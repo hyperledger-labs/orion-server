@@ -1,0 +1,5 @@
+language: go
+go:
+    - 1.14
+script:
+    - scripts/run-unit-tests.sh
