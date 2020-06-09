@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option go_package = "github.com/blockchaindb/server/api";
+
+package api;
+
+import "types.proto";
+
+service TransactionSvc {
+    rpc SubmitTransaction(stream Envelope) returns (stream Response);
+}

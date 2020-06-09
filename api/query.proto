@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+option go_package = "github.com/blockchaindb/server/api";
+
+package api;
+
+import "types.proto";
+import "google/protobuf/empty.proto";
+
+service Query {
+  rpc GetDBStatus(DBName) returns (DBStatus);
+  rpc Get(DataQuery) returns (Value);
+  rpc GetHistory(HistoryQuery) returns (stream HistoryDataSet);
+  rpc GetProof(ProofQuery) returns (Proof);
+  rpc GetMerkleRoot(google.protobuf.Empty) returns (Digest);
+  rpc GetTx(TxQuery) returns (Envelope);
+  rpc GetBlock(BlockQuery) returns (Block);
+  rpc GetUsers(UserQuery) returns(UserSet);
+  rpc GetBlockHeight(google.protobuf.Empty) returns(LedgerHeight);
+}

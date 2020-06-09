@@ -1,0 +1,214 @@
+syntax = "proto3";
+
+option go_package = "github.com/blockchaindb/server/api";
+
+package api;
+
+import "google/protobuf/timestamp.proto";
+
+message DBName {
+  string db_name = 1;
+}
+
+message DBStatus {
+  bool exist = 1;
+}
+
+message DataQuery {
+  QueryHeader header = 1;
+  string key         = 2;
+}
+
+message QueryHeader {
+  User   user      = 1;
+  bytes  signature = 2;
+  string dbName    = 3;
+}
+
+message Value {
+  bytes   value   = 1;
+  Metadata metadata = 2;
+}
+
+message Metadata {
+  Version version = 1;
+}
+
+message Version {
+  uint64 block_num = 1;
+  uint64 tx_num    = 2;
+}
+
+message HistoryQuery {
+  QueryHeader header   = 1;
+  string    key        = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time   = 4;
+  string    user_id    = 5;
+  uint64    page_size  = 6;
+}
+
+message HistoryDataSet{
+}
+
+message HistoricalData {
+  // DB key
+  string key = 1;
+  // Historical value
+  bytes value = 2;
+  // Client time for client who submitted transaction
+  google.protobuf.Timestamp txTime = 3;
+  // Sequencer time when block was created
+  google.protobuf.Timestamp blocktime = 4;
+  // Transaction that did the change
+  bytes txId = 5;
+  // Block number that holds changing tx
+  uint64 blocknumber = 6;
+  // Client who submitted changing tx
+  bytes clientId = 7;
+  // Is this tx deleted this key
+  bool isDelete = 8;
+}
+
+message ProofQuery {
+  QueryHeader header = 1;
+  string txID        = 2;
+}
+
+message Digest {
+  // Ledger merkle tree root
+  bytes root_hash = 1;
+  // Ledger height
+  uint64 height = 2;
+}
+
+message Proof {
+  // Path to tx inside blocks merkle tree
+  repeated bytes block_path = 1;
+  // Path to block inside dynamic ledger merkle tree
+  repeated bytes ledger_path = 2;
+  // Transaction signatures
+  repeated bytes tx_signatures = 3;
+  // Block signatures
+  repeated bytes block_signatures = 4;
+}
+
+message TxQuery {
+  QueryHeader header = 1;
+  string txID        = 2;
+}
+
+message BlockQuery {
+  QueryHeader header  = 1;
+  uint64 block_number = 2;
+}
+
+
+message UserQuery {
+  QueryHeader header = 1;
+  repeated string user_ids = 2;
+  string role = 3;
+}
+
+message User {
+  bytes userID = 1;
+  bytes user_certificate = 2;
+  repeated string roles = 3;
+}
+
+message UserSet {
+  repeated User users = 1;
+}
+
+message LedgerHeight {
+  uint64 height = 2;
+}
+
+message Block {
+  BlockHeader header = 1;
+  // Marshaled BlockData
+  bytes block_data = 2;
+  // Marshaled
+  bytes tx_merkle_tree = 3;
+}
+
+// BlockHeader is the element of the block which forms the block chain
+// The block header is hashed using the configured chain hashing algorithm
+// over the ASN.1 encoding of the BlockHeader
+message BlockHeader {
+  uint64 number = 1; // The position in the blockchain
+  bytes previous_hash = 2; // The hash of the previous block header
+  bytes data_hash = 3; // The hash of the BlockData
+  bytes merkle_tree_root = 4; // The hash of MerkleTree root
+}
+
+message BlockData {
+  repeated bytes envelopes = 1;
+}
+
+message TxMerkleTree {
+}
+
+message Response {
+  bytes txid = 1;
+  bool status = 2;
+  bytes signature = 3;
+}
+
+// Envelope wraps a Payload with a signature so that the message may be authenticated
+message Envelope {
+  // A marshaled Payload
+  bytes payload = 1;
+  // A signature by the creator specified in the Payload header
+  bytes signature = 2;
+}
+
+// Payload is the message contents (and header to allow for signing)
+message Payload {
+  // Header is included to provide identity and prevent replay
+  Header header = 1;
+  // Encoded payload, can be only Transaction, at least at first phase
+  bytes data = 2;
+}
+
+message Header {
+  // Creator of the message, a marshaled msp.SerializedIdentity
+  bytes creator = 1;
+  // Arbitrary number that may only be used once. Can be used to detect replay attacks.
+  bytes nonce = 2;
+}
+
+message Transaction {
+  bytes txId = 1;
+  enum DataModel {
+    KV = 0;
+  }
+
+  DataModel datamodel = 2;
+  repeated Statement statements = 3;
+  bytes rwset = 4;
+}
+
+message KVRWSet {
+  repeated KVRead rset = 1;
+  repeated KVWrite wset = 2;
+}
+
+message KVRead {
+  string key = 1;
+  bytes version = 2;
+}
+
+message KVWrite {
+  string key = 1;
+  bool is_delete = 2;
+  bytes value = 3;
+}
+
+
+message Statement{
+  string operation = 1;
+  repeated bytes arguments = 2;
+}
+
+
