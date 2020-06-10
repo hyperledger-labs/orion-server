@@ -196,7 +196,7 @@ message KVRWSet {
 
 message KVRead {
   string key = 1;
-  bytes version = 2;
+  Version version = 2;
 }
 
 message KVWrite {
