@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+
 	"github.ibm.com/blockchaindb/server/api"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,6 +16,6 @@ func (qs *queryServer) Get(ctx context.Context, req *api.DataQuery) (*api.Value,
 	return nil, status.Errorf(codes.Unimplemented, "method Get not implemented")
 }
 
-func NewQueryServer() (*queryServer, error) {
+func newQueryServer() (*queryServer, error) {
 	return &queryServer{}, nil
 }
