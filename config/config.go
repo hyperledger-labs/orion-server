@@ -13,9 +13,10 @@ type Configurations struct {
 }
 
 type ServerConf struct {
-	ID      string
-	Network NetworkConf
-	Crypto  CryptoConf
+	ID       string
+	Network  NetworkConf
+	Crypto   CryptoConf
+	Database DatabaseConf
 }
 
 type NetworkConf struct {
@@ -26,6 +27,11 @@ type NetworkConf struct {
 type CryptoConf struct {
 	Certificate string
 	Key         string
+}
+
+type DatabaseConf struct {
+	Name            string
+	LedgerDirectory string
 }
 
 type RootCAConf struct {
@@ -49,8 +55,11 @@ func init() {
 	viper.AutomaticEnv()
 	conf = &Configurations{}
 
+	viper.SetDefault("server.database.name", "leveldb")
+	viper.SetDefault("server.database.ledgerDirectory", "./tmp/")
+
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error reading config file, %s", err)
+		log.Printf("Error reading config file, %v\n", err)
 	}
 
 	err := viper.Unmarshal(conf)
@@ -69,6 +78,10 @@ func ServerNetwork() *NetworkConf {
 
 func ServerCrypto() *CryptoConf {
 	return &conf.Server.Crypto
+}
+
+func Database() *DatabaseConf {
+	return &conf.Server.Database
 }
 
 func RootCA() *RootCAConf {

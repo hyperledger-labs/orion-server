@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/blockchaindb/server/api";
+option go_package = "github.ibm.com/blockchaindb/server/api";
 
 package api;
 

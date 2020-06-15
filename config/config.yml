@@ -6,6 +6,9 @@ server:
   crypto:
     certificate: peer1.crt
     key: peer1.key
+  database:
+    name: leveldb
+    ledgerDirectory: ./tmp/
 
 rootca:
   certificate: ca.crt

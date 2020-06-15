@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/blockchaindb/server/api";
+option go_package = "github.ibm.com/blockchaindb/server/api";
 
 package api;
 
@@ -8,8 +8,8 @@ import "types.proto";
 import "google/protobuf/empty.proto";
 
 service Query {
-  rpc GetDBStatus(DBName) returns (DBStatus);
-  rpc Get(DataQuery) returns (Value);
+  rpc GetStatus(DB) returns (DBStatus);
+  rpc GetState(DataQuery) returns (Value);
   rpc GetHistory(HistoryQuery) returns (stream HistoryDataSet);
   rpc GetProof(ProofQuery) returns (Proof);
   rpc GetMerkleRoot(google.protobuf.Empty) returns (Digest);

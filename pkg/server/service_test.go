@@ -24,8 +24,15 @@ func TestStart(t *testing.T) {
 	queryClient := api.NewQueryClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	val, err := queryClient.Get(ctx, &api.DataQuery{})
+	val, err := queryClient.GetState(
+		ctx,
+		&api.DataQuery{
+			Header: &api.QueryHeader{
+				DBName: "db1",
+			},
+		},
+	)
 	require.Nil(t, val)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "method Get not implemented")
+	require.Contains(t, err.Error(), "database db1 does not exist")
 }

@@ -1,13 +1,13 @@
 syntax = "proto3";
 
-option go_package = "github.com/blockchaindb/server/api";
+option go_package = "github.ibm.com/blockchaindb/server/api";
 
 package api;
 
 import "google/protobuf/timestamp.proto";
 
-message DBName {
-  string db_name = 1;
+message DB {
+  string name = 1;
 }
 
 message DBStatus {
@@ -22,7 +22,7 @@ message DataQuery {
 message QueryHeader {
   User   user      = 1;
   bytes  signature = 2;
-  string dbName    = 3;
+  string DBName    = 3;
 }
 
 message Value {
