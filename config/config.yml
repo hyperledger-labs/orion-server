@@ -1,0 +1,16 @@
+server:
+  id: bdb-node-1
+  network:
+    address: localhost
+    port: 6001
+  crypto:
+    certificate: peer1.crt
+    key: peer1.key
+
+rootca:
+  certificate: ca.crt
+
+admin:
+  username: admin
+  dbname: admin
+  certificate: admin.crt
