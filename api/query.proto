@@ -5,6 +5,7 @@ option go_package = "github.ibm.com/blockchaindb/server/api";
 package api;
 
 import "types.proto";
+import "block_tx_types.proto";
 import "google/protobuf/empty.proto";
 
 service Query {

@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+option go_package = "github.ibm.com/blockchaindb/server/api";
+
+package api;
+
+import "types.proto";
+
+message Block {
+  BlockHeader header = 1;
+  // Marshaled BlockData
+  bytes block_data = 2;
+  // Marshaled
+  bytes tx_merkle_tree = 3;
+}
+
+// BlockHeader is the element of the block which forms the block chain
+// The block header is hashed using the configured chain hashing algorithm
+// over the ASN.1 encoding of the BlockHeader
+message BlockHeader {
+  uint64 number = 1; // The position in the blockchain
+  bytes previous_hash = 2; // The hash of the previous block header
+  bytes data_hash = 3; // The hash of the BlockData
+  bytes merkle_tree_root = 4; // The hash of MerkleTree root
+}
+
+message BlockData {
+  repeated bytes envelopes = 1;
+}
+
+// Envelope wraps a Payload with a signature so that the message may be authenticated
+message Envelope {
+  // A marshaled Payload
+  bytes payload = 1;
+  // A signature by the creator specified in the Payload header
+  bytes signature = 2;
+}
+
+// Payload is the message contents (and header to allow for signing)
+message Payload {
+  // Header is included to provide identity and prevent replay
+  Header header = 1;
+  // Encoded payload, can be only Transaction, at least at first phase
+  bytes data = 2;
+}
+
+message Header {
+  // Creator of the message, a marshaled msp.SerializedIdentity
+  bytes creator = 1;
+  // Arbitrary number that may only be used once. Can be used to detect replay attacks.
+  bytes nonce = 2;
+}
+
+message Transaction {
+  bytes txId = 1;
+  enum DataModel {
+    KV = 0;
+  }
+
+  DataModel datamodel = 2;
+  repeated Statement statements = 3;
+  bytes rwset = 4;
+}
+
+message KVRWSet {
+  repeated KVRead rset = 1;
+  repeated KVWrite wset = 2;
+}
+
+message KVRead {
+  string key = 1;
+  Version version = 2;
+}
+
+message KVWrite {
+  string key = 1;
+  bool is_delete = 2;
+  bytes value = 3;
+}
+
+message Statement{
+  string operation = 1;
+  repeated bytes arguments = 2;
+}
+
+message TxMerkleTree {
+}
+
+message Response {
+  bytes txid = 1;
+  bool status = 2;
+  bytes signature = 3;
+}
+
+message ValidationInfo {
+    enum Flag {
+        VALID = 0;
+        INVALID_MVCC_CONFLICT = 1;
+        INVALID_DB_NOT_EXIST = 2;
+        INVALID_NO_PERMISSION = 3;
+    }
+    Flag flag = 1;
+}
