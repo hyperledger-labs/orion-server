@@ -3,9 +3,9 @@ server:
   network:
     address: localhost
     port: 6001
-  crypto:
-    certificate: peer1.crt
-    key: peer1.key
+  identity:
+    certificate: node1.crt
+    key: node1.key
   database:
     name: leveldb
     ledgerDirectory: ./tmp/

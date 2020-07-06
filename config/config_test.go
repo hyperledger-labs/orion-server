@@ -13,9 +13,9 @@ func TestServerConfig(t *testing.T) {
 			Address: "localhost",
 			Port:    6001,
 		},
-		Crypto: CryptoConf{
-			Certificate: "peer1.crt",
-			Key:         "peer1.key",
+		Identity: IdentityConf{
+			Certificate: "node1.crt",
+			Key:         "node1.key",
 		},
 		Database: DatabaseConf{
 			Name:            "leveldb",
@@ -37,8 +37,8 @@ func TestServerConfig(t *testing.T) {
 
 	t.Run("test-crypto-conf", func(t *testing.T) {
 		t.Parallel()
-		cryptoConf := ServerCrypto()
-		require.Equal(t, &expectedServerConf.Crypto, cryptoConf)
+		cryptoConf := ServerIdentity()
+		require.Equal(t, &expectedServerConf.Identity, cryptoConf)
 	})
 
 	t.Run("test-database-conf", func(t *testing.T) {

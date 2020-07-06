@@ -15,7 +15,7 @@ type Configurations struct {
 type ServerConf struct {
 	ID       string
 	Network  NetworkConf
-	Crypto   CryptoConf
+	Identity IdentityConf
 	Database DatabaseConf
 }
 
@@ -24,7 +24,7 @@ type NetworkConf struct {
 	Port    int
 }
 
-type CryptoConf struct {
+type IdentityConf struct {
 	Certificate string
 	Key         string
 }
@@ -62,8 +62,7 @@ func init() {
 		log.Printf("Error reading config file, %v\n", err)
 	}
 
-	err := viper.Unmarshal(conf)
-	if err != nil {
+	if err := viper.GetViper().UnmarshalExact(conf); err != nil {
 		log.Fatalf("Unable to decode into struct, %v", err)
 	}
 }
@@ -76,8 +75,8 @@ func ServerNetwork() *NetworkConf {
 	return &conf.Server.Network
 }
 
-func ServerCrypto() *CryptoConf {
-	return &conf.Server.Crypto
+func ServerIdentity() *IdentityConf {
+	return &conf.Server.Identity
 }
 
 func Database() *DatabaseConf {
