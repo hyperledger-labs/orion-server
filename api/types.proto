@@ -123,3 +123,20 @@ message UserSet {
 message LedgerHeight {
   uint64 height = 2;
 }
+
+message Response {
+  bytes txid = 1;
+  bool status = 2;
+  bytes signature = 3;
+}
+
+message ValidationInfo {
+    Flag flag = 1;
+}
+
+enum Flag {
+    VALID = 0;
+    INVALID_MVCC_CONFLICT = 1;
+    INVALID_DB_NOT_EXIST = 2;
+    INVALID_NO_PERMISSION = 3;
+}

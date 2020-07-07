@@ -5,7 +5,8 @@ option go_package = "github.ibm.com/blockchaindb/server/api";
 package api;
 
 import "block_tx_types.proto";
+import "types.proto";
 
 service TransactionSvc {
-    rpc SubmitTransaction(stream Envelope) returns (stream Response);
+    rpc SubmitTransaction(stream TransactionEnvelope) returns (stream Response);
 }

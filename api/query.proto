@@ -14,7 +14,7 @@ service Query {
   rpc GetHistory(HistoryQuery) returns (stream HistoryDataSet);
   rpc GetProof(ProofQuery) returns (Proof);
   rpc GetMerkleRoot(google.protobuf.Empty) returns (Digest);
-  rpc GetTx(TxQuery) returns (Envelope);
+  rpc GetTx(TxQuery) returns (TransactionEnvelope);
   rpc GetBlock(BlockQuery) returns (Block);
   rpc GetUsers(UserQuery) returns(UserSet);
   rpc GetBlockHeight(google.protobuf.Empty) returns(LedgerHeight);

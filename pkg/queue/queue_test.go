@@ -10,12 +10,16 @@ import (
 )
 
 func TestTransactionQueue(t *testing.T) {
-	var txs []*api.Transaction
+	var txs []*api.TransactionEnvelope
 	for i := 0; i < 5; i++ {
-		txs = append(txs, &api.Transaction{
-			TxId:      []byte(fmt.Sprintf("tx-%d", i)),
-			Datamodel: api.Transaction_KV,
-			Rwset:     []byte(fmt.Sprintf("rwset-%d", i)),
+		txs = append(txs, &api.TransactionEnvelope{
+			Payload: &api.Transaction{
+				TxID:      []byte(fmt.Sprintf("tx-%d", i)),
+				DataModel: api.Transaction_KV,
+				Reads:     []*api.KVRead{},
+				Writes:    []*api.KVWrite{},
+			},
+			Signature: []byte("sign"),
 		})
 	}
 
@@ -33,7 +37,7 @@ func TestTransactionQueue(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		require.Equal(t, len(txs)-i, q.Size())
-		require.Equal(t, txs[i], q.Dequeue().(*api.Transaction))
+		require.Equal(t, txs[i], q.Dequeue().(*api.TransactionEnvelope))
 	}
 	require.Equal(t, 0, q.Size())
 	require.False(t, q.IsFull())
