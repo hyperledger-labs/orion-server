@@ -26,7 +26,7 @@ func NewProcessor(queue *queue.Queue, db worldstate.DB) *Processor {
 func (p *Processor) Process() {
 	for {
 		block := p.blockQueue.Dequeue().(*api.Block)
-		validationInfo, err := p.validator.Validate(block)
+		validationInfo, err := p.validator.ValidateBlock(block)
 		if err != nil {
 			panic(err)
 		}
