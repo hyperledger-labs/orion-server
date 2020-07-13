@@ -13,6 +13,7 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
+// LevelDB holds information about all created database
 type LevelDB struct {
 	dirPath string
 	dbs     map[string]*db
@@ -34,6 +35,7 @@ func NewLevelDB(dirPath string) (*LevelDB, error) {
 		dirPath: dirPath,
 		dbs:     make(map[string]*db),
 	}
+
 	exists, err := fileExists(dirPath)
 	if err != nil {
 		return nil, err
@@ -57,34 +59,36 @@ func NewLevelDB(dirPath string) (*LevelDB, error) {
 		if err != nil {
 			return nil, errors.WithMessagef(err, "failed to open leveldb file for database %s", dbName)
 		}
-		db := &db{
+
+		l.dbs[dbName] = &db{
 			name:      dbName,
 			file:      file,
 			readOpts:  &opt.ReadOptions{},
 			writeOpts: &opt.WriteOptions{Sync: true},
 		}
-		l.dbs[dbName] = db
 	}
+
 	return l, nil
 }
 
 // Create creates a new database. It returns an error if database already exists.
 func (l *LevelDB) Create(dbName string) error {
 	if db, _ := l.getDB(dbName); db != nil {
-		return errors.New(fmt.Sprintf("database %s already exists", dbName))
+		return fmt.Errorf("database %s already exists", dbName)
 	}
 
 	file, err := leveldb.OpenFile(filepath.Join(l.dirPath, dbName), &opt.Options{})
 	if err != nil {
 		return errors.WithMessagef(err, "failed to open leveldb file for database %s", dbName)
 	}
-	db := &db{
+
+	l.dbs[dbName] = &db{
 		name:      dbName,
 		file:      file,
 		readOpts:  &opt.ReadOptions{},
 		writeOpts: &opt.WriteOptions{Sync: true},
 	}
-	l.dbs[dbName] = db
+
 	return nil
 }
 
@@ -100,8 +104,10 @@ func (l *LevelDB) Get(dbName string, key string) (*api.Value, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	db.mu.RLock()
 	defer db.mu.RUnlock()
+
 	dbval, err := db.file.Get([]byte(key), db.readOpts)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
@@ -109,10 +115,12 @@ func (l *LevelDB) Get(dbName string, key string) (*api.Value, error) {
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to retrieve leveldb key [%s] from database %s", key, dbName)
 	}
+
 	value := &api.Value{}
 	if err := proto.Unmarshal(dbval, value); err != nil {
 		return nil, err
 	}
+
 	return value, nil
 }
 
@@ -125,6 +133,7 @@ func (l *LevelDB) GetVersion(dbName string, key string) (*api.Version, error) {
 	if dbval == nil {
 		return nil, nil
 	}
+
 	return dbval.Metadata.Version, nil
 }
 
@@ -135,8 +144,10 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
 		if err != nil {
 			return err
 		}
-		db.mu.Lock()
+
 		batch := &leveldb.Batch{}
+
+		db.mu.Lock()
 		for _, kv := range updates.Writes {
 			dbval, err := proto.Marshal(kv.Value)
 			if err != nil {
@@ -147,18 +158,22 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
 		for _, key := range updates.Deletes {
 			batch.Delete([]byte(key))
 		}
-		db.file.Write(batch, db.writeOpts)
+		if err := db.file.Write(batch, db.writeOpts); err != nil {
+			return err
+		}
 		db.mu.Unlock()
 	}
+
 	return nil
 }
 
 func (l *LevelDB) getDB(dbName string) (*db, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
+
 	db, ok := l.dbs[dbName]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("database %s does not exist", dbName))
+		return nil, fmt.Errorf("database %s does not exist", dbName)
 	}
 	return db, nil
 }

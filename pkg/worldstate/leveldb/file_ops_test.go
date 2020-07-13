@@ -8,33 +8,50 @@ import (
 )
 
 func TestIsDirEmpty(t *testing.T) {
-	isEmpty, err := isDirEmpty("./testdata/dir")
-	require.NoError(t, err)
-	require.False(t, isEmpty)
+	t.Run("non-empty directory", func(t *testing.T) {
+		t.Parallel()
+		isEmpty, err := isDirEmpty("./testdata/dir")
+		require.NoError(t, err)
+		require.False(t, isEmpty)
+	})
 
-	require.NoError(t, createDir("./testdata/z"))
+	t.Run("empty directory", func(t *testing.T) {
+		t.Parallel()
+		require.NoError(t, createDir("./testdata/z"))
+		isEmpty, err := isDirEmpty("./testdata/z")
+		require.NoError(t, err)
+		require.True(t, isEmpty)
+		require.NoError(t, os.RemoveAll("./testdata/z"))
+	})
 
-	isEmpty, err = isDirEmpty("./testdata/z")
-	require.NoError(t, err)
-	require.True(t, isEmpty)
-	require.NoError(t, os.RemoveAll("./testdata/z"))
-
-	_, err = isDirEmpty("xx")
-	require.Contains(t, err.Error(), "error opening dir [xx]")
+	t.Run("error case", func(t *testing.T) {
+		t.Parallel()
+		_, err := isDirEmpty("xx")
+		require.Contains(t, err.Error(), "error opening dir [xx]")
+	})
 }
 
 func TestListSubdirs(t *testing.T) {
-	dirs, err := listSubdirs("./testdata/dir")
-	require.NoError(t, err)
-	expectedDirs := []string{"a", "b", "c", "d"}
-	require.Equal(t, expectedDirs, dirs)
+	t.Run("subdirs exist", func(t *testing.T) {
+		t.Parallel()
+		dirs, err := listSubdirs("./testdata/dir")
+		require.NoError(t, err)
+		expectedDirs := []string{"a", "b", "c", "d"}
+		require.Equal(t, expectedDirs, dirs)
+	})
 
-	dirs, err = listSubdirs("./testdata/dir/a")
-	require.NoError(t, err)
-	require.Empty(t, dirs)
+	t.Run("subdirs do not exist", func(t *testing.T) {
+		t.Parallel()
+		dirs, err := listSubdirs("./testdata/dir/a")
+		require.NoError(t, err)
+		require.Empty(t, dirs)
+	})
 
-	_, err = listSubdirs("xx")
-	require.Contains(t, err.Error(), "error reading dir [xx]")
+	t.Run("error case", func(t *testing.T) {
+		t.Parallel()
+		_, err := listSubdirs("xx")
+		require.Contains(t, err.Error(), "error reading dir [xx]")
+	})
 }
 
 func TestFileExists(t *testing.T) {
