@@ -44,8 +44,6 @@ func (env *testEnv) init(t *testing.T) {
 	env.validator = NewValidator(db)
 }
 
-var env testEnv
-
 func TestMVCCValidator(t *testing.T) {
 	setup := func(db worldstate.DB) {
 		val1 := &api.Value{
@@ -84,11 +82,13 @@ func TestMVCCValidator(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.db.Create("db1"))
-		require.NoError(t, env.db.Commit(dbsUpdates))
+		require.NoError(t, db.Create("db1"))
+		require.NoError(t, db.Commit(dbsUpdates))
 	}
 
 	t.Run("mvccValidation, valid transaction", func(t *testing.T) {
+		t.Parallel()
+		env := &testEnv{}
 		env.init(t)
 		defer env.cleanup()
 		setup(env.db)
@@ -128,6 +128,8 @@ func TestMVCCValidator(t *testing.T) {
 	})
 
 	t.Run("mvccValidation, invalid transaction due to conflict with pending writes", func(t *testing.T) {
+		t.Parallel()
+		env := &testEnv{}
 		env.init(t)
 		defer env.cleanup()
 		setup(env.db)
@@ -155,6 +157,8 @@ func TestMVCCValidator(t *testing.T) {
 	})
 
 	t.Run("mvccValidation, invalid transaction due to mismatch in the committed version", func(t *testing.T) {
+		t.Parallel()
+		env := &testEnv{}
 		env.init(t)
 		defer env.cleanup()
 		setup(env.db)
@@ -185,6 +189,8 @@ func TestMVCCValidator(t *testing.T) {
 	})
 
 	t.Run("mvccValidation, error", func(t *testing.T) {
+		t.Parallel()
+		env := &testEnv{}
 		env.init(t)
 		defer env.cleanup()
 		tx := &api.Transaction{
@@ -274,12 +280,14 @@ func TestValidator(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.db.Create("db1"))
-		require.NoError(t, env.db.Create("db2"))
-		require.NoError(t, env.db.Commit(dbsUpdates))
+		require.NoError(t, db.Create("db1"))
+		require.NoError(t, db.Create("db2"))
+		require.NoError(t, db.Commit(dbsUpdates))
 	}
 
 	t.Run("validate block", func(t *testing.T) {
+		t.Parallel()
+		env := &testEnv{}
 		env.init(t)
 		defer env.cleanup()
 		setup(env.db)
