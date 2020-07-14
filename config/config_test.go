@@ -1,10 +1,16 @@
 package config
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	Init()
+	os.Exit(m.Run())
+}
 
 func TestServerConfig(t *testing.T) {
 	expectedServerConf := &ServerConf{

@@ -4,21 +4,24 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.ibm.com/blockchaindb/server/config"
 )
 
 var s *http.Server
-var restServer *DBServer
 
 func Start() {
-	var err error
-	restServer, err = NewDBServer()
+	config.Init()
+
+	restServer, err := NewDBServer()
 	if err != nil {
-		log.Fatalf("failed to start rest server: %v", err)
+		log.Fatalf("Failed to start rest server: %v", err)
 	}
 
+	netConf := config.ServerNetwork()
 	go func() {
 		s = &http.Server{
-			Addr:    fmt.Sprintf("localhost:%d", 6001),
+			Addr:    fmt.Sprintf("%s:%d", netConf.Address, netConf.Port),
 			Handler: restServer.router,
 		}
 
