@@ -13,7 +13,7 @@ import (
 )
 
 func TestQueryService(t *testing.T) {
-	qs, err := newQueryServer()
+	qs, err := newQueryProcessor()
 	require.NoError(t, err)
 	require.NotNil(t, qs)
 	require.NoError(t, qs.db.Create("test-db"))
@@ -57,51 +57,53 @@ func TestQueryService(t *testing.T) {
 
 	t.Run("GetStatus", func(t *testing.T) {
 		t.Parallel()
-		req := &api.DB{
-			Name: "test-db",
+		req := &api.GetStatusQueryEnvelope{
+			Payload: &api.GetStatusQuery{
+				UserID: []byte("testUser"),
+				DBName: "test-db",
+			},
+			Signature: []byte("signature"),
 		}
 		status, err := qs.GetStatus(context.TODO(), req)
 		require.NoError(t, err)
-		expectedStatus := &api.DBStatus{
-			Exist: true,
-		}
-		require.True(t, proto.Equal(expectedStatus, status))
+		require.True(t, status.Payload.Exist)
 
-		req.Name = ""
+		req.Payload.DBName = ""
 		status, err = qs.GetStatus(context.TODO(), req)
 		require.NoError(t, err)
-		expectedStatus.Exist = false
-		require.True(t, proto.Equal(expectedStatus, status))
+		require.False(t, status.Payload.Exist)
 
 		status, err = qs.GetStatus(context.TODO(), nil)
-		require.EqualError(t, err, "db request is nil")
+		require.EqualError(t, err, "db request envelope is nil")
 		require.Nil(t, status)
 	})
 
 	t.Run("GetState", func(t *testing.T) {
 		t.Parallel()
-		req := &api.DataQuery{
-			Header: &api.QueryHeader{
+		req := &api.GetStateQueryEnvelope{
+			Payload: &api.GetStateQuery{
+				UserID: []byte("testUser"),
 				DBName: "test-db",
+				Key:    "key1",
 			},
-			Key: "key1",
+			Signature: []byte("signature"),
 		}
 		val, err := qs.GetState(context.TODO(), req)
 		require.NoError(t, err)
-		require.True(t, proto.Equal(val1, val))
+		require.True(t, proto.Equal(val1, val.Payload.Value))
 
-		req.Key = "key3"
+		req.Payload.Key = "key3"
 		val, err = qs.GetState(context.TODO(), req)
 		require.NoError(t, err)
-		require.Nil(t, val)
+		require.Nil(t, val.Payload.Value)
 
-		req.Header = nil
+		req.Payload.UserID = nil
 		val, err = qs.GetState(context.TODO(), req)
-		require.EqualError(t, err, "header in DataQuery is nil [key:\"key3\" ]")
+		require.EqualError(t, err, "DataQuery userid is nil [payload:<DBName:\"test-db\" key:\"key3\" > signature:\"signature\" ]")
 		require.Nil(t, val)
 
 		val, err = qs.GetState(context.TODO(), nil)
-		require.EqualError(t, err, "dataQuery request is nil")
+		require.EqualError(t, err, "dataQueryEnvelope request is nil")
 		require.Nil(t, val)
 	})
 }

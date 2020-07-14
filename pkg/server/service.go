@@ -3,33 +3,29 @@ package server
 import (
 	"fmt"
 	"log"
-	"net"
-
-	"github.ibm.com/blockchaindb/server/api"
-	"google.golang.org/grpc"
+	"net/http"
 )
 
+var s *http.Server
+var restServer *DBServer
+
 func Start() {
-	qs, err := newQueryServer()
+	var err error
+	restServer, err = NewDBServer()
 	if err != nil {
-		log.Fatalf("Failed to initiate query server %v", err)
-	}
-	ts, err := newTransactionServer()
-	if err != nil {
-		log.Fatalf("Failed to initiate transaction server %v", err)
+		log.Fatalf("failed to start rest server: %v", err)
 	}
 
-	log.Printf("starting server localhost:%d", 6001)
-	listen, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", 6001))
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	grpcServer := grpc.NewServer()
-	api.RegisterQueryServer(grpcServer, qs)
-	api.RegisterTransactionSvcServer(grpcServer, ts)
 	go func() {
-		if err := grpcServer.Serve(listen); err != nil {
-			log.Fatalf("Failed to start the grpc server")
+		s = &http.Server{
+			Addr:    fmt.Sprintf("localhost:%d", 6001),
+			Handler: restServer.router,
 		}
+
+		s.ListenAndServe()
 	}()
+}
+
+func Stop() {
+	s.Close()
 }

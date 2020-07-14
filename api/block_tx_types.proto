@@ -21,8 +21,8 @@ message BlockHeader {
 
 // TransactionEnvelope holds the transaction and a signature
 message TransactionEnvelope {
-    Transaction payload = 1;
-    bytes signature = 2;
+  Transaction payload = 1;
+  bytes signature = 2;
 }
 
 // Transaction holds the user and all reads/writes

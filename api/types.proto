@@ -6,27 +6,50 @@ package api;
 
 import "google/protobuf/timestamp.proto";
 
-message DB {
-  string name = 1;
+message GetStatusQueryEnvelope {
+  GetStatusQuery payload = 1;
+  bytes signature = 2;
 }
 
-message DBStatus {
-  bool exist = 1;
+message GetStatusQuery {
+  bytes userID = 1;
+  string DBName = 2;
 }
 
-message DataQuery {
-  QueryHeader header = 1;
-  string key         = 2;
+message GetStatusResponseEnvelope {
+  GetStatusResponse payload = 1;
+  bytes signature = 2;
+
 }
 
-message QueryHeader {
-  User   user      = 1;
-  bytes  signature = 2;
-  string DBName    = 3;
+message GetStatusResponse {
+  ResponseHeader header = 1;
+  bool exist = 2;
+}
+
+message GetStateQueryEnvelope {
+  GetStateQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetStateQuery {
+  bytes userID = 1;
+  string DBName = 2;
+  string key = 3;
+}
+
+message GetStateResponseEnvelope {
+  GetStateResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetStateResponse {
+  ResponseHeader header = 1;
+  Value value = 2;
 }
 
 message Value {
-  bytes   value   = 1;
+  bytes   value = 1;
   Metadata metadata = 2;
 }
 
@@ -36,43 +59,7 @@ message Metadata {
 
 message Version {
   uint64 block_num = 1;
-  uint64 tx_num    = 2;
-}
-
-message HistoryQuery {
-  QueryHeader header   = 1;
-  string    key        = 2;
-  google.protobuf.Timestamp start_time = 3;
-  google.protobuf.Timestamp end_time   = 4;
-  string    user_id    = 5;
-  uint64    page_size  = 6;
-}
-
-message HistoryDataSet{
-}
-
-message HistoricalData {
-  // DB key
-  string key = 1;
-  // Historical value
-  bytes value = 2;
-  // Client time for client who submitted transaction
-  google.protobuf.Timestamp txTime = 3;
-  // Sequencer time when block was created
-  google.protobuf.Timestamp blocktime = 4;
-  // Transaction that did the change
-  bytes txId = 5;
-  // Block number that holds changing tx
-  uint64 blocknumber = 6;
-  // Client who submitted changing tx
-  bytes clientId = 7;
-  // Is this tx deleted this key
-  bool isDelete = 8;
-}
-
-message ProofQuery {
-  QueryHeader header = 1;
-  string txID        = 2;
+  uint64 tx_num = 2;
 }
 
 message Digest {
@@ -82,52 +69,30 @@ message Digest {
   uint64 height = 2;
 }
 
-message Proof {
-  // Path to tx inside blocks merkle tree
-  repeated bytes block_path = 1;
-  // Path to block inside dynamic ledger merkle tree
-  repeated bytes ledger_path = 2;
-  // Transaction signatures
-  repeated bytes tx_signatures = 3;
-  // Block signatures
-  repeated bytes block_signatures = 4;
-}
-
-message TxQuery {
-  QueryHeader header = 1;
-  string txID        = 2;
-}
-
-message BlockQuery {
-  QueryHeader header  = 1;
-  uint64 block_number = 2;
-}
-
-
-message UserQuery {
-  QueryHeader header = 1;
-  repeated string user_ids = 2;
-  string role = 3;
-}
-
 message User {
   bytes userID = 1;
   bytes user_certificate = 2;
   repeated string roles = 3;
 }
 
-message UserSet {
-  repeated User users = 1;
+message Node {
+  bytes nodeID = 1;
+  bytes node_certificate = 2;
 }
 
-message LedgerHeight {
-  uint64 height = 2;
+message ResponseHeader {
+  bytes nodeID = 1;
 }
 
 message Response {
-  bytes txid = 1;
-  bool status = 2;
-  bytes signature = 3;
+  ResponseHeader header = 1;
+  bytes txid = 2;
+  bool status = 3;
+}
+
+message ResponseEnvelope {
+  Response data = 1;
+  bytes signature = 2;
 }
 
 message ValidationInfo {
