@@ -32,11 +32,20 @@ func TestStart(t *testing.T) {
 	dbConf := config.Database()
 	defer os.RemoveAll(dbConf.LedgerDirectory)
 
-	Start()
-	time.Sleep(time.Millisecond * 10)
+	go Start()
 	defer Stop()
-	client, err := mock.NewRESTClient("http://localhost:6001")
-	require.NoError(t, err)
+
+	var client *mock.Client
+	var err error
+	createClient := func() bool {
+		client, err = mock.NewRESTClient("http://localhost:6001")
+		if err == nil && client != nil {
+			return true
+		}
+		return false
+	}
+	require.Eventually(t, createClient, time.Second*2, time.Millisecond*100)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	valEnv, err := client.GetState(

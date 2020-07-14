@@ -13,12 +13,13 @@ import (
 )
 
 func TestQueryService(t *testing.T) {
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	qs, err := newQueryProcessor()
 	require.NoError(t, err)
 	require.NotNil(t, qs)
 	require.NoError(t, qs.db.Create("test-db"))
-	dbConf := config.Database()
-	defer os.RemoveAll(dbConf.LedgerDirectory)
 
 	val1 := &api.Value{
 		Value: []byte("value1"),

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/golang/protobuf/ptypes/empty"
@@ -30,13 +31,16 @@ func NewDBServer() (*DBServer, error) {
 	rs := &DBServer{}
 	var err error
 
+	log.Println("Creating query processor")
 	if rs.qs, err = newQueryProcessor(); err != nil {
 		return nil, errors.Wrap(err, "failed to initiate query processor")
 	}
+	log.Println("Creating transaction processor")
 	if rs.ts, err = newTransactionProcessor(); err != nil {
 		return nil, errors.Wrap(err, "failed to initiate transaction processor")
 	}
 
+	log.Println("Setting up REST APIs")
 	rs.router = mux.NewRouter()
 	rs.router.HandleFunc("/db/{dbname}/state/{key}", rs.handleDataQuery).Methods(http.MethodGet)
 	rs.router.HandleFunc("/db/{dbname}", rs.handleStatusQuery).Methods(http.MethodGet)

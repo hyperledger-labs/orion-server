@@ -19,11 +19,13 @@ import (
 var httpServer *http.Server
 
 func TestCreateRESTService(t *testing.T) {
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	rs, err := NewDBServer()
 	require.NoError(t, err)
 	require.NotNil(t, rs)
-	dbConf := config.Database()
-	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	s = &http.Server{
 		Addr:    fmt.Sprintf("localhost:%d", 6001),
 		Handler: rs.router,
@@ -48,11 +50,13 @@ func TestCreateRESTService(t *testing.T) {
 }
 
 func Test_handleStatusQuery(t *testing.T) {
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	rs, err := NewDBServer()
 	require.NoError(t, err)
 	require.NotNil(t, rs)
-	dbConf := config.Database()
-	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	s = &http.Server{
 		Addr:    fmt.Sprintf("localhost:%d", 6001),
 		Handler: rs.router,
@@ -93,11 +97,13 @@ func Test_handleStatusQuery(t *testing.T) {
 }
 
 func Test_handleStateQuery(t *testing.T) {
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	rs, err := NewDBServer()
 	require.NoError(t, err)
 	require.NotNil(t, rs)
-	dbConf := config.Database()
-	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	s = &http.Server{
 		Addr:    fmt.Sprintf("localhost:%d", 6001),
 		Handler: rs.router,
