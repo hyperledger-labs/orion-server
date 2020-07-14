@@ -10,6 +10,5 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/ugorji/go v1.1.4
 	google.golang.org/grpc v1.29.1
 )

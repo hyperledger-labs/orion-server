@@ -4,15 +4,13 @@ option go_package = "github.ibm.com/blockchaindb/server/api";
 
 package api;
 
-import "google/protobuf/timestamp.proto";
-
 message GetStatusQueryEnvelope {
   GetStatusQuery payload = 1;
   bytes signature = 2;
 }
 
 message GetStatusQuery {
-  bytes userID = 1;
+  string userID = 1;
   string DBName = 2;
 }
 
@@ -33,7 +31,7 @@ message GetStateQueryEnvelope {
 }
 
 message GetStateQuery {
-  bytes userID = 1;
+  string userID = 1;
   string DBName = 2;
   string key = 3;
 }
@@ -55,6 +53,8 @@ message Value {
 
 message Metadata {
   Version version = 1;
+  repeated string read_access_users = 2;
+  repeated string write_access_users = 3;
 }
 
 message Version {
@@ -70,9 +70,8 @@ message Digest {
 }
 
 message User {
-  bytes userID = 1;
+  string userID = 1;
   bytes user_certificate = 2;
-  repeated string roles = 3;
 }
 
 message Node {

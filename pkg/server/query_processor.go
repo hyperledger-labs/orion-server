@@ -89,14 +89,14 @@ func validateDataQuery(req *api.GetStateQueryEnvelope) error {
 	if req.Payload == nil {
 		return fmt.Errorf("DataQuery is nil [%v]", req)
 	}
-	if req.Payload.UserID == nil {
-		return fmt.Errorf("DataQuery userid is nil [%v]", req)
+	if req.Payload.UserID == "" {
+		return fmt.Errorf("DataQuery userid is empty [%v]", req)
 	}
 	queryBytes, err := json.Marshal(req.Payload)
 	if err != nil {
 		return errors.Wrapf(err, "error while encoding db query %v", req.Payload)
 	}
-	if err := crypto.Validate(req.Signature, req.Payload.UserID, queryBytes); err != nil {
+	if err := crypto.Validate(req.Payload.UserID, req.Signature, queryBytes); err != nil {
 		return errors.Wrap(err, "query error - wrong signature")
 	}
 	return nil
@@ -109,14 +109,14 @@ func validateDB(req *api.GetStatusQueryEnvelope) error {
 	if req.Payload == nil {
 		return fmt.Errorf("db query is nil %v", req)
 	}
-	if req.Payload.UserID == nil {
-		return fmt.Errorf("db query userid is nil %v", req)
+	if req.Payload.UserID == "" {
+		return fmt.Errorf("db query userid is empty %v", req)
 	}
 	queryBytes, err := json.Marshal(req.Payload)
 	if err != nil {
 		return errors.Wrapf(err, "error while encoding db query %v", req.Payload)
 	}
-	if err := crypto.Validate(req.Signature, req.Payload.UserID, queryBytes); err != nil {
+	if err := crypto.Validate(req.Payload.UserID, req.Signature, queryBytes); err != nil {
 		return errors.Wrap(err, "query error - wrong signature")
 	}
 	return nil

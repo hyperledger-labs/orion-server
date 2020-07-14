@@ -17,7 +17,6 @@ import (
 const UserHeader = "X-BLockchain-DB-User-ID"
 const SignatureHeader = "X-BLockchain-DB-Signature"
 
-
 type Client struct {
 	RawURL     string
 	BaseURL    *url.URL
@@ -50,7 +49,7 @@ func (c *Client) GetStatus(ctx context.Context, in *api.GetStatusQueryEnvelope) 
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(UserHeader, base64.StdEncoding.EncodeToString(in.Payload.UserID))
+	req.Header.Set(UserHeader, in.Payload.UserID)
 	req.Header.Set(SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
 
 	resp, err := c.httpClient.Do(req)
@@ -80,7 +79,7 @@ func (c *Client) GetState(ctx context.Context, in *api.GetStateQueryEnvelope) (*
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(UserHeader, base64.StdEncoding.EncodeToString(in.Payload.UserID))
+	req.Header.Set(UserHeader, in.Payload.UserID)
 	req.Header.Set(SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
 
 	resp, err := c.httpClient.Do(req)

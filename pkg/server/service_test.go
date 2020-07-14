@@ -22,7 +22,7 @@ func TestStart(t *testing.T) {
 		ctx,
 		&api.GetStateQueryEnvelope{
 			Payload: &api.GetStateQuery{
-				UserID: []byte("testUser"),
+				UserID: "testUser",
 				DBName: "db1",
 				Key:    "key1",
 			},

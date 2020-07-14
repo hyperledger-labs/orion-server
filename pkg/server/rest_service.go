@@ -130,22 +130,20 @@ func composeJSONResponse(w http.ResponseWriter, code int, payload interface{}) {
 	w.Write(response)
 }
 
-func validateAndParseQueryHeader(r *http.Request) ([]byte, []byte, error) {
-	user := r.Header.Get(UserHeader)
-	if user == "" {
-		return nil, nil, errors.New("empty user")
+func validateAndParseQueryHeader(r *http.Request) (string, []byte, error) {
+	userID := r.Header.Get(UserHeader)
+	if userID == "" {
+		return "", nil, errors.New("empty user")
 	}
-	userBytes, err := base64.StdEncoding.DecodeString(user)
-	if err != nil {
-		return nil, nil, errors.New("wrongly encoded user")
-	}
+
 	signature := r.Header.Get(SignatureHeader)
 	if signature == "" {
-		return nil, nil, errors.New("empty signature")
+		return "", nil, errors.New("empty signature")
 	}
 	signatureBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
-		return nil, nil, errors.New("wrongly encoded signature")
+		return "", nil, errors.New("wrongly encoded signature")
 	}
-	return userBytes, signatureBytes, nil
+
+	return userID, signatureBytes, nil
 }

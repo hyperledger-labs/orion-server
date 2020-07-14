@@ -59,7 +59,7 @@ func TestQueryService(t *testing.T) {
 		t.Parallel()
 		req := &api.GetStatusQueryEnvelope{
 			Payload: &api.GetStatusQuery{
-				UserID: []byte("testUser"),
+				UserID: "testUser",
 				DBName: "test-db",
 			},
 			Signature: []byte("signature"),
@@ -82,7 +82,7 @@ func TestQueryService(t *testing.T) {
 		t.Parallel()
 		req := &api.GetStateQueryEnvelope{
 			Payload: &api.GetStateQuery{
-				UserID: []byte("testUser"),
+				UserID: "testUser",
 				DBName: "test-db",
 				Key:    "key1",
 			},
@@ -97,9 +97,9 @@ func TestQueryService(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, val.Payload.Value)
 
-		req.Payload.UserID = nil
+		req.Payload.UserID = ""
 		val, err = qs.GetState(context.TODO(), req)
-		require.EqualError(t, err, "DataQuery userid is nil [payload:<DBName:\"test-db\" key:\"key3\" > signature:\"signature\" ]")
+		require.EqualError(t, err, "DataQuery userid is empty [payload:<DBName:\"test-db\" key:\"key3\" > signature:\"signature\" ]")
 		require.Nil(t, val)
 
 		val, err = qs.GetState(context.TODO(), nil)

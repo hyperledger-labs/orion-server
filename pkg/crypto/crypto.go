@@ -1,6 +1,6 @@
 package crypto
 
-func Validate(signature, user, body []byte) error {
+func Validate(userID string, signature, body []byte) error {
 	return nil
 }
 

@@ -32,7 +32,7 @@ func TestCreateRESTService(t *testing.T) {
 	rc, _ := mock.NewRESTClient("http://localhost:6001")
 	req := &api.GetStatusQueryEnvelope{
 		Payload: &api.GetStatusQuery{
-			UserID: []byte("testUser"),
+			UserID: "testUser",
 			DBName: "db1",
 		},
 		Signature: []byte("signature"),
@@ -62,7 +62,7 @@ func Test_handleStatusQuery(t *testing.T) {
 	rc, _ := mock.NewRESTClient("http://localhost:6001")
 	req := &api.GetStatusQueryEnvelope{
 		Payload: &api.GetStatusQuery{
-			UserID: []byte("testUser"),
+			UserID: "testUser",
 			DBName: "db1",
 		},
 		Signature: []byte("signature"),
@@ -81,7 +81,7 @@ func Test_handleStatusQuery(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "empty signature")
 
-	req.Payload.UserID = nil
+	req.Payload.UserID = ""
 	req.Signature = []byte("signature")
 	ctx, cancel3 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel3()
@@ -142,7 +142,7 @@ func Test_handleStateQuery(t *testing.T) {
 	rc, _ := mock.NewRESTClient("http://localhost:6001")
 	req := &api.GetStateQueryEnvelope{
 		Payload: &api.GetStateQuery{
-			UserID: []byte("testUser"),
+			UserID: "testUser",
 			DBName: "db1",
 			Key:    "key1",
 		},
@@ -171,7 +171,7 @@ func Test_handleStateQuery(t *testing.T) {
 	require.NotNil(t, resp)
 	require.Nil(t, resp.Payload.Value)
 
-	req.Payload.UserID = nil
+	req.Payload.UserID = ""
 	ctx, cancel4 := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel4()
 	resp, err = rc.GetState(ctx, req)
