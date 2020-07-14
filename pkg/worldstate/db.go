@@ -2,6 +2,11 @@ package worldstate
 
 import "github.ibm.com/blockchaindb/server/api"
 
+const (
+	// UsersDBName holds all users information
+	UsersDBName = "_users"
+)
+
 // DB provides method to create and access states stored in
 // a database.
 type DB interface {

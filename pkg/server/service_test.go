@@ -2,15 +2,20 @@ package server
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 )
 
 func TestStart(t *testing.T) {
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	Start()
 	time.Sleep(time.Millisecond * 10)
 	defer Stop()
