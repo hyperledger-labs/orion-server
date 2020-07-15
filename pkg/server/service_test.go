@@ -29,6 +29,9 @@ func TestMain(m *testing.M) {
 }
 
 func TestStart(t *testing.T) {
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
+
 	Start()
 	time.Sleep(time.Millisecond * 10)
 	defer Stop()

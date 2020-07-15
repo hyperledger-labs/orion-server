@@ -34,7 +34,10 @@ func (env *testEnv) init(t *testing.T) {
 		t.Fatalf("failed to create leveldb with path %s", env.path)
 	}
 	require.Equal(t, env.path, l.dirPath)
-	require.Empty(t, l.dbs)
+	require.Len(t, l.dbs, len(systemDBs))
+	for _, dbName := range systemDBs {
+		require.NotNil(t, l.dbs[dbName])
+	}
 
 	env.l = l
 }
@@ -303,12 +306,16 @@ func TestNewLevelDB(t *testing.T) {
 
 	l, err := NewLevelDB(levelPath)
 	require.NoError(t, err)
+	require.NoError(t, l.Open(worldstate.UsersDBName))
 	require.NoError(t, l.Create("db1"))
 	require.NoError(t, l.Create("db2"))
 	require.NoError(t, l.Create("db3"))
 	require.NoError(t, l.Create("db4"))
 
-	require.Len(t, l.dbs, 4)
+	require.Len(t, l.dbs, 4+len(systemDBs))
+	for _, dbName := range systemDBs {
+		require.NoError(t, l.Open(dbName))
+	}
 	require.NoError(t, l.Open("db1"))
 	require.NoError(t, l.Open("db2"))
 	require.NoError(t, l.Open("db3"))
@@ -317,7 +324,10 @@ func TestNewLevelDB(t *testing.T) {
 	closeLevelDB(t, l)
 	l, err = NewLevelDB(levelPath)
 	require.NoError(t, err)
-	require.Len(t, l.dbs, 4)
+	require.Len(t, l.dbs, 4+len(systemDBs))
+	for _, dbName := range systemDBs {
+		require.NoError(t, l.Open(dbName))
+	}
 	require.NoError(t, l.Open("db1"))
 	require.NoError(t, l.Open("db2"))
 	require.NoError(t, l.Open("db3"))

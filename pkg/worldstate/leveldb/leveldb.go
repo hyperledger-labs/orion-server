@@ -29,6 +29,10 @@ type db struct {
 	writeOpts *opt.WriteOptions
 }
 
+var (
+	systemDBs = []string{worldstate.UsersDBName, "test"}
+)
+
 // NewLevelDB creates a new leveldb instance
 func NewLevelDB(dirPath string) (*LevelDB, error) {
 	l := &LevelDB{
@@ -43,6 +47,9 @@ func NewLevelDB(dirPath string) (*LevelDB, error) {
 	if !exists {
 		if err := createDir(dirPath); err != nil {
 			return nil, errors.WithMessagef(err, "failed to create director %s", dirPath)
+		}
+		if err := l.createDBsIfNotExist(systemDBs); err != nil {
+			return nil, err
 		}
 		return l, nil
 	}
@@ -68,7 +75,21 @@ func NewLevelDB(dirPath string) (*LevelDB, error) {
 		}
 	}
 
+	if err := l.createDBsIfNotExist(systemDBs); err != nil {
+		return nil, err
+	}
 	return l, nil
+}
+
+func (l *LevelDB) createDBsIfNotExist(dbNames []string) error {
+	for _, dbName := range dbNames {
+		if db, _ := l.getDB(dbName); db == nil {
+			if err := l.Create(dbName); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Create creates a new database. It returns an error if database already exists.
@@ -173,7 +194,16 @@ func (l *LevelDB) getDB(dbName string) (*db, error) {
 
 	db, ok := l.dbs[dbName]
 	if !ok {
-		return nil, fmt.Errorf("database %s does not exist", dbName)
+		return nil, &DBNotFoundErr{dbName: dbName}
 	}
 	return db, nil
+}
+
+// DBNotFoundErr denotes that the given dbName is not present in the database
+type DBNotFoundErr struct {
+	dbName string
+}
+
+func (e *DBNotFoundErr) Error() string {
+	return fmt.Sprintf("database %s does not exist", e.dbName)
 }

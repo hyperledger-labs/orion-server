@@ -22,6 +22,8 @@ func TestCreateRESTService(t *testing.T) {
 	rs, err := NewDBServer()
 	require.NoError(t, err)
 	require.NotNil(t, rs)
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
 	s = &http.Server{
 		Addr:    fmt.Sprintf("localhost:%d", 6001),
 		Handler: rs.router,
@@ -49,6 +51,8 @@ func Test_handleStatusQuery(t *testing.T) {
 	rs, err := NewDBServer()
 	require.NoError(t, err)
 	require.NotNil(t, rs)
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
 	s = &http.Server{
 		Addr:    fmt.Sprintf("localhost:%d", 6001),
 		Handler: rs.router,
@@ -57,8 +61,6 @@ func Test_handleStatusQuery(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	defer s.Close()
 	rs.qs.db.Create("db1")
-	dbConf := config.Database()
-	defer os.RemoveAll(dbConf.LedgerDirectory)
 	rc, _ := mock.NewRESTClient("http://localhost:6001")
 	req := &api.GetStatusQueryEnvelope{
 		Payload: &api.GetStatusQuery{
@@ -94,6 +96,8 @@ func Test_handleStateQuery(t *testing.T) {
 	rs, err := NewDBServer()
 	require.NoError(t, err)
 	require.NotNil(t, rs)
+	dbConf := config.Database()
+	defer os.RemoveAll(dbConf.LedgerDirectory)
 	s = &http.Server{
 		Addr:    fmt.Sprintf("localhost:%d", 6001),
 		Handler: rs.router,
@@ -102,8 +106,6 @@ func Test_handleStateQuery(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	defer s.Close()
 	rs.qs.db.Create("db1")
-	dbConf := config.Database()
-	defer os.RemoveAll(dbConf.LedgerDirectory)
 
 	val1 := &api.Value{
 		Value: []byte("Value1"),
