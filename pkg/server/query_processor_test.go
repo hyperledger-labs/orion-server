@@ -2,22 +2,25 @@ package server
 
 import (
 	"context"
+	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/api"
-	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
+	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
 func TestQueryService(t *testing.T) {
-	dbConf := config.Database()
-	defer os.RemoveAll(dbConf.LedgerDirectory)
-
-	qs, err := newQueryProcessor()
+	path, err := ioutil.TempDir("/tmp", "queryservice")
 	require.NoError(t, err)
+	defer os.RemoveAll(path)
+	db, err := leveldb.NewLevelDB(path)
+	require.NoError(t, err)
+
+	qs := newQueryProcessor(db)
 	require.NotNil(t, qs)
 	require.NoError(t, qs.db.Create("test-db"))
 

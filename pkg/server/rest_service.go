@@ -12,6 +12,8 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/server/config"
+	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
 const UserHeader = "X-BLockchain-DB-User-ID"
@@ -29,18 +31,22 @@ type ResponseErr struct {
 
 func NewDBServer() (*DBServer, error) {
 	rs := &DBServer{}
-	var err error
 
-	log.Println("Creating query processor")
-	if rs.qs, err = newQueryProcessor(); err != nil {
-		return nil, errors.Wrap(err, "failed to initiate query processor")
-	}
-	log.Println("Creating transaction processor")
-	if rs.ts, err = newTransactionProcessor(); err != nil {
-		return nil, errors.Wrap(err, "failed to initiate transaction processor")
+	dbConf := config.Database()
+	if dbConf.Name != "leveldb" {
+		return nil, errors.New("only leveldb is supported as the state database")
 	}
 
-	log.Println("Setting up REST APIs")
+	db, err := leveldb.NewLevelDB(dbConf.LedgerDirectory)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "failed to create a new leveldb instance for the peer")
+	}
+
+	log.Println("Starting query processor")
+	rs.qs = newQueryProcessor(db)
+	log.Println("Starting transaction processor")
+	rs.ts = newTransactionProcessor(db)
+
 	rs.router = mux.NewRouter()
 	rs.router.HandleFunc("/db/{dbname}/state/{key}", rs.handleDataQuery).Methods(http.MethodGet)
 	rs.router.HandleFunc("/db/{dbname}", rs.handleStatusQuery).Methods(http.MethodGet)

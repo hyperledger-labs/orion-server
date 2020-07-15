@@ -9,26 +9,17 @@ import (
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/api"
-	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
 type queryProcessor struct {
 	db worldstate.DB
 }
 
-func newQueryProcessor() (*queryProcessor, error) {
-	qs := &queryProcessor{}
-	dbConf := config.Database()
-	if dbConf.Name != "leveldb" {
-		return nil, errors.New("only leveldb is supported as the state database")
+func newQueryProcessor(db worldstate.DB) *queryProcessor {
+	return &queryProcessor{
+		db: db,
 	}
-	var err error
-	if qs.db, err = leveldb.NewLevelDB(dbConf.LedgerDirectory); err != nil {
-		return nil, errors.WithMessagef(err, "failed to create a new leveldb instance for the peer")
-	}
-	return qs, nil
 }
 
 func (qp *queryProcessor) GetStatus(ctx context.Context, req *api.GetStatusQueryEnvelope) (*api.GetStatusResponseEnvelope, error) {
