@@ -2,8 +2,16 @@ package config
 
 import (
 	"log"
+	"os"
 
 	"github.com/spf13/viper"
+)
+
+const (
+	PathEnv = "BCDB_CONFIG_PATH"
+
+	name     = "config"
+	filetype = "yml"
 )
 
 type Configurations struct {
@@ -46,22 +54,31 @@ type AdminConf struct {
 
 var conf *Configurations
 
-func init() {
-	// TODO: use environment variable to find
-	// the absolute path of the config file
-	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
-	viper.SetConfigType("yml")
+func Init() {
+	path := os.Getenv(PathEnv)
+	if path == "" {
+		log.Printf(
+			"Server config path environment %s is empty. Using the %s.%s located in the current directory if exist.",
+			PathEnv,
+			name,
+			filetype,
+		)
+		path = "./"
+	}
+
+	viper.SetConfigName(name)
+	viper.AddConfigPath(path)
+	viper.SetConfigType(filetype)
 	viper.AutomaticEnv()
-	conf = &Configurations{}
 
 	viper.SetDefault("server.database.name", "leveldb")
 	viper.SetDefault("server.database.ledgerDirectory", "./tmp/")
 
 	if err := viper.ReadInConfig(); err != nil {
-		log.Printf("Error reading config file, %v\n", err)
+		log.Fatalf("Error reading config file, %v\n", err)
 	}
 
+	conf = &Configurations{}
 	if err := viper.GetViper().UnmarshalExact(conf); err != nil {
 		log.Fatalf("Unable to decode into struct, %v", err)
 	}

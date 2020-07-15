@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"log"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -11,6 +13,20 @@ import (
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 )
+
+func TestMain(m *testing.M) {
+	path, err := filepath.Abs("../../config")
+	if err != nil {
+		log.Fatal("Failed to construct absolute path from the default config")
+	}
+
+	if err := os.Setenv(config.PathEnv, path); err != nil {
+		log.Fatalf("Failed to set the config path to %s", config.PathEnv)
+	}
+
+	config.Init()
+	os.Exit(m.Run())
+}
 
 func TestStart(t *testing.T) {
 	dbConf := config.Database()
