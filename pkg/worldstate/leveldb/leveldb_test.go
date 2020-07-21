@@ -8,7 +8,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -75,38 +75,38 @@ func TestCommitAndGet(t *testing.T) {
 		require.NoError(t, l.Create("db2"))
 	}
 
-	setupWithData := func(l *LevelDB) (map[string]*api.Value, map[string]*api.Value) {
-		db1val1 := &api.Value{
+	setupWithData := func(l *LevelDB) (map[string]*types.Value, map[string]*types.Value) {
+		db1val1 := &types.Value{
 			Value: []byte("db1-value1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    1,
 				},
 			},
 		}
-		db1val2 := &api.Value{
+		db1val2 := &types.Value{
 			Value: []byte("db1-value2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    2,
 				},
 			},
 		}
-		db2val1 := &api.Value{
+		db2val1 := &types.Value{
 			Value: []byte("db2-value1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    3,
 				},
 			},
 		}
-		db2val2 := &api.Value{
+		db2val2 := &types.Value{
 			Value: []byte("db2-value2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    4,
 				},
@@ -145,11 +145,11 @@ func TestCommitAndGet(t *testing.T) {
 		require.NoError(t, l.Create("db2"))
 		require.NoError(t, l.Commit(dbsUpdates))
 
-		db1KVs := map[string]*api.Value{
+		db1KVs := map[string]*types.Value{
 			"db1-key1": db1val1,
 			"db1-key2": db1val2,
 		}
-		db2KVs := map[string]*api.Value{
+		db2KVs := map[string]*types.Value{
 			"db2-key1": db2val1,
 			"db2-key2": db2val2,
 		}
@@ -226,19 +226,19 @@ func TestCommitAndGet(t *testing.T) {
 		l := env.l
 		db1KVs, db2KVs := setupWithData(l)
 
-		db1val1new := &api.Value{
+		db1val1new := &types.Value{
 			Value: []byte("db1-value1-new"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    1,
 				},
 			},
 		}
-		db2val1new := &api.Value{
+		db2val1new := &types.Value{
 			Value: []byte("db2-value1-new"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    2,
 				},

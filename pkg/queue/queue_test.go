@@ -6,18 +6,18 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 )
 
 func TestTransactionQueue(t *testing.T) {
-	var txs []*api.TransactionEnvelope
+	var txs []*types.TransactionEnvelope
 	for i := 0; i < 5; i++ {
-		txs = append(txs, &api.TransactionEnvelope{
-			Payload: &api.Transaction{
+		txs = append(txs, &types.TransactionEnvelope{
+			Payload: &types.Transaction{
 				TxID:      []byte(fmt.Sprintf("tx-%d", i)),
-				DataModel: api.Transaction_KV,
-				Reads:     []*api.KVRead{},
-				Writes:    []*api.KVWrite{},
+				DataModel: types.Transaction_KV,
+				Reads:     []*types.KVRead{},
+				Writes:    []*types.KVWrite{},
 			},
 			Signature: []byte("sign"),
 		})
@@ -37,7 +37,7 @@ func TestTransactionQueue(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		require.Equal(t, len(txs)-i, q.Size())
-		require.Equal(t, txs[i], q.Dequeue().(*api.TransactionEnvelope))
+		require.Equal(t, txs[i], q.Dequeue().(*types.TransactionEnvelope))
 	}
 	require.Equal(t, 0, q.Size())
 	require.False(t, q.IsFull())

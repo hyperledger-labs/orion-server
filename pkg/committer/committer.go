@@ -2,7 +2,7 @@ package committer
 
 import (
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -20,15 +20,15 @@ func NewCommitter(db worldstate.DB) *Committer {
 	}
 }
 
-func (c *Committer) Commit(block *api.Block, blockValidationInfo []*api.ValidationInfo) error {
+func (c *Committer) Commit(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
 	return c.commitToStateDB(block, blockValidationInfo)
 	//TODO: add code to commit to block store and provenance store
 }
 
-func (c *Committer) commitToStateDB(block *api.Block, blockValidationInfo []*api.ValidationInfo) error {
+func (c *Committer) commitToStateDB(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
 	dbsUpdates := []*worldstate.DBUpdates{}
 	for txNum, txValidationInfo := range blockValidationInfo {
-		if txValidationInfo.Flag != api.Flag_VALID {
+		if txValidationInfo.Flag != types.Flag_VALID {
 			continue
 		}
 
@@ -44,10 +44,10 @@ func (c *Committer) commitToStateDB(block *api.Block, blockValidationInfo []*api
 
 			kv := &worldstate.KV{
 				Key: write.Key,
-				Value: &api.Value{
+				Value: &types.Value{
 					Value: write.Value,
-					Metadata: &api.Metadata{
-						Version: &api.Version{
+					Metadata: &types.Metadata{
+						Version: &types.Version{
 							BlockNum: block.Header.Number,
 							TxNum:    uint64(txNum),
 						},

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 )
@@ -50,8 +50,8 @@ func TestStart(t *testing.T) {
 	defer cancel()
 	valEnv, err := client.GetState(
 		ctx,
-		&api.GetStateQueryEnvelope{
-			Payload: &api.GetStateQuery{
+		&types.GetStateQueryEnvelope{
+			Payload: &types.GetStateQuery{
 				UserID: "testUser",
 				DBName: "db1",
 				Key:    "key1",

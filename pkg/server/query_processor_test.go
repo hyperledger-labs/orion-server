@@ -8,7 +8,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -24,19 +24,19 @@ func TestQueryService(t *testing.T) {
 	require.NotNil(t, qs)
 	require.NoError(t, qs.db.Create("test-db"))
 
-	val1 := &api.Value{
+	val1 := &types.Value{
 		Value: []byte("value1"),
-		Metadata: &api.Metadata{
-			Version: &api.Version{
+		Metadata: &types.Metadata{
+			Version: &types.Version{
 				BlockNum: 1,
 				TxNum:    1,
 			},
 		},
 	}
-	val2 := &api.Value{
+	val2 := &types.Value{
 		Value: []byte("value2"),
-		Metadata: &api.Metadata{
-			Version: &api.Version{
+		Metadata: &types.Metadata{
+			Version: &types.Version{
 				BlockNum: 1,
 				TxNum:    2,
 			},
@@ -61,8 +61,8 @@ func TestQueryService(t *testing.T) {
 
 	t.Run("GetStatus", func(t *testing.T) {
 		t.Parallel()
-		req := &api.GetStatusQueryEnvelope{
-			Payload: &api.GetStatusQuery{
+		req := &types.GetStatusQueryEnvelope{
+			Payload: &types.GetStatusQuery{
 				UserID: "testUser",
 				DBName: "test-db",
 			},
@@ -84,8 +84,8 @@ func TestQueryService(t *testing.T) {
 
 	t.Run("GetState", func(t *testing.T) {
 		t.Parallel()
-		req := &api.GetStateQueryEnvelope{
-			Payload: &api.GetStateQuery{
+		req := &types.GetStateQueryEnvelope{
+			Payload: &types.GetStateQuery{
 				UserID: "testUser",
 				DBName: "test-db",
 				Key:    "key1",

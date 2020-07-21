@@ -1,6 +1,6 @@
 package worldstate
 
-import "github.ibm.com/blockchaindb/server/api"
+import "github.ibm.com/blockchaindb/protos/types"
 
 const (
 	// UsersDBName holds all users information
@@ -16,10 +16,10 @@ type DB interface {
 	Open(dbName string) error
 	// Get returns the value of the key present in the
 	// database
-	Get(dbName, key string) (*api.Value, error)
+	Get(dbName, key string) (*types.Value, error)
 	// GetVersion returns the version of the key present
 	// in the database
-	GetVersion(dbName, key string) (*api.Version, error)
+	GetVersion(dbName, key string) (*types.Version, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates []*DBUpdates) error
 }
@@ -27,7 +27,7 @@ type DB interface {
 // KV holds a key and value pair
 type KV struct {
 	Key   string
-	Value *api.Value
+	Value *types.Value
 }
 
 // DBUpdates holds writes of KV pairs and deletes of

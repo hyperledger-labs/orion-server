@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockcreator"
 	"github.ibm.com/blockchaindb/server/pkg/blockprocessor"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
@@ -41,7 +41,7 @@ func newTransactionProcessor(db worldstate.DB) *transactionProcessor {
 	return t
 }
 
-func (t *transactionProcessor) SubmitTransaction(ctx context.Context, tx *api.TransactionEnvelope) error {
+func (t *transactionProcessor) SubmitTransaction(ctx context.Context, tx *types.TransactionEnvelope) error {
 	if t.txQueue.IsFull() {
 		return fmt.Errorf("transaction queue is full. It means the server load is high. Try after sometime")
 	}

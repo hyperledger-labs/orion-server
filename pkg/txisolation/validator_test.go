@@ -8,7 +8,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -46,20 +46,20 @@ func (env *testEnv) init(t *testing.T) {
 
 func TestMVCCValidator(t *testing.T) {
 	setup := func(db worldstate.DB) {
-		val1 := &api.Value{
+		val1 := &types.Value{
 			Value: []byte("value1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    1,
 				},
 			},
 		}
 
-		val2 := &api.Value{
+		val2 := &types.Value{
 			Value: []byte("value2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    2,
 				},
@@ -93,19 +93,19 @@ func TestMVCCValidator(t *testing.T) {
 		defer env.cleanup()
 		setup(env.db)
 
-		tx := &api.Transaction{
+		tx := &types.Transaction{
 			DBName: "db1",
-			Reads: []*api.KVRead{
+			Reads: []*types.KVRead{
 				{
 					Key: "key1",
-					Version: &api.Version{
+					Version: &types.Version{
 						BlockNum: 1,
 						TxNum:    1,
 					},
 				},
 				{
 					Key: "key2",
-					Version: &api.Version{
+					Version: &types.Version{
 						BlockNum: 1,
 						TxNum:    2,
 					},
@@ -124,7 +124,7 @@ func TestMVCCValidator(t *testing.T) {
 
 		valInfo, err := env.validator.mvccValidation(tx, pendingWrites)
 		require.NoError(t, err)
-		require.True(t, proto.Equal(&api.ValidationInfo{Flag: api.Flag_VALID}, valInfo))
+		require.True(t, proto.Equal(&types.ValidationInfo{Flag: types.Flag_VALID}, valInfo))
 	})
 
 	t.Run("mvccValidation, invalid transaction due to conflict with pending writes", func(t *testing.T) {
@@ -134,12 +134,12 @@ func TestMVCCValidator(t *testing.T) {
 		defer env.cleanup()
 		setup(env.db)
 
-		tx := &api.Transaction{
+		tx := &types.Transaction{
 			DBName: "db1",
-			Reads: []*api.KVRead{
+			Reads: []*types.KVRead{
 				{
 					Key: "key1",
-					Version: &api.Version{
+					Version: &types.Version{
 						BlockNum: 1,
 						TxNum:    1,
 					},
@@ -153,7 +153,7 @@ func TestMVCCValidator(t *testing.T) {
 
 		valInfo, err := env.validator.mvccValidation(tx, pendingWrites)
 		require.NoError(t, err)
-		require.True(t, proto.Equal(&api.ValidationInfo{Flag: api.Flag_INVALID_MVCC_CONFLICT}, valInfo))
+		require.True(t, proto.Equal(&types.ValidationInfo{Flag: types.Flag_INVALID_MVCC_CONFLICT}, valInfo))
 	})
 
 	t.Run("mvccValidation, invalid transaction due to mismatch in the committed version", func(t *testing.T) {
@@ -163,19 +163,19 @@ func TestMVCCValidator(t *testing.T) {
 		defer env.cleanup()
 		setup(env.db)
 
-		tx := &api.Transaction{
+		tx := &types.Transaction{
 			DBName: "db1",
-			Reads: []*api.KVRead{
+			Reads: []*types.KVRead{
 				{
 					Key: "key1",
-					Version: &api.Version{
+					Version: &types.Version{
 						BlockNum: 1,
 						TxNum:    1,
 					},
 				},
 				{
 					Key: "key3",
-					Version: &api.Version{
+					Version: &types.Version{
 						BlockNum: 1,
 						TxNum:    2,
 					},
@@ -185,7 +185,7 @@ func TestMVCCValidator(t *testing.T) {
 
 		valInfo, err := env.validator.mvccValidation(tx, map[string]bool{})
 		require.NoError(t, err)
-		require.True(t, proto.Equal(&api.ValidationInfo{Flag: api.Flag_INVALID_MVCC_CONFLICT}, valInfo))
+		require.True(t, proto.Equal(&types.ValidationInfo{Flag: types.Flag_INVALID_MVCC_CONFLICT}, valInfo))
 	})
 
 	t.Run("mvccValidation, error", func(t *testing.T) {
@@ -193,9 +193,9 @@ func TestMVCCValidator(t *testing.T) {
 		env := &testEnv{}
 		env.init(t)
 		defer env.cleanup()
-		tx := &api.Transaction{
+		tx := &types.Transaction{
 			DBName: "db1",
-			Reads: []*api.KVRead{
+			Reads: []*types.KVRead{
 				{
 					Key:     "key3",
 					Version: nil,
@@ -211,40 +211,40 @@ func TestMVCCValidator(t *testing.T) {
 
 func TestValidator(t *testing.T) {
 	setup := func(db worldstate.DB) {
-		db1val1 := &api.Value{
+		db1val1 := &types.Value{
 			Value: []byte("db1-value1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    1,
 				},
 			},
 		}
 
-		db1val2 := &api.Value{
+		db1val2 := &types.Value{
 			Value: []byte("db1-value2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    2,
 				},
 			},
 		}
 
-		db2val1 := &api.Value{
+		db2val1 := &types.Value{
 			Value: []byte("db2-value1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    3,
 				},
 			},
 		}
 
-		db2val2 := &api.Value{
+		db2val2 := &types.Value{
 			Value: []byte("db2-value2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    4,
 				},
@@ -292,23 +292,23 @@ func TestValidator(t *testing.T) {
 		defer env.cleanup()
 		setup(env.db)
 
-		block := &api.Block{
-			TransactionEnvelopes: []*api.TransactionEnvelope{
+		block := &types.Block{
+			TransactionEnvelopes: []*types.TransactionEnvelope{
 				{
 					// valid transaction
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Reads: []*api.KVRead{
+						Reads: []*types.KVRead{
 							{
 								Key: "db1-key1",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    1,
 								},
 							},
 							{
 								Key: "db1-key2",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    2,
 								},
@@ -318,7 +318,7 @@ func TestValidator(t *testing.T) {
 								Version: nil,
 							},
 						},
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db1-key1",
 								Value: []byte("value-1"),
@@ -329,19 +329,19 @@ func TestValidator(t *testing.T) {
 				{
 					// invalid transaction because db1-key3 does not exist
 					// and hence the committedVersion would be nil
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Reads: []*api.KVRead{
+						Reads: []*types.KVRead{
 							{
 								Key: "db1-key2",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    1,
 								},
 							},
 							{
 								Key: "db1-key3",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    2,
 								},
@@ -351,19 +351,19 @@ func TestValidator(t *testing.T) {
 				},
 				{
 					// valid transaction
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Reads: []*api.KVRead{
+						Reads: []*types.KVRead{
 							{
 								Key: "db2-key1",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    3,
 								},
 							},
 							{
 								Key: "db2-key2",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    4,
 								},
@@ -373,7 +373,7 @@ func TestValidator(t *testing.T) {
 								Version: nil,
 							},
 						},
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db2-key1",
 								Value: []byte("value-2"),
@@ -384,19 +384,19 @@ func TestValidator(t *testing.T) {
 				{
 					// invalid transaction because db2-key3 does not exist
 					// and hence the committedVersion would be nil
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Reads: []*api.KVRead{
+						Reads: []*types.KVRead{
 							{
 								Key: "db2-key2",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    1,
 								},
 							},
 							{
 								Key: "db2-key3",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    2,
 								},
@@ -406,19 +406,19 @@ func TestValidator(t *testing.T) {
 				},
 				{
 					// invalid transaction as the db3 does not exist
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db3",
 					},
 				},
 				{
 					// invalid transaction as it conflicts with the
 					// first transaction in the block
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Reads: []*api.KVRead{
+						Reads: []*types.KVRead{
 							{
 								Key: "db1-key1",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    1,
 								},
@@ -429,12 +429,12 @@ func TestValidator(t *testing.T) {
 				{
 					// invalid transaction as it conflicts with the
 					// third transaction in the block
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Reads: []*api.KVRead{
+						Reads: []*types.KVRead{
 							{
 								Key: "db2-key1",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    3,
 								},
@@ -445,27 +445,27 @@ func TestValidator(t *testing.T) {
 			},
 		}
 
-		expectedValidationInfo := []*api.ValidationInfo{
+		expectedValidationInfo := []*types.ValidationInfo{
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_INVALID_MVCC_CONFLICT,
+				Flag: types.Flag_INVALID_MVCC_CONFLICT,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_INVALID_MVCC_CONFLICT,
+				Flag: types.Flag_INVALID_MVCC_CONFLICT,
 			},
 			{
-				Flag: api.Flag_INVALID_DB_NOT_EXIST,
+				Flag: types.Flag_INVALID_DB_NOT_EXIST,
 			},
 			{
-				Flag: api.Flag_INVALID_MVCC_CONFLICT,
+				Flag: types.Flag_INVALID_MVCC_CONFLICT,
 			},
 			{
-				Flag: api.Flag_INVALID_MVCC_CONFLICT,
+				Flag: types.Flag_INVALID_MVCC_CONFLICT,
 			},
 		}
 

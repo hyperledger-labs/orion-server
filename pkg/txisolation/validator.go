@@ -2,7 +2,7 @@ package txisolation
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -17,15 +17,15 @@ func NewValidator(db worldstate.DB) *Validator {
 
 }
 
-func (v *Validator) ValidateBlock(block *api.Block) ([]*api.ValidationInfo, error) {
+func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
 	var err error
-	valInfo := make([]*api.ValidationInfo, len(block.TransactionEnvelopes))
+	valInfo := make([]*types.ValidationInfo, len(block.TransactionEnvelopes))
 	pendingWrites := make(map[string]bool)
 
 	for txIndex, tx := range block.TransactionEnvelopes {
 		if err = v.db.Open(tx.Payload.DBName); err != nil {
-			valInfo[txIndex] = &api.ValidationInfo{
-				Flag: api.Flag_INVALID_DB_NOT_EXIST,
+			valInfo[txIndex] = &types.ValidationInfo{
+				Flag: types.Flag_INVALID_DB_NOT_EXIST,
 			}
 			continue
 		}
@@ -33,7 +33,7 @@ func (v *Validator) ValidateBlock(block *api.Block) ([]*api.ValidationInfo, erro
 		if valInfo[txIndex], err = v.mvccValidation(tx.Payload, pendingWrites); err != nil {
 			return nil, err
 		}
-		if valInfo[txIndex].Flag == api.Flag_VALID {
+		if valInfo[txIndex].Flag == types.Flag_VALID {
 			for _, write := range tx.Payload.Writes {
 				pendingWrites[write.Key] = true
 			}
@@ -43,14 +43,14 @@ func (v *Validator) ValidateBlock(block *api.Block) ([]*api.ValidationInfo, erro
 	return valInfo, nil
 }
 
-func (v *Validator) mvccValidation(tx *api.Transaction, pendingWrites map[string]bool) (*api.ValidationInfo, error) {
-	valInfo := &api.ValidationInfo{
-		Flag: api.Flag_VALID,
+func (v *Validator) mvccValidation(tx *types.Transaction, pendingWrites map[string]bool) (*types.ValidationInfo, error) {
+	valInfo := &types.ValidationInfo{
+		Flag: types.Flag_VALID,
 	}
 
 	for _, read := range tx.Reads {
 		if pendingWrites[read.Key] {
-			valInfo.Flag = api.Flag_INVALID_MVCC_CONFLICT
+			valInfo.Flag = types.Flag_INVALID_MVCC_CONFLICT
 			return valInfo, nil
 		}
 
@@ -62,7 +62,7 @@ func (v *Validator) mvccValidation(tx *api.Transaction, pendingWrites map[string
 			continue
 		}
 
-		valInfo.Flag = api.Flag_INVALID_MVCC_CONFLICT
+		valInfo.Flag = types.Flag_INVALID_MVCC_CONFLICT
 		return valInfo, nil
 	}
 

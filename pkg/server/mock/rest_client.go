@@ -11,11 +11,9 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/library/pkg/server"
+	"github.ibm.com/blockchaindb/protos/types"
 )
-
-const UserHeader = "X-BLockchain-DB-User-ID"
-const SignatureHeader = "X-BLockchain-DB-Signature"
 
 type Client struct {
 	RawURL     string
@@ -40,7 +38,7 @@ func NewRESTClient(rawurl string) (*Client, error) {
 	return res, nil
 }
 
-func (c *Client) GetStatus(ctx context.Context, in *api.GetStatusQueryEnvelope) (*api.GetStatusResponseEnvelope, error) {
+func (c *Client) GetStatus(ctx context.Context, in *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
 	rel := &url.URL{Path: fmt.Sprintf("/db/%s", in.Payload.DBName)}
 	u := c.BaseURL.ResolveReference(rel)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -49,8 +47,8 @@ func (c *Client) GetStatus(ctx context.Context, in *api.GetStatusQueryEnvelope) 
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(UserHeader, in.Payload.UserID)
-	req.Header.Set(SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
+	req.Header.Set(server.UserHeader, in.Payload.UserID)
+	req.Header.Set(server.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -65,12 +63,12 @@ func (c *Client) GetStatus(ctx context.Context, in *api.GetStatusQueryEnvelope) 
 		}
 		return nil, errors.New(errorRes.Error)
 	}
-	res := &api.GetStatusResponseEnvelope{}
+	res := &types.GetStatusResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
 
-func (c *Client) GetState(ctx context.Context, in *api.GetStateQueryEnvelope) (*api.GetStateResponseEnvelope, error) {
+func (c *Client) GetState(ctx context.Context, in *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
 	rel := &url.URL{Path: fmt.Sprintf("/db/%s/state/%s", in.Payload.DBName, in.Payload.Key)}
 	u := c.BaseURL.ResolveReference(rel)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -79,8 +77,8 @@ func (c *Client) GetState(ctx context.Context, in *api.GetStateQueryEnvelope) (*
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(UserHeader, in.Payload.UserID)
-	req.Header.Set(SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
+	req.Header.Set(server.UserHeader, in.Payload.UserID)
+	req.Header.Set(server.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -95,12 +93,12 @@ func (c *Client) GetState(ctx context.Context, in *api.GetStateQueryEnvelope) (*
 		}
 		return nil, errors.New(errorRes.Error)
 	}
-	res := &api.GetStateResponseEnvelope{}
+	res := &types.GetStateResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
 
-func (c *Client) SubmitTransaction(ctx context.Context, in *api.TransactionEnvelope) (*api.ResponseEnvelope, error) {
+func (c *Client) SubmitTransaction(ctx context.Context, in *types.TransactionEnvelope) (*types.ResponseEnvelope, error) {
 	rel := &url.URL{Path: "/tx"}
 	u := c.BaseURL.ResolveReference(rel)
 
@@ -133,7 +131,7 @@ func (c *Client) SubmitTransaction(ctx context.Context, in *api.TransactionEnvel
 		}
 		return nil, errors.New(errorRes.Error)
 	}
-	res := new(api.ResponseEnvelope)
+	res := new(types.ResponseEnvelope)
 	err = json.NewDecoder(resp.Body).Decode(res)
 	if res.Data == nil {
 		return nil, nil

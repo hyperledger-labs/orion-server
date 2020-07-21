@@ -8,7 +8,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -48,37 +48,37 @@ var env testEnv
 
 func TestStateDBCommitter(t *testing.T) {
 	setup := func(db worldstate.DB) []*worldstate.DBUpdates {
-		db1val1 := &api.Value{
+		db1val1 := &types.Value{
 			Value: []byte("db1-value1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    1,
 				},
 			},
 		}
-		db1val2 := &api.Value{
+		db1val2 := &types.Value{
 			Value: []byte("db1-value2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    2,
 				},
 			},
 		}
-		db2val1 := &api.Value{
+		db2val1 := &types.Value{
 			Value: []byte("db2-value1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    3,
 				},
 			},
 		}
-		db2val2 := &api.Value{
+		db2val2 := &types.Value{
 			Value: []byte("db2-value2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    4,
 				},
@@ -134,15 +134,15 @@ func TestStateDBCommitter(t *testing.T) {
 		// create a block to update all existing entries in the database
 		// In db1, we update db1-key1, db1-key2
 		// In db2, we update db2-key1, db2-key2
-		block := &api.Block{
-			Header: &api.BlockHeader{
+		block := &types.Block{
+			Header: &types.BlockHeader{
 				Number: 2,
 			},
-			TransactionEnvelopes: []*api.TransactionEnvelope{
+			TransactionEnvelopes: []*types.TransactionEnvelope{
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db1-key1",
 								Value: []byte("new-value-1"),
@@ -151,9 +151,9 @@ func TestStateDBCommitter(t *testing.T) {
 					},
 				},
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db1-key2",
 								Value: []byte("new-value-2"),
@@ -162,9 +162,9 @@ func TestStateDBCommitter(t *testing.T) {
 					},
 				},
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db2-key1",
 								Value: []byte("new-value-1"),
@@ -173,9 +173,9 @@ func TestStateDBCommitter(t *testing.T) {
 					},
 				},
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db2-key2",
 								Value: []byte("new-value-2"),
@@ -186,18 +186,18 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		validationInfo := []*api.ValidationInfo{
+		validationInfo := []*types.ValidationInfo{
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 		}
 
@@ -215,10 +215,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err := env.db.Get("db1", "db1-key1")
 		require.NoError(t, err)
-		expectedVal := &api.Value{
+		expectedVal := &types.Value{
 			Value: []byte("new-value-1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    0,
 				},
@@ -227,10 +227,10 @@ func TestStateDBCommitter(t *testing.T) {
 		require.True(t, proto.Equal(expectedVal, val))
 		val, err = env.db.Get("db1", "db1-key2")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("new-value-2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    1,
 				},
@@ -239,10 +239,10 @@ func TestStateDBCommitter(t *testing.T) {
 		require.True(t, proto.Equal(expectedVal, val))
 		val, err = env.db.Get("db2", "db2-key1")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("new-value-1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    2,
 				},
@@ -252,10 +252,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err = env.db.Get("db2", "db2-key2")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("new-value-2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    3,
 				},
@@ -280,15 +280,15 @@ func TestStateDBCommitter(t *testing.T) {
 		// create a block to delete all existing entries in the database
 		// In db1, we delete db1-key1, db1-key2
 		// In db2, we delete db2-key1, db2-key2
-		block := &api.Block{
-			Header: &api.BlockHeader{
+		block := &types.Block{
+			Header: &types.BlockHeader{
 				Number: 2,
 			},
-			TransactionEnvelopes: []*api.TransactionEnvelope{
+			TransactionEnvelopes: []*types.TransactionEnvelope{
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:      "db1-key1",
 								IsDelete: true,
@@ -301,9 +301,9 @@ func TestStateDBCommitter(t *testing.T) {
 					},
 				},
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:      "db2-key1",
 								IsDelete: true,
@@ -318,12 +318,12 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		validationInfo := []*api.ValidationInfo{
+		validationInfo := []*types.ValidationInfo{
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 		}
 
@@ -373,15 +373,15 @@ func TestStateDBCommitter(t *testing.T) {
 		// existing entries in the database
 		// In db1, insert db1-key3, db1-key4
 		// In db2, insert db2-key3, db2-key4
-		block := &api.Block{
-			Header: &api.BlockHeader{
+		block := &types.Block{
+			Header: &types.BlockHeader{
 				Number: 2,
 			},
-			TransactionEnvelopes: []*api.TransactionEnvelope{
+			TransactionEnvelopes: []*types.TransactionEnvelope{
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db1-key3",
 								Value: []byte("value-3"),
@@ -394,9 +394,9 @@ func TestStateDBCommitter(t *testing.T) {
 					},
 				},
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db2-key3",
 								Value: []byte("value-3"),
@@ -411,12 +411,12 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		validationInfo := []*api.ValidationInfo{
+		validationInfo := []*types.ValidationInfo{
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 		}
 
@@ -434,10 +434,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err := env.db.Get("db1", "db1-key3")
 		require.NoError(t, err)
-		expectedVal := &api.Value{
+		expectedVal := &types.Value{
 			Value: []byte("value-3"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    0,
 				},
@@ -447,10 +447,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err = env.db.Get("db1", "db1-key4")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("value-4"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    0,
 				},
@@ -460,10 +460,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err = env.db.Get("db2", "db2-key3")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("value-3"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    1,
 				},
@@ -473,10 +473,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err = env.db.Get("db2", "db2-key4")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("value-4"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    1,
 				},
@@ -502,16 +502,16 @@ func TestStateDBCommitter(t *testing.T) {
 		// add a new entry
 		// In db1, we delete db1-key1, update db1-key2, newly add db1-key3
 		// In db2, we update db2-key1, delete db2-key2, newly add db2-key3
-		block := &api.Block{
-			Header: &api.BlockHeader{
+		block := &types.Block{
+			Header: &types.BlockHeader{
 				Number: 10,
 			},
-			TransactionEnvelopes: []*api.TransactionEnvelope{
+			TransactionEnvelopes: []*types.TransactionEnvelope{
 				{
 					// we mark this transaction valid
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:      "db1-key1",
 								IsDelete: true,
@@ -533,9 +533,9 @@ func TestStateDBCommitter(t *testing.T) {
 				},
 				{
 					// we mark this transaction invalid
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db3",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db3-key2",
 								Value: []byte("value-2"),
@@ -545,18 +545,18 @@ func TestStateDBCommitter(t *testing.T) {
 				},
 				{
 					// we mark this transaction valid
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Reads: []*api.KVRead{
+						Reads: []*types.KVRead{
 							{
 								Key: "db2-key1",
-								Version: &api.Version{
+								Version: &types.Version{
 									BlockNum: 1,
 									TxNum:    3,
 								},
 							},
 						},
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db2-key1",
 								Value: []byte("new-value-1"),
@@ -566,9 +566,9 @@ func TestStateDBCommitter(t *testing.T) {
 				},
 				{
 					// we mark this transaction valid
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:      "db2-key2",
 								IsDelete: true,
@@ -582,16 +582,16 @@ func TestStateDBCommitter(t *testing.T) {
 				},
 				{
 					// we mark this transaction valid
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Writes: []*api.KVWrite{},
+						Writes: []*types.KVWrite{},
 					},
 				},
 				{
 					// we mark this transaction invalid
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db2",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:      "db2-key2",
 								IsDelete: true,
@@ -606,24 +606,24 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		validationInfo := []*api.ValidationInfo{
+		validationInfo := []*types.ValidationInfo{
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_INVALID_DB_NOT_EXIST,
+				Flag: types.Flag_INVALID_DB_NOT_EXIST,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: api.Flag_INVALID_MVCC_CONFLICT,
+				Flag: types.Flag_INVALID_MVCC_CONFLICT,
 			},
 		}
 
@@ -647,10 +647,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err = env.db.Get("db1", "db1-key2")
 		require.NoError(t, err)
-		expectedVal := &api.Value{
+		expectedVal := &types.Value{
 			Value: []byte("new-value-2"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 10,
 					TxNum:    0,
 				},
@@ -660,10 +660,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err = env.db.Get("db1", "db1-key3")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("value-3"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 10,
 					TxNum:    0,
 				},
@@ -674,10 +674,10 @@ func TestStateDBCommitter(t *testing.T) {
 		// In db2, we update db2-key1, delete db2-key2, newly add db2-key3
 		val, err = env.db.Get("db2", "db2-key1")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("new-value-1"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 10,
 					TxNum:    2,
 				},
@@ -691,10 +691,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		val, err = env.db.Get("db2", "db2-key3")
 		require.NoError(t, err)
-		expectedVal = &api.Value{
+		expectedVal = &types.Value{
 			Value: []byte("value-3"),
-			Metadata: &api.Metadata{
-				Version: &api.Version{
+			Metadata: &types.Metadata{
+				Version: &types.Version{
 					BlockNum: 10,
 					TxNum:    3,
 				},
@@ -707,15 +707,15 @@ func TestStateDBCommitter(t *testing.T) {
 		env.init(t)
 		defer env.cleanup()
 
-		block := &api.Block{
-			Header: &api.BlockHeader{
+		block := &types.Block{
+			Header: &types.BlockHeader{
 				Number: 2,
 			},
-			TransactionEnvelopes: []*api.TransactionEnvelope{
+			TransactionEnvelopes: []*types.TransactionEnvelope{
 				{
-					Payload: &api.Transaction{
+					Payload: &types.Transaction{
 						DBName: "db1",
-						Writes: []*api.KVWrite{
+						Writes: []*types.KVWrite{
 							{
 								Key:   "db1-key3",
 								Value: []byte("value-3"),
@@ -726,9 +726,9 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		validationInfo := []*api.ValidationInfo{
+		validationInfo := []*types.ValidationInfo{
 			{
-				Flag: api.Flag_VALID,
+				Flag: types.Flag_VALID,
 			},
 		}
 

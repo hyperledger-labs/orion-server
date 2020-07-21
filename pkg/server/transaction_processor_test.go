@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -53,13 +53,13 @@ func TestTransactionProcessor(t *testing.T) {
 		env := newTxProcessorTestEnv(t)
 		defer env.cleanup()
 
-		tx := &api.TransactionEnvelope{
-			Payload: &api.Transaction{
+		tx := &types.TransactionEnvelope{
+			Payload: &types.Transaction{
 				DBName:    "test",
 				TxID:      []byte("tx1"),
-				DataModel: api.Transaction_KV,
-				Reads:     []*api.KVRead{},
-				Writes: []*api.KVWrite{
+				DataModel: types.Transaction_KV,
+				Reads:     []*types.KVRead{},
+				Writes: []*types.KVWrite{
 					{
 						Key:   "test-key1",
 						Value: []byte("test-value1"),

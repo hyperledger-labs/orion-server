@@ -3,7 +3,7 @@ package blockcreator
 import (
 	"log"
 
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
@@ -24,10 +24,10 @@ func NewAssembler(txBatchQueue, blockQueue *queue.Queue) *Assembler {
 
 func (a *Assembler) Run() {
 	for {
-		txBatch := a.txBatchQueue.Dequeue().([]*api.TransactionEnvelope)
+		txBatch := a.txBatchQueue.Dequeue().([]*types.TransactionEnvelope)
 
-		block := &api.Block{
-			Header: &api.BlockHeader{
+		block := &types.Block{
+			Header: &types.BlockHeader{
 				Number: a.blockNumber,
 			},
 			TransactionEnvelopes: txBatch,

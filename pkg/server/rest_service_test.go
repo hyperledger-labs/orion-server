@@ -10,7 +10,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
@@ -34,8 +34,8 @@ func TestCreateRESTService(t *testing.T) {
 	time.Sleep(time.Millisecond * 10)
 	defer s.Close()
 	rc, _ := mock.NewRESTClient("http://localhost:6001")
-	req := &api.GetStatusQueryEnvelope{
-		Payload: &api.GetStatusQuery{
+	req := &types.GetStatusQueryEnvelope{
+		Payload: &types.GetStatusQuery{
 			UserID: "testUser",
 			DBName: "db1",
 		},
@@ -66,8 +66,8 @@ func Test_handleStatusQuery(t *testing.T) {
 	defer s.Close()
 	rs.qs.db.Create("db1")
 	rc, _ := mock.NewRESTClient("http://localhost:6001")
-	req := &api.GetStatusQueryEnvelope{
-		Payload: &api.GetStatusQuery{
+	req := &types.GetStatusQueryEnvelope{
+		Payload: &types.GetStatusQuery{
 			UserID: "testUser",
 			DBName: "db1",
 		},
@@ -113,19 +113,19 @@ func Test_handleStateQuery(t *testing.T) {
 	defer s.Close()
 	rs.qs.db.Create("db1")
 
-	val1 := &api.Value{
+	val1 := &types.Value{
 		Value: []byte("Value1"),
-		Metadata: &api.Metadata{
-			Version: &api.Version{
+		Metadata: &types.Metadata{
+			Version: &types.Version{
 				BlockNum: 1,
 				TxNum:    1,
 			},
 		},
 	}
-	val2 := &api.Value{
+	val2 := &types.Value{
 		Value: []byte("Value2"),
-		Metadata: &api.Metadata{
-			Version: &api.Version{
+		Metadata: &types.Metadata{
+			Version: &types.Version{
 				BlockNum: 1,
 				TxNum:    2,
 			},
@@ -148,8 +148,8 @@ func Test_handleStateQuery(t *testing.T) {
 	}
 	require.NoError(t, rs.qs.db.Commit(dbsUpdates))
 	rc, _ := mock.NewRESTClient("http://localhost:6001")
-	req := &api.GetStateQueryEnvelope{
-		Payload: &api.GetStateQuery{
+	req := &types.GetStateQueryEnvelope{
+		Payload: &types.GetStateQuery{
 			UserID: "testUser",
 			DBName: "db1",
 			Key:    "key1",

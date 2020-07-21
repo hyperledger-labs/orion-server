@@ -3,7 +3,7 @@ package txreorderer
 import (
 	"log"
 
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
@@ -34,9 +34,9 @@ func NewBatchCreator(txQueue, txBatchQueue *queue.Queue) *BatchCreator {
 
 // Run runs the transactions batch creator
 func (b *BatchCreator) Run() {
-	var txBatch []*api.TransactionEnvelope
+	var txBatch []*types.TransactionEnvelope
 	for {
-		tx := b.txQueue.Dequeue().(*api.TransactionEnvelope)
+		tx := b.txQueue.Dequeue().(*types.TransactionEnvelope)
 		txBatch = append(txBatch, tx)
 		if len(txBatch) < txBatchSize {
 			continue

@@ -3,7 +3,7 @@ package blockprocessor
 import (
 	"log"
 
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/committer"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 	"github.ibm.com/blockchaindb/server/pkg/txisolation"
@@ -30,7 +30,7 @@ func NewValidatorAndCommitter(blockQueue *queue.Queue, db worldstate.DB) *Valida
 // Run runs validator and committer
 func (p *ValidatorAndCommitter) Run() {
 	for {
-		block := p.blockQueue.Dequeue().(*api.Block)
+		block := p.blockQueue.Dequeue().(*types.Block)
 
 		validationInfo, err := p.validator.ValidateBlock(block)
 		if err != nil {

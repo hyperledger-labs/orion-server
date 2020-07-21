@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -120,7 +120,7 @@ func (l *LevelDB) Open(dbName string) error {
 }
 
 // Get returns the value of the key present in the database.
-func (l *LevelDB) Get(dbName string, key string) (*api.Value, error) {
+func (l *LevelDB) Get(dbName string, key string) (*types.Value, error) {
 	db, err := l.getDB(dbName)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (l *LevelDB) Get(dbName string, key string) (*api.Value, error) {
 		return nil, errors.WithMessagef(err, "failed to retrieve leveldb key [%s] from database %s", key, dbName)
 	}
 
-	value := &api.Value{}
+	value := &types.Value{}
 	if err := proto.Unmarshal(dbval, value); err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (l *LevelDB) Get(dbName string, key string) (*api.Value, error) {
 }
 
 // GetVersion returns the version of the key present in the database
-func (l *LevelDB) GetVersion(dbName string, key string) (*api.Version, error) {
+func (l *LevelDB) GetVersion(dbName string, key string) (*types.Version, error) {
 	dbval, err := l.Get(dbName, key)
 	if err != nil {
 		return nil, err

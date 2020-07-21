@@ -5,10 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -22,13 +21,13 @@ func newQueryProcessor(db worldstate.DB) *queryProcessor {
 	}
 }
 
-func (qp *queryProcessor) GetStatus(ctx context.Context, req *api.GetStatusQueryEnvelope) (*api.GetStatusResponseEnvelope, error) {
+func (qp *queryProcessor) GetStatus(ctx context.Context, req *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
 	if err := validateDB(req); err != nil {
 		return nil, err
 	}
-	status := &api.GetStatusResponseEnvelope{
-		Payload: &api.GetStatusResponse{
-			Header: &api.ResponseHeader{
+	status := &types.GetStatusResponseEnvelope{
+		Payload: &types.GetStatusResponse{
+			Header: &types.ResponseHeader{
 				NodeID: nil,
 			},
 			Exist: false,
@@ -46,14 +45,14 @@ func (qp *queryProcessor) GetStatus(ctx context.Context, req *api.GetStatusQuery
 	return status, nil
 }
 
-func (qp *queryProcessor) GetState(ctx context.Context, req *api.GetStateQueryEnvelope) (*api.GetStateResponseEnvelope, error) {
+func (qp *queryProcessor) GetState(ctx context.Context, req *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
 	if err := validateDataQuery(req); err != nil {
 		return nil, err
 	}
 
-	result := &api.GetStateResponseEnvelope{
-		Payload: &api.GetStateResponse{
-			Header: &api.ResponseHeader{
+	result := &types.GetStateResponseEnvelope{
+		Payload: &types.GetStateResponse{
+			Header: &types.ResponseHeader{
 				NodeID: nil,
 			},
 		},
@@ -73,7 +72,7 @@ func (qp *queryProcessor) GetState(ctx context.Context, req *api.GetStateQueryEn
 	return result, nil
 }
 
-func validateDataQuery(req *api.GetStateQueryEnvelope) error {
+func validateDataQuery(req *types.GetStateQueryEnvelope) error {
 	if req == nil {
 		return fmt.Errorf("dataQueryEnvelope request is nil")
 	}
@@ -93,7 +92,7 @@ func validateDataQuery(req *api.GetStateQueryEnvelope) error {
 	return nil
 }
 
-func validateDB(req *api.GetStatusQueryEnvelope) error {
+func validateDB(req *types.GetStatusQueryEnvelope) error {
 	if req == nil {
 		return fmt.Errorf("db request envelope is nil")
 	}

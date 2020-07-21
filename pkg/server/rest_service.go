@@ -11,13 +11,11 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/api"
+	"github.ibm.com/blockchaindb/library/pkg/server"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
-
-const UserHeader = "X-BLockchain-DB-User-ID"
-const SignatureHeader = "X-BLockchain-DB-Signature"
 
 type DBServer struct {
 	router *mux.Router
@@ -67,8 +65,8 @@ func (rs *DBServer) handleStatusQuery(w http.ResponseWriter, r *http.Request) {
 		composeJSONResponse(w, http.StatusBadRequest, &ResponseErr{Error: "query error - bad or missing database name"})
 		return
 	}
-	dbQueryEnvelope := &api.GetStatusQueryEnvelope{
-		Payload: &api.GetStatusQuery{
+	dbQueryEnvelope := &types.GetStatusQueryEnvelope{
+		Payload: &types.GetStatusQuery{
 			UserID: userId,
 			DBName: dbname,
 		},
@@ -101,8 +99,8 @@ func (rs *DBServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
 		composeJSONResponse(w, http.StatusBadRequest, &ResponseErr{Error: "query error - bad or missing key"})
 		return
 	}
-	dataQueryEnvelope := &api.GetStateQueryEnvelope{
-		Payload: &api.GetStateQuery{
+	dataQueryEnvelope := &types.GetStateQueryEnvelope{
+		Payload: &types.GetStateQuery{
 			UserID: userid,
 			DBName: dbname,
 			Key:    key,
@@ -119,7 +117,7 @@ func (rs *DBServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
 }
 
 func (rs *DBServer) handleTransactionSubmit(w http.ResponseWriter, r *http.Request) {
-	tx := new(api.TransactionEnvelope)
+	tx := new(types.TransactionEnvelope)
 	err := json.NewDecoder(r.Body).Decode(tx)
 	if err != nil {
 		composeJSONResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
@@ -141,12 +139,12 @@ func composeJSONResponse(w http.ResponseWriter, code int, payload interface{}) {
 }
 
 func validateAndParseQueryHeader(r *http.Request) (string, []byte, error) {
-	userID := r.Header.Get(UserHeader)
+	userID := r.Header.Get(server.UserHeader)
 	if userID == "" {
 		return "", nil, errors.New("empty user")
 	}
 
-	signature := r.Header.Get(SignatureHeader)
+	signature := r.Header.Get(server.SignatureHeader)
 	if signature == "" {
 		return "", nil, errors.New("empty signature")
 	}
