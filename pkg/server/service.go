@@ -6,13 +6,16 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/config"
 )
 
 var s *http.Server
 
-func Start() {
-	config.Init()
+func Start() error {
+	if err := config.Init(); err != nil {
+		return errors.WithMessagef(err, "error while starting the server")
+	}
 
 	restServer, err := NewDBServer()
 	if err != nil {
@@ -33,6 +36,8 @@ func Start() {
 		s.ListenAndServe()
 	}()
 	wg.Wait()
+
+	return nil
 }
 
 func Stop() {

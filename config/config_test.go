@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"testing"
 
@@ -8,7 +9,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	Init()
+	if err := Init(); err != nil {
+		log.Fatalf("error while initializing configuration, %v", err)
+	}
 	os.Exit(m.Run())
 }
 

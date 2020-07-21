@@ -17,14 +17,15 @@ import (
 func TestMain(m *testing.M) {
 	path, err := filepath.Abs("../../config")
 	if err != nil {
-		log.Fatal("Failed to construct absolute path from the default config")
+		log.Fatalf("Error while constructing absolute path from the default config, %v", err)
 	}
-
 	if err := os.Setenv(config.PathEnv, path); err != nil {
-		log.Fatalf("Failed to set the config path to %s", config.PathEnv)
+		log.Fatalf(" Error while setting the config path to %s, %v", config.PathEnv, err)
 	}
 
-	config.Init()
+	if err := config.Init(); err != nil {
+		log.Fatalf("Error while initializing the configuration, %v", err)
+	}
 	os.Exit(m.Run())
 }
 

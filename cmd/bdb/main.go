@@ -68,7 +68,9 @@ func startCmd() *cobra.Command {
 
 			cmd.SilenceUsage = true
 			log.Println("Starting a blockchain database")
-			server.Start()
+			if err := server.Start(); err != nil {
+				log.Fatalf("%v", err)
+			}
 
 			return nil
 		},
