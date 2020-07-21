@@ -23,7 +23,7 @@ func TestTransactionQueue(t *testing.T) {
 		})
 	}
 
-	q := NewQueue(5)
+	q := New(5)
 	require.Equal(t, 0, q.Size())
 	require.False(t, q.IsFull())
 	require.True(t, q.IsEmpty())

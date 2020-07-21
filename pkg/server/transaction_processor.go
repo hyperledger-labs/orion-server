@@ -23,9 +23,9 @@ type transactionProcessor struct {
 
 func newTransactionProcessor(db worldstate.DB) *transactionProcessor {
 	// TODO: make the queue size configurable
-	txQueue := queue.NewQueue(100)
-	txBatchQueue := queue.NewQueue(100)
-	blockQueue := queue.NewQueue(100)
+	txQueue := queue.New(100)
+	txBatchQueue := queue.New(100)
+	blockQueue := queue.New(100)
 
 	t := &transactionProcessor{
 		txQueue:        txQueue,
