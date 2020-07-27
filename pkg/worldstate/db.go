@@ -5,6 +5,11 @@ import "github.ibm.com/blockchaindb/protos/types"
 const (
 	// UsersDBName holds all users information
 	UsersDBName = "_users"
+	// DatabasesDBName holds the name of all user databases
+	DatabasesDBName = "_dbs"
+	// DefaultDBName is the default database created during
+	// node bootstrap
+	DefaultDBName = "bdb"
 )
 
 // DB provides method to create and access states stored in

@@ -13,101 +13,196 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
-func TestQueryService(t *testing.T) {
-	path, err := ioutil.TempDir("/tmp", "queryservice")
+type queryProcessorTestEnv struct {
+	db      *leveldb.LevelDB
+	q       *queryProcessor
+	cleanup func(t *testing.T)
+}
+
+func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
+	path, err := ioutil.TempDir("/tmp", "queryProcessor")
 	require.NoError(t, err)
-	defer os.RemoveAll(path)
-	db, err := leveldb.NewLevelDB(path)
-	require.NoError(t, err)
 
-	qs := newQueryProcessor(db)
-	require.NotNil(t, qs)
-	require.NoError(t, qs.db.Create("test-db"))
-
-	val1 := &types.Value{
-		Value: []byte("value1"),
-		Metadata: &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 1,
-				TxNum:    1,
-			},
-		},
-	}
-	val2 := &types.Value{
-		Value: []byte("value2"),
-		Metadata: &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 1,
-				TxNum:    2,
-			},
-		},
-	}
-	dbsUpdates := []*worldstate.DBUpdates{
-		{
-			DBName: "test-db",
-			Writes: []*worldstate.KV{
-				{
-					Key:   "key1",
-					Value: val1,
-				},
-				{
-					Key:   "key2",
-					Value: val2,
-				},
-			},
-		},
-	}
-	require.NoError(t, qs.db.Commit(dbsUpdates))
-
-	t.Run("GetStatus", func(t *testing.T) {
-		t.Parallel()
-		req := &types.GetStatusQueryEnvelope{
-			Payload: &types.GetStatusQuery{
-				UserID: "testUser",
-				DBName: "test-db",
-			},
-			Signature: []byte("signature"),
+	cleanup := func(t *testing.T) {
+		if err := os.RemoveAll(path); err != nil {
+			t.Errorf("failed to remove %s due to %v", path, err)
 		}
-		status, err := qs.GetStatus(context.TODO(), req)
-		require.NoError(t, err)
-		require.True(t, status.Payload.Exist)
+	}
 
-		req.Payload.DBName = ""
-		status, err = qs.GetStatus(context.TODO(), req)
-		require.NoError(t, err)
-		require.False(t, status.Payload.Exist)
+	db, err := leveldb.New(path)
+	if err != nil {
+		cleanup(t)
+		t.Fatalf("failed to create a new leveldb instance, %v", err)
+	}
 
-		status, err = qs.GetStatus(context.TODO(), nil)
-		require.EqualError(t, err, "db request envelope is nil")
-		require.Nil(t, status)
+	return &queryProcessorTestEnv{
+		db:      db,
+		q:       newQueryProcessor(db),
+		cleanup: cleanup,
+	}
+}
+
+func TestGetStatus(t *testing.T) {
+	t.Run("GetStatus-Returns-Status", func(t *testing.T) {
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		require.NoError(t, env.db.Create("test-db"))
+
+		testCases := []struct {
+			dbName  string
+			isExist bool
+		}{
+			{
+				dbName:  "test-db",
+				isExist: true,
+			},
+			{
+				dbName:  "random",
+				isExist: false,
+			},
+		}
+
+		for _, testCase := range testCases {
+			req := &types.GetStatusQueryEnvelope{
+				Payload: &types.GetStatusQuery{
+					UserID: "testUser",
+					DBName: testCase.dbName,
+				},
+				Signature: []byte("signature"),
+			}
+			status, err := env.q.GetStatus(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, testCase.isExist, status.Payload.Exist)
+		}
 	})
 
-	t.Run("GetState", func(t *testing.T) {
-		t.Parallel()
-		req := &types.GetStateQueryEnvelope{
-			Payload: &types.GetStateQuery{
-				UserID: "testUser",
-				DBName: "test-db",
-				Key:    "key1",
+	t.Run("GetStatus-Returns-Error", func(t *testing.T) {
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		testCases := []struct {
+			request       *types.GetStatusQueryEnvelope
+			expectedError string
+		}{
+			{
+				request:       nil,
+				expectedError: "`GetStatusQueryEnvelope` is nil",
 			},
-			Signature: []byte("signature"),
+			{
+				request: &types.GetStatusQueryEnvelope{
+					Payload: nil,
+				},
+				expectedError: "`Payload` in `GetStatusQueryEnvelope` is nil",
+			},
+			{
+				request: &types.GetStatusQueryEnvelope{
+					Payload: &types.GetStatusQuery{
+						UserID: "",
+					},
+				},
+				expectedError: "`UserID` is not set in `Payload`",
+			},
 		}
-		val, err := qs.GetState(context.TODO(), req)
-		require.NoError(t, err)
-		require.True(t, proto.Equal(val1, val.Payload.Value))
 
-		req.Payload.Key = "key3"
-		val, err = qs.GetState(context.TODO(), req)
-		require.NoError(t, err)
-		require.Nil(t, val.Payload.Value)
+		for _, testCase := range testCases {
+			status, err := env.q.GetStatus(context.Background(), testCase.request)
+			require.Contains(t, err.Error(), testCase.expectedError)
+			require.Nil(t, status)
+		}
+	})
+}
 
-		req.Payload.UserID = ""
-		val, err = qs.GetState(context.TODO(), req)
-		require.EqualError(t, err, "DataQuery userid is empty [payload:<DBName:\"test-db\" key:\"key3\" > signature:\"signature\" ]")
-		require.Nil(t, val)
+func TestGetState(t *testing.T) {
+	t.Run("GetState-Returns-State", func(t *testing.T) {
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
 
-		val, err = qs.GetState(context.TODO(), nil)
-		require.EqualError(t, err, "dataQueryEnvelope request is nil")
-		require.Nil(t, val)
+		require.NoError(t, env.db.Create("test-db"))
+		val1 := &types.Value{
+			Value: []byte("value1"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+			},
+		}
+		dbsUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: "test-db",
+				Writes: []*worldstate.KV{
+					{
+						Key:   "key1",
+						Value: val1,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(dbsUpdates))
+
+		testCases := []struct {
+			key           string
+			expectedValue *types.Value
+		}{
+			{
+				key:           "key1",
+				expectedValue: val1,
+			},
+			{
+				key:           "not-present",
+				expectedValue: nil,
+			},
+		}
+
+		for _, testCase := range testCases {
+			req := &types.GetStateQueryEnvelope{
+				Payload: &types.GetStateQuery{
+					UserID: "testUser",
+					DBName: "test-db",
+					Key:    testCase.key,
+				},
+				Signature: []byte("signature"),
+			}
+
+			val, err := env.q.GetState(context.Background(), req)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(testCase.expectedValue, val.Payload.Value))
+		}
+	})
+
+	t.Run("GetState-Returns-Error", func(t *testing.T) {
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		testCases := []struct {
+			request       *types.GetStateQueryEnvelope
+			expectedError string
+		}{
+			{
+				request:       nil,
+				expectedError: "`GetStateQueryEnvelope` is nil",
+			},
+			{
+				request: &types.GetStateQueryEnvelope{
+					Payload: nil,
+				},
+				expectedError: "`Payload` in `GetStateQueryEnvelope` is nil",
+			},
+			{
+				request: &types.GetStateQueryEnvelope{
+					Payload: &types.GetStateQuery{
+						UserID: "",
+					},
+				},
+				expectedError: "`UserID` is not set in `Payload`",
+			},
+		}
+
+		for _, testCase := range testCases {
+			state, err := env.q.GetState(context.Background(), testCase.request)
+			require.Contains(t, err.Error(), testCase.expectedError)
+			require.Nil(t, state)
+		}
 	})
 }

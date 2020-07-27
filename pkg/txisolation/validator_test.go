@@ -34,7 +34,7 @@ func (env *testEnv) init(t *testing.T) {
 		}
 	}
 
-	db, err := leveldb.NewLevelDB(env.path)
+	db, err := leveldb.New(env.path)
 	if err != nil {
 		env.cleanup()
 		t.Fatalf("failed to create leveldb with path %s", env.path)

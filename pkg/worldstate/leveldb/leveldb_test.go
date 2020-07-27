@@ -28,7 +28,7 @@ func (env *testEnv) init(t *testing.T) {
 		require.NoError(t, os.RemoveAll(env.path))
 	}
 
-	l, err := NewLevelDB(env.path)
+	l, err := New(env.path)
 	if err != nil {
 		env.cleanup()
 		t.Fatalf("failed to create leveldb with path %s", env.path)
@@ -304,7 +304,7 @@ func TestNewLevelDB(t *testing.T) {
 		require.NoError(t, os.RemoveAll(levelPath))
 	}()
 
-	l, err := NewLevelDB(levelPath)
+	l, err := New(levelPath)
 	require.NoError(t, err)
 	require.NoError(t, l.Open(worldstate.UsersDBName))
 	require.NoError(t, l.Create("db1"))
@@ -322,7 +322,7 @@ func TestNewLevelDB(t *testing.T) {
 	require.NoError(t, l.Open("db4"))
 
 	closeLevelDB(t, l)
-	l, err = NewLevelDB(levelPath)
+	l, err = New(levelPath)
 	require.NoError(t, err)
 	require.Len(t, l.dbs, 4+len(systemDBs))
 	for _, dbName := range systemDBs {

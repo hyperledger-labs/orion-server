@@ -15,10 +15,7 @@ import (
 )
 
 type transactionProcessor struct {
-	txQueue        *queue.Queue
-	txBatchCreator *txreorderer.BatchCreator
-	blockCreator   *blockcreator.Assembler
-	blockProcessor *blockprocessor.ValidatorAndCommitter
+	txQueue *queue.Queue
 }
 
 func newTransactionProcessor(db worldstate.DB) *transactionProcessor {
@@ -27,21 +24,17 @@ func newTransactionProcessor(db worldstate.DB) *transactionProcessor {
 	txBatchQueue := queue.New(100)
 	blockQueue := queue.New(100)
 
-	t := &transactionProcessor{
-		txQueue:        txQueue,
-		txBatchCreator: txreorderer.NewBatchCreator(txQueue, txBatchQueue),
-		blockCreator:   blockcreator.NewAssembler(txBatchQueue, blockQueue),
-		blockProcessor: blockprocessor.NewValidatorAndCommitter(blockQueue, db),
+	go txreorderer.NewBatchCreator(txQueue, txBatchQueue).Run()
+	go blockcreator.NewAssembler(txBatchQueue, blockQueue).Run()
+	go blockprocessor.NewValidatorAndCommitter(blockQueue, db).Run()
+
+	return &transactionProcessor{
+		txQueue: txQueue,
 	}
-
-	go t.txBatchCreator.Run()
-	go t.blockCreator.Run()
-	go t.blockProcessor.Run()
-
-	return t
 }
 
-func (t *transactionProcessor) SubmitTransaction(ctx context.Context, tx *types.TransactionEnvelope) error {
+// SubmitTransaction enqueue the transaction to the transaction queue
+func (t *transactionProcessor) SubmitTransaction(_ context.Context, tx *types.TransactionEnvelope) error {
 	if t.txQueue.IsFull() {
 		return fmt.Errorf("transaction queue is full. It means the server load is high. Try after sometime")
 	}
@@ -51,6 +44,7 @@ func (t *transactionProcessor) SubmitTransaction(ctx context.Context, tx *types.
 	if err != nil {
 		return fmt.Errorf("failed to marshal transaction: %v", err)
 	}
+
 	log.Printf("enqueued transaction %s\n", string(jsonBytes))
 	return nil
 }

@@ -21,10 +21,13 @@ func newQueryProcessor(db worldstate.DB) *queryProcessor {
 	}
 }
 
-func (qp *queryProcessor) GetStatus(ctx context.Context, req *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
-	if err := validateDB(req); err != nil {
+// GetStatus returns the status about a database, i.e., whether a database exist or not
+func (q *queryProcessor) GetStatus(_ context.Context, req *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
+	var err error
+	if err = validateGetStatusQuery(req); err != nil {
 		return nil, err
 	}
+
 	status := &types.GetStatusResponseEnvelope{
 		Payload: &types.GetStatusResponse{
 			Header: &types.ResponseHeader{
@@ -34,23 +37,25 @@ func (qp *queryProcessor) GetStatus(ctx context.Context, req *types.GetStatusQue
 		},
 		Signature: nil,
 	}
-	var err error
 
-	if err = qp.db.Open(req.Payload.DBName); err == nil {
+	if err = q.db.Open(req.Payload.DBName); err == nil {
 		status.Payload.Exist = true
 	}
+
 	if status.Signature, err = crypto.Sign(status.Payload); err != nil {
 		return nil, err
 	}
 	return status, nil
 }
 
-func (qp *queryProcessor) GetState(ctx context.Context, req *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
-	if err := validateDataQuery(req); err != nil {
+// GetState return the state associated with a given key
+func (q *queryProcessor) GetState(_ context.Context, req *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
+	var err error
+	if err = validateGetStateQuery(req); err != nil {
 		return nil, err
 	}
 
-	result := &types.GetStateResponseEnvelope{
+	state := &types.GetStateResponseEnvelope{
 		Payload: &types.GetStateResponse{
 			Header: &types.ResponseHeader{
 				NodeID: nil,
@@ -59,55 +64,55 @@ func (qp *queryProcessor) GetState(ctx context.Context, req *types.GetStateQuery
 		Signature: nil,
 	}
 
-	dbVal, err := qp.db.Get(req.Payload.DBName, req.Payload.Key)
-	if err != nil {
+	if state.Payload.Value, err = q.db.Get(req.Payload.DBName, req.Payload.Key); err != nil {
 		return nil, err
 	}
-	if dbVal != nil {
-		result.Payload.Value = dbVal
-	}
-	if result.Signature, err = crypto.Sign(result.Payload); err != nil {
+
+	if state.Signature, err = crypto.Sign(state.Payload); err != nil {
 		return nil, err
 	}
-	return result, nil
+
+	return state, nil
 }
 
-func validateDataQuery(req *types.GetStateQueryEnvelope) error {
-	if req == nil {
-		return fmt.Errorf("dataQueryEnvelope request is nil")
+func validateGetStatusQuery(req *types.GetStatusQueryEnvelope) error {
+	switch {
+	case req == nil:
+		return fmt.Errorf("`GetStatusQueryEnvelope` is nil, %v", req)
+	case req.Payload == nil:
+		return fmt.Errorf("`Payload` in `GetStatusQueryEnvelope` is nil, %v", req)
+	case req.Payload.UserID == "":
+		return fmt.Errorf("`UserID` is not set in `Payload`, %v", req.Payload)
 	}
-	if req.Payload == nil {
-		return fmt.Errorf("DataQuery is nil [%v]", req)
-	}
-	if req.Payload.UserID == "" {
-		return fmt.Errorf("DataQuery userid is empty [%v]", req)
-	}
+
 	queryBytes, err := json.Marshal(req.Payload)
 	if err != nil {
-		return errors.Wrapf(err, "error while encoding db query %v", req.Payload)
+		return errors.Wrapf(err, "error while encoding `Payload` in the `GetStatusQueryEnvelope`, %v", req)
 	}
+
 	if err := crypto.Validate(req.Payload.UserID, req.Signature, queryBytes); err != nil {
-		return errors.Wrap(err, "query error - wrong signature")
+		return errors.Wrap(err, "signature validation failed")
 	}
 	return nil
 }
 
-func validateDB(req *types.GetStatusQueryEnvelope) error {
-	if req == nil {
-		return fmt.Errorf("db request envelope is nil")
+func validateGetStateQuery(req *types.GetStateQueryEnvelope) error {
+	switch {
+	case req == nil:
+		return fmt.Errorf("`GetStateQueryEnvelope` is nil")
+	case req.Payload == nil:
+		return fmt.Errorf("`Payload` in `GetStateQueryEnvelope` is nil, %v", req)
+	case req.Payload.UserID == "":
+		return fmt.Errorf("`UserID` is not set in `Payload`, %v", req.Payload)
 	}
-	if req.Payload == nil {
-		return fmt.Errorf("db query is nil %v", req)
-	}
-	if req.Payload.UserID == "" {
-		return fmt.Errorf("db query userid is empty %v", req)
-	}
+
 	queryBytes, err := json.Marshal(req.Payload)
 	if err != nil {
-		return errors.Wrapf(err, "error while encoding db query %v", req.Payload)
+		return errors.Wrapf(err, "error while encoding `Payload` in the `GetStateQueryEnvelope`, %v", req)
 	}
+
 	if err := crypto.Validate(req.Payload.UserID, req.Signature, queryBytes); err != nil {
-		return errors.Wrap(err, "query error - wrong signature")
+		return errors.Wrap(err, "signature validation failed")
 	}
 	return nil
 }

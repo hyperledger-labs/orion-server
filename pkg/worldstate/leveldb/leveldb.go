@@ -30,11 +30,15 @@ type db struct {
 }
 
 var (
-	systemDBs = []string{worldstate.UsersDBName, "test"}
+	systemDBs = []string{
+		worldstate.UsersDBName,
+		worldstate.DatabasesDBName,
+		worldstate.DefaultDBName,
+	}
 )
 
-// NewLevelDB creates a new leveldb instance
-func NewLevelDB(dirPath string) (*LevelDB, error) {
+// New creates a new leveldb instance
+func New(dirPath string) (*LevelDB, error) {
 	l := &LevelDB{
 		dirPath: dirPath,
 		dbs:     make(map[string]*db),

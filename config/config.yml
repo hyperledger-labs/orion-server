@@ -1,7 +1,7 @@
 server:
   id: bdb-node-1
   network:
-    address: localhost
+    address: 127.0.0.1
     port: 6001
   identity:
     certificate: node1.crt

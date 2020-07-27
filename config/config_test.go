@@ -19,7 +19,7 @@ func TestServerConfig(t *testing.T) {
 	expectedServerConf := &ServerConf{
 		ID: "bdb-node-1",
 		Network: NetworkConf{
-			Address: "localhost",
+			Address: "127.0.0.1",
 			Port:    6001,
 		},
 		Identity: IdentityConf{

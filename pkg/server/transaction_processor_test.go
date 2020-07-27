@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -32,7 +33,7 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		}
 	}
 
-	db, err := leveldb.NewLevelDB(dbPath)
+	db, err := leveldb.New(dbPath)
 	if err != nil {
 		cleanup()
 		t.Fatalf("Failed to create new leveldb instance: %v", err)
@@ -55,7 +56,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 		tx := &types.TransactionEnvelope{
 			Payload: &types.Transaction{
-				DBName:    "test",
+				DBName:    worldstate.DefaultDBName,
 				TxID:      []byte("tx1"),
 				DataModel: types.Transaction_KV,
 				Reads:     []*types.KVRead{},
@@ -68,10 +69,10 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.txProcessor.SubmitTransaction(context.TODO(), tx))
+		require.NoError(t, env.txProcessor.SubmitTransaction(context.Background(), tx))
 
 		assertTestKey1InDB := func() bool {
-			val, err := env.db.Get("test", "test-key1")
+			val, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
 			if err != nil {
 				return false
 			}
