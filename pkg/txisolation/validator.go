@@ -6,17 +6,22 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
+// Validator validates the each transaction read set present in a
+// block against the committed version to ensure the requested
+// isolation level
 type Validator struct {
 	db worldstate.DB
 }
 
+// NewValidator creates a new validator
 func NewValidator(db worldstate.DB) *Validator {
 	return &Validator{
 		db: db,
 	}
-
 }
 
+// ValidateBlock validates each transaction present in the block to ensure
+// the request isolation level
 func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
 	var err error
 	valInfo := make([]*types.ValidationInfo, len(block.TransactionEnvelopes))

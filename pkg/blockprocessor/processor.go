@@ -10,7 +10,7 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
-// ValidatorAnValidatorAndCommitter holds block validator and committer
+// ValidatorAndCommitter holds block validator and committer
 type ValidatorAndCommitter struct {
 	blockQueue *queue.Queue
 	validator  *txisolation.Validator
