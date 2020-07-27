@@ -7,12 +7,15 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
+// Assembler uses transactions batch queue to construct the
+// block and stores the created block in the block queue
 type Assembler struct {
 	txBatchQueue *queue.Queue
 	blockQueue   *queue.Queue
 	blockNumber  uint64
 }
 
+// NewAssembler creates a new block assembler
 func NewAssembler(txBatchQueue, blockQueue *queue.Queue) *Assembler {
 	return &Assembler{
 		txBatchQueue: txBatchQueue,
@@ -22,6 +25,7 @@ func NewAssembler(txBatchQueue, blockQueue *queue.Queue) *Assembler {
 	}
 }
 
+// Run runs the block assembler in an infinte loop
 func (a *Assembler) Run() {
 	for {
 		txBatch := a.txBatchQueue.Dequeue().([]*types.TransactionEnvelope)
