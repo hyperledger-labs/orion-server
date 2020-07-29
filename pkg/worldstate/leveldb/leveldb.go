@@ -33,6 +33,7 @@ var (
 	systemDBs = []string{
 		worldstate.UsersDBName,
 		worldstate.DatabasesDBName,
+		worldstate.ConfigDBName,
 		worldstate.DefaultDBName,
 	}
 )

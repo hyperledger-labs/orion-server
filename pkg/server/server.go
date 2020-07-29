@@ -10,11 +10,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/library/pkg/server"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
+	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -39,7 +41,18 @@ func Start() error {
 		return errors.Wrap(err, "error while starting the database server")
 	}
 
-	netConf := config.ServerNetwork()
+	// TODO: query block store to check whether the chain is empty. If it empty,
+	// submit a config transaction
+	configTx, err := prepareConfigTransaction()
+	if err != nil {
+		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
+	}
+
+	if err := s.dbServ.SubmitTransaction(context.Background(), configTx); err != nil {
+		return errors.Wrap(err, "error while committing configuration transaction")
+	}
+
+	netConf := config.NodeNetwork()
 	s.listenAddr = fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
 	log.Printf("Starting the server listening on %s\n", s.listenAddr)
 
@@ -61,6 +74,9 @@ func Start() error {
 // Stop stops the http server
 func Stop() error {
 	log.Printf("Stopping the server listening on %s\n", s.listenAddr)
+	if s == nil || s.httpServ == nil {
+		return nil
+	}
 	return s.httpServ.Close()
 }
 
@@ -209,4 +225,50 @@ func composeResponse(w http.ResponseWriter, code int, payload interface{}) {
 // ResponseErr holds the error response
 type ResponseErr struct {
 	Error string `json:"error,omitempty"`
+}
+
+func prepareConfigTransaction() (*types.TransactionEnvelope, error) {
+	certs, err := config.Certs()
+	if err != nil {
+		return nil, err
+	}
+
+	clusterConfig := &types.ClusterConfig{
+		Nodes: []*types.NodeConfig{
+			{
+				ID:          config.NodeIdentity().ID,
+				Certificate: certs.Node,
+				Address:     config.NodeNetwork().Address,
+				Port:        config.NodeNetwork().Port,
+			},
+		},
+		Admins: []*types.Admin{
+			{
+				ID:          config.Admin().ID,
+				Certificate: certs.Admin,
+			},
+		},
+		RootCACertificate: certs.RootCA,
+	}
+
+	configValue, err := json.Marshal(clusterConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.TransactionEnvelope{
+		Payload: &types.Transaction{
+			Type:      types.Transaction_CONFIG,
+			DBName:    worldstate.ConfigDBName,
+			TxID:      []byte(uuid.New().String()), // TODO: we need to change TxID to string
+			DataModel: types.Transaction_KV,
+			Writes: []*types.KVWrite{
+				{
+					Key:   "config", // TODO: need to define a constant and put in library package
+					Value: configValue,
+				},
+			},
+		},
+		// TODO: we can make the node itself sign the transaction
+	}, nil
 }

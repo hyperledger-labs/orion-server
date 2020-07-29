@@ -23,21 +23,49 @@ func TestBatchCreator(t *testing.T) {
 				txBatchSize: 1,
 				txs: []*types.TransactionEnvelope{
 					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_DATA,
+						},
 						Signature: []byte("sign-1"),
 					},
 					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_CONFIG,
+						},
 						Signature: []byte("sign-2"),
 					},
+					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_DATA,
+						},
+						Signature: []byte("sign-3"),
+					},
 				},
+				// as txBatchSize is 1, with three tx, we expect three tx batches
+				// each with a single transaction
 				expectedTxBatches: [][]*types.TransactionEnvelope{
 					{
 						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_DATA,
+							},
 							Signature: []byte("sign-1"),
 						},
 					},
 					{
 						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_CONFIG,
+							},
 							Signature: []byte("sign-2"),
+						},
+					},
+					{
+						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_DATA,
+							},
+							Signature: []byte("sign-3"),
 						},
 					},
 				},
@@ -46,25 +74,75 @@ func TestBatchCreator(t *testing.T) {
 				txBatchSize: 3,
 				txs: []*types.TransactionEnvelope{
 					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_DATA,
+						},
 						Signature: []byte("sign-1"),
 					},
 					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_DATA,
+						},
 						Signature: []byte("sign-2"),
 					},
 					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_CONFIG,
+						},
 						Signature: []byte("sign-3"),
 					},
+					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_DATA,
+						},
+						Signature: []byte("sign-4"),
+					},
+					{
+						Payload: &types.Transaction{
+							Type: types.Transaction_CONFIG,
+						},
+						Signature: []byte("sign-5"),
+					},
 				},
+				// though the txBatchSize is 3, we will have 4 batches
+				// due to the presence of config transaction
 				expectedTxBatches: [][]*types.TransactionEnvelope{
 					{
 						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_DATA,
+							},
 							Signature: []byte("sign-1"),
 						},
 						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_DATA,
+							},
 							Signature: []byte("sign-2"),
 						},
+					},
+					{
 						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_CONFIG,
+							},
 							Signature: []byte("sign-3"),
+						},
+					},
+					{
+						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_DATA,
+							},
+							Signature: []byte("sign-4"),
+						},
+					},
+					{
+						{
+							Payload: &types.Transaction{
+								Type: types.Transaction_CONFIG,
+							},
+							Signature: []byte("sign-5"),
 						},
 					},
 				},

@@ -37,13 +37,28 @@ func (b *BatchCreator) Run() {
 	var txBatch []*types.TransactionEnvelope
 	for {
 		tx := b.txQueue.Dequeue().(*types.TransactionEnvelope)
+
+		if tx.Payload.Type == types.Transaction_CONFIG {
+			b.enqueueTxBatch(txBatch)
+			b.enqueueTxBatch([]*types.TransactionEnvelope{tx})
+			txBatch = nil
+			continue
+		}
+
 		txBatch = append(txBatch, tx)
 		if len(txBatch) < txBatchSize {
 			continue
 		}
 
-		b.txBatchQueue.Enqueue(txBatch)
-		log.Println("created a transaction batch")
+		b.enqueueTxBatch(txBatch)
 		txBatch = nil
 	}
+}
+
+func (b *BatchCreator) enqueueTxBatch(txBatch []*types.TransactionEnvelope) {
+	if len(txBatch) == 0 {
+		return
+	}
+	b.txBatchQueue.Enqueue(txBatch)
+	log.Printf("created a transaction batch with %d transactions", len(txBatch))
 }

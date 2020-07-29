@@ -2,9 +2,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,26 +42,46 @@ type serverTestEnv struct {
 func newServerTestEnv(t *testing.T) *serverTestEnv {
 	env := &serverTestEnv{}
 
-	go Start()
+	go func() {
+		if err := Start(); err != nil {
+			t.Errorf("error while starting the server")
+			t.Fail()
+		}
+	}()
 	dbConf := config.Database()
 	env.cleanup = func(t *testing.T) {
-		if err := os.RemoveAll(dbConf.LedgerDirectory); err != nil {
-			t.Errorf("Warning: failed to remove %s: %v\n", dbConf.LedgerDirectory, err)
-		}
 		if err := Stop(); err != nil {
 			t.Errorf("Warning: failed to stop the server: %v\n", err)
+		}
+		if err := os.RemoveAll(dbConf.LedgerDirectory); err != nil {
+			t.Errorf("Warning: failed to remove %s: %v\n", dbConf.LedgerDirectory, err)
 		}
 	}
 
 	var err error
-	createClient := func() bool {
-		env.client, err = mock.NewRESTClient("http://127.0.0.1:6001")
-		if err == nil && env.client != nil {
-			return true
-		}
-		return false
+	url := fmt.Sprintf("http://%s:%d", config.NodeNetwork().Address, config.NodeNetwork().Port)
+	env.client, err = mock.NewRESTClient(url)
+	require.NoError(t, err)
+	require.NotNil(t, env.client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	hasServerStarted := func() bool {
+		_, err := env.client.GetState(
+			ctx,
+			&types.GetStateQueryEnvelope{
+				Payload: &types.GetStateQuery{
+					UserID: "testUser",
+					DBName: "db1",
+					Key:    "key1",
+				},
+				Signature: []byte("hello"),
+			},
+		)
+		return !strings.Contains(err.Error(), "connection refused")
 	}
-	require.Eventually(t, createClient, time.Second*2, time.Millisecond*100)
+
+	require.Eventually(t, hasServerStarted, time.Second*2, time.Millisecond*200)
 
 	return env
 }
@@ -83,6 +106,24 @@ func TestStart(t *testing.T) {
 		)
 		require.Nil(t, valEnv)
 		require.Contains(t, err.Error(), "database db1 does not exist")
+
+		config, err := env.client.GetState(
+			ctx,
+			&types.GetStateQueryEnvelope{
+				Payload: &types.GetStateQuery{
+					UserID: "admin",
+					DBName: "_config",
+					Key:    "config",
+				},
+				Signature: []byte("hello"),
+			},
+		)
+		require.NoError(t, err)
+		require.NotNil(t, config)
+
+		configTx, err := prepareConfigTransaction()
+		require.NoError(t, err)
+		require.Equal(t, configTx.Payload.Writes[0].Value, config.Payload.Value.Value)
 	})
 }
 
@@ -232,5 +273,53 @@ func TestHandleStateQuery(t *testing.T) {
 			require.Contains(t, err.Error(), testCase.expectedError)
 			require.Nil(t, resp)
 		}
+	})
+}
+
+func TestPrepareConfigTransaction(t *testing.T) {
+	t.Run("successfully-returns", func(t *testing.T) {
+		certs, err := config.Certs()
+		require.NoError(t, err)
+
+		expectedClusterConfig := &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					ID:          "bdb-node-1",
+					Certificate: certs.Node,
+					Address:     "127.0.0.1",
+					Port:        6001,
+				},
+			},
+			Admins: []*types.Admin{
+				{
+					ID:          "admin",
+					Certificate: certs.Admin,
+				},
+			},
+			RootCACertificate: certs.RootCA,
+		}
+
+		expectedConfigValue, err := json.Marshal(expectedClusterConfig)
+		require.NoError(t, err)
+
+		expectedConfigTx := &types.TransactionEnvelope{
+			Payload: &types.Transaction{
+				Type:      1,
+				DBName:    "_config",
+				DataModel: 0,
+				Writes: []*types.KVWrite{
+					{
+						Key:   "config", // TODO: need to define a constant and put in library package
+						Value: expectedConfigValue,
+					},
+				},
+			},
+		}
+
+		configTx, err := prepareConfigTransaction()
+		require.NoError(t, err)
+		require.NotEmpty(t, configTx.Payload.TxID)
+		configTx.Payload.TxID = []byte{}
+		require.True(t, proto.Equal(expectedConfigTx, configTx))
 	})
 }

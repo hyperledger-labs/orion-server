@@ -1,19 +1,18 @@
-server:
-  id: bdb-node-1
+node:
+  identity:
+    id: bdb-node-1
+    certificatePath: ./testdata/node.cert
+    keyPath: ./testdata/node.key
   network:
     address: 127.0.0.1
     port: 6001
-  identity:
-    certificate: node1.crt
-    key: node1.key
   database:
     name: leveldb
     ledgerDirectory: ./tmp/
 
-rootca:
-  certificate: ca.crt
-
 admin:
-  username: admin
-  dbname: admin
-  certificate: admin.crt
+  id: admin
+  certificatePath: ./testdata/admin.cert
+
+rootca:
+  certificatePath: ./testdata/rootca.cert

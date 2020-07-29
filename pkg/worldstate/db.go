@@ -7,6 +7,9 @@ const (
 	UsersDBName = "_users"
 	// DatabasesDBName holds the name of all user databases
 	DatabasesDBName = "_dbs"
+	// ConfigDBName holds the name of the database that holds
+	// the configuration details
+	ConfigDBName = "_config"
 	// DefaultDBName is the default database created during
 	// node bootstrap
 	DefaultDBName = "bdb"

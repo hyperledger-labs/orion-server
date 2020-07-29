@@ -1,8 +1,10 @@
 package config
 
 import (
+	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -18,82 +20,82 @@ const (
 )
 
 // Configurations holds the complete configuration
-// of the database server
+// of a database node
 type Configurations struct {
-	Server ServerConf
-	RootCa RootCAConf
+	Node   NodeConf
 	Admin  AdminConf
+	RootCA RootCAConf
 }
 
-// ServerConf holds the identity information of the
-// database server along with network and underlying
+// NodeConf holds the identity information of the
+// database node along with network and underlying
 // state database configuration
-type ServerConf struct {
-	ID       string
-	Network  NetworkConf
+type NodeConf struct {
 	Identity IdentityConf
+	Network  NetworkConf
 	Database DatabaseConf
 }
 
-// NetworkConf holds the listen address and port of
-// the database server
-type NetworkConf struct {
-	Address string
-	Port    int
+// IdentityConf holds the ID, path to x509 certificate
+// and the private key associated with the database node
+type IdentityConf struct {
+	ID              string
+	CertificatePath string
+	KeyPath         string
 }
 
-// IdentityConf holds the path to x509 certificate
-// and the private key associated with the database server
-type IdentityConf struct {
-	Certificate string
-	Key         string
+// NetworkConf holds the listen address and port of
+// the database node
+type NetworkConf struct {
+	Address string
+	Port    uint32
 }
 
 // DatabaseConf holds the name of the state database
-// and the absolute path where the data is stored
+// and the path where the data is stored
 type DatabaseConf struct {
 	Name            string
 	LedgerDirectory string
 }
 
-// RootCAConf holds the absolute path to the
-// x509 certificate of the certificate authority
-// who issues users' certificate
-type RootCAConf struct {
-	Certificate string
+// AdminConf holds the credentials of the blockchain
+// database cluster admin such as the ID and path to
+// the x509 certificate
+type AdminConf struct {
+	ID              string
+	CertificatePath string
 }
 
-// AdminConf holds the credentials of the database
-// server admin such as the username and absolute
-// path to the x509 certificate
-type AdminConf struct {
-	Username    string
-	DBName      string // TODO: remove
-	Certificate string
+// RootCAConf holds the path to the
+// x509 certificate of the certificate authority
+// who issues all certificates
+type RootCAConf struct {
+	CertificatePath string
 }
 
 var conf *Configurations
+var configPath string
 
 // Init initializes Configurations by reading the config file
 func Init() error {
-	path := os.Getenv(PathEnv)
-	if path == "" {
+	configPath = os.Getenv(PathEnv)
+	if configPath == "" {
 		log.Printf(
-			"Server config path environment %s is empty. Using the %s.%s located in the current directory if exist.",
+			"node config path environment %s is empty. Using the %s.%s located in the current directory if exist.",
 			PathEnv,
 			name,
 			filetype,
 		)
-		path = "./"
+		configPath = "./"
 	}
 
 	viper.SetConfigName(name)
-	viper.AddConfigPath(path)
+	viper.AddConfigPath(configPath)
 	viper.SetConfigType(filetype)
 	viper.AutomaticEnv()
 
-	viper.SetDefault("server.database.name", "leveldb")
-	viper.SetDefault("server.database.ledgerDirectory", "./tmp/")
+	viper.SetDefault("node.database.name", "leveldb")
+	viper.SetDefault("node.database.ledgerDirectory", "./tmp/")
 
 	if err := viper.ReadInConfig(); err != nil {
 		return errors.Wrapf(err, "error reading config file")
@@ -107,32 +109,71 @@ func Init() error {
 	return nil
 }
 
-// Server returns the server configuration
-func Server() *ServerConf {
-	return &conf.Server
+// Node returns the node configuration
+func Node() *NodeConf {
+	return &conf.Node
 }
 
-// ServerNetwork returns the network configuration
-func ServerNetwork() *NetworkConf {
-	return &conf.Server.Network
+// NodeNetwork returns the network configuration
+func NodeNetwork() *NetworkConf {
+	return &conf.Node.Network
 }
 
-// ServerIdentity returns the identity information
-func ServerIdentity() *IdentityConf {
-	return &conf.Server.Identity
+// NodeIdentity returns the identity information
+func NodeIdentity() *IdentityConf {
+	return &conf.Node.Identity
 }
 
 // Database returns the database configuration
 func Database() *DatabaseConf {
-	return &conf.Server.Database
+	return &conf.Node.Database
 }
 
 // RootCA returns the root certificate authority
 func RootCA() *RootCAConf {
-	return &conf.RootCa
+	return &conf.RootCA
 }
 
 // Admin returns the admin configuration
 func Admin() *AdminConf {
 	return &conf.Admin
+}
+
+// Certificates holds the certificate content of the
+// node, admin, and the root CA
+type Certificates struct {
+	Node   []byte
+	Admin  []byte
+	RootCA []byte
+}
+
+// Certs retuns certificate content of the node, admin,
+// and the root CA
+func Certs() (*Certificates, error) {
+	certsPath := []string{
+		conf.Node.Identity.CertificatePath,
+		conf.Admin.CertificatePath,
+		conf.RootCA.CertificatePath,
+	}
+
+	for i, path := range certsPath {
+		if !filepath.IsAbs(path) {
+			certsPath[i] = filepath.Join(configPath, path)
+		}
+	}
+
+	certsContent := [][]byte{}
+	for _, path := range certsPath {
+		content, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while reading file %s", path)
+		}
+		certsContent = append(certsContent, content)
+	}
+
+	return &Certificates{
+		Node:   certsContent[0],
+		Admin:  certsContent[1],
+		RootCA: certsContent[2],
+	}, nil
 }

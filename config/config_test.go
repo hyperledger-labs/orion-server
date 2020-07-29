@@ -15,16 +15,16 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestServerConfig(t *testing.T) {
-	expectedServerConf := &ServerConf{
-		ID: "bdb-node-1",
+func TestNodeConfig(t *testing.T) {
+	expectedNodeConf := &NodeConf{
 		Network: NetworkConf{
 			Address: "127.0.0.1",
 			Port:    6001,
 		},
 		Identity: IdentityConf{
-			Certificate: "node1.crt",
-			Key:         "node1.key",
+			ID:              "bdb-node-1",
+			CertificatePath: "./testdata/node.cert",
+			KeyPath:         "./testdata/node.key",
 		},
 		Database: DatabaseConf{
 			Name:            "leveldb",
@@ -32,34 +32,34 @@ func TestServerConfig(t *testing.T) {
 		},
 	}
 
-	t.Run("test-server-conf", func(t *testing.T) {
+	t.Run("test-Node-conf", func(t *testing.T) {
 		t.Parallel()
-		serverConf := Server()
-		require.Equal(t, expectedServerConf, serverConf)
+		NodeConf := Node()
+		require.Equal(t, expectedNodeConf, NodeConf)
 	})
 
 	t.Run("test-network-conf", func(t *testing.T) {
 		t.Parallel()
-		networkConf := ServerNetwork()
-		require.Equal(t, &expectedServerConf.Network, networkConf)
+		networkConf := NodeNetwork()
+		require.Equal(t, &expectedNodeConf.Network, networkConf)
 	})
 
 	t.Run("test-crypto-conf", func(t *testing.T) {
 		t.Parallel()
-		cryptoConf := ServerIdentity()
-		require.Equal(t, &expectedServerConf.Identity, cryptoConf)
+		cryptoConf := NodeIdentity()
+		require.Equal(t, &expectedNodeConf.Identity, cryptoConf)
 	})
 
 	t.Run("test-database-conf", func(t *testing.T) {
 		t.Parallel()
 		databaseConf := Database()
-		require.Equal(t, &expectedServerConf.Database, databaseConf)
+		require.Equal(t, &expectedNodeConf.Database, databaseConf)
 	})
 }
 
 func TestRootCAConfig(t *testing.T) {
 	expectedRootCAConfig := &RootCAConf{
-		Certificate: "ca.crt",
+		CertificatePath: "./testdata/rootca.cert",
 	}
 	rootCAConf := RootCA()
 	require.Equal(t, expectedRootCAConfig, rootCAConf)
@@ -67,10 +67,28 @@ func TestRootCAConfig(t *testing.T) {
 
 func TestAdminConfig(t *testing.T) {
 	expectedAdminConfig := &AdminConf{
-		Username:    "admin",
-		DBName:      "admin",
-		Certificate: "admin.crt",
+		ID:              "admin",
+		CertificatePath: "./testdata/admin.cert",
 	}
 	adminConf := Admin()
 	require.Equal(t, expectedAdminConfig, adminConf)
+}
+
+func TestCerts(t *testing.T) {
+	t.Run("successfully-returns", func(t *testing.T) {
+		t.Parallel()
+		c, err := Certs()
+		require.NoError(t, err)
+		require.NotNil(t, c.Node)
+		require.NotNil(t, c.Admin)
+		require.NotNil(t, c.RootCA)
+	})
+
+	t.Run("error-due-to-missing-files", func(t *testing.T) {
+		t.Parallel()
+		conf.Node.Identity.CertificatePath = "/"
+		c, err := Certs()
+		require.Contains(t, err.Error(), "error while reading file /")
+		require.Nil(t, c)
+	})
 }
