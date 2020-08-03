@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io/ioutil"
+	"net"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -19,75 +18,64 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
-func TestMain(m *testing.M) {
-	path, err := filepath.Abs("../../config")
-	if err != nil {
-		log.Fatalf("Error while constructing absolute path from the default config, %v", err)
-	}
-	if err := os.Setenv(config.PathEnv, path); err != nil {
-		log.Fatalf(" Error while setting the config path to %s, %v", config.PathEnv, err)
-	}
-
-	if err := config.Init(); err != nil {
-		log.Fatalf("Error while initializing the configuration, %v", err)
-	}
-	os.Exit(m.Run())
-}
-
 type serverTestEnv struct {
+	server  *DBAndHTTPServer
 	client  *mock.Client
 	cleanup func(t *testing.T)
+	conf    *config.Configurations
 }
 
 func newServerTestEnv(t *testing.T) *serverTestEnv {
-	env := &serverTestEnv{}
+	conf := testConfiguration(t)
+	server, err := New(conf)
+	require.NoError(t, err)
 
 	go func() {
-		if err := Start(); err != nil {
-			t.Errorf("error while starting the server")
+		if err := server.Start(); err != nil {
+			t.Errorf("error while starting the server, %v", err)
 			t.Fail()
 		}
 	}()
-	dbConf := config.Database()
-	env.cleanup = func(t *testing.T) {
-		if err := Stop(); err != nil {
+
+	cleanup := func(t *testing.T) {
+		if err := server.Stop(); err != nil {
 			t.Errorf("Warning: failed to stop the server: %v\n", err)
 		}
-		if err := os.RemoveAll(dbConf.LedgerDirectory); err != nil {
-			t.Errorf("Warning: failed to remove %s: %v\n", dbConf.LedgerDirectory, err)
+
+		ledgerDir := conf.Node.Database.LedgerDirectory
+		if err := os.RemoveAll(ledgerDir); err != nil {
+			t.Errorf("Warning: failed to remove %s: %v\n", ledgerDir, err)
 		}
 	}
 
-	var err error
-	url := fmt.Sprintf("http://%s:%d", config.NodeNetwork().Address, config.NodeNetwork().Port)
-	env.client, err = mock.NewRESTClient(url)
-	require.NoError(t, err)
-	require.NotNil(t, env.client)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	hasServerStarted := func() bool {
-		_, err := env.client.GetState(
-			ctx,
-			&types.GetStateQueryEnvelope{
-				Payload: &types.GetStateQuery{
-					UserID: "testUser",
-					DBName: "db1",
-					Key:    "key1",
-				},
-				Signature: []byte("hello"),
-			},
-		)
-		return !strings.Contains(err.Error(), "connection refused")
+	var port string
+	isPortAllocated := func() bool {
+		_, port, err = net.SplitHostPort(server.listen.Addr().String())
+		if err != nil {
+			return false
+		}
+		return port != "0"
 	}
+	require.Eventually(t, isPortAllocated, 2*time.Second, 100*time.Millisecond)
 
-	require.Eventually(t, hasServerStarted, time.Second*2, time.Millisecond*200)
+	url := fmt.Sprintf("http://%s:%s", conf.Node.Network.Address, port)
+	client, err := mock.NewRESTClient(url)
+	require.NoError(t, err)
+	require.NotNil(t, client)
 
-	return env
+	return &serverTestEnv{
+		server:  server,
+		client:  client,
+		cleanup: cleanup,
+		conf:    conf,
+	}
 }
 
 func TestStart(t *testing.T) {
+	t.Parallel()
+
 	t.Run("server-starts-successfully", func(t *testing.T) {
+		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
@@ -121,14 +109,17 @@ func TestStart(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, config)
 
-		configTx, err := prepareConfigTransaction()
+		configTx, err := prepareConfigTx(env.conf)
 		require.NoError(t, err)
 		require.Equal(t, configTx.Payload.Writes[0].Value, config.Payload.Value.Value)
 	})
 }
 
 func TestHandleStatusQuery(t *testing.T) {
+	t.Parallel()
+
 	t.Run("GetStatus-Returns-True", func(t *testing.T) {
+		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
@@ -145,6 +136,7 @@ func TestHandleStatusQuery(t *testing.T) {
 	})
 
 	t.Run("GetStatus-Returns-Error", func(t *testing.T) {
+		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
@@ -182,7 +174,10 @@ func TestHandleStatusQuery(t *testing.T) {
 }
 
 func TestHandleStateQuery(t *testing.T) {
+	t.Parallel()
+
 	t.Run("GetState-Returns-State", func(t *testing.T) {
+		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
@@ -206,7 +201,7 @@ func TestHandleStateQuery(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, s.dbServ.db.Commit(dbsUpdates))
+		require.NoError(t, env.server.dbServ.db.Commit(dbsUpdates))
 
 		testCases := []struct {
 			key         string
@@ -238,6 +233,7 @@ func TestHandleStateQuery(t *testing.T) {
 	})
 
 	t.Run("GetState-Returns-Error", func(t *testing.T) {
+		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
@@ -277,26 +273,35 @@ func TestHandleStateQuery(t *testing.T) {
 }
 
 func TestPrepareConfigTransaction(t *testing.T) {
+	t.Parallel()
+
 	t.Run("successfully-returns", func(t *testing.T) {
-		certs, err := config.Certs()
+		t.Parallel()
+		nodeCert, err := ioutil.ReadFile("./testdata/node.cert")
+		require.NoError(t, err)
+
+		adminCert, err := ioutil.ReadFile("./testdata/admin.cert")
+		require.NoError(t, err)
+
+		rootCACert, err := ioutil.ReadFile("./testdata/rootca.cert")
 		require.NoError(t, err)
 
 		expectedClusterConfig := &types.ClusterConfig{
 			Nodes: []*types.NodeConfig{
 				{
 					ID:          "bdb-node-1",
-					Certificate: certs.Node,
+					Certificate: nodeCert,
 					Address:     "127.0.0.1",
-					Port:        6001,
+					Port:        0,
 				},
 			},
 			Admins: []*types.Admin{
 				{
 					ID:          "admin",
-					Certificate: certs.Admin,
+					Certificate: adminCert,
 				},
 			},
-			RootCACertificate: certs.RootCA,
+			RootCACertificate: rootCACert,
 		}
 
 		expectedConfigValue, err := json.Marshal(expectedClusterConfig)
@@ -316,10 +321,40 @@ func TestPrepareConfigTransaction(t *testing.T) {
 			},
 		}
 
-		configTx, err := prepareConfigTransaction()
+		configTx, err := prepareConfigTx(testConfiguration(t))
 		require.NoError(t, err)
 		require.NotEmpty(t, configTx.Payload.TxID)
 		configTx.Payload.TxID = []byte{}
 		require.True(t, proto.Equal(expectedConfigTx, configTx))
 	})
+}
+
+func testConfiguration(t *testing.T) *config.Configurations {
+	ledgerDir, err := ioutil.TempDir("/tmp", "server")
+	require.NoError(t, err)
+
+	return &config.Configurations{
+		Node: config.NodeConf{
+			Identity: config.IdentityConf{
+				ID:              "bdb-node-1",
+				CertificatePath: "./testdata/node.cert",
+				KeyPath:         "./testdata/node.key",
+			},
+			Network: config.NetworkConf{
+				Address: "127.0.0.1",
+				Port:    0,
+			},
+			Database: config.DatabaseConf{
+				Name:            "leveldb",
+				LedgerDirectory: ledgerDir,
+			},
+		},
+		Admin: config.AdminConf{
+			ID:              "admin",
+			CertificatePath: "./testdata/admin.cert",
+		},
+		RootCA: config.RootCAConf{
+			CertificatePath: "./testdata/rootca.cert",
+		},
+	}
 }

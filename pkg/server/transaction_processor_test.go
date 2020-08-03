@@ -50,7 +50,10 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 }
 
 func TestTransactionProcessor(t *testing.T) {
+	t.Parallel()
+
 	t.Run("commit a simple transaction", func(t *testing.T) {
+		t.Parallel()
 		env := newTxProcessorTestEnv(t)
 		defer env.cleanup()
 

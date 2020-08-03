@@ -1,0 +1,8 @@
+node:
+  identity:
+    id: bdb-node-1
+    certificatePath: ./testdata/node.cert
+    keyPath: ./testdata/node.key
+  network:
+    address: 127.0.0.1
+    port: abcd

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.ibm.com/blockchaindb/server/config"
@@ -12,6 +13,9 @@ import (
 
 var (
 	configPath string
+	// PathEnv is an environment variable that can hold
+	// the absolute path of the config file
+	pathEnv = "BCDB_CONFIG_PATH"
 )
 
 func main() {
@@ -56,21 +60,38 @@ func startCmd() *cobra.Command {
 		Use:   "start",
 		Short: "Starts a blockchain database",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if configPath == "" && os.Getenv(config.PathEnv) == "" {
-				log.Fatalf("Neither --configpath nor %s path environment is set", config.PathEnv)
+			var path string
+			switch {
+			case configPath != "":
+				path = configPath
+			case os.Getenv(pathEnv) != "":
+				path = os.Getenv(pathEnv)
+			default:
+				log.Fatalf("Neither --configpath nor %s path environment is set", pathEnv)
 			}
 
-			if configPath != "" {
-				if err := os.Setenv(config.PathEnv, configPath); err != nil {
-					log.Fatalf("Failed to set %s due to %s", config.PathEnv, err.Error())
-				}
+			conf, err := config.Read(path)
+			if err != nil {
+				return err
 			}
 
 			cmd.SilenceUsage = true
 			log.Println("Starting a blockchain database")
-			if err := server.Start(); err != nil {
-				log.Fatalf("%v", err)
+			srv, err := server.New(conf)
+			if err != nil {
+				return err
 			}
+
+			var wg sync.WaitGroup
+
+			wg.Add(1)
+			go func() {
+				if err := srv.Start(); err != nil {
+					wg.Done()
+					log.Fatalf("%v", err)
+				}
+			}()
+			wg.Wait()
 
 			return nil
 		},

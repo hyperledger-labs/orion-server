@@ -43,7 +43,10 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 }
 
 func TestGetStatus(t *testing.T) {
+	t.Parallel()
+
 	t.Run("GetStatus-Returns-Status", func(t *testing.T) {
+		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -78,6 +81,7 @@ func TestGetStatus(t *testing.T) {
 	})
 
 	t.Run("GetStatus-Returns-Error", func(t *testing.T) {
+		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -114,7 +118,10 @@ func TestGetStatus(t *testing.T) {
 }
 
 func TestGetState(t *testing.T) {
+	t.Parallel()
+
 	t.Run("GetState-Returns-State", func(t *testing.T) {
+		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -172,6 +179,7 @@ func TestGetState(t *testing.T) {
 	})
 
 	t.Run("GetState-Returns-Error", func(t *testing.T) {
+		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 

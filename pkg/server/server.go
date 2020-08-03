@@ -5,9 +5,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
-	"sync"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/google/uuid"
@@ -20,96 +21,98 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
-type httpAndDBServer struct {
-	listenAddr string
-	httpServ   *http.Server
-	dbServ     *dbServer
+// DBAndHTTPServer holds the database and http server objects
+type DBAndHTTPServer struct {
+	dbServ  *dbServer
+	handler http.Handler
+	listen  net.Listener
+	conf    *config.Configurations
 }
 
-var s *httpAndDBServer
-
-// Start starts a the database server and a http server
-func Start() error {
-	var err error
-	if err = config.Init(); err != nil {
-		return errors.WithMessagef(err, "error while starting the server")
-	}
-
-	s = &httpAndDBServer{}
-	s.dbServ, err = newDBServer()
+// New creates a object of DBAndHTTPServer
+func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
+	dbServ, err := newDBServer(&conf.Node.Database)
 	if err != nil {
-		return errors.Wrap(err, "error while starting the database server")
+		return nil, errors.Wrap(err, "error while creating the database object")
 	}
 
+	router := mux.NewRouter()
+	router.HandleFunc("/db/{dbname}/state/{key}", dbServ.handleDataQuery).Methods(http.MethodGet)
+	router.HandleFunc("/db/{dbname}", dbServ.handleStatusQuery).Methods(http.MethodGet)
+	router.HandleFunc("/tx", dbServ.handleTransaction).Methods(http.MethodPost)
+
+	netConf := conf.Node.Network
+	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
+	listen, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while creating a tcp listener")
+	}
+
+	return &DBAndHTTPServer{
+		dbServ:  dbServ,
+		handler: router,
+		listen:  listen,
+		conf:    conf,
+	}, nil
+}
+
+// Start starts the server
+func (s *DBAndHTTPServer) Start() error {
 	// TODO: query block store to check whether the chain is empty. If it empty,
-	// submit a config transaction
-	configTx, err := prepareConfigTransaction()
-	if err != nil {
-		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
+	// submit a config transaction. We also need to check whether the node is a
+	// master or slave
+	if err := s.dbServ.prepareAndCommitConfigTx(s.conf); err != nil {
+		return errors.Wrapf(err, "error while preparing and committing config transaction")
 	}
 
-	if err := s.dbServ.SubmitTransaction(context.Background(), configTx); err != nil {
-		return errors.Wrap(err, "error while committing configuration transaction")
-	}
+	log.Printf("Starting the server on %s", s.listen.Addr().String())
 
-	netConf := config.NodeNetwork()
-	s.listenAddr = fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
-	log.Printf("Starting the server listening on %s\n", s.listenAddr)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
 	go func() {
-		s.httpServ = &http.Server{
-			Addr:    s.listenAddr,
-			Handler: s.dbServ.router,
+		if err := http.Serve(s.listen, s.handler); err != nil {
+			switch err.(type) {
+			case *net.OpError:
+				log.Printf("network connection is closed")
+			default:
+				log.Fatalf("server stopped unexpectedly, %v", err)
+			}
 		}
-
-		err = s.httpServ.ListenAndServe()
 	}()
-	wg.Wait()
 
-	return err
+	return nil
 }
 
-// Stop stops the http server
-func Stop() error {
-	log.Printf("Stopping the server listening on %s\n", s.listenAddr)
-	if s == nil || s.httpServ == nil {
+// Stop stops the server
+func (s *DBAndHTTPServer) Stop() error {
+	if s == nil || s.listen == nil {
 		return nil
 	}
-	return s.httpServ.Close()
+
+	log.Printf("Stopping the server listening on %s\n", s.listen.Addr().String())
+	return s.listen.Close()
 }
 
 type dbServer struct {
-	router *mux.Router
 	*queryProcessor
 	*transactionProcessor
 }
 
-func newDBServer() (*dbServer, error) {
+func newDBServer(dbConfig *config.DatabaseConf) (*dbServer, error) {
 	var levelDB *leveldb.LevelDB
 	var err error
 
-	switch config.Database().Name {
+	switch dbConfig.Name {
 	case "leveldb":
-		if levelDB, err = leveldb.New(config.Database().LedgerDirectory); err != nil {
+		if levelDB, err = leveldb.New(dbConfig.LedgerDirectory); err != nil {
 			return nil, errors.WithMessagef(err, "failed to create a new leveldb instance for the peer")
 		}
 	default:
 		return nil, errors.New("only leveldb is supported as the state database")
 	}
 
-	db := &dbServer{
-		mux.NewRouter(),
+	return &dbServer{
 		newQueryProcessor(levelDB),
 		newTransactionProcessor(levelDB),
-	}
-
-	db.router.HandleFunc("/db/{dbname}/state/{key}", db.handleDataQuery).Methods(http.MethodGet)
-	db.router.HandleFunc("/db/{dbname}", db.handleStatusQuery).Methods(http.MethodGet)
-	db.router.HandleFunc("/tx", db.handleTransaction).Methods(http.MethodPost)
-
-	return db, nil
+	}, nil
 }
 
 func (db *dbServer) handleStatusQuery(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +136,8 @@ func (db *dbServer) handleStatusQuery(w http.ResponseWriter, r *http.Request) {
 		},
 		Signature: signature,
 	}
+
+	//TODO: verify signature
 
 	statusEnvelope, err := db.GetStatus(context.Background(), dbQueryEnvelope)
 	if err != nil {
@@ -171,6 +176,8 @@ func (db *dbServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
 		Signature: signature,
 	}
 
+	//TODO: verify signature
+
 	valueEnvelope, err := db.GetState(context.Background(), dataQueryEnvelope)
 	if err != nil {
 		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: fmt.Sprintf("error while processing %v, %v", dataQueryEnvelope, err)})
@@ -187,12 +194,26 @@ func (db *dbServer) handleTransaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: verify signature
+
 	err = db.SubmitTransaction(context.Background(), tx)
 	if err != nil {
 		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
 		return
 	}
 	composeResponse(w, http.StatusOK, empty.Empty{})
+}
+
+func (db *dbServer) prepareAndCommitConfigTx(conf *config.Configurations) error {
+	configTx, err := prepareConfigTx(conf)
+	if err != nil {
+		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
+	}
+
+	if err := db.SubmitTransaction(context.Background(), configTx); err != nil {
+		return errors.Wrap(err, "error while committing configuration transaction")
+	}
+	return nil
 }
 
 func validateAndParseHeader(h *http.Header) (string, []byte, error) {
@@ -227,28 +248,38 @@ type ResponseErr struct {
 	Error string `json:"error,omitempty"`
 }
 
-func prepareConfigTransaction() (*types.TransactionEnvelope, error) {
-	certs, err := config.Certs()
+func prepareConfigTx(conf *config.Configurations) (*types.TransactionEnvelope, error) {
+	nodeCert, err := ioutil.ReadFile(conf.Node.Identity.CertificatePath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "error while reading node certificate %s", conf.Node.Identity.CertificatePath)
+	}
+
+	adminCert, err := ioutil.ReadFile(conf.Admin.CertificatePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while reading admin certificate %s", conf.Admin.CertificatePath)
+	}
+
+	rootCACert, err := ioutil.ReadFile(conf.RootCA.CertificatePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while reading rootCA certificate %s", conf.RootCA.CertificatePath)
 	}
 
 	clusterConfig := &types.ClusterConfig{
 		Nodes: []*types.NodeConfig{
 			{
-				ID:          config.NodeIdentity().ID,
-				Certificate: certs.Node,
-				Address:     config.NodeNetwork().Address,
-				Port:        config.NodeNetwork().Port,
+				ID:          conf.Node.Identity.ID,
+				Certificate: nodeCert,
+				Address:     conf.Node.Network.Address,
+				Port:        conf.Node.Network.Port,
 			},
 		},
 		Admins: []*types.Admin{
 			{
-				ID:          config.Admin().ID,
-				Certificate: certs.Admin,
+				ID:          conf.Admin.ID,
+				Certificate: adminCert,
 			},
 		},
-		RootCACertificate: certs.RootCA,
+		RootCACertificate: rootCACert,
 	}
 
 	configValue, err := json.Marshal(clusterConfig)
