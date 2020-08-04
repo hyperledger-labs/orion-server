@@ -12,7 +12,7 @@ import (
 
 func TestBatchCreator(t *testing.T) {
 	t.Run("assemble-different-sized-blocks", func(t *testing.T) {
-		a := NewAssembler(queue.New(10), queue.New(10))
+		a := New(queue.New(10), queue.New(10))
 		go a.Run()
 
 		testCases := []struct {

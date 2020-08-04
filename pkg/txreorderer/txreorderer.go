@@ -2,38 +2,38 @@ package txreorderer
 
 import (
 	"log"
+	"time"
 
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
-var (
-	// TODO: Need to make the txBatchSize or blockSize configurable
-	txBatchSize = 1
-)
-
-// BatchCreator holds queue and other components needed to reorder
+// TxReorderer holds queue and other components needed to reorder
 // transactions before creating a next batch of transactions to be
 // included in the block
-type BatchCreator struct {
-	txQueue      *queue.Queue
-	txBatchQueue *queue.Queue
+type TxReorderer struct {
+	txQueue            *queue.Queue
+	txBatchQueue       *queue.Queue
+	MaxTxCountPerBatch uint32
+	batchTimeout       time.Duration
 	// TODO:
 	// tx merkle tree
 	// dependency graph
 	// early abort and reorder
 }
 
-// NewBatchCreator creates a BatchCreator
-func NewBatchCreator(txQueue, txBatchQueue *queue.Queue) *BatchCreator {
-	return &BatchCreator{
-		txQueue:      txQueue,
-		txBatchQueue: txBatchQueue,
+// New creates a BatchCreator
+func New(txQueue, txBatchQueue *queue.Queue, maxTxCountPerBatch uint32, batchTimeout time.Duration) *TxReorderer {
+	return &TxReorderer{
+		txQueue:            txQueue,
+		txBatchQueue:       txBatchQueue,
+		MaxTxCountPerBatch: maxTxCountPerBatch,
+		batchTimeout:       batchTimeout,
 	}
 }
 
 // Run runs the transactions batch creator
-func (b *BatchCreator) Run() {
+func (b *TxReorderer) Run() {
 	var txBatch []*types.TransactionEnvelope
 	for {
 		tx := b.txQueue.Dequeue().(*types.TransactionEnvelope)
@@ -46,7 +46,7 @@ func (b *BatchCreator) Run() {
 		}
 
 		txBatch = append(txBatch, tx)
-		if len(txBatch) < txBatchSize {
+		if uint32(len(txBatch)) < b.MaxTxCountPerBatch {
 			continue
 		}
 
@@ -55,7 +55,7 @@ func (b *BatchCreator) Run() {
 	}
 }
 
-func (b *BatchCreator) enqueueTxBatch(txBatch []*types.TransactionEnvelope) {
+func (b *TxReorderer) enqueueTxBatch(txBatch []*types.TransactionEnvelope) {
 	if len(txBatch) == 0 {
 		return
 	}

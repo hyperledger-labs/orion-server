@@ -1,6 +1,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
@@ -13,18 +15,20 @@ const (
 // Configurations holds the complete configuration
 // of a database node
 type Configurations struct {
-	Node   NodeConf
-	Admin  AdminConf
-	RootCA RootCAConf
+	Node      NodeConf
+	Consensus ConsensusConf
+	Admin     AdminConf
+	RootCA    RootCAConf
 }
 
 // NodeConf holds the identity information of the
 // database node along with network and underlying
 // state database configuration
 type NodeConf struct {
-	Identity IdentityConf
-	Network  NetworkConf
-	Database DatabaseConf
+	Identity    IdentityConf
+	Network     NetworkConf
+	Database    DatabaseConf
+	QueueLength QueueLengthConf
 }
 
 // IdentityConf holds the ID, path to x509 certificate
@@ -47,6 +51,24 @@ type NetworkConf struct {
 type DatabaseConf struct {
 	Name            string
 	LedgerDirectory string
+}
+
+// QueueLengthConf holds the queue length of all
+// queues within the node
+type QueueLengthConf struct {
+	Transaction               uint32
+	ReorderedTransactionBatch uint32
+	Block                     uint32
+}
+
+// ConsensusConf holds the employed consensus algorithm
+// along with block size in MB and block timeout in
+// milliseconds
+type ConsensusConf struct {
+	Algorithm                   string
+	MaxBlockSize                uint32
+	MaxTransactionCountPerBlock uint32
+	BlockTimeout                time.Duration
 }
 
 // AdminConf holds the credentials of the blockchain

@@ -7,7 +7,7 @@ type Queue struct {
 }
 
 // New creates a new queue of given size
-func New(size int) *Queue {
+func New(size uint32) *Queue {
 	return &Queue{
 		entries: make(chan interface{}, size),
 	}

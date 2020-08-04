@@ -8,34 +8,33 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
-// ValidatorAndCommitter holds block validator and committer
-type ValidatorAndCommitter struct {
+// BlockProcessor holds block validator and committer
+type BlockProcessor struct {
 	blockQueue *queue.Queue
 	validator  *validator
 	committer  *committer
 }
 
-// NewValidatorAndCommitter creates a ValidatorAndCommitter
-func NewValidatorAndCommitter(blockQueue *queue.Queue, db worldstate.DB) *ValidatorAndCommitter {
-	c := &ValidatorAndCommitter{
+// New creates a ValidatorAndCommitter
+func New(blockQueue *queue.Queue, db worldstate.DB) *BlockProcessor {
+	return &BlockProcessor{
 		blockQueue: blockQueue,
 		validator:  newValidator(db),
 		committer:  newCommitter(db),
 	}
-	return c
 }
 
 // Run runs validator and committer
-func (c *ValidatorAndCommitter) Run() {
+func (b *BlockProcessor) Run() {
 	for {
-		block := c.blockQueue.Dequeue().(*types.Block)
+		block := b.blockQueue.Dequeue().(*types.Block)
 
-		validationInfo, err := c.validator.validateBlock(block)
+		validationInfo, err := b.validator.validateBlock(block)
 		if err != nil {
 			panic(err)
 		}
 
-		if err = c.committer.commitBlock(block, validationInfo); err != nil {
+		if err = b.committer.commitBlock(block, validationInfo); err != nil {
 			panic(err)
 		}
 		log.Printf("validated and committed block %d\n", block.Header.Number)

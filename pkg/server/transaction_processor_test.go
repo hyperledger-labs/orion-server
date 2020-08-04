@@ -39,7 +39,15 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		t.Fatalf("Failed to create new leveldb instance: %v", err)
 	}
 
-	txProcessor := newTransactionProcessor(db)
+	txProcConf := &txProcessorConfig{
+		db:                 db,
+		txQueueLength:      100,
+		txBatchQueueLength: 100,
+		blockQueueLength:   100,
+		MaxTxCountPerBatch: 1,
+		batchTimeout:       50 * time.Millisecond,
+	}
+	txProcessor := newTransactionProcessor(txProcConf)
 
 	return &txProcessorTestEnv{
 		dbPath:      dbPath,

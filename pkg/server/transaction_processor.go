@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockcreator"
@@ -18,15 +19,23 @@ type transactionProcessor struct {
 	txQueue *queue.Queue
 }
 
-func newTransactionProcessor(db worldstate.DB) *transactionProcessor {
-	// TODO: make the queue size configurable
-	txQueue := queue.New(100)
-	txBatchQueue := queue.New(100)
-	blockQueue := queue.New(100)
+type txProcessorConfig struct {
+	db                 worldstate.DB
+	txQueueLength      uint32
+	txBatchQueueLength uint32
+	blockQueueLength   uint32
+	MaxTxCountPerBatch uint32
+	batchTimeout       time.Duration
+}
 
-	go txreorderer.NewBatchCreator(txQueue, txBatchQueue).Run()
-	go blockcreator.NewAssembler(txBatchQueue, blockQueue).Run()
-	go blockprocessor.NewValidatorAndCommitter(blockQueue, db).Run()
+func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
+	txQueue := queue.New(conf.txQueueLength)
+	txBatchQueue := queue.New(conf.txBatchQueueLength)
+	blockQueue := queue.New(conf.blockQueueLength)
+
+	go txreorderer.New(txQueue, txBatchQueue, conf.MaxTxCountPerBatch, conf.batchTimeout).Run()
+	go blockcreator.New(txBatchQueue, blockQueue).Run()
+	go blockprocessor.New(blockQueue, conf.db).Run()
 
 	return &transactionProcessor{
 		txQueue: txQueue,

@@ -9,18 +9,18 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
-func TestBatchCreator(t *testing.T) {
+func TestTxReorderer(t *testing.T) {
 	t.Run("different-tx-batch-size", func(t *testing.T) {
-		b := NewBatchCreator(queue.New(10), queue.New(10))
+		b := New(queue.New(10), queue.New(10), 1, 50*time.Millisecond)
 		go b.Run()
 
 		testCases := []struct {
-			txBatchSize       int
-			txs               []*types.TransactionEnvelope
-			expectedTxBatches [][]*types.TransactionEnvelope
+			MaxTxCountPerBatch uint32
+			txs                []*types.TransactionEnvelope
+			expectedTxBatches  [][]*types.TransactionEnvelope
 		}{
 			{
-				txBatchSize: 1,
+				MaxTxCountPerBatch: 1,
 				txs: []*types.TransactionEnvelope{
 					{
 						Payload: &types.Transaction{
@@ -71,7 +71,7 @@ func TestBatchCreator(t *testing.T) {
 				},
 			},
 			{
-				txBatchSize: 3,
+				MaxTxCountPerBatch: 3,
 				txs: []*types.TransactionEnvelope{
 					{
 						Payload: &types.Transaction{
@@ -150,7 +150,7 @@ func TestBatchCreator(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			txBatchSize = testCase.txBatchSize
+			b.MaxTxCountPerBatch = testCase.MaxTxCountPerBatch
 			for _, tx := range testCase.txs {
 				b.txQueue.Enqueue(tx)
 			}

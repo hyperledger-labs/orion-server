@@ -348,6 +348,17 @@ func testConfiguration(t *testing.T) *config.Configurations {
 				Name:            "leveldb",
 				LedgerDirectory: ledgerDir,
 			},
+			QueueLength: config.QueueLengthConf{
+				Transaction:               1000,
+				ReorderedTransactionBatch: 100,
+				Block:                     100,
+			},
+		},
+		Consensus: config.ConsensusConf{
+			Algorithm:                   "raft",
+			MaxBlockSize:                2,
+			MaxTransactionCountPerBlock: 1,
+			BlockTimeout:                50 * time.Millisecond,
 		},
 		Admin: config.AdminConf{
 			ID:              "admin",

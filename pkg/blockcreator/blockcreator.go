@@ -7,17 +7,17 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
-// Assembler uses transactions batch queue to construct the
+// BlockCreator uses transactions batch queue to construct the
 // block and stores the created block in the block queue
-type Assembler struct {
+type BlockCreator struct {
 	txBatchQueue *queue.Queue
 	blockQueue   *queue.Queue
 	blockNumber  uint64
 }
 
-// NewAssembler creates a new block assembler
-func NewAssembler(txBatchQueue, blockQueue *queue.Queue) *Assembler {
-	return &Assembler{
+// New creates a new block assembler
+func New(txBatchQueue, blockQueue *queue.Queue) *BlockCreator {
+	return &BlockCreator{
 		txBatchQueue: txBatchQueue,
 		blockQueue:   blockQueue,
 		blockNumber:  1, // once the blockstore is added, we need to
@@ -26,7 +26,7 @@ func NewAssembler(txBatchQueue, blockQueue *queue.Queue) *Assembler {
 }
 
 // Run runs the block assembler in an infinte loop
-func (a *Assembler) Run() {
+func (a *BlockCreator) Run() {
 	for {
 		txBatch := a.txBatchQueue.Dequeue().([]*types.TransactionEnvelope)
 

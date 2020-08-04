@@ -16,7 +16,7 @@ import (
 )
 
 type testEnv struct {
-	v       *ValidatorAndCommitter
+	v       *BlockProcessor
 	db      worldstate.DB
 	path    string
 	cleanup func()
@@ -44,7 +44,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		}
 	}
 
-	v := NewValidatorAndCommitter(queue.New(10), db)
+	v := New(queue.New(10), db)
 	go v.Run()
 
 	return &testEnv{

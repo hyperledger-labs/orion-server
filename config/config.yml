@@ -1,18 +1,61 @@
 node:
   identity:
+    # identity.id denotes the id of the node
     id: bdb-node-1
+    # identity.certificatePath denotes the path
+    # to the x509 certificate of the node
     certificatePath: ./testdata/node.cert
+    # identity.keyPath denotes the path to the
+    # private key of the node
     keyPath: ./testdata/node.key
   network:
+    # network.address denotes the listen address
     address: 127.0.0.1
+    # network.port denotes the listen port
     port: 6001
   database:
+    # database.name denotes the name of the underlying
+    # database engine
     name: leveldb
+    # database.ledgerDirectory denotes the root path
+    # where we store all ledger data
     ledgerDirectory: ./tmp/
+  queueLength:
+    # queueLength.transaction denotes the maximum
+    # queue length of waiting transactions
+    transaction: 1000
+    # queueLength.transactionBatch denotes the maximum
+    # queue length of waiting reordered batches of transactions
+    reorderedTransactionBatch: 100
+    # queueLength.block denotes the maximum queue length
+    # of waiting blocks
+    block: 100
+
+consensus:
+  # consensus.algorithm denotes the employed consensus
+  # algorithm. Currently, only the raft consensus is
+  # supported
+  algorithm: raft
+  # consensus.blockSize denotes the maximum allowed
+  # size of the block in MB
+  maxBlockSize: 2
+  # MaxBlockTransactionCount denotes the maximum allowed
+  # number of transactions per block
+  maxTransactionCountPerBlock: 100
+  # consensus.blockTimeout denotes the block timeout
+  # in milliseconds
+  blockTimeout: 50ms
 
 admin:
+  # admin.id denotes the id of the cluster admin
   id: admin
+  # identity.certificatePath denotes the path
+  # to the x509 certificate of the cluster admin
   certificatePath: ./testdata/admin.cert
 
 rootca:
+  # rootca.certificatePath denotes the path
+  # to the x509 certificate of the root certificate
+  # authority who has issued all certificates used
+  # in the cluster
   certificatePath: ./testdata/rootca.cert

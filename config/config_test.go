@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -26,6 +27,17 @@ func TestConfig(t *testing.T) {
 					Name:            "leveldb",
 					LedgerDirectory: "./tmp/",
 				},
+				QueueLength: QueueLengthConf{
+					Transaction:               1000,
+					ReorderedTransactionBatch: 100,
+					Block:                     100,
+				},
+			},
+			Consensus: ConsensusConf{
+				Algorithm:                   "raft",
+				MaxBlockSize:                2,
+				MaxTransactionCountPerBlock: 100,
+				BlockTimeout:                50 * time.Millisecond,
 			},
 			Admin: AdminConf{
 				ID:              "admin",

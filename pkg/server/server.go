@@ -31,7 +31,7 @@ type DBAndHTTPServer struct {
 
 // New creates a object of DBAndHTTPServer
 func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
-	dbServ, err := newDBServer(&conf.Node.Database)
+	dbServ, err := newDBServer(conf)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating the database object")
 	}
@@ -96,22 +96,31 @@ type dbServer struct {
 	*transactionProcessor
 }
 
-func newDBServer(dbConfig *config.DatabaseConf) (*dbServer, error) {
+func newDBServer(conf *config.Configurations) (*dbServer, error) {
 	var levelDB *leveldb.LevelDB
 	var err error
 
-	switch dbConfig.Name {
+	dbConf := conf.Node.Database
+	switch dbConf.Name {
 	case "leveldb":
-		if levelDB, err = leveldb.New(dbConfig.LedgerDirectory); err != nil {
+		if levelDB, err = leveldb.New(dbConf.LedgerDirectory); err != nil {
 			return nil, errors.WithMessagef(err, "failed to create a new leveldb instance for the peer")
 		}
 	default:
 		return nil, errors.New("only leveldb is supported as the state database")
 	}
 
+	txProcConf := &txProcessorConfig{
+		db:                 levelDB,
+		txQueueLength:      conf.Node.QueueLength.Transaction,
+		txBatchQueueLength: conf.Node.QueueLength.ReorderedTransactionBatch,
+		blockQueueLength:   conf.Node.QueueLength.Block,
+		MaxTxCountPerBatch: conf.Consensus.MaxTransactionCountPerBlock,
+		batchTimeout:       conf.Consensus.BlockTimeout,
+	}
 	return &dbServer{
 		newQueryProcessor(levelDB),
-		newTransactionProcessor(levelDB),
+		newTransactionProcessor(txProcConf),
 	}, nil
 }
 
