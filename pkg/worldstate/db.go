@@ -30,6 +30,8 @@ type DB interface {
 	GetVersion(dbName, key string) (*types.Version, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates []*DBUpdates) error
+	// Close closes the DB instance
+	Close() error
 }
 
 // KV holds a key and value pair

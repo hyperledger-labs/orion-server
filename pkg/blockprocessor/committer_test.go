@@ -1,4 +1,4 @@
-package committer
+package blockprocessor
 
 import (
 	"io/ioutil"
@@ -13,40 +13,46 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
-type testEnv struct {
+type committerTestEnv struct {
 	db        *leveldb.LevelDB
 	path      string
-	committer *Committer
+	committer *committer
 	cleanup   func()
 }
 
-func (env *testEnv) init(t *testing.T) {
-	dir, err := ioutil.TempDir("/tmp", "ledger")
+func newCommitterTestEnv(t *testing.T) *committerTestEnv {
+	dir, err := ioutil.TempDir("/tmp", "committer")
 	require.NoError(t, err)
-	env.path = filepath.Join(dir, "leveldb")
 
-	env.cleanup = func() {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Fatalf("failed to remove directory %s", dir)
-		}
-		if err := os.RemoveAll(env.path); err != nil {
-			t.Fatalf("failed to remove directory %s", dir)
-		}
-	}
-
-	db, err := leveldb.New(env.path)
+	path := filepath.Join(dir, "leveldb")
+	db, err := leveldb.New(path)
 	if err != nil {
-		env.cleanup()
-		t.Fatalf("failed to create leveldb with path %s", env.path)
+		if err := os.RemoveAll(dir); err != nil {
+			t.Logf("failed to remove directory %s, %v", dir, err)
+		}
+		t.Fatalf("failed to create leveldb with path %s", path)
 	}
 
-	env.db = db
-	env.committer = NewCommitter(db)
+	cleanup := func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close the db instance, %v", err)
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("failed to remove directory %s, %v", dir, err)
+		}
+	}
+
+	return &committerTestEnv{
+		db:        db,
+		path:      path,
+		committer: newCommitter(db),
+		cleanup:   cleanup,
+	}
 }
 
-var env testEnv
-
 func TestStateDBCommitter(t *testing.T) {
+	t.Parallel()
+
 	setup := func(db worldstate.DB) []*worldstate.DBUpdates {
 		db1val1 := &types.Value{
 			Value: []byte("db1-value1"),
@@ -112,14 +118,15 @@ func TestStateDBCommitter(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Create("db1"))
-		require.NoError(t, env.db.Create("db2"))
-		require.NoError(t, env.db.Commit(dbsUpdates))
+		require.NoError(t, db.Create("db1"))
+		require.NoError(t, db.Create("db2"))
+		require.NoError(t, db.Commit(dbsUpdates))
 		return dbsUpdates
 	}
 
 	t.Run("commit block to replace all existing entries", func(t *testing.T) {
-		env.init(t)
+		t.Parallel()
+		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 		initialKVsPerDB := setup(env.db)
 
@@ -201,7 +208,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.Commit(block, validationInfo))
+		require.NoError(t, env.committer.commitBlock(block, validationInfo))
 
 		// as the last block commit has updated all existing entries,
 		// kvs in initialKVsPerDB should not match with the committed versions
@@ -265,7 +272,8 @@ func TestStateDBCommitter(t *testing.T) {
 	})
 
 	t.Run("commit block to delete all existing entries", func(t *testing.T) {
-		env.init(t)
+		t.Parallel()
+		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 		initialKVsPerDB := setup(env.db)
 
@@ -327,7 +335,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.Commit(block, validationInfo))
+		require.NoError(t, env.committer.commitBlock(block, validationInfo))
 
 		// as the last block commit has deleted all existing entries,
 		// kvs in initialKVsPerDB should not match with the committed versions
@@ -357,7 +365,8 @@ func TestStateDBCommitter(t *testing.T) {
 	})
 
 	t.Run("commit block to only insert new entries", func(t *testing.T) {
-		env.init(t)
+		t.Parallel()
+		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 		initialKVsPerDB := setup(env.db)
 
@@ -420,7 +429,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.Commit(block, validationInfo))
+		require.NoError(t, env.committer.commitBlock(block, validationInfo))
 
 		// as the last block commit has not modified existing entries,
 		// kvs in initialKVsPerDB should match with the committed versions
@@ -486,7 +495,8 @@ func TestStateDBCommitter(t *testing.T) {
 	})
 
 	t.Run("commit block to update and delete existing entries while inserting new", func(t *testing.T) {
-		env.init(t)
+		t.Parallel()
+		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 		initialKVsPerDB := setup(env.db)
 
@@ -627,7 +637,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.Commit(block, validationInfo))
+		require.NoError(t, env.committer.commitBlock(block, validationInfo))
 
 		// as the last block commit has either updated or deleted
 		// existing entries, kvs in initialKVsPerDB should not
@@ -704,7 +714,8 @@ func TestStateDBCommitter(t *testing.T) {
 	})
 
 	t.Run("commit block and expect error", func(t *testing.T) {
-		env.init(t)
+		t.Parallel()
+		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 
 		block := &types.Block{
@@ -732,6 +743,6 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.EqualError(t, env.committer.Commit(block, validationInfo), "failed to commit block 2 to state database: database db1 does not exist")
+		require.EqualError(t, env.committer.commitBlock(block, validationInfo), "failed to commit block 2 to state database: database db1 does not exist")
 	})
 }

@@ -1,4 +1,4 @@
-package txisolation
+package blockprocessor
 
 import (
 	"io/ioutil"
@@ -13,38 +13,46 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
-type testEnv struct {
+type validatorTestEnv struct {
 	db        *leveldb.LevelDB
 	path      string
-	validator *Validator
+	validator *validator
 	cleanup   func()
 }
 
-func (env *testEnv) init(t *testing.T) {
-	dir, err := ioutil.TempDir("/tmp", "ledger")
+func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
+	dir, err := ioutil.TempDir("/tmp", "validator")
 	require.NoError(t, err)
-	env.path = filepath.Join(dir, "leveldb")
+	path := filepath.Join(dir, "leveldb")
 
-	env.cleanup = func() {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Fatalf("failed to remove directory %s", dir)
-		}
-		if err := os.RemoveAll(env.path); err != nil {
-			t.Fatalf("failed to remove directory %s", dir)
-		}
-	}
-
-	db, err := leveldb.New(env.path)
+	db, err := leveldb.New(path)
 	if err != nil {
-		env.cleanup()
-		t.Fatalf("failed to create leveldb with path %s", env.path)
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("failed to remove directory %s, %v", dir, err)
+		}
+		t.Fatalf("failed to create leveldb with path %s", path)
 	}
 
-	env.db = db
-	env.validator = NewValidator(db)
+	cleanup := func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close the db instance, %v", err)
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("failed to remove directory %s, %v", dir, err)
+		}
+	}
+
+	return &validatorTestEnv{
+		db:        db,
+		path:      path,
+		validator: newValidator(db),
+		cleanup:   cleanup,
+	}
 }
 
 func TestMVCCValidator(t *testing.T) {
+	t.Parallel()
+
 	setup := func(db worldstate.DB) {
 		val1 := &types.Value{
 			Value: []byte("value1"),
@@ -88,8 +96,7 @@ func TestMVCCValidator(t *testing.T) {
 
 	t.Run("mvccValidation, valid transaction", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newValidatorTestEnv(t)
 		defer env.cleanup()
 		setup(env.db)
 
@@ -129,8 +136,7 @@ func TestMVCCValidator(t *testing.T) {
 
 	t.Run("mvccValidation, invalid transaction due to conflict with pending writes", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newValidatorTestEnv(t)
 		defer env.cleanup()
 		setup(env.db)
 
@@ -158,8 +164,7 @@ func TestMVCCValidator(t *testing.T) {
 
 	t.Run("mvccValidation, invalid transaction due to mismatch in the committed version", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newValidatorTestEnv(t)
 		defer env.cleanup()
 		setup(env.db)
 
@@ -190,8 +195,7 @@ func TestMVCCValidator(t *testing.T) {
 
 	t.Run("mvccValidation, error", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newValidatorTestEnv(t)
 		defer env.cleanup()
 		tx := &types.Transaction{
 			DBName: "db1",
@@ -210,6 +214,8 @@ func TestMVCCValidator(t *testing.T) {
 }
 
 func TestValidator(t *testing.T) {
+	t.Parallel()
+
 	setup := func(db worldstate.DB) {
 		db1val1 := &types.Value{
 			Value: []byte("db1-value1"),
@@ -287,8 +293,7 @@ func TestValidator(t *testing.T) {
 
 	t.Run("validate block", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newValidatorTestEnv(t)
 		defer env.cleanup()
 		setup(env.db)
 
@@ -469,7 +474,7 @@ func TestValidator(t *testing.T) {
 			},
 		}
 
-		valInfo, err := env.validator.ValidateBlock(block)
+		valInfo, err := env.validator.validateBlock(block)
 		require.NoError(t, err)
 		require.Equal(t, expectedValidationInfo, valInfo)
 	})

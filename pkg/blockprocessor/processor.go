@@ -4,40 +4,38 @@ import (
 	"log"
 
 	"github.ibm.com/blockchaindb/protos/types"
-	"github.ibm.com/blockchaindb/server/pkg/committer"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
-	"github.ibm.com/blockchaindb/server/pkg/txisolation"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
 // ValidatorAndCommitter holds block validator and committer
 type ValidatorAndCommitter struct {
 	blockQueue *queue.Queue
-	validator  *txisolation.Validator
-	committer  *committer.Committer
+	validator  *validator
+	committer  *committer
 }
 
 // NewValidatorAndCommitter creates a ValidatorAndCommitter
 func NewValidatorAndCommitter(blockQueue *queue.Queue, db worldstate.DB) *ValidatorAndCommitter {
-	p := &ValidatorAndCommitter{
+	c := &ValidatorAndCommitter{
 		blockQueue: blockQueue,
-		validator:  txisolation.NewValidator(db),
-		committer:  committer.NewCommitter(db),
+		validator:  newValidator(db),
+		committer:  newCommitter(db),
 	}
-	return p
+	return c
 }
 
 // Run runs validator and committer
-func (p *ValidatorAndCommitter) Run() {
+func (c *ValidatorAndCommitter) Run() {
 	for {
-		block := p.blockQueue.Dequeue().(*types.Block)
+		block := c.blockQueue.Dequeue().(*types.Block)
 
-		validationInfo, err := p.validator.ValidateBlock(block)
+		validationInfo, err := c.validator.validateBlock(block)
 		if err != nil {
 			panic(err)
 		}
 
-		if err = p.committer.Commit(block, validationInfo); err != nil {
+		if err = c.committer.commitBlock(block, validationInfo); err != nil {
 			panic(err)
 		}
 		log.Printf("validated and committed block %d\n", block.Header.Number)

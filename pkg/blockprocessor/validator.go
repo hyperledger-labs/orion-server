@@ -1,4 +1,4 @@
-package txisolation
+package blockprocessor
 
 import (
 	"github.com/golang/protobuf/proto"
@@ -6,23 +6,23 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
-// Validator validates the each transaction read set present in a
+// validator validates the each transaction read set present in a
 // block against the committed version to ensure the requested
 // isolation level
-type Validator struct {
+type validator struct {
 	db worldstate.DB
 }
 
-// NewValidator creates a new validator
-func NewValidator(db worldstate.DB) *Validator {
-	return &Validator{
+// newValidator creates a new validator
+func newValidator(db worldstate.DB) *validator {
+	return &validator{
 		db: db,
 	}
 }
 
-// ValidateBlock validates each transaction present in the block to ensure
+// validateBlock validates each transaction present in the block to ensure
 // the request isolation level
-func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
+func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
 	var err error
 	valInfo := make([]*types.ValidationInfo, len(block.TransactionEnvelopes))
 	pendingWrites := make(map[string]bool)
@@ -52,7 +52,7 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	return valInfo, nil
 }
 
-func (v *Validator) mvccValidation(tx *types.Transaction, pendingWrites map[string]bool) (*types.ValidationInfo, error) {
+func (v *validator) mvccValidation(tx *types.Transaction, pendingWrites map[string]bool) (*types.ValidationInfo, error) {
 	valInfo := &types.ValidationInfo{
 		Flag: types.Flag_VALID,
 	}

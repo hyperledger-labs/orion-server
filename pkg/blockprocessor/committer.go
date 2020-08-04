@@ -1,4 +1,4 @@
-package committer
+package blockprocessor
 
 import (
 	"github.com/pkg/errors"
@@ -6,7 +6,7 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
-type Committer struct {
+type committer struct {
 	db worldstate.DB
 	// TODO
 	// 1. Block Store
@@ -14,18 +14,18 @@ type Committer struct {
 	// 3. Proof Store
 }
 
-func NewCommitter(db worldstate.DB) *Committer {
-	return &Committer{
+func newCommitter(db worldstate.DB) *committer {
+	return &committer{
 		db: db,
 	}
 }
 
-func (c *Committer) Commit(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
+func (c *committer) commitBlock(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
 	return c.commitToStateDB(block, blockValidationInfo)
 	//TODO: add code to commit to block store and provenance store
 }
 
-func (c *Committer) commitToStateDB(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
+func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
 	dbsUpdates := []*worldstate.DBUpdates{}
 	for txNum, txValidationInfo := range blockValidationInfo {
 		if txValidationInfo.Flag != types.Flag_VALID {

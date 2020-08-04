@@ -3,6 +3,7 @@ package blockprocessor
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,23 +19,29 @@ type testEnv struct {
 	v       *ValidatorAndCommitter
 	db      worldstate.DB
 	path    string
-	cleanup func(t *testing.T)
+	cleanup func()
 }
 
 func newTestEnv(t *testing.T) *testEnv {
-	path, err := ioutil.TempDir("/tmp", "validatorAndCommitter")
+	dir, err := ioutil.TempDir("/tmp", "validatorAndCommitter")
 	require.NoError(t, err)
 
-	cleanup := func(t *testing.T) {
-		if err := os.RemoveAll(path); err != nil {
-			t.Errorf("failed to remove path %s, %v", path, err)
-		}
-	}
-
+	path := filepath.Join(dir, "leveldb")
 	db, err := leveldb.New(path)
 	if err != nil {
-		defer cleanup(t)
+		if err := os.RemoveAll(dir); err != nil {
+			t.Logf("failed to remove directory %s, %v", dir, err)
+		}
 		t.Fatalf("failed to create a leveldb instance, %v", err)
+	}
+
+	cleanup := func() {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close the db instance, %v", err)
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("failed to remove directory %s, %v", dir, err)
+		}
 	}
 
 	v := NewValidatorAndCommitter(queue.New(10), db)
@@ -43,12 +50,14 @@ func newTestEnv(t *testing.T) *testEnv {
 	return &testEnv{
 		v:       v,
 		db:      db,
-		path:    path,
+		path:    dir,
 		cleanup: cleanup,
 	}
 }
 
 func TestValidatorAndCommitter(t *testing.T) {
+	t.Parallel()
+
 	block1 := &types.Block{
 		Header: &types.BlockHeader{
 			Number: 1,
@@ -87,8 +96,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 	}
 
 	t.Run("enqueue-one-block", func(t *testing.T) {
+		t.Parallel()
 		env := newTestEnv(t)
-		defer env.cleanup(t)
+		defer env.cleanup()
 
 		testCases := []struct {
 			block             *types.Block
@@ -131,8 +141,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 	})
 
 	t.Run("enqueue-more-than-one-block", func(t *testing.T) {
+		t.Parallel()
 		env := newTestEnv(t)
-		defer env.cleanup(t)
+		defer env.cleanup()
 
 		testCases := []struct {
 			blocks            []*types.Block

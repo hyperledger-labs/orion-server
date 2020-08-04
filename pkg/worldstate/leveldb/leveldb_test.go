@@ -18,35 +18,47 @@ type testEnv struct {
 	cleanup func()
 }
 
-func (env *testEnv) init(t *testing.T) {
+func newTestEnv(t *testing.T) *testEnv {
 	dir, err := ioutil.TempDir("/tmp", "ledger")
 	require.NoError(t, err)
-	env.path = filepath.Join(dir, "leveldb")
 
-	env.cleanup = func() {
-		require.NoError(t, os.RemoveAll(dir))
-		require.NoError(t, os.RemoveAll(env.path))
-	}
-
-	l, err := New(env.path)
+	path := filepath.Join(dir, "leveldb")
+	l, err := New(path)
 	if err != nil {
-		env.cleanup()
-		t.Fatalf("failed to create leveldb with path %s", env.path)
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("failed to remove %s, %v", dir, err)
+		}
+		t.Fatalf("failed to create leveldb with path %s", path)
 	}
-	require.Equal(t, env.path, l.dirPath)
+
+	cleanup := func() {
+		if err := l.Close(); err != nil {
+			t.Errorf("failed to close the database instance, %v", err)
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			t.Errorf("failed to remove %s, %v", dir, err)
+		}
+	}
+
+	require.Equal(t, path, l.dirPath)
 	require.Len(t, l.dbs, len(systemDBs))
 	for _, dbName := range systemDBs {
 		require.NotNil(t, l.dbs[dbName])
 	}
 
-	env.l = l
+	return &testEnv{
+		l:       l,
+		path:    path,
+		cleanup: cleanup,
+	}
 }
 
 func TestCreateAndOpenDB(t *testing.T) {
+	t.Parallel()
+
 	t.Run("opening an non-existing database", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newTestEnv(t)
 		defer env.cleanup()
 		l := env.l
 		require.Contains(t, l.Open("db1").Error(), "database db1 does not exist")
@@ -57,8 +69,7 @@ func TestCreateAndOpenDB(t *testing.T) {
 
 	t.Run("creating and opening a database", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newTestEnv(t)
 		defer env.cleanup()
 		l := env.l
 		require.NoError(t, l.Create("db1"))
@@ -70,6 +81,8 @@ func TestCreateAndOpenDB(t *testing.T) {
 }
 
 func TestCommitAndGet(t *testing.T) {
+	t.Parallel()
+
 	setupWithNoData := func(l *LevelDB) {
 		require.NoError(t, l.Create("db1"))
 		require.NoError(t, l.Create("db2"))
@@ -158,8 +171,7 @@ func TestCommitAndGet(t *testing.T) {
 
 	t.Run("Get() and GetVersion() on empty databases", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newTestEnv(t)
 		defer env.cleanup()
 		l := env.l
 		setupWithNoData(l)
@@ -186,8 +198,7 @@ func TestCommitAndGet(t *testing.T) {
 	// (db2-key1, db2-key2 for db2) and commit them.
 	t.Run("Get() and GetVersion() on non-empty databases", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newTestEnv(t)
 		defer env.cleanup()
 		l := env.l
 		db1KVs, db2KVs := setupWithData(l)
@@ -220,8 +231,7 @@ func TestCommitAndGet(t *testing.T) {
 	// commit them.
 	t.Run("Commit() and Get() on non-empty databases", func(t *testing.T) {
 		t.Parallel()
-		env := &testEnv{}
-		env.init(t)
+		env := newTestEnv(t)
 		defer env.cleanup()
 		l := env.l
 		db1KVs, db2KVs := setupWithData(l)
@@ -296,6 +306,8 @@ func TestCommitAndGet(t *testing.T) {
 }
 
 func TestNewLevelDB(t *testing.T) {
+	t.Parallel()
+
 	dir, err := ioutil.TempDir("/tmp", "ledger")
 	require.NoError(t, err)
 	levelPath := filepath.Join(dir, "leveldb")
@@ -304,38 +316,37 @@ func TestNewLevelDB(t *testing.T) {
 		require.NoError(t, os.RemoveAll(levelPath))
 	}()
 
-	l, err := New(levelPath)
-	require.NoError(t, err)
-	require.NoError(t, l.Open(worldstate.UsersDBName))
-	require.NoError(t, l.Create("db1"))
-	require.NoError(t, l.Create("db2"))
-	require.NoError(t, l.Create("db3"))
-	require.NoError(t, l.Create("db4"))
+	t.Run("open-new-databases", func(t *testing.T) {
+		l, err := New(levelPath)
+		require.NoError(t, err)
+		require.NoError(t, l.Open(worldstate.UsersDBName))
 
-	require.Len(t, l.dbs, 4+len(systemDBs))
-	for _, dbName := range systemDBs {
-		require.NoError(t, l.Open(dbName))
-	}
-	require.NoError(t, l.Open("db1"))
-	require.NoError(t, l.Open("db2"))
-	require.NoError(t, l.Open("db3"))
-	require.NoError(t, l.Open("db4"))
+		userDBs := []string{"db1", "db2", "db3", "db4"}
+		for _, dbName := range userDBs {
+			require.NoError(t, l.Create(dbName))
+		}
 
-	closeLevelDB(t, l)
-	l, err = New(levelPath)
-	require.NoError(t, err)
-	require.Len(t, l.dbs, 4+len(systemDBs))
-	for _, dbName := range systemDBs {
-		require.NoError(t, l.Open(dbName))
-	}
-	require.NoError(t, l.Open("db1"))
-	require.NoError(t, l.Open("db2"))
-	require.NoError(t, l.Open("db3"))
-	require.NoError(t, l.Open("db4"))
-}
+		require.Len(t, l.dbs, 4+len(systemDBs))
 
-func closeLevelDB(t *testing.T, l *LevelDB) {
-	for _, db := range l.dbs {
-		require.NoError(t, db.file.Close())
-	}
+		for _, dbName := range systemDBs {
+			require.NoError(t, l.Open(dbName))
+		}
+
+		require.NoError(t, l.Close())
+	})
+
+	t.Run("reopen-old-databases", func(t *testing.T) {
+		l, err := New(levelPath)
+		require.NoError(t, err)
+		require.Len(t, l.dbs, 4+len(systemDBs))
+
+		for _, dbName := range systemDBs {
+			require.NoError(t, l.Open(dbName))
+		}
+
+		userDBs := []string{"db1", "db2", "db3", "db4"}
+		for _, dbName := range userDBs {
+			require.NoError(t, l.Open(dbName))
+		}
+	})
 }

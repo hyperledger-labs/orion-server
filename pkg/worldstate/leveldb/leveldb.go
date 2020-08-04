@@ -193,6 +193,17 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
 	return nil
 }
 
+// Close closes the database instance by closing all leveldb databases
+func (l *LevelDB) Close() error {
+	for name, db := range l.dbs {
+		if err := db.file.Close(); err != nil {
+			return fmt.Errorf("error while closing database %s, %v", name, err)
+		}
+	}
+
+	return nil
+}
+
 func (l *LevelDB) getDB(dbName string) (*db, error) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
