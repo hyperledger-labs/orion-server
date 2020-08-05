@@ -41,7 +41,7 @@ consensus:
   maxBlockSize: 2
   # MaxBlockTransactionCount denotes the maximum allowed
   # number of transactions per block
-  maxTransactionCountPerBlock: 100
+  maxTransactionCountPerBlock: 1
   # consensus.blockTimeout denotes the block timeout
   # in milliseconds
   blockTimeout: 50ms

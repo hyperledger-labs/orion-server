@@ -36,7 +36,7 @@ func TestConfig(t *testing.T) {
 			Consensus: ConsensusConf{
 				Algorithm:                   "raft",
 				MaxBlockSize:                2,
-				MaxTransactionCountPerBlock: 100,
+				MaxTransactionCountPerBlock: 1,
 				BlockTimeout:                50 * time.Millisecond,
 			},
 			Admin: AdminConf{
