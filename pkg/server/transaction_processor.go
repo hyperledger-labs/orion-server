@@ -16,7 +16,12 @@ import (
 )
 
 type transactionProcessor struct {
-	txQueue *queue.Queue
+	txQueue        *queue.Queue
+	txBatchQueue   *queue.Queue
+	blockQueue     *queue.Queue
+	txReorderer    *txreorderer.TxReorderer
+	blockCreator   *blockcreator.BlockCreator
+	blockProcessor *blockprocessor.BlockProcessor
 }
 
 type txProcessorConfig struct {
@@ -29,17 +34,21 @@ type txProcessorConfig struct {
 }
 
 func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
-	txQueue := queue.New(conf.txQueueLength)
-	txBatchQueue := queue.New(conf.txBatchQueueLength)
-	blockQueue := queue.New(conf.blockQueueLength)
+	p := &transactionProcessor{}
 
-	go txreorderer.New(txQueue, txBatchQueue, conf.MaxTxCountPerBatch, conf.batchTimeout).Run()
-	go blockcreator.New(txBatchQueue, blockQueue).Run()
-	go blockprocessor.New(blockQueue, conf.db).Run()
+	p.txQueue = queue.New(conf.txQueueLength)
+	p.txBatchQueue = queue.New(conf.txBatchQueueLength)
+	p.blockQueue = queue.New(conf.blockQueueLength)
 
-	return &transactionProcessor{
-		txQueue: txQueue,
-	}
+	p.txReorderer = txreorderer.New(p.txQueue, p.txBatchQueue, conf.MaxTxCountPerBatch, conf.batchTimeout)
+	p.blockCreator = blockcreator.New(p.txBatchQueue, p.blockQueue)
+	p.blockProcessor = blockprocessor.New(p.blockQueue, conf.db)
+
+	go p.txReorderer.Run()
+	go p.blockCreator.Run()
+	go p.blockProcessor.Run()
+
+	return p
 }
 
 // SubmitTransaction enqueue the transaction to the transaction queue
