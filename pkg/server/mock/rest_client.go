@@ -11,7 +11,7 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/library/pkg/server"
+	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/protos/types"
 )
 
@@ -47,8 +47,8 @@ func (c *Client) GetStatus(ctx context.Context, in *types.GetStatusQueryEnvelope
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(server.UserHeader, in.Payload.UserID)
-	req.Header.Set(server.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
+	req.Header.Set(constants.UserHeader, in.Payload.UserID)
+	req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -77,8 +77,8 @@ func (c *Client) GetState(ctx context.Context, in *types.GetStateQueryEnvelope) 
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(server.UserHeader, in.Payload.UserID)
-	req.Header.Set(server.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
+	req.Header.Set(constants.UserHeader, in.Payload.UserID)
+	req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/library/pkg/server"
+	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
@@ -226,18 +226,18 @@ func (db *dbServer) prepareAndCommitConfigTx(conf *config.Configurations) error 
 }
 
 func validateAndParseHeader(h *http.Header) (string, []byte, error) {
-	userID := h.Get(server.UserHeader)
+	userID := h.Get(constants.UserHeader)
 	if userID == "" {
-		return "", nil, errors.New(server.UserHeader + " is not set in the http request header")
+		return "", nil, errors.New(constants.UserHeader + " is not set in the http request header")
 	}
 
-	signature := h.Get(server.SignatureHeader)
+	signature := h.Get(constants.SignatureHeader)
 	if signature == "" {
-		return "", nil, errors.New(server.SignatureHeader + " is not set in the http request header")
+		return "", nil, errors.New(constants.SignatureHeader + " is not set in the http request header")
 	}
 	signatureBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
-		return "", nil, errors.New(server.SignatureHeader + " is not encoded correctly")
+		return "", nil, errors.New(constants.SignatureHeader + " is not encoded correctly")
 	}
 
 	return userID, signatureBytes, nil
