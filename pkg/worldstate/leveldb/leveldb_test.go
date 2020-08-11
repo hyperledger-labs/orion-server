@@ -60,6 +60,7 @@ func TestCreateAndOpenDB(t *testing.T) {
 		t.Parallel()
 		env := newTestEnv(t)
 		defer env.cleanup()
+
 		l := env.l
 		require.Contains(t, l.Open("db1").Error(), "database db1 does not exist")
 		exists, err := fileExists(filepath.Join(env.path, "db1"))
@@ -71,6 +72,7 @@ func TestCreateAndOpenDB(t *testing.T) {
 		t.Parallel()
 		env := newTestEnv(t)
 		defer env.cleanup()
+
 		l := env.l
 		require.NoError(t, l.Create("db1"))
 		require.DirExists(t, filepath.Join(env.path, "db1"))
@@ -88,8 +90,8 @@ func TestCommitAndGet(t *testing.T) {
 		require.NoError(t, l.Create("db2"))
 	}
 
-	setupWithData := func(l *LevelDB) (map[string]*types.Value, map[string]*types.Value) {
-		db1val1 := &types.Value{
+	setupWithData := func(l *LevelDB) (map[string]*ValueAndMetadata, map[string]*ValueAndMetadata) {
+		db1valAndMetadata1 := &ValueAndMetadata{
 			Value: []byte("db1-value1"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -98,7 +100,7 @@ func TestCommitAndGet(t *testing.T) {
 				},
 			},
 		}
-		db1val2 := &types.Value{
+		db1valAndMetadata2 := &ValueAndMetadata{
 			Value: []byte("db1-value2"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -107,7 +109,7 @@ func TestCommitAndGet(t *testing.T) {
 				},
 			},
 		}
-		db2val1 := &types.Value{
+		db2valAndMetadata1 := &ValueAndMetadata{
 			Value: []byte("db2-value1"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -116,7 +118,7 @@ func TestCommitAndGet(t *testing.T) {
 				},
 			},
 		}
-		db2val2 := &types.Value{
+		db2valAndMetadata2 := &ValueAndMetadata{
 			Value: []byte("db2-value2"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -128,27 +130,31 @@ func TestCommitAndGet(t *testing.T) {
 		dbsUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: "db1",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   "db1-key1",
-						Value: db1val1,
+						Key:      "db1-key1",
+						Value:    db1valAndMetadata1.Value,
+						Metadata: db1valAndMetadata1.Metadata,
 					},
 					{
-						Key:   "db1-key2",
-						Value: db1val2,
+						Key:      "db1-key2",
+						Value:    db1valAndMetadata2.Value,
+						Metadata: db1valAndMetadata2.Metadata,
 					},
 				},
 			},
 			{
 				DBName: "db2",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   "db2-key1",
-						Value: db2val1,
+						Key:      "db2-key1",
+						Value:    db2valAndMetadata1.Value,
+						Metadata: db2valAndMetadata1.Metadata,
 					},
 					{
-						Key:   "db2-key2",
-						Value: db2val2,
+						Key:      "db2-key2",
+						Value:    db2valAndMetadata2.Value,
+						Metadata: db2valAndMetadata2.Metadata,
 					},
 				},
 			},
@@ -158,13 +164,13 @@ func TestCommitAndGet(t *testing.T) {
 		require.NoError(t, l.Create("db2"))
 		require.NoError(t, l.Commit(dbsUpdates))
 
-		db1KVs := map[string]*types.Value{
-			"db1-key1": db1val1,
-			"db1-key2": db1val2,
+		db1KVs := map[string]*ValueAndMetadata{
+			"db1-key1": db1valAndMetadata1,
+			"db1-key2": db1valAndMetadata2,
 		}
-		db2KVs := map[string]*types.Value{
-			"db2-key1": db2val1,
-			"db2-key2": db2val2,
+		db2KVs := map[string]*ValueAndMetadata{
+			"db2-key1": db2valAndMetadata1,
+			"db2-key2": db2valAndMetadata2,
 		}
 		return db1KVs, db2KVs
 	}
@@ -176,13 +182,15 @@ func TestCommitAndGet(t *testing.T) {
 		l := env.l
 		setupWithNoData(l)
 
-		val, err := l.Get("db1", "db1-key1")
+		val, metadata, err := l.Get("db1", "db1-key1")
 		require.NoError(t, err)
 		require.Nil(t, val)
+		require.Nil(t, metadata)
 
-		val, err = l.Get("db2", "db2-key1")
+		val, metadata, err = l.Get("db2", "db2-key1")
 		require.NoError(t, err)
 		require.Nil(t, val)
+		require.Nil(t, metadata)
 
 		ver, err := l.GetVersion("db1", "db1-key1")
 		require.NoError(t, err)
@@ -203,24 +211,30 @@ func TestCommitAndGet(t *testing.T) {
 		l := env.l
 		db1KVs, db2KVs := setupWithData(l)
 
-		for key, expectedVal := range db1KVs {
-			val, err := l.Get("db1", key)
+		for key, expectedValAndMetadata := range db1KVs {
+			val, metadata, err := l.Get("db1", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal, val))
+			require.True(t, proto.Equal(
+				expectedValAndMetadata,
+				&ValueAndMetadata{Value: val, Metadata: metadata},
+			))
 
 			ver, err := l.GetVersion("db1", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal.GetMetadata().GetVersion(), ver))
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
 		}
 
-		for key, expectedVal := range db2KVs {
-			val, err := l.Get("db2", key)
+		for key, expectedValAndMetadata := range db2KVs {
+			val, metadata, err := l.Get("db2", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal, val))
+			require.True(t, proto.Equal(
+				expectedValAndMetadata,
+				&ValueAndMetadata{Value: val, Metadata: metadata},
+			))
 
 			ver, err := l.GetVersion("db2", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal.GetMetadata().GetVersion(), ver))
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
 		}
 	})
 
@@ -236,7 +250,7 @@ func TestCommitAndGet(t *testing.T) {
 		l := env.l
 		db1KVs, db2KVs := setupWithData(l)
 
-		db1val1new := &types.Value{
+		db1valAndMetadata1New := &ValueAndMetadata{
 			Value: []byte("db1-value1-new"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -245,7 +259,7 @@ func TestCommitAndGet(t *testing.T) {
 				},
 			},
 		}
-		db2val1new := &types.Value{
+		db2valAndMetadata1New := &ValueAndMetadata{
 			Value: []byte("db2-value1-new"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -257,20 +271,22 @@ func TestCommitAndGet(t *testing.T) {
 		dbsUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: "db1",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   "db1-key1",
-						Value: db1val1new,
+						Key:      "db1-key1",
+						Value:    db1valAndMetadata1New.Value,
+						Metadata: db1valAndMetadata1New.Metadata,
 					},
 				},
 				Deletes: []string{"db1-key2"},
 			},
 			{
 				DBName: "db2",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   "db2-key1",
-						Value: db2val1new,
+						Key:      "db2-key1",
+						Value:    db2valAndMetadata1New.Value,
+						Metadata: db2valAndMetadata1New.Metadata,
 					},
 				},
 				Deletes: []string{"db2-key2"},
@@ -279,28 +295,30 @@ func TestCommitAndGet(t *testing.T) {
 
 		require.NoError(t, l.Commit(dbsUpdates))
 
-		db1KVs["db1-key1"] = db1val1new
+		db1KVs["db1-key1"] = db1valAndMetadata1New
 		db1KVs["db1-key2"] = nil
-		for key, expectedVal := range db1KVs {
-			val, err := l.Get("db1", key)
+		for key, expectedValAndMetadata := range db1KVs {
+			val, metadata, err := l.Get("db1", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal, val))
+			require.Equal(t, expectedValAndMetadata.GetValue(), val)
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata(), metadata))
 
 			ver, err := l.GetVersion("db1", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal.GetMetadata().GetVersion(), ver))
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
 		}
 
-		db2KVs["db2-key1"] = db2val1new
+		db2KVs["db2-key1"] = db2valAndMetadata1New
 		db2KVs["db2-key2"] = nil
-		for key, expectedVal := range db2KVs {
-			val, err := l.Get("db2", key)
+		for key, expectedValAndMetadata := range db2KVs {
+			val, metadata, err := l.Get("db2", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal, val))
+			require.Equal(t, expectedValAndMetadata.GetValue(), val)
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata(), metadata))
 
 			ver, err := l.GetVersion("db2", key)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedVal.GetMetadata().GetVersion(), ver))
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
 		}
 	})
 }

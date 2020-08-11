@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
@@ -83,11 +84,20 @@ func TestTransactionProcessor(t *testing.T) {
 		require.NoError(t, env.txProcessor.SubmitTransaction(context.Background(), tx))
 
 		assertTestKey1InDB := func() bool {
-			val, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
+			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
 			if err != nil {
 				return false
 			}
-			return bytes.Equal([]byte("test-value1"), val.Value)
+			return bytes.Equal([]byte("test-value1"), val) &&
+				proto.Equal(
+					&types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+					metadata,
+				)
 		}
 		require.Eventually(
 			t,

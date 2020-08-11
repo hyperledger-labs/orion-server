@@ -125,10 +125,10 @@ func (l *LevelDB) Open(dbName string) error {
 }
 
 // Get returns the value of the key present in the database.
-func (l *LevelDB) Get(dbName string, key string) (*types.Value, error) {
+func (l *LevelDB) Get(dbName string, key string) ([]byte, *types.Metadata, error) {
 	db, err := l.getDB(dbName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	db.mu.RLock()
@@ -136,31 +136,28 @@ func (l *LevelDB) Get(dbName string, key string) (*types.Value, error) {
 
 	dbval, err := db.file.Get([]byte(key), db.readOpts)
 	if err == leveldb.ErrNotFound {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, errors.WithMessagef(err, "failed to retrieve leveldb key [%s] from database %s", key, dbName)
+		return nil, nil, errors.WithMessagef(err, "failed to retrieve leveldb key [%s] from database %s", key, dbName)
 	}
 
-	value := &types.Value{}
-	if err := proto.Unmarshal(dbval, value); err != nil {
-		return nil, err
+	persisted := &ValueAndMetadata{}
+	if err := proto.Unmarshal(dbval, persisted); err != nil {
+		return nil, nil, err
 	}
 
-	return value, nil
+	return persisted.Value, persisted.Metadata, nil
 }
 
 // GetVersion returns the version of the key present in the database
 func (l *LevelDB) GetVersion(dbName string, key string) (*types.Version, error) {
-	dbval, err := l.Get(dbName, key)
+	_, metadata, err := l.Get(dbName, key)
 	if err != nil {
 		return nil, err
 	}
-	if dbval == nil {
-		return nil, nil
-	}
 
-	return dbval.Metadata.Version, nil
+	return metadata.GetVersion(), nil
 }
 
 // Commit commits the updates to the database
@@ -175,15 +172,22 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
 
 		db.mu.Lock()
 		for _, kv := range updates.Writes {
-			dbval, err := proto.Marshal(kv.Value)
+			dbval, err := proto.Marshal(
+				&ValueAndMetadata{
+					Value:    kv.Value,
+					Metadata: kv.Metadata,
+				},
+			)
 			if err != nil {
 				return errors.WithMessagef(err, "failed to marshal the constructed dbValue [%v]", kv.Value)
 			}
 			batch.Put([]byte(kv.Key), dbval)
 		}
+
 		for _, key := range updates.Deletes {
 			batch.Delete([]byte(key))
 		}
+
 		if err := db.file.Write(batch, db.writeOpts); err != nil {
 			return err
 		}

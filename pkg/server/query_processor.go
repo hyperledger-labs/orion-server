@@ -55,24 +55,24 @@ func (q *queryProcessor) GetState(_ context.Context, req *types.GetStateQueryEnv
 		return nil, err
 	}
 
-	state := &types.GetStateResponseEnvelope{
+	value, metadata, err := q.db.Get(req.Payload.DBName, req.Payload.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	s := &types.GetStateResponseEnvelope{
 		Payload: &types.GetStateResponse{
-			Header: &types.ResponseHeader{
-				NodeID: nil,
-			},
+			Value:    value,
+			Metadata: metadata,
 		},
 		Signature: nil,
 	}
 
-	if state.Payload.Value, err = q.db.Get(req.Payload.DBName, req.Payload.Key); err != nil {
+	if s.Signature, err = crypto.Sign(s.Payload); err != nil {
 		return nil, err
 	}
 
-	if state.Signature, err = crypto.Sign(state.Payload); err != nil {
-		return nil, err
-	}
-
-	return state, nil
+	return s, nil
 }
 
 func validateGetStatusQuery(req *types.GetStatusQueryEnvelope) error {

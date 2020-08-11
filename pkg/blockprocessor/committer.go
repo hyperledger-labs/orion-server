@@ -33,7 +33,7 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 		}
 
 		tx := block.TransactionEnvelopes[txNum].Payload
-		kvWrites := []*worldstate.KV{}
+		kvWrites := []*worldstate.KVWithMetadata{}
 		kvDeletes := []string{}
 
 		for _, write := range tx.Writes {
@@ -42,15 +42,13 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 				continue
 			}
 
-			kv := &worldstate.KV{
-				Key: write.Key,
-				Value: &types.Value{
-					Value: write.Value,
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: block.Header.Number,
-							TxNum:    uint64(txNum),
-						},
+			kv := &worldstate.KVWithMetadata{
+				Key:   write.Key,
+				Value: write.Value,
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: block.Header.Number,
+						TxNum:    uint64(txNum),
 					},
 				},
 			}

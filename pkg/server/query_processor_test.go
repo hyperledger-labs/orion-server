@@ -126,22 +126,23 @@ func TestGetState(t *testing.T) {
 		defer env.cleanup(t)
 
 		require.NoError(t, env.db.Create("test-db"))
-		val1 := &types.Value{
-			Value: []byte("value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    1,
-				},
+
+		val := []byte("value1")
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
 			},
 		}
+
 		dbsUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: "test-db",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   "key1",
-						Value: val1,
+						Key:      "key1",
+						Value:    val,
+						Metadata: metadata,
 					},
 				},
 			},
@@ -149,16 +150,19 @@ func TestGetState(t *testing.T) {
 		require.NoError(t, env.db.Commit(dbsUpdates))
 
 		testCases := []struct {
-			key           string
-			expectedValue *types.Value
+			key              string
+			expectedValue    []byte
+			expectedMetadata *types.Metadata
 		}{
 			{
-				key:           "key1",
-				expectedValue: val1,
+				key:              "key1",
+				expectedValue:    val,
+				expectedMetadata: metadata,
 			},
 			{
-				key:           "not-present",
-				expectedValue: nil,
+				key:              "not-present",
+				expectedValue:    nil,
+				expectedMetadata: nil,
 			},
 		}
 
@@ -174,7 +178,8 @@ func TestGetState(t *testing.T) {
 
 			val, err := env.q.GetState(context.Background(), req)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(testCase.expectedValue, val.Payload.Value))
+			require.Equal(t, testCase.expectedValue, val.Payload.Value)
+			require.True(t, proto.Equal(testCase.expectedMetadata, val.Payload.Metadata))
 		}
 	})
 

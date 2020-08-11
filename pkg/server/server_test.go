@@ -111,7 +111,7 @@ func TestStart(t *testing.T) {
 
 		configTx, err := prepareConfigTx(env.conf)
 		require.NoError(t, err)
-		require.Equal(t, configTx.Payload.Writes[0].Value, config.Payload.Value.Value)
+		require.Equal(t, configTx.Payload.Writes[0].Value, config.Payload.Value)
 	})
 }
 
@@ -181,22 +181,21 @@ func TestHandleStateQuery(t *testing.T) {
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
-		val1 := &types.Value{
-			Value: []byte("Value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    1,
-				},
+		val := []byte("Value1")
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
 			},
 		}
 		dbsUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: worldstate.DefaultDBName,
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   "key1",
-						Value: val1,
+						Key:      "key1",
+						Value:    val,
+						Metadata: metadata,
 					},
 				},
 			},
@@ -204,16 +203,18 @@ func TestHandleStateQuery(t *testing.T) {
 		require.NoError(t, env.server.dbServ.db.Commit(dbsUpdates))
 
 		testCases := []struct {
-			key         string
-			expectedVal *types.Value
+			key              string
+			expectedValue    []byte
+			expectedMetadata *types.Metadata
 		}{
 			{
-				key:         "key1",
-				expectedVal: val1,
+				key:              "key1",
+				expectedValue:    val,
+				expectedMetadata: metadata,
 			},
 			{
-				key:         "key2",
-				expectedVal: nil,
+				key:           "key2",
+				expectedValue: nil,
 			},
 		}
 
@@ -228,7 +229,8 @@ func TestHandleStateQuery(t *testing.T) {
 			}
 			resp, err := env.client.GetState(context.Background(), req)
 			require.NoError(t, err)
-			require.True(t, proto.Equal(resp.Payload.Value, testCase.expectedVal))
+			require.Equal(t, testCase.expectedValue, resp.Payload.Value)
+			require.True(t, proto.Equal(testCase.expectedMetadata, resp.Payload.Metadata))
 		}
 	})
 

@@ -54,37 +54,29 @@ func TestMVCCValidator(t *testing.T) {
 	t.Parallel()
 
 	setup := func(db worldstate.DB) {
-		val1 := &types.Value{
-			Value: []byte("value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    1,
-				},
-			},
-		}
-
-		val2 := &types.Value{
-			Value: []byte("value2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    2,
-				},
-			},
-		}
-
 		dbsUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: "db1",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   "key1",
-						Value: val1,
+						Value: []byte("value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
+						},
 					},
 					{
 						Key:   "key2",
-						Value: val2,
+						Value: []byte("value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    2,
+							},
+						},
 					},
 				},
 			},
@@ -217,70 +209,54 @@ func TestValidator(t *testing.T) {
 	t.Parallel()
 
 	setup := func(db worldstate.DB) {
-		db1val1 := &types.Value{
-			Value: []byte("db1-value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    1,
-				},
-			},
-		}
-
-		db1val2 := &types.Value{
-			Value: []byte("db1-value2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    2,
-				},
-			},
-		}
-
-		db2val1 := &types.Value{
-			Value: []byte("db2-value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    3,
-				},
-			},
-		}
-
-		db2val2 := &types.Value{
-			Value: []byte("db2-value2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    4,
-				},
-			},
-		}
-
 		dbsUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: "db1",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   "db1-key1",
-						Value: db1val1,
+						Value: []byte("db1-value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
+						},
 					},
 					{
 						Key:   "db1-key2",
-						Value: db1val2,
+						Value: []byte("db1-value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    2,
+							},
+						},
 					},
 				},
 			},
 			{
 				DBName: "db2",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   "db2-key1",
-						Value: db2val1,
+						Value: []byte("db2-value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    3,
+							},
+						},
 					},
 					{
 						Key:   "db2-key2",
-						Value: db2val2,
+						Value: []byte("db2-value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    4,
+							},
+						},
 					},
 				},
 			},

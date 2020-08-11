@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option go_package = "github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb";
+
+package leveldb;
+
+import "types/query_and_response.proto";
+
+message ValueAndMetadata {
+    bytes value = 1;
+    types.Metadata metadata = 2;
+}

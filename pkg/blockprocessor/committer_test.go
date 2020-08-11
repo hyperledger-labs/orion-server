@@ -54,66 +54,54 @@ func TestStateDBCommitter(t *testing.T) {
 	t.Parallel()
 
 	setup := func(db worldstate.DB) []*worldstate.DBUpdates {
-		db1val1 := &types.Value{
-			Value: []byte("db1-value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    1,
-				},
-			},
-		}
-		db1val2 := &types.Value{
-			Value: []byte("db1-value2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    2,
-				},
-			},
-		}
-		db2val1 := &types.Value{
-			Value: []byte("db2-value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    3,
-				},
-			},
-		}
-		db2val2 := &types.Value{
-			Value: []byte("db2-value2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    4,
-				},
-			},
-		}
 		dbsUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: "db1",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   "db1-key1",
-						Value: db1val1,
+						Value: []byte("db1-value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
+						},
 					},
 					{
 						Key:   "db1-key2",
-						Value: db1val2,
+						Value: []byte("db1-value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    2,
+							},
+						},
 					},
 				},
 			},
 			{
 				DBName: "db2",
-				Writes: []*worldstate.KV{
+				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   "db2-key1",
-						Value: db2val1,
+						Value: []byte("db2-value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    3,
+							},
+						},
 					},
 					{
 						Key:   "db2-key2",
-						Value: db2val2,
+						Value: []byte("db2-value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    4,
+							},
+						},
 					},
 				},
 			},
@@ -132,9 +120,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(kv.Value, val))
+				require.Equal(t, kv.Value, val)
+				require.True(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
@@ -214,61 +203,60 @@ func TestStateDBCommitter(t *testing.T) {
 		// kvs in initialKVsPerDB should not match with the committed versions
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.False(t, proto.Equal(kv.Value, val))
+				require.NotEqual(t, kv.Value, val)
+				require.False(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
-		val, err := env.db.Get("db1", "db1-key1")
+		val, metadata, err := env.db.Get("db1", "db1-key1")
 		require.NoError(t, err)
-		expectedVal := &types.Value{
-			Value: []byte("new-value-1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    0,
-				},
+		expectedVal := []byte("new-value-1")
+		expectedMetadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    0,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
-		val, err = env.db.Get("db1", "db1-key2")
-		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("new-value-2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    1,
-				},
-			},
-		}
-		require.True(t, proto.Equal(expectedVal, val))
-		val, err = env.db.Get("db2", "db2-key1")
-		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("new-value-1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    2,
-				},
-			},
-		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 
-		val, err = env.db.Get("db2", "db2-key2")
+		val, metadata, err = env.db.Get("db1", "db1-key2")
 		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("new-value-2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    3,
-				},
+		expectedVal = []byte("new-value-2")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
+
+		val, metadata, err = env.db.Get("db2", "db2-key1")
+		require.NoError(t, err)
+		expectedVal = []byte("new-value-1")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    2,
+			},
+		}
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
+
+		val, metadata, err = env.db.Get("db2", "db2-key2")
+		require.NoError(t, err)
+		expectedVal = []byte("new-value-2")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    3,
+			},
+		}
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 	})
 
 	t.Run("commit block to delete all existing entries", func(t *testing.T) {
@@ -279,9 +267,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(kv.Value, val))
+				require.Equal(t, kv.Value, val)
+				require.True(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
@@ -341,27 +330,32 @@ func TestStateDBCommitter(t *testing.T) {
 		// kvs in initialKVsPerDB should not match with the committed versions
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.False(t, proto.Equal(kv.Value, val))
+				require.NotEqual(t, kv.Value, val)
+				require.False(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
-		val, err := env.db.Get("db1", "db1-key1")
+		val, metadata, err := env.db.Get("db1", "db1-key1")
 		require.NoError(t, err)
 		require.Nil(t, val)
+		require.Nil(t, metadata)
 
-		val, err = env.db.Get("db1", "db1-key2")
+		val, metadata, err = env.db.Get("db1", "db1-key2")
 		require.NoError(t, err)
 		require.Nil(t, val)
+		require.Nil(t, metadata)
 
-		val, err = env.db.Get("db1", "db2-key1")
+		val, metadata, err = env.db.Get("db1", "db2-key1")
 		require.NoError(t, err)
 		require.Nil(t, val)
+		require.Nil(t, metadata)
 
-		val, err = env.db.Get("db1", "db2-key2")
+		val, metadata, err = env.db.Get("db1", "db2-key2")
 		require.NoError(t, err)
 		require.Nil(t, val)
+		require.Nil(t, metadata)
 	})
 
 	t.Run("commit block to only insert new entries", func(t *testing.T) {
@@ -372,9 +366,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(kv.Value, val))
+				require.Equal(t, kv.Value, val)
+				require.True(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
@@ -435,63 +430,60 @@ func TestStateDBCommitter(t *testing.T) {
 		// kvs in initialKVsPerDB should match with the committed versions
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(kv.Value, val))
+				require.Equal(t, kv.Value, val)
+				require.True(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
-		val, err := env.db.Get("db1", "db1-key3")
+		val, metadata, err := env.db.Get("db1", "db1-key3")
 		require.NoError(t, err)
-		expectedVal := &types.Value{
-			Value: []byte("value-3"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    0,
-				},
+		expectedVal := []byte("value-3")
+		expectedMetadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    0,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 
-		val, err = env.db.Get("db1", "db1-key4")
+		val, metadata, err = env.db.Get("db1", "db1-key4")
 		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("value-4"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    0,
-				},
+		expectedVal = []byte("value-4")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    0,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 
-		val, err = env.db.Get("db2", "db2-key3")
+		val, metadata, err = env.db.Get("db2", "db2-key3")
 		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("value-3"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    1,
-				},
+		expectedVal = []byte("value-3")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 
-		val, err = env.db.Get("db2", "db2-key4")
+		val, metadata, err = env.db.Get("db2", "db2-key4")
 		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("value-4"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    1,
-				},
+		expectedVal = []byte("value-4")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 	})
 
 	t.Run("commit block to update and delete existing entries while inserting new", func(t *testing.T) {
@@ -502,9 +494,10 @@ func TestStateDBCommitter(t *testing.T) {
 
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(kv.Value, val))
+				require.Equal(t, kv.Value, val)
+				require.True(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
@@ -644,73 +637,71 @@ func TestStateDBCommitter(t *testing.T) {
 		// match with the committed versions
 		for _, kvs := range initialKVsPerDB {
 			for _, kv := range kvs.Writes {
-				val, err := env.db.Get(kvs.DBName, kv.Key)
+				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
 				require.NoError(t, err)
-				require.False(t, proto.Equal(kv.Value, val))
+				require.NotEqual(t, kv.Value, val)
+				require.False(t, proto.Equal(kv.Metadata, metadata))
 			}
 		}
 
 		// In db1, we delete db1-key1, update db1-key2, newly add db1-key3
-		val, err := env.db.Get("db1", "db1-key1")
+		val, metadata, err := env.db.Get("db1", "db1-key1")
 		require.NoError(t, err)
 		require.Nil(t, val)
+		require.Nil(t, metadata)
 
-		val, err = env.db.Get("db1", "db1-key2")
+		val, metadata, err = env.db.Get("db1", "db1-key2")
 		require.NoError(t, err)
-		expectedVal := &types.Value{
-			Value: []byte("new-value-2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 10,
-					TxNum:    0,
-				},
+		expectedVal := []byte("new-value-2")
+		expectedMetadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 10,
+				TxNum:    0,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 
-		val, err = env.db.Get("db1", "db1-key3")
+		val, metadata, err = env.db.Get("db1", "db1-key3")
 		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("value-3"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 10,
-					TxNum:    0,
-				},
+		expectedVal = []byte("value-3")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 10,
+				TxNum:    0,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 
 		// In db2, we update db2-key1, delete db2-key2, newly add db2-key3
-		val, err = env.db.Get("db2", "db2-key1")
+		val, metadata, err = env.db.Get("db2", "db2-key1")
 		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("new-value-1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 10,
-					TxNum:    2,
-				},
+		expectedVal = []byte("new-value-1")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 10,
+				TxNum:    2,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 
-		val, err = env.db.Get("db2", "db2-key2")
+		val, metadata, err = env.db.Get("db2", "db2-key2")
 		require.NoError(t, err)
 		require.Nil(t, val)
 
-		val, err = env.db.Get("db2", "db2-key3")
+		val, metadata, err = env.db.Get("db2", "db2-key3")
 		require.NoError(t, err)
-		expectedVal = &types.Value{
-			Value: []byte("value-3"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 10,
-					TxNum:    3,
-				},
+		expectedVal = []byte("value-3")
+		expectedMetadata = &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 10,
+				TxNum:    3,
 			},
 		}
-		require.True(t, proto.Equal(expectedVal, val))
+		require.Equal(t, expectedVal, val)
+		require.True(t, proto.Equal(expectedMetadata, metadata))
 	})
 
 	t.Run("commit block and expect error", func(t *testing.T) {

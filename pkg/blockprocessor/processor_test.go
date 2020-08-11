@@ -101,30 +101,30 @@ func TestValidatorAndCommitter(t *testing.T) {
 		defer env.cleanup()
 
 		testCases := []struct {
-			block             *types.Block
-			expectedKey1Value *types.Value
+			block            *types.Block
+			key              string
+			expectedValue    []byte
+			expectedMetadata *types.Metadata
 		}{
 			{
-				block: block1,
-				expectedKey1Value: &types.Value{
-					Value: []byte("value-1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    0,
-						},
+				block:         block1,
+				key:           "key1",
+				expectedValue: []byte("value-1"),
+				expectedMetadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 1,
+						TxNum:    0,
 					},
 				},
 			},
 			{
-				block: block2,
-				expectedKey1Value: &types.Value{
-					Value: []byte("value-2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
-						},
+				block:         block2,
+				key:           "key1",
+				expectedValue: []byte("value-2"),
+				expectedMetadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    0,
 					},
 				},
 			},
@@ -134,9 +134,10 @@ func TestValidatorAndCommitter(t *testing.T) {
 			env.v.blockQueue.Enqueue(testCase.block)
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
-			val, err := env.db.Get(worldstate.UsersDBName, "key1")
+			val, metadata, err := env.db.Get(worldstate.UsersDBName, "key1")
 			require.NoError(t, err)
-			require.True(t, proto.Equal(testCase.expectedKey1Value, val))
+			require.Equal(t, testCase.expectedValue, val)
+			require.True(t, proto.Equal(testCase.expectedMetadata, metadata))
 		}
 	})
 
@@ -146,21 +147,22 @@ func TestValidatorAndCommitter(t *testing.T) {
 		defer env.cleanup()
 
 		testCases := []struct {
-			blocks            []*types.Block
-			expectedKey1Value *types.Value
+			blocks           []*types.Block
+			key              string
+			expectedValue    []byte
+			expectedMetadata *types.Metadata
 		}{
 			{
 				blocks: []*types.Block{
 					block1,
 					block2,
 				},
-				expectedKey1Value: &types.Value{
-					Value: []byte("value-2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
-						},
+				key:           "key1",
+				expectedValue: []byte("value-2"),
+				expectedMetadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    0,
 					},
 				},
 			},
@@ -172,9 +174,10 @@ func TestValidatorAndCommitter(t *testing.T) {
 			}
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
-			val, err := env.db.Get(worldstate.UsersDBName, "key1")
+			val, metadata, err := env.db.Get(worldstate.UsersDBName, "key1")
 			require.NoError(t, err)
-			require.True(t, proto.Equal(testCase.expectedKey1Value, val))
+			require.Equal(t, testCase.expectedValue, val)
+			require.True(t, proto.Equal(testCase.expectedMetadata, metadata))
 		}
 	})
 }
