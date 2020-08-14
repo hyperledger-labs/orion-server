@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "github.ibm.com/blockchaindb/server/pkg/blockstore";
+
+package blockstore;
+
+message BlockLocation {
+    uint64 file_chunk_num = 1;
+    int64 offset = 2;
+}

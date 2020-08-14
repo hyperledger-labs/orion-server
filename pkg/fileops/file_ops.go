@@ -1,7 +1,6 @@
 package fileops
 
 import (
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -101,12 +100,12 @@ func CreateFile(filePath string) error {
 		return err
 	}
 	if exist {
-		return fmt.Errorf("file [%s] exist", filePath)
+		return errors.New("file " + filePath + " exist")
 	}
 
 	file, err := os.Create(filePath)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "error while creating file [%s]", filePath)
 	}
 
 	if err := file.Close(); err != nil {

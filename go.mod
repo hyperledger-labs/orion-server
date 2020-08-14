@@ -4,6 +4,7 @@ go 1.14
 
 require (
 	github.com/golang/protobuf v1.4.2
+	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4
 	github.com/pkg/errors v0.9.1

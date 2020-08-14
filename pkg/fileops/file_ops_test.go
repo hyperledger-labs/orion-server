@@ -1,7 +1,6 @@
 package fileops
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -130,19 +129,19 @@ func TestCreateFile(t *testing.T) {
 		name         string
 		filePath     string
 		existingFile bool
-		expectedErr  error
+		expectedErr  string
 	}{
 		{
 			name:         "creating a new file",
 			filePath:     "./testdata/new-file",
 			existingFile: false,
-			expectedErr:  nil,
+			expectedErr:  "",
 		},
 		{
 			name:         "file already exist",
 			filePath:     "./testdata/dir/e",
 			existingFile: true,
-			expectedErr:  fmt.Errorf("file [./testdata/dir/e] exist"),
+			expectedErr:  "file ./testdata/dir/e exist",
 		},
 	}
 
@@ -156,7 +155,10 @@ func TestCreateFile(t *testing.T) {
 				require.FileExists(t, tt.filePath)
 			}
 
-			require.Equal(t, CreateFile(tt.filePath), tt.expectedErr)
+			err := CreateFile(tt.filePath)
+			if tt.expectedErr != "" {
+				require.Contains(t, err.Error(), tt.expectedErr)
+			}
 			require.FileExists(t, tt.filePath)
 		})
 	}
