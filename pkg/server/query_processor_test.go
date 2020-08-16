@@ -9,6 +9,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -36,8 +37,12 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	}
 
 	return &queryProcessorTestEnv{
-		db:      db,
-		q:       newQueryProcessor(db),
+		db: db,
+		q: newQueryProcessor(db, &config.NodeConf{
+			Identity: config.IdentityConf{
+				ID: "test-node-id1",
+			},
+		}),
 		cleanup: cleanup,
 	}
 }

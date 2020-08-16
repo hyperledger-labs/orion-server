@@ -119,7 +119,7 @@ func newDBServer(conf *config.Configurations) (*dbServer, error) {
 		batchTimeout:       conf.Consensus.BlockTimeout,
 	}
 	return &dbServer{
-		newQueryProcessor(levelDB),
+		newQueryProcessor(levelDB, &conf.Node),
 		newTransactionProcessor(txProcConf),
 	}, nil
 }

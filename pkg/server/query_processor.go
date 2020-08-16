@@ -7,17 +7,20 @@ import (
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
 type queryProcessor struct {
-	db worldstate.DB
+	db   worldstate.DB
+	conf *config.NodeConf
 }
 
-func newQueryProcessor(db worldstate.DB) *queryProcessor {
+func newQueryProcessor(db worldstate.DB, nodeConf *config.NodeConf) *queryProcessor {
 	return &queryProcessor{
-		db: db,
+		db:   db,
+		conf: nodeConf,
 	}
 }
 
@@ -31,7 +34,7 @@ func (q *queryProcessor) GetStatus(_ context.Context, req *types.GetStatusQueryE
 	status := &types.GetStatusResponseEnvelope{
 		Payload: &types.GetStatusResponse{
 			Header: &types.ResponseHeader{
-				NodeID: nil,
+				NodeID: []byte(q.conf.Identity.ID),
 			},
 			Exist: false,
 		},
@@ -62,6 +65,9 @@ func (q *queryProcessor) GetState(_ context.Context, req *types.GetStateQueryEnv
 
 	s := &types.GetStateResponseEnvelope{
 		Payload: &types.GetStateResponse{
+			Header: &types.ResponseHeader{
+				NodeID: []byte(q.conf.Identity.ID),
+			},
 			Value:    value,
 			Metadata: metadata,
 		},
