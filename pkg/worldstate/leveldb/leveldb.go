@@ -10,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/fileops"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -45,12 +46,12 @@ func New(dirPath string) (*LevelDB, error) {
 		dbs:     make(map[string]*db),
 	}
 
-	exists, err := fileExists(dirPath)
+	exists, err := fileops.Exists(dirPath)
 	if err != nil {
 		return nil, err
 	}
 	if !exists {
-		if err := createDir(dirPath); err != nil {
+		if err := fileops.CreateDir(dirPath); err != nil {
 			return nil, errors.WithMessagef(err, "failed to create director %s", dirPath)
 		}
 		if err := l.createDBsIfNotExist(systemDBs); err != nil {
@@ -59,7 +60,7 @@ func New(dirPath string) (*LevelDB, error) {
 		return l, nil
 	}
 
-	dbNames, err := listSubdirs(dirPath)
+	dbNames, err := fileops.ListSubdirs(dirPath)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to retrieve existing level dbs from %s", dirPath)
 	}

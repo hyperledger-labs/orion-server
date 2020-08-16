@@ -9,6 +9,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/fileops"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -63,7 +64,7 @@ func TestCreateAndOpenDB(t *testing.T) {
 
 		l := env.l
 		require.Contains(t, l.Open("db1").Error(), "database db1 does not exist")
-		exists, err := fileExists(filepath.Join(env.path, "db1"))
+		exists, err := fileops.Exists(filepath.Join(env.path, "db1"))
 		require.NoError(t, err)
 		require.False(t, exists)
 	})
