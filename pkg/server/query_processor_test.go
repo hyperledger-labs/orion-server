@@ -81,7 +81,10 @@ func TestGetStatus(t *testing.T) {
 			}
 			status, err := env.q.GetStatus(context.Background(), req)
 			require.NoError(t, err)
+			require.NotNil(t, status.Payload)
 			require.Equal(t, testCase.isExist, status.Payload.Exist)
+			require.NotNil(t, status.Payload.Header)
+			require.Equal(t, "test-node-id1", string(status.Payload.Header.NodeID))
 		}
 	})
 
@@ -183,8 +186,11 @@ func TestGetState(t *testing.T) {
 
 			val, err := env.q.GetState(context.Background(), req)
 			require.NoError(t, err)
+			require.NotNil(t, val.Payload)
 			require.Equal(t, testCase.expectedValue, val.Payload.Value)
 			require.True(t, proto.Equal(testCase.expectedMetadata, val.Payload.Metadata))
+			require.NotNil(t, val.Payload.Header)
+			require.Equal(t, "test-node-id1", string(val.Payload.Header.NodeID))
 		}
 	})
 
