@@ -45,7 +45,7 @@ func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
 	listen, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error while creating a tcp listener")
+		return nil, errors.Wrap(err, "error while creating a tcp listener")
 	}
 
 	return &DBAndHTTPServer{
@@ -62,7 +62,7 @@ func (s *DBAndHTTPServer) Start() error {
 	// submit a config transaction. We also need to check whether the node is a
 	// master or slave
 	if err := s.dbServ.prepareAndCommitConfigTx(s.conf); err != nil {
-		return errors.Wrapf(err, "error while preparing and committing config transaction")
+		return errors.Wrap(err, "error while preparing and committing config transaction")
 	}
 
 	log.Printf("Starting the server on %s", s.listen.Addr().String())

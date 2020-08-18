@@ -104,7 +104,7 @@ func (s *Store) addIndexForBlock(number uint64, offset int64) error {
 		},
 	)
 	if err != nil {
-		return errors.Wrapf(err, "error while marshaling BlockLocation")
+		return errors.Wrap(err, "error while marshaling BlockLocation")
 	}
 
 	return s.blockIndex.Put(
@@ -179,7 +179,7 @@ func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 
 	blockLocation := &BlockLocation{}
 	if err := proto.Unmarshal(val, blockLocation); err != nil {
-		return nil, errors.Wrapf(err, "error while unmarshaling block location")
+		return nil, errors.Wrap(err, "error while unmarshaling block location")
 	}
 
 	return blockLocation, nil
@@ -187,28 +187,28 @@ func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 
 func readBlockFromFile(f *os.File, location *BlockLocation) (*types.Block, error) {
 	if _, err := f.Seek(location.Offset, 0); err != nil {
-		return nil, errors.Wrapf(err, "error while seeking")
+		return nil, errors.Wrap(err, "error while seeking")
 	}
 
 	bufReader := bufio.NewReader(f)
 	blockSize, err := binary.ReadUvarint(bufReader)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error while reading the length of the stored block")
+		return nil, errors.Wrap(err, "error while reading the length of the stored block")
 	}
 
 	buf := make([]byte, blockSize)
 	if _, err := io.ReadFull(bufReader, buf); err != nil {
-		return nil, errors.Wrapf(err, "error while reading block from the file")
+		return nil, errors.Wrap(err, "error while reading block from the file")
 	}
 
 	marshaledBlock, err := snappy.Decode(nil, buf)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error while decoding the block using snappy compression")
+		return nil, errors.Wrap(err, "error while decoding the block using snappy compression")
 	}
 
 	block := &types.Block{}
 	if err := proto.Unmarshal(marshaledBlock, block); err != nil {
-		return nil, errors.Wrapf(err, "error while unmarshaling the block")
+		return nil, errors.Wrap(err, "error while unmarshaling the block")
 	}
 
 	return block, nil

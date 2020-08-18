@@ -101,12 +101,12 @@ func Read(configFilePath string) (*Configurations, error) {
 	v.SetDefault("node.database.ledgerDirectory", "./tmp/")
 
 	if err := v.ReadInConfig(); err != nil {
-		return nil, errors.Wrapf(err, "error reading config file")
+		return nil, errors.Wrap(err, "error reading config file")
 	}
 
 	conf := &Configurations{}
 	if err := v.UnmarshalExact(conf); err != nil {
-		return nil, errors.Wrapf(err, "unable to unmarshal config file into struct")
+		return nil, errors.Wrap(err, "unable to unmarshal config file into struct")
 	}
 	return conf, nil
 }
