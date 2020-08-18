@@ -7,25 +7,33 @@ import (
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
-	"github.ibm.com/blockchaindb/server/config"
+	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
 type queryProcessor struct {
-	db   worldstate.DB
-	conf *config.NodeConf
+	nodeID     []byte
+	db         worldstate.DB
+	blockStore *blockstore.Store
 }
 
-func newQueryProcessor(db worldstate.DB, nodeConf *config.NodeConf) *queryProcessor {
+type queryProcessorConfig struct {
+	nodeID     []byte
+	db         worldstate.DB
+	blockStore *blockstore.Store
+}
+
+func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 	return &queryProcessor{
-		db:   db,
-		conf: nodeConf,
+		nodeID:     conf.nodeID,
+		db:         conf.db,
+		blockStore: conf.blockStore,
 	}
 }
 
-// GetStatus returns the status about a database, i.e., whether a database exist or not
-func (q *queryProcessor) GetStatus(_ context.Context, req *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
+// getStatus returns the status about a database, i.e., whether a database exist or not
+func (q *queryProcessor) getStatus(_ context.Context, req *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
 	var err error
 	if err = validateGetStatusQuery(req); err != nil {
 		return nil, err
@@ -34,7 +42,7 @@ func (q *queryProcessor) GetStatus(_ context.Context, req *types.GetStatusQueryE
 	status := &types.GetStatusResponseEnvelope{
 		Payload: &types.GetStatusResponse{
 			Header: &types.ResponseHeader{
-				NodeID: []byte(q.conf.Identity.ID),
+				NodeID: q.nodeID,
 			},
 			Exist: false,
 		},
@@ -51,8 +59,8 @@ func (q *queryProcessor) GetStatus(_ context.Context, req *types.GetStatusQueryE
 	return status, nil
 }
 
-// GetState return the state associated with a given key
-func (q *queryProcessor) GetState(_ context.Context, req *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
+// getState return the state associated with a given key
+func (q *queryProcessor) getState(_ context.Context, req *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
 	var err error
 	if err = validateGetStateQuery(req); err != nil {
 		return nil, err
@@ -66,7 +74,7 @@ func (q *queryProcessor) GetState(_ context.Context, req *types.GetStateQueryEnv
 	s := &types.GetStateResponseEnvelope{
 		Payload: &types.GetStateResponse{
 			Header: &types.ResponseHeader{
-				NodeID: []byte(q.conf.Identity.ID),
+				NodeID: q.nodeID,
 			},
 			Value:    value,
 			Metadata: metadata,
@@ -79,6 +87,14 @@ func (q *queryProcessor) GetState(_ context.Context, req *types.GetStateQueryEnv
 	}
 
 	return s, nil
+}
+
+func (q *queryProcessor) close() error {
+	if err := q.db.Close(); err != nil {
+		return err
+	}
+
+	return q.blockStore.Close()
 }
 
 func validateGetStatusQuery(req *types.GetStatusQueryEnvelope) error {

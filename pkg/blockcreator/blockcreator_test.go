@@ -11,15 +11,28 @@ import (
 )
 
 func TestBatchCreator(t *testing.T) {
-	t.Run("assemble-different-sized-blocks", func(t *testing.T) {
-		a := New(queue.New(10), queue.New(10))
-		go a.Run()
+	setup := func(lastCommittedBlockNumber uint64) *BlockCreator {
+		b := New(&Config{
+			TxBatchQueue:    queue.New(10),
+			BlockQueue:      queue.New(10),
+			LastBlockNumber: lastCommittedBlockNumber,
+		})
+		go b.Run()
+
+		return b
+	}
+
+	t.Run("construct-different-sized-blocks", func(t *testing.T) {
+		blockCreatorWithLastBlockNumber0 := setup(0)
+		blockCreatorWithLastBlockNumber5 := setup(5)
 
 		testCases := []struct {
+			blockCreator   *BlockCreator
 			txBatches      [][]*types.TransactionEnvelope
 			expectedBlocks []*types.Block
 		}{
 			{
+				blockCreator: blockCreatorWithLastBlockNumber0,
 				txBatches: [][]*types.TransactionEnvelope{
 					{
 						{
@@ -56,6 +69,7 @@ func TestBatchCreator(t *testing.T) {
 				},
 			},
 			{
+				blockCreator: blockCreatorWithLastBlockNumber0,
 				txBatches: [][]*types.TransactionEnvelope{
 					{
 						{
@@ -88,23 +102,46 @@ func TestBatchCreator(t *testing.T) {
 					},
 				},
 			},
+			{
+				blockCreator: blockCreatorWithLastBlockNumber5,
+				txBatches: [][]*types.TransactionEnvelope{
+					{
+						{
+							Signature: []byte("sign-1"),
+						},
+					},
+				},
+				expectedBlocks: []*types.Block{
+					{
+						Header: &types.BlockHeader{
+							Number: 6,
+						},
+						TransactionEnvelopes: []*types.TransactionEnvelope{
+							{
+								Signature: []byte("sign-1"),
+							},
+						},
+					},
+				},
+			},
 		}
 
-		for _, testCase := range testCases {
-			for _, txBatch := range testCase.txBatches {
-				a.txBatchQueue.Enqueue(txBatch)
+		for _, tt := range testCases {
+			b := tt.blockCreator
+			for _, txBatch := range tt.txBatches {
+				b.txBatchQueue.Enqueue(txBatch)
 			}
 
 			hasBlockCountMatched := func() bool {
-				if len(testCase.expectedBlocks) == a.blockQueue.Size() {
+				if len(tt.expectedBlocks) == b.blockQueue.Size() {
 					return true
 				}
 				return false
 			}
 			require.Eventually(t, hasBlockCountMatched, 2*time.Second, 100*time.Millisecond)
 
-			for _, expectedBlock := range testCase.expectedBlocks {
-				block := a.blockQueue.Dequeue().(*types.Block)
+			for _, expectedBlock := range tt.expectedBlocks {
+				block := b.blockQueue.Dequeue().(*types.Block)
 				require.True(t, proto.Equal(expectedBlock, block))
 			}
 		}

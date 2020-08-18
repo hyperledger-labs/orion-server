@@ -10,29 +10,41 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
 type testEnv struct {
-	v       *BlockProcessor
-	db      worldstate.DB
-	path    string
-	cleanup func()
+	v              *BlockProcessor
+	db             worldstate.DB
+	dbPath         string
+	blockStore     *blockstore.Store
+	blockStorePath string
+	cleanup        func()
 }
 
 func newTestEnv(t *testing.T) *testEnv {
 	dir, err := ioutil.TempDir("/tmp", "validatorAndCommitter")
 	require.NoError(t, err)
 
-	path := filepath.Join(dir, "leveldb")
-	db, err := leveldb.New(path)
+	dbPath := filepath.Join(dir, "leveldb")
+	db, err := leveldb.New(dbPath)
 	if err != nil {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Logf("failed to remove directory %s, %v", dir, err)
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, err)
 		}
-		t.Fatalf("failed to create a leveldb instance, %v", err)
+		t.Fatalf("error while creating the leveldb instance, %v", err)
+	}
+
+	blockStorePath := filepath.Join(dir, "blockstore")
+	blockStore, err := blockstore.Open(blockStorePath)
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, err)
+		}
+		t.Fatalf("error while creating the block store, %v", err)
 	}
 
 	cleanup := func() {
@@ -44,14 +56,20 @@ func newTestEnv(t *testing.T) *testEnv {
 		}
 	}
 
-	v := New(queue.New(10), db)
+	v := New(&Config{
+		BlockQueue: queue.New(10),
+		BlockStore: blockStore,
+		DB:         db,
+	})
 	go v.Run()
 
 	return &testEnv{
-		v:       v,
-		db:      db,
-		path:    dir,
-		cleanup: cleanup,
+		v:              v,
+		db:             db,
+		dbPath:         dir,
+		blockStore:     blockStore,
+		blockStorePath: blockStorePath,
+		cleanup:        cleanup,
 	}
 }
 
@@ -101,10 +119,11 @@ func TestValidatorAndCommitter(t *testing.T) {
 		defer env.cleanup()
 
 		testCases := []struct {
-			block            *types.Block
-			key              string
-			expectedValue    []byte
-			expectedMetadata *types.Metadata
+			block               *types.Block
+			key                 string
+			expectedValue       []byte
+			expectedMetadata    *types.Metadata
+			expectedBlockHeight uint64
 		}{
 			{
 				block:         block1,
@@ -116,6 +135,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 						TxNum:    0,
 					},
 				},
+				expectedBlockHeight: 1,
 			},
 			{
 				block:         block2,
@@ -127,17 +147,26 @@ func TestValidatorAndCommitter(t *testing.T) {
 						TxNum:    0,
 					},
 				},
+				expectedBlockHeight: 2,
 			},
 		}
 
-		for _, testCase := range testCases {
-			env.v.blockQueue.Enqueue(testCase.block)
+		for _, tt := range testCases {
+			env.v.blockQueue.Enqueue(tt.block)
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
 			val, metadata, err := env.db.Get(worldstate.UsersDBName, "key1")
 			require.NoError(t, err)
-			require.Equal(t, testCase.expectedValue, val)
-			require.True(t, proto.Equal(testCase.expectedMetadata, metadata))
+			require.Equal(t, tt.expectedValue, val)
+			require.True(t, proto.Equal(tt.expectedMetadata, metadata))
+
+			height, err := env.blockStore.Height()
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedBlockHeight, height)
+
+			block, err := env.blockStore.Get(tt.block.Header.Number)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(tt.block, block))
 		}
 	})
 
@@ -147,10 +176,11 @@ func TestValidatorAndCommitter(t *testing.T) {
 		defer env.cleanup()
 
 		testCases := []struct {
-			blocks           []*types.Block
-			key              string
-			expectedValue    []byte
-			expectedMetadata *types.Metadata
+			blocks              []*types.Block
+			key                 string
+			expectedValue       []byte
+			expectedMetadata    *types.Metadata
+			expectedBlockHeight uint64
 		}{
 			{
 				blocks: []*types.Block{
@@ -165,19 +195,30 @@ func TestValidatorAndCommitter(t *testing.T) {
 						TxNum:    0,
 					},
 				},
+				expectedBlockHeight: 2,
 			},
 		}
 
-		for _, testCase := range testCases {
-			for _, block := range testCase.blocks {
+		for _, tt := range testCases {
+			for _, block := range tt.blocks {
 				env.v.blockQueue.Enqueue(block)
 			}
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
 			val, metadata, err := env.db.Get(worldstate.UsersDBName, "key1")
 			require.NoError(t, err)
-			require.Equal(t, testCase.expectedValue, val)
-			require.True(t, proto.Equal(testCase.expectedMetadata, metadata))
+			require.Equal(t, tt.expectedValue, val)
+			require.True(t, proto.Equal(tt.expectedMetadata, metadata))
+
+			height, err := env.blockStore.Height()
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedBlockHeight, height)
+
+			for _, expectedBlock := range tt.blocks {
+				block, err := env.blockStore.Get(expectedBlock.Header.Number)
+				require.NoError(t, err)
+				require.True(t, proto.Equal(expectedBlock, block))
+			}
 		}
 	})
 }

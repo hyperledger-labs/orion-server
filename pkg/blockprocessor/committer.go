@@ -3,26 +3,36 @@ package blockprocessor
 import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
 type committer struct {
-	db worldstate.DB
+	db         worldstate.DB
+	blockStore *blockstore.Store
 	// TODO
-	// 1. Block Store
-	// 2. Provenance Store
-	// 3. Proof Store
+	// 1. Provenance Store
+	// 2. Proof Store
 }
 
-func newCommitter(db worldstate.DB) *committer {
+func newCommitter(conf *Config) *committer {
 	return &committer{
-		db: db,
+		db:         conf.DB,
+		blockStore: conf.BlockStore,
 	}
 }
 
 func (c *committer) commitBlock(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
+	if err := c.commitToBlockStore(block); err != nil {
+		return errors.WithMessagef(err, "error while committing block %d to the block store", block.Header.Number)
+	}
+
 	return c.commitToStateDB(block, blockValidationInfo)
-	//TODO: add code to commit to block store and provenance store
+	//TODO: add code to commit to provenance store
+}
+
+func (c *committer) commitToBlockStore(block *types.Block) error {
+	return c.blockStore.Commit(block)
 }
 
 func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {

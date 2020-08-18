@@ -112,6 +112,16 @@ func TestStart(t *testing.T) {
 		configTx, err := prepareConfigTx(env.conf)
 		require.NoError(t, err)
 		require.Equal(t, configTx.Payload.Writes[0].Value, config.Payload.Value)
+
+		blockStore := env.server.dbServ.blockStore
+		height, err := blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), height)
+
+		configBlock, err := blockStore.Get(1)
+		require.NoError(t, err)
+		configTx.Payload.TxID = configBlock.TransactionEnvelopes[0].Payload.TxID
+		require.True(t, proto.Equal(configTx, configBlock.TransactionEnvelopes[0]))
 	})
 }
 

@@ -9,7 +9,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
-	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -36,13 +35,14 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 		t.Fatalf("failed to create a new leveldb instance, %v", err)
 	}
 
+	qProcConfig := &queryProcessorConfig{
+		nodeID: []byte("test-node-id1"),
+		db:     db,
+	}
+
 	return &queryProcessorTestEnv{
-		db: db,
-		q: newQueryProcessor(db, &config.NodeConf{
-			Identity: config.IdentityConf{
-				ID: "test-node-id1",
-			},
-		}),
+		db:      db,
+		q:       newQueryProcessor(qProcConfig),
 		cleanup: cleanup,
 	}
 }
@@ -79,7 +79,7 @@ func TestGetStatus(t *testing.T) {
 				},
 				Signature: []byte("signature"),
 			}
-			status, err := env.q.GetStatus(context.Background(), req)
+			status, err := env.q.getStatus(context.Background(), req)
 			require.NoError(t, err)
 			require.NotNil(t, status.Payload)
 			require.Equal(t, testCase.isExist, status.Payload.Exist)
@@ -118,7 +118,7 @@ func TestGetStatus(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			status, err := env.q.GetStatus(context.Background(), testCase.request)
+			status, err := env.q.getStatus(context.Background(), testCase.request)
 			require.Contains(t, err.Error(), testCase.expectedError)
 			require.Nil(t, status)
 		}
@@ -184,7 +184,7 @@ func TestGetState(t *testing.T) {
 				Signature: []byte("signature"),
 			}
 
-			val, err := env.q.GetState(context.Background(), req)
+			val, err := env.q.getState(context.Background(), req)
 			require.NoError(t, err)
 			require.NotNil(t, val.Payload)
 			require.Equal(t, testCase.expectedValue, val.Payload.Value)
@@ -224,7 +224,7 @@ func TestGetState(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			state, err := env.q.GetState(context.Background(), testCase.request)
+			state, err := env.q.getState(context.Background(), testCase.request)
 			require.Contains(t, err.Error(), testCase.expectedError)
 			require.Nil(t, state)
 		}

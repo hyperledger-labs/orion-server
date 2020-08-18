@@ -1,6 +1,7 @@
 package blockprocessor
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -9,45 +10,192 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
 type committerTestEnv struct {
-	db        *leveldb.LevelDB
-	path      string
-	committer *committer
-	cleanup   func()
+	db             *leveldb.LevelDB
+	dbPath         string
+	blockStore     *blockstore.Store
+	blockStorePath string
+	committer      *committer
+	cleanup        func()
 }
 
 func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	dir, err := ioutil.TempDir("/tmp", "committer")
 	require.NoError(t, err)
 
-	path := filepath.Join(dir, "leveldb")
-	db, err := leveldb.New(path)
+	dbPath := filepath.Join(dir, "leveldb")
+	db, err := leveldb.New(dbPath)
 	if err != nil {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Logf("failed to remove directory %s, %v", dir, err)
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, rmErr)
 		}
-		t.Fatalf("failed to create leveldb with path %s", path)
+		t.Fatalf("error while creating leveldb, %v", err)
+	}
+
+	blockStorePath := filepath.Join(dir, "blockstore")
+	blockStore, err := blockstore.Open(blockStorePath)
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, rmErr)
+		}
+		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
 	cleanup := func() {
 		if err := db.Close(); err != nil {
-			t.Errorf("failed to close the db instance, %v", err)
+			t.Errorf("error while closing the db instance, %v", err)
 		}
+
+		if err := blockStore.Close(); err != nil {
+			t.Errorf("error while closing blockstore, %v", err)
+		}
+
 		if err := os.RemoveAll(dir); err != nil {
-			t.Errorf("failed to remove directory %s, %v", dir, err)
+			t.Fatalf("error while removing directory %s, %v", dir, err)
 		}
 	}
 
-	return &committerTestEnv{
-		db:        db,
-		path:      path,
-		committer: newCommitter(db),
-		cleanup:   cleanup,
+	c := &Config{
+		DB:         db,
+		BlockStore: blockStore,
 	}
+	return &committerTestEnv{
+		db:             db,
+		dbPath:         dbPath,
+		committer:      newCommitter(c),
+		blockStore:     blockStore,
+		blockStorePath: blockStorePath,
+		cleanup:        cleanup,
+	}
+}
+
+func TestCommitter(t *testing.T) {
+	t.Run("commit block to block store and state db", func(t *testing.T) {
+		env := newCommitterTestEnv(t)
+		defer env.cleanup()
+
+		env.db.Create("db1")
+
+		block1 := &types.Block{
+			Header: &types.BlockHeader{
+				Number: 1,
+			},
+			TransactionEnvelopes: []*types.TransactionEnvelope{
+				{
+					Payload: &types.Transaction{
+						DBName: "db1",
+						Writes: []*types.KVWrite{
+							{
+								Key:   "db1-key1",
+								Value: []byte("value-1"),
+							},
+						},
+					},
+				},
+			},
+		}
+
+		err := env.committer.commitBlock(
+			block1,
+			[]*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		)
+		require.NoError(t, err)
+
+		height, err := env.blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), height)
+
+		block, err := env.blockStore.Get(1)
+		require.NoError(t, err)
+		require.True(t, proto.Equal(block, block1))
+
+		val, metadata, err := env.db.Get("db1", "db1-key1")
+		require.NoError(t, err)
+
+		expectedMetadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    0,
+			},
+		}
+		require.True(t, proto.Equal(expectedMetadata, metadata))
+		require.Equal(t, val, []byte("value-1"))
+	})
+}
+
+func TestBlockStoreCommitter(t *testing.T) {
+	getSampleBlock := func(number uint64) *types.Block {
+		return &types.Block{
+			Header: &types.BlockHeader{
+				Number: number,
+			},
+			TransactionEnvelopes: []*types.TransactionEnvelope{
+				{
+					Payload: &types.Transaction{
+						DBName: "db1",
+						Writes: []*types.KVWrite{
+							{
+								Key:   fmt.Sprintf("db1-key%d", number),
+								Value: []byte(fmt.Sprintf("new-value-%d", number)),
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.Transaction{
+						DBName: "db2",
+						Writes: []*types.KVWrite{
+							{
+								Key:   fmt.Sprintf("db2-key%d", number),
+								Value: []byte(fmt.Sprintf("new-value-%d", number)),
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("commit multiple blocks to the block store and query the same", func(t *testing.T) {
+		env := newCommitterTestEnv(t)
+		defer env.cleanup()
+
+		var expectedBlocks []*types.Block
+
+		for blockNumber := uint64(1); blockNumber <= 1000; blockNumber++ {
+			block := getSampleBlock(blockNumber)
+			require.NoError(t, env.committer.commitToBlockStore(block))
+			expectedBlocks = append(expectedBlocks, block)
+		}
+
+		for blockNumber := uint64(1); blockNumber <= 1000; blockNumber++ {
+			block, err := env.blockStore.Get(blockNumber)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedBlocks[blockNumber-1], block))
+		}
+
+		height, err := env.blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(1000), height)
+	})
+
+	t.Run("commit unexpected block to the block store", func(t *testing.T) {
+		env := newCommitterTestEnv(t)
+		defer env.cleanup()
+
+		block := getSampleBlock(10)
+		err := env.committer.commitToBlockStore(block)
+		require.EqualError(t, err, "expected block number [1] but received [10]")
+	})
 }
 
 func TestStateDBCommitter(t *testing.T) {
@@ -197,7 +345,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.commitBlock(block, validationInfo))
+		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
 
 		// as the last block commit has updated all existing entries,
 		// kvs in initialKVsPerDB should not match with the committed versions
@@ -324,7 +472,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.commitBlock(block, validationInfo))
+		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
 
 		// as the last block commit has deleted all existing entries,
 		// kvs in initialKVsPerDB should not match with the committed versions
@@ -424,7 +572,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.commitBlock(block, validationInfo))
+		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
 
 		// as the last block commit has not modified existing entries,
 		// kvs in initialKVsPerDB should match with the committed versions
@@ -630,7 +778,7 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.committer.commitBlock(block, validationInfo))
+		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
 
 		// as the last block commit has either updated or deleted
 		// existing entries, kvs in initialKVsPerDB should not
@@ -734,6 +882,6 @@ func TestStateDBCommitter(t *testing.T) {
 			},
 		}
 
-		require.EqualError(t, env.committer.commitBlock(block, validationInfo), "failed to commit block 2 to state database: database db1 does not exist")
+		require.EqualError(t, env.committer.commitToStateDB(block, validationInfo), "failed to commit block 2 to state database: database db1 does not exist")
 	})
 }

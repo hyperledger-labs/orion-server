@@ -43,10 +43,14 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 	}
 
 	return &validatorTestEnv{
-		db:        db,
-		path:      path,
-		validator: newValidator(db),
-		cleanup:   cleanup,
+		db:   db,
+		path: path,
+		validator: newValidator(
+			&Config{
+				DB: db,
+			},
+		),
+		cleanup: cleanup,
 	}
 }
 

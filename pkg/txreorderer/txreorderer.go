@@ -22,13 +22,22 @@ type TxReorderer struct {
 	// early abort and reorder
 }
 
-// New creates a BatchCreator
-func New(txQueue, txBatchQueue *queue.Queue, maxTxCountPerBatch uint32, batchTimeout time.Duration) *TxReorderer {
+// Config holds the configuration information need to start the transaction
+// reorderer
+type Config struct {
+	TxQueue            *queue.Queue
+	TxBatchQueue       *queue.Queue
+	MaxTxCountPerBatch uint32
+	BatchTimeout       time.Duration
+}
+
+// New creates a transaction reorderer
+func New(conf *Config) *TxReorderer {
 	return &TxReorderer{
-		txQueue:            txQueue,
-		txBatchQueue:       txBatchQueue,
-		MaxTxCountPerBatch: maxTxCountPerBatch,
-		batchTimeout:       batchTimeout,
+		txQueue:            conf.TxQueue,
+		txBatchQueue:       conf.TxBatchQueue,
+		MaxTxCountPerBatch: conf.MaxTxCountPerBatch,
+		batchTimeout:       conf.BatchTimeout,
 	}
 }
 
@@ -50,6 +59,7 @@ func (b *TxReorderer) Run() {
 			continue
 		}
 
+		log.Printf("added %d transactions to the tx batch queue", len(txBatch))
 		b.enqueueTxBatch(txBatch)
 		txBatch = nil
 	}

@@ -17,6 +17,8 @@ import (
 	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
+	"github.ibm.com/blockchaindb/server/pkg/blockstore"
+	"github.ibm.com/blockchaindb/server/pkg/fileops"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -58,11 +60,14 @@ func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
 
 // Start starts the server
 func (s *DBAndHTTPServer) Start() error {
-	// TODO: query block store to check whether the chain is empty. If it empty,
-	// submit a config transaction. We also need to check whether the node is a
-	// master or slave
-	if err := s.dbServ.prepareAndCommitConfigTx(s.conf); err != nil {
-		return errors.Wrap(err, "error while preparing and committing config transaction")
+	blockHeight, err := s.dbServ.blockStore.Height()
+	if err != nil {
+		return err
+	}
+	if blockHeight == 0 {
+		if err := s.dbServ.prepareAndCommitConfigTx(s.conf); err != nil {
+			return errors.Wrap(err, "error while preparing and committing config transaction")
+		}
 	}
 
 	log.Printf("Starting the server on %s", s.listen.Addr().String())
@@ -71,7 +76,7 @@ func (s *DBAndHTTPServer) Start() error {
 		if err := http.Serve(s.listen, s.handler); err != nil {
 			switch err.(type) {
 			case *net.OpError:
-				log.Printf("network connection is closed")
+				log.Println("network connection is closed")
 			default:
 				log.Fatalf("server stopped unexpectedly, %v", err)
 			}
@@ -88,7 +93,11 @@ func (s *DBAndHTTPServer) Stop() error {
 	}
 
 	log.Printf("Stopping the server listening on %s\n", s.listen.Addr().String())
-	return s.listen.Close()
+	if err := s.listen.Close(); err != nil {
+		return errors.Wrap(err, "error while closing the network listener")
+	}
+
+	return s.dbServ.close()
 }
 
 type dbServer struct {
@@ -97,31 +106,58 @@ type dbServer struct {
 }
 
 func newDBServer(conf *config.Configurations) (*dbServer, error) {
+	ledgerDir := conf.Node.Database.LedgerDirectory
+	if err := createLedgerDir(ledgerDir); err != nil {
+		return nil, err
+	}
+
 	var levelDB *leveldb.LevelDB
 	var err error
 
-	dbConf := conf.Node.Database
-	switch dbConf.Name {
+	switch conf.Node.Database.Name {
 	case "leveldb":
-		if levelDB, err = leveldb.New(dbConf.LedgerDirectory); err != nil {
-			return nil, errors.WithMessagef(err, "failed to create a new leveldb instance for the peer")
+		worldStatePath := constructWorldStatePath(ledgerDir)
+		if levelDB, err = leveldb.New(worldStatePath); err != nil {
+			return nil, errors.WithMessage(err, "error while creating the world state database")
 		}
 	default:
 		return nil, errors.New("only leveldb is supported as the state database")
 	}
 
+	blockStorePath := constructBlockStorePath(ledgerDir)
+	blockStore, err := blockstore.Open(blockStorePath)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while creating the block store")
+	}
+
+	qProcConfig := &queryProcessorConfig{
+		nodeID:     []byte(conf.Node.Identity.ID),
+		db:         levelDB,
+		blockStore: blockStore,
+	}
+
 	txProcConf := &txProcessorConfig{
 		db:                 levelDB,
+		blockStore:         blockStore,
 		txQueueLength:      conf.Node.QueueLength.Transaction,
 		txBatchQueueLength: conf.Node.QueueLength.ReorderedTransactionBatch,
 		blockQueueLength:   conf.Node.QueueLength.Block,
-		MaxTxCountPerBatch: conf.Consensus.MaxTransactionCountPerBlock,
+		maxTxCountPerBatch: conf.Consensus.MaxTransactionCountPerBlock,
 		batchTimeout:       conf.Consensus.BlockTimeout,
 	}
+
 	return &dbServer{
-		newQueryProcessor(levelDB, &conf.Node),
+		newQueryProcessor(qProcConfig),
 		newTransactionProcessor(txProcConf),
 	}, nil
+}
+
+func (db *dbServer) close() error {
+	if err := db.queryProcessor.close(); err != nil {
+		return err
+	}
+
+	return db.transactionProcessor.close()
 }
 
 func (db *dbServer) handleStatusQuery(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +184,7 @@ func (db *dbServer) handleStatusQuery(w http.ResponseWriter, r *http.Request) {
 
 	//TODO: verify signature
 
-	statusEnvelope, err := db.GetStatus(context.Background(), dbQueryEnvelope)
+	statusEnvelope, err := db.getStatus(context.Background(), dbQueryEnvelope)
 	if err != nil {
 		composeResponse(w, http.StatusInternalServerError,
 			&ResponseErr{Error: fmt.Sprintf("error while processing %v, %v", dbQueryEnvelope, err)})
@@ -187,7 +223,7 @@ func (db *dbServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
 
 	//TODO: verify signature
 
-	valueEnvelope, err := db.GetState(context.Background(), dataQueryEnvelope)
+	valueEnvelope, err := db.getState(context.Background(), dataQueryEnvelope)
 	if err != nil {
 		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: fmt.Sprintf("error while processing %v, %v", dataQueryEnvelope, err)})
 		return
@@ -205,7 +241,7 @@ func (db *dbServer) handleTransaction(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: verify signature
 
-	err = db.SubmitTransaction(context.Background(), tx)
+	err = db.submitTransaction(context.Background(), tx)
 	if err != nil {
 		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
 		return
@@ -219,7 +255,7 @@ func (db *dbServer) prepareAndCommitConfigTx(conf *config.Configurations) error 
 		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
 	}
 
-	if err := db.SubmitTransaction(context.Background(), configTx); err != nil {
+	if err := db.submitTransaction(context.Background(), configTx); err != nil {
 		return errors.Wrap(err, "error while committing configuration transaction")
 	}
 	return nil
@@ -311,4 +347,16 @@ func prepareConfigTx(conf *config.Configurations) (*types.TransactionEnvelope, e
 		},
 		// TODO: we can make the node itself sign the transaction
 	}, nil
+}
+
+func createLedgerDir(dir string) error {
+	exist, err := fileops.Exists(dir)
+	if err != nil {
+		return err
+	}
+	if exist {
+		return nil
+	}
+
+	return fileops.CreateDir(dir)
 }

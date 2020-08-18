@@ -11,50 +11,75 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
 type txProcessorTestEnv struct {
-	dbPath      string
-	db          *leveldb.LevelDB
-	txProcessor *transactionProcessor
-	cleanup     func()
+	dbPath         string
+	db             *leveldb.LevelDB
+	blockStore     *blockstore.Store
+	blockStorePath string
+	txProcessor    *transactionProcessor
+	cleanup        func()
 }
 
 func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
-	dbPath, err := ioutil.TempDir("/tmp", "transaction-processor")
+	dir, err := ioutil.TempDir("/tmp", "transactionProcessor")
+	require.NoError(t, err)
+
+	dbPath := constructWorldStatePath(dir)
+	db, err := leveldb.New(dbPath)
 	if err != nil {
-		t.Fatalf("Failed to create a temp directory: %v", err)
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, rmErr)
+		}
+		t.Fatalf("error while creating leveldb, %v", err)
+	}
+
+	blockStorePath := constructBlockStorePath(dir)
+	blockStore, err := blockstore.Open(blockStorePath)
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, rmErr)
+		}
+		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
 	cleanup := func() {
-		if err := os.RemoveAll(dbPath); err != nil {
-			t.Fatalf("Failed to remove dbPath [%s]: %v", dbPath, err)
+		if err := db.Close(); err != nil {
+			t.Errorf("error while closing the db instance, %v", err)
 		}
-	}
 
-	db, err := leveldb.New(dbPath)
-	if err != nil {
-		cleanup()
-		t.Fatalf("Failed to create new leveldb instance: %v", err)
+		if err := blockStore.Close(); err != nil {
+			t.Errorf("error while closing blockstore, %v", err)
+		}
+
+		if err := os.RemoveAll(dir); err != nil {
+			t.Fatalf("error while removing directory %s, %v", dir, err)
+		}
 	}
 
 	txProcConf := &txProcessorConfig{
 		db:                 db,
+		blockStore:         blockStore,
+		blockHeight:        0,
 		txQueueLength:      100,
 		txBatchQueueLength: 100,
 		blockQueueLength:   100,
-		MaxTxCountPerBatch: 1,
+		maxTxCountPerBatch: 1,
 		batchTimeout:       50 * time.Millisecond,
 	}
 	txProcessor := newTransactionProcessor(txProcConf)
 
 	return &txProcessorTestEnv{
-		dbPath:      dbPath,
-		db:          db,
-		txProcessor: txProcessor,
-		cleanup:     cleanup,
+		dbPath:         dbPath,
+		db:             db,
+		blockStorePath: blockStorePath,
+		blockStore:     blockStore,
+		txProcessor:    txProcessor,
+		cleanup:        cleanup,
 	}
 }
 
@@ -81,7 +106,7 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.txProcessor.SubmitTransaction(context.Background(), tx))
+		require.NoError(t, env.txProcessor.submitTransaction(context.Background(), tx))
 
 		assertTestKey1InDB := func() bool {
 			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
@@ -105,5 +130,24 @@ func TestTransactionProcessor(t *testing.T) {
 			2*time.Second,
 			100*time.Millisecond,
 		)
+
+		height, err := env.blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), height)
+
+		expectedBlock := &types.Block{
+			Header: &types.BlockHeader{
+				Number:                  1,
+				PreviousBlockHeaderHash: nil,
+				TransactionsHash:        nil,
+			},
+			TransactionEnvelopes: []*types.TransactionEnvelope{
+				tx,
+			},
+		}
+
+		block, err := env.blockStore.Get(1)
+		require.NoError(t, err)
+		require.True(t, proto.Equal(expectedBlock, block))
 	})
 }

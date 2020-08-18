@@ -14,9 +14,9 @@ type validator struct {
 }
 
 // newValidator creates a new validator
-func newValidator(db worldstate.DB) *validator {
+func newValidator(conf *Config) *validator {
 	return &validator{
-		db: db,
+		db: conf.DB,
 	}
 }
 

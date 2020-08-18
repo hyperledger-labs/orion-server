@@ -10,35 +10,43 @@ import (
 // BlockCreator uses transactions batch queue to construct the
 // block and stores the created block in the block queue
 type BlockCreator struct {
-	txBatchQueue *queue.Queue
-	blockQueue   *queue.Queue
-	blockNumber  uint64
+	txBatchQueue    *queue.Queue
+	blockQueue      *queue.Queue
+	lastBlockNumber uint64
+}
+
+// Config holds the configuration information required to initialize the
+// block creator
+type Config struct {
+	TxBatchQueue    *queue.Queue
+	BlockQueue      *queue.Queue
+	LastBlockNumber uint64
 }
 
 // New creates a new block assembler
-func New(txBatchQueue, blockQueue *queue.Queue) *BlockCreator {
+func New(conf *Config) *BlockCreator {
 	return &BlockCreator{
-		txBatchQueue: txBatchQueue,
-		blockQueue:   blockQueue,
-		blockNumber:  1, // once the blockstore is added, we need to
-		// retrieve the last committed block number
+		txBatchQueue:    conf.TxBatchQueue,
+		blockQueue:      conf.BlockQueue,
+		lastBlockNumber: conf.LastBlockNumber,
 	}
 }
 
 // Run runs the block assembler in an infinte loop
-func (a *BlockCreator) Run() {
+func (b *BlockCreator) Run() {
 	for {
-		txBatch := a.txBatchQueue.Dequeue().([]*types.TransactionEnvelope)
+		log.Printf("waiting for the block")
+		txBatch := b.txBatchQueue.Dequeue().([]*types.TransactionEnvelope)
 
 		block := &types.Block{
 			Header: &types.BlockHeader{
-				Number: a.blockNumber,
+				Number: b.lastBlockNumber + 1,
 			},
 			TransactionEnvelopes: txBatch,
 		}
 
-		a.blockQueue.Enqueue(block)
-		log.Printf("created block %d with %d transactions\n", a.blockNumber, len(txBatch))
-		a.blockNumber++
+		log.Printf("created block %d with %d transactions\n", b.lastBlockNumber, len(txBatch))
+		b.blockQueue.Enqueue(block)
+		b.lastBlockNumber++
 	}
 }

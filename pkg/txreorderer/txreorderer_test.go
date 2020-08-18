@@ -11,7 +11,12 @@ import (
 
 func TestTxReorderer(t *testing.T) {
 	t.Run("different-tx-batch-size", func(t *testing.T) {
-		b := New(queue.New(10), queue.New(10), 1, 50*time.Millisecond)
+		b := New(&Config{
+			TxQueue:            queue.New(10),
+			TxBatchQueue:       queue.New(10),
+			MaxTxCountPerBatch: 1,
+			BatchTimeout:       50 * time.Millisecond,
+		})
 		go b.Run()
 
 		testCases := []struct {
