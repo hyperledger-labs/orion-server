@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
+	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -43,38 +44,70 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 		}
 
 		tx := block.TransactionEnvelopes[txNum].Payload
-		kvWrites := []*worldstate.KVWithMetadata{}
-		kvDeletes := []string{}
-
-		for _, write := range tx.Writes {
-			if write.IsDelete {
-				kvDeletes = append(kvDeletes, write.Key)
-				continue
-			}
-
-			kv := &worldstate.KVWithMetadata{
-				Key:   write.Key,
-				Value: write.Value,
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: block.Header.Number,
-						TxNum:    uint64(txNum),
-					},
-				},
-			}
-			kvWrites = append(kvWrites, kv)
+		if len(tx.Writes) == 0 {
+			// maybe the http server can be made to throw
+			// error when there is no write in a given
+			// transaction. maybe it is good to record
+			// only reads but couldn't think of a good
+			// use-case and a trust model.
+			// TODO: discuss with the team and make a
+			// decision
+			continue
 		}
 
-		dbUpdate := &worldstate.DBUpdates{
-			DBName:  tx.DBName,
-			Writes:  kvWrites,
-			Deletes: kvDeletes,
+		version := &types.Version{
+			BlockNum: block.Header.Number,
+			TxNum:    uint64(txNum),
 		}
-		dbsUpdates = append(dbsUpdates, dbUpdate)
+
+		// TODO: move worldstate.UsersDBName and ConfigDBName to
+		// the repo library and pkg types as they are common to
+		// both server and sdk -- issue 97
+		switch {
+		case tx.DBName == worldstate.UsersDBName:
+			dbsUpdates = append(
+				dbsUpdates,
+				identity.ConstructDBEntriesForUsers(tx, version),
+			)
+		// TODO: construct node and cluster identity entries when
+		// the dbName is _config -- issue 98
+		default:
+			dbsUpdates = append(
+				dbsUpdates,
+				constructDBEntriesForData(tx, version),
+			)
+		}
 	}
 
 	if err := c.db.Commit(dbsUpdates); err != nil {
 		return errors.WithMessagef(err, "failed to commit block %d to state database", block.Header.Number)
 	}
 	return nil
+}
+
+func constructDBEntriesForData(tx *types.Transaction, version *types.Version) *worldstate.DBUpdates {
+	var kvWrites []*worldstate.KVWithMetadata
+	var kvDeletes []string
+
+	for _, write := range tx.Writes {
+		if write.IsDelete {
+			kvDeletes = append(kvDeletes, write.Key)
+			continue
+		}
+
+		kv := &worldstate.KVWithMetadata{
+			Key:   write.Key,
+			Value: write.Value,
+			Metadata: &types.Metadata{
+				Version: version,
+			},
+		}
+		kvWrites = append(kvWrites, kv)
+	}
+
+	return &worldstate.DBUpdates{
+		DBName:  tx.DBName,
+		Writes:  kvWrites,
+		Deletes: kvDeletes,
+	}
 }

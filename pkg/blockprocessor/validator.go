@@ -37,7 +37,13 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 
 		// TODO
 		// We need to ensure that a config transaction is submitted only by the admin
-		// and it should have the correct database, i.e., _config and correct key.
+		// and it should have the correct database, i.e., _config and correct key -
+		// issue 74
+
+		// TODO
+		// If the transaction touches _users database, we need to validate the user
+		// information present in the writes, i.e., userID should not be empty,
+		// certificate must be present, etc... -- issue 100
 
 		if valInfo[txIndex], err = v.mvccValidation(tx.Payload, pendingWrites); err != nil {
 			return nil, err

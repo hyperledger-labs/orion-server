@@ -83,7 +83,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		TransactionEnvelopes: []*types.TransactionEnvelope{
 			{
 				Payload: &types.Transaction{
-					DBName: worldstate.UsersDBName,
+					DBName: worldstate.DefaultDBName,
 					Writes: []*types.KVWrite{
 						{
 							Key:   "key1",
@@ -101,7 +101,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		TransactionEnvelopes: []*types.TransactionEnvelope{
 			{
 				Payload: &types.Transaction{
-					DBName: worldstate.UsersDBName,
+					DBName: worldstate.DefaultDBName,
 					Writes: []*types.KVWrite{
 						{
 							Key:   "key1",
@@ -155,7 +155,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			env.v.blockQueue.Enqueue(tt.block)
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
-			val, metadata, err := env.db.Get(worldstate.UsersDBName, "key1")
+			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedValue, val)
 			require.True(t, proto.Equal(tt.expectedMetadata, metadata))
@@ -205,7 +205,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			}
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
-			val, metadata, err := env.db.Get(worldstate.UsersDBName, "key1")
+			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedValue, val)
 			require.True(t, proto.Equal(tt.expectedMetadata, metadata))

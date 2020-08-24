@@ -11,17 +11,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
+	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
 type committerTestEnv struct {
-	db             *leveldb.LevelDB
-	dbPath         string
-	blockStore     *blockstore.Store
-	blockStorePath string
-	committer      *committer
-	cleanup        func()
+	db              *leveldb.LevelDB
+	dbPath          string
+	blockStore      *blockstore.Store
+	blockStorePath  string
+	identityQuerier *identity.Querier
+	committer       *committer
+	cleanup         func()
 }
 
 func newCommitterTestEnv(t *testing.T) *committerTestEnv {
@@ -65,12 +67,13 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 		BlockStore: blockStore,
 	}
 	return &committerTestEnv{
-		db:             db,
-		dbPath:         dbPath,
-		committer:      newCommitter(c),
-		blockStore:     blockStore,
-		blockStorePath: blockStorePath,
-		cleanup:        cleanup,
+		db:              db,
+		dbPath:          dbPath,
+		blockStore:      blockStore,
+		blockStorePath:  blockStorePath,
+		identityQuerier: identity.NewQuerier(db),
+		committer:       newCommitter(c),
+		cleanup:         cleanup,
 	}
 }
 
@@ -198,7 +201,7 @@ func TestBlockStoreCommitter(t *testing.T) {
 	})
 }
 
-func TestStateDBCommitter(t *testing.T) {
+func TestStateDBCommitterForData(t *testing.T) {
 	t.Parallel()
 
 	setup := func(db worldstate.DB) []*worldstate.DBUpdates {
@@ -883,5 +886,140 @@ func TestStateDBCommitter(t *testing.T) {
 		}
 
 		require.EqualError(t, env.committer.commitToStateDB(block, validationInfo), "failed to commit block 2 to state database: database db1 does not exist")
+	})
+}
+
+func TestStateDBCommitterForUsers(t *testing.T) {
+	t.Parallel()
+
+	getSampleBlock := func(number uint64) (*types.Block, []*types.ValidationInfo, []*types.User) {
+		userWithLessPrivilege := &types.User{
+			ID:          fmt.Sprintf("%s:%d", "userWithLessPrivilege", number),
+			Certificate: []byte("certificate-1"),
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					fmt.Sprintf("db-%d", number): types.Privilege_Read,
+				},
+				DBAdministration:      false,
+				ClusterAdministration: false,
+				UserAdministration:    false,
+			},
+		}
+
+		userWithMorePrivilege := &types.User{
+			ID:          fmt.Sprintf("%s:%d", "userWithMorePrivilege", number),
+			Certificate: []byte("certificate-2"),
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					fmt.Sprintf("db-%d", number): types.Privilege_ReadWrite,
+				},
+				DBAdministration:      true,
+				ClusterAdministration: true,
+				UserAdministration:    true,
+			},
+		}
+
+		user1, err := proto.Marshal(userWithLessPrivilege)
+		require.NoError(t, err)
+		user2, err := proto.Marshal(userWithMorePrivilege)
+		require.NoError(t, err)
+
+		block := &types.Block{
+			Header: &types.BlockHeader{
+				Number: number,
+			},
+			TransactionEnvelopes: []*types.TransactionEnvelope{
+				{
+					Payload: &types.Transaction{
+						DBName: worldstate.UsersDBName,
+						Writes: []*types.KVWrite{
+							{
+								Key:   fmt.Sprintf("%s:%d", "userWithLessPrivilege", number),
+								Value: user1,
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.Transaction{
+						DBName: worldstate.UsersDBName,
+						Writes: []*types.KVWrite{
+							{
+								Key:   fmt.Sprintf("%s:%d", "userWithMorePrivilege", number),
+								Value: user2,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		valInfo := []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+
+		return block, valInfo, []*types.User{
+			userWithLessPrivilege,
+			userWithMorePrivilege,
+		}
+	}
+
+	t.Run("commit block with all valid transactions", func(t *testing.T) {
+		t.Parallel()
+
+		env := newCommitterTestEnv(t)
+		defer env.cleanup()
+
+		block, valInfo, users := getSampleBlock(1)
+		require.NoError(t, env.committer.commitToStateDB(block, valInfo))
+
+		for i, expectedUser := range users {
+			persistedUser, metadata, err := env.identityQuerier.GetUser(expectedUser.ID)
+			require.NoError(t, err)
+
+			expectedMetadata := &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 1,
+					TxNum:    uint64(i),
+				},
+			}
+			require.True(t, proto.Equal(expectedMetadata, metadata))
+			require.True(t, proto.Equal(expectedUser, persistedUser))
+		}
+	})
+
+	t.Run("commit block with a mix of valid and invalid transactions", func(t *testing.T) {
+		t.Parallel()
+
+		env := newCommitterTestEnv(t)
+		defer env.cleanup()
+
+		block, valInfo, users := getSampleBlock(1)
+		valInfo[0] = &types.ValidationInfo{
+			Flag: types.Flag_INVALID_NO_PERMISSION,
+		}
+		require.NoError(t, env.committer.commitToStateDB(block, valInfo))
+
+		persistedUser, metadata, err := env.identityQuerier.GetUser(users[0].ID)
+		require.NoError(t, err)
+		require.Nil(t, metadata)
+		require.Nil(t, persistedUser)
+
+		persistedUser, metadata, err = env.identityQuerier.GetUser(users[1].ID)
+		require.NoError(t, err)
+
+		expectedMetadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
+			},
+		}
+		require.True(t, proto.Equal(expectedMetadata, metadata))
+		require.True(t, proto.Equal(users[1], persistedUser))
 	})
 }
