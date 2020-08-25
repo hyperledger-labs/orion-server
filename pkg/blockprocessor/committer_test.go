@@ -31,7 +31,7 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	require.NoError(t, err)
 
 	dbPath := filepath.Join(dir, "leveldb")
-	db, err := leveldb.New(dbPath)
+	db, err := leveldb.Open(dbPath)
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, rmErr)
@@ -82,7 +82,17 @@ func TestCommitter(t *testing.T) {
 		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 
-		env.db.Create("db1")
+		createDB := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "db1",
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(createDB))
 
 		block1 := &types.Block{
 			Header: &types.BlockHeader{
@@ -257,8 +267,22 @@ func TestStateDBCommitterForData(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, db.Create("db1"))
-		require.NoError(t, db.Create("db2"))
+
+		createDBs := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "db1",
+					},
+					{
+						Key: "db2",
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createDBs))
+
 		require.NoError(t, db.Commit(dbsUpdates))
 		return dbsUpdates
 	}

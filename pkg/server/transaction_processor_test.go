@@ -30,7 +30,7 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	require.NoError(t, err)
 
 	dbPath := constructWorldStatePath(dir)
-	db, err := leveldb.New(dbPath)
+	db, err := leveldb.Open(dbPath)
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, rmErr)

@@ -30,7 +30,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	dbPath := filepath.Join(dir, "leveldb")
-	db, err := leveldb.New(dbPath)
+	db, err := leveldb.Open(dbPath)
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, err)

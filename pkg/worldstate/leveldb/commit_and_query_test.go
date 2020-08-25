@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
@@ -24,7 +25,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	path := filepath.Join(dir, "leveldb")
-	l, err := New(path)
+	l, err := Open(path)
 	if err != nil {
 		if err := os.RemoveAll(dir); err != nil {
 			t.Errorf("failed to remove %s, %v", dir, err)
@@ -36,13 +37,15 @@ func newTestEnv(t *testing.T) *testEnv {
 		if err := l.Close(); err != nil {
 			t.Errorf("failed to close the database instance, %v", err)
 		}
+
 		if err := os.RemoveAll(dir); err != nil {
 			t.Errorf("failed to remove %s, %v", dir, err)
 		}
 	}
 
-	require.Equal(t, path, l.dirPath)
+	require.Equal(t, path, l.dbRootDir)
 	require.Len(t, l.dbs, len(systemDBs))
+
 	for _, dbName := range systemDBs {
 		require.NotNil(t, l.dbs[dbName])
 	}
@@ -54,32 +57,112 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 }
 
-func TestCreateAndOpenDB(t *testing.T) {
+func TestCreateDB(t *testing.T) {
 	t.Parallel()
 
-	t.Run("opening an non-existing database", func(t *testing.T) {
+	t.Run("create new database", func(t *testing.T) {
 		t.Parallel()
+
 		env := newTestEnv(t)
 		defer env.cleanup()
-
 		l := env.l
-		require.Contains(t, l.Open("db1").Error(), "database db1 does not exist")
-		exists, err := fileops.Exists(filepath.Join(env.path, "db1"))
-		require.NoError(t, err)
-		require.False(t, exists)
+		dbName := "db1"
+
+		verifyDBExistance(t, l, dbName, false)
+
+		require.NoError(t, l.create(dbName))
+		verifyDBExistance(t, l, dbName, true)
 	})
 
-	t.Run("creating and opening a database", func(t *testing.T) {
+	t.Run("create already existing database -- no-op", func(t *testing.T) {
 		t.Parallel()
+
+		env := newTestEnv(t)
+		defer env.cleanup()
+		l := env.l
+		dbName := "db1"
+
+		require.NoError(t, l.create(dbName))
+		verifyDBExistance(t, l, dbName, true)
+
+		db := l.dbs[dbName]
+		db.file.Put([]byte("key1"), []byte("value1"), &opt.WriteOptions{Sync: true})
+
+		require.NoError(t, l.create(dbName))
+
+		actualVal, err := db.file.Get([]byte("key1"), nil)
+		require.NoError(t, err)
+		require.Equal(t, []byte("value1"), actualVal)
+
+		verifyDBExistance(t, l, dbName, true)
+	})
+}
+
+func TestDeleteDB(t *testing.T) {
+	t.Parallel()
+
+	t.Run("deleting an existing database", func(t *testing.T) {
+		t.Parallel()
+
+		env := newTestEnv(t)
+		defer env.cleanup()
+		l := env.l
+		dbName := "db1"
+
+		require.NoError(t, l.create(dbName))
+		verifyDBExistance(t, l, dbName, true)
+
+		require.NoError(t, l.delete(dbName))
+		verifyDBExistance(t, l, dbName, false)
+	})
+
+	t.Run("deleting a non-existing database -- no-op", func(t *testing.T) {
+		t.Parallel()
+
+		env := newTestEnv(t)
+		defer env.cleanup()
+		l := env.l
+		dbName := "db1"
+
+		verifyDBExistance(t, l, dbName, false)
+		require.NoError(t, l.delete(dbName))
+	})
+}
+
+func verifyDBExistance(t *testing.T, l *LevelDB, dbName string, expected bool) {
+	require.Equal(t, expected, l.Exist(dbName))
+	exist, err := fileops.Exists(filepath.Join(l.dbRootDir, dbName))
+	require.NoError(t, err)
+	require.Equal(t, expected, exist)
+}
+
+func TestListDBsAndExist(t *testing.T) {
+	t.Parallel()
+
+	t.Run("list all user databases", func(t *testing.T) {
+		env := newTestEnv(t)
+		l := env.l
+		defer env.cleanup()
+
+		dbs := []string{"db1", "db2", "db3"}
+		for _, name := range dbs {
+			require.NoError(t, l.create(name))
+		}
+
+		require.ElementsMatch(t, dbs, l.ListDBs())
+	})
+
+	t.Run("check for database existance", func(t *testing.T) {
 		env := newTestEnv(t)
 		defer env.cleanup()
 
-		l := env.l
-		require.NoError(t, l.Create("db1"))
-		require.DirExists(t, filepath.Join(env.path, "db1"))
-		require.NotEmpty(t, l.dbs)
-		require.NotNil(t, l.dbs["db1"])
-		require.NoError(t, l.Open("db1"))
+		for _, dbName := range systemDBs {
+			require.True(t, env.l.Exist(dbName))
+		}
+
+		for _, dbName := range []string{"no-db1", "no-db2", "no-db3"} {
+			require.False(t, env.l.Exist(dbName))
+		}
 	})
 }
 
@@ -87,8 +170,8 @@ func TestCommitAndGet(t *testing.T) {
 	t.Parallel()
 
 	setupWithNoData := func(l *LevelDB) {
-		require.NoError(t, l.Create("db1"))
-		require.NoError(t, l.Create("db2"))
+		require.NoError(t, l.create("db1"))
+		require.NoError(t, l.create("db2"))
 	}
 
 	setupWithData := func(l *LevelDB) (map[string]*ValueAndMetadata, map[string]*ValueAndMetadata) {
@@ -161,8 +244,8 @@ func TestCommitAndGet(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, l.Create("db1"))
-		require.NoError(t, l.Create("db2"))
+		require.NoError(t, l.create("db1"))
+		require.NoError(t, l.create("db2"))
 		require.NoError(t, l.Commit(dbsUpdates))
 
 		db1KVs := map[string]*ValueAndMetadata{
@@ -324,48 +407,99 @@ func TestCommitAndGet(t *testing.T) {
 	})
 }
 
-func TestNewLevelDB(t *testing.T) {
+func TestCommitWithDBManagement(t *testing.T) {
 	t.Parallel()
 
-	dir, err := ioutil.TempDir("/tmp", "ledger")
-	require.NoError(t, err)
-	levelPath := filepath.Join(dir, "leveldb")
-	defer func() {
-		require.NoError(t, os.RemoveAll(dir))
-		require.NoError(t, os.RemoveAll(levelPath))
-	}()
+	tests := []struct {
+		name                   string
+		preCreateDBs           []string
+		updates                *worldstate.DBUpdates
+		expectedDBsAfterCommit []string
+	}{
+		{
+			name:         "only create DBs",
+			preCreateDBs: nil,
+			updates: &worldstate.DBUpdates{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "db1",
+					},
+					{
+						Key: "db2",
+					},
+				},
+			},
+			expectedDBsAfterCommit: []string{"db1", "db2"},
+		},
+		{
+			name:         "only delete DBs",
+			preCreateDBs: []string{"db1", "db2"},
+			updates: &worldstate.DBUpdates{
+				DBName:  worldstate.DatabasesDBName,
+				Deletes: []string{"db1", "db2"},
+			},
+			expectedDBsAfterCommit: nil,
+		},
+		{
+			name:         "create and delete DBs",
+			preCreateDBs: []string{"db3", "db4"},
+			updates: &worldstate.DBUpdates{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "db1",
+					},
+					{
+						Key: "db2",
+					},
+				},
+				Deletes: []string{"db3", "db4"},
+			},
+			expectedDBsAfterCommit: []string{"db1", "db2"},
+		},
+		{
+			name:         "create already existing DBs and delete non-existing DBs -- applicable during node failure and reply of block",
+			preCreateDBs: []string{"db1", "db3"},
+			updates: &worldstate.DBUpdates{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "db1",
+					},
+					{
+						Key: "db2",
+					},
+				},
+				Deletes: []string{"db3", "db4"},
+			},
+			expectedDBsAfterCommit: []string{"db1", "db2"},
+		},
+	}
 
-	t.Run("open-new-databases", func(t *testing.T) {
-		l, err := New(levelPath)
-		require.NoError(t, err)
-		require.NoError(t, l.Open(worldstate.UsersDBName))
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		userDBs := []string{"db1", "db2", "db3", "db4"}
-		for _, dbName := range userDBs {
-			require.NoError(t, l.Create(dbName))
-		}
+			env := newTestEnv(t)
+			defer env.cleanup()
+			l := env.l
 
-		require.Len(t, l.dbs, 4+len(systemDBs))
+			for _, name := range tt.preCreateDBs {
+				require.NoError(t, l.create(name))
+			}
 
-		for _, dbName := range systemDBs {
-			require.NoError(t, l.Open(dbName))
-		}
+			require.NoError(
+				t,
+				l.Commit(
+					[]*worldstate.DBUpdates{
+						tt.updates,
+					},
+				),
+			)
 
-		require.NoError(t, l.Close())
-	})
-
-	t.Run("reopen-old-databases", func(t *testing.T) {
-		l, err := New(levelPath)
-		require.NoError(t, err)
-		require.Len(t, l.dbs, 4+len(systemDBs))
-
-		for _, dbName := range systemDBs {
-			require.NoError(t, l.Open(dbName))
-		}
-
-		userDBs := []string{"db1", "db2", "db3", "db4"}
-		for _, dbName := range userDBs {
-			require.NoError(t, l.Open(dbName))
-		}
-	})
+			require.ElementsMatch(t, tt.expectedDBsAfterCommit, l.ListDBs())
+		})
+	}
 }

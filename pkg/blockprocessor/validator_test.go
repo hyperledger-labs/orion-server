@@ -25,7 +25,7 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 	require.NoError(t, err)
 	path := filepath.Join(dir, "leveldb")
 
-	db, err := leveldb.New(path)
+	db, err := leveldb.Open(path)
 	if err != nil {
 		if err := os.RemoveAll(dir); err != nil {
 			t.Errorf("failed to remove directory %s, %v", dir, err)
@@ -86,7 +86,18 @@ func TestMVCCValidator(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Create("db1"))
+		createDB := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "db1",
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createDB))
+
 		require.NoError(t, db.Commit(dbsUpdates))
 	}
 
@@ -266,8 +277,21 @@ func TestValidator(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Create("db1"))
-		require.NoError(t, db.Create("db2"))
+		createDBs := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "db1",
+					},
+					{
+						Key: "db2",
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createDBs))
+
 		require.NoError(t, db.Commit(dbsUpdates))
 	}
 

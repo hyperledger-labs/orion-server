@@ -28,7 +28,7 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	pendingWrites := make(map[string]bool)
 
 	for txIndex, tx := range block.TransactionEnvelopes {
-		if err = v.db.Open(tx.Payload.DBName); err != nil {
+		if !v.db.Exist(tx.Payload.DBName) {
 			valInfo[txIndex] = &types.ValidationInfo{
 				Flag: types.Flag_INVALID_DB_NOT_EXIST,
 			}

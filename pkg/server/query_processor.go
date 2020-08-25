@@ -44,13 +44,9 @@ func (q *queryProcessor) getStatus(_ context.Context, req *types.GetStatusQueryE
 			Header: &types.ResponseHeader{
 				NodeID: q.nodeID,
 			},
-			Exist: false,
+			Exist: q.db.Exist(req.Payload.DBName),
 		},
 		Signature: nil,
-	}
-
-	if err = q.db.Open(req.Payload.DBName); err == nil {
-		status.Payload.Exist = true
 	}
 
 	if status.Signature, err = crypto.Sign(status.Payload); err != nil {

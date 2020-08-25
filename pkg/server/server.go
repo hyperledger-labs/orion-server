@@ -117,7 +117,7 @@ func newDBServer(conf *config.Configurations) (*dbServer, error) {
 	switch conf.Node.Database.Name {
 	case "leveldb":
 		worldStatePath := constructWorldStatePath(ledgerDir)
-		if levelDB, err = leveldb.New(worldStatePath); err != nil {
+		if levelDB, err = leveldb.Open(worldStatePath); err != nil {
 			return nil, errors.WithMessage(err, "error while creating the world state database")
 		}
 	default:

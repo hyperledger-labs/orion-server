@@ -29,7 +29,7 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 		}
 	}
 
-	db, err := leveldb.New(path)
+	db, err := leveldb.Open(path)
 	if err != nil {
 		cleanup(t)
 		t.Fatalf("failed to create a new leveldb instance, %v", err)
@@ -55,7 +55,17 @@ func TestGetStatus(t *testing.T) {
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
-		require.NoError(t, env.db.Create("test-db"))
+		createDB := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "test-db",
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(createDB))
 
 		testCases := []struct {
 			dbName  string
@@ -133,7 +143,17 @@ func TestGetState(t *testing.T) {
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
-		require.NoError(t, env.db.Create("test-db"))
+		createDB := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.DatabasesDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: "test-db",
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(createDB))
 
 		val := []byte("value1")
 		metadata := &types.Metadata{

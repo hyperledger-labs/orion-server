@@ -18,10 +18,11 @@ const (
 // DB provides method to create and access states stored in
 // a database.
 type DB interface {
-	// Create creates a new database
-	Create(dbName string) error
-	// Open opens an existing database
-	Open(dbName string) error
+	// Exist returns true if the database exist
+	Exist(dbName string) bool
+	// ListDBs lists all user databases (excludes system
+	// databases)
+	ListDBs() []string
 	// Get returns the value of the key present in the
 	// database
 	Get(dbName, key string) ([]byte, *types.Metadata, error)
