@@ -38,15 +38,15 @@ func (b *BlockCreator) Run() {
 		log.Printf("waiting for the block")
 		txBatch := b.txBatchQueue.Dequeue().([]*types.TransactionEnvelope)
 
+		b.lastBlockNumber++
 		block := &types.Block{
 			Header: &types.BlockHeader{
-				Number: b.lastBlockNumber + 1,
+				Number: b.lastBlockNumber,
 			},
 			TransactionEnvelopes: txBatch,
 		}
 
 		log.Printf("created block %d with %d transactions\n", b.lastBlockNumber, len(txBatch))
 		b.blockQueue.Enqueue(block)
-		b.lastBlockNumber++
 	}
 }

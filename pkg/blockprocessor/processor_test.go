@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
+	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
@@ -76,6 +77,36 @@ func newTestEnv(t *testing.T) *testEnv {
 func TestValidatorAndCommitter(t *testing.T) {
 	t.Parallel()
 
+	user := &types.User{
+		ID: "testUser",
+		Privilege: &types.Privilege{
+			DBPermission: map[string]types.Privilege_Access{
+				worldstate.DefaultDBName: types.Privilege_ReadWrite,
+			},
+		},
+	}
+
+	u, err := proto.Marshal(user)
+	require.NoError(t, err)
+
+	createUser := []*worldstate.DBUpdates{
+		{
+			DBName: worldstate.UsersDBName,
+			Writes: []*worldstate.KVWithMetadata{
+				{
+					Key:   string(identity.UserNamespace) + "testUser",
+					Value: u,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    1,
+						},
+					},
+				},
+			},
+		},
+	}
+
 	block1 := &types.Block{
 		Header: &types.BlockHeader{
 			Number: 1,
@@ -83,6 +114,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		TransactionEnvelopes: []*types.TransactionEnvelope{
 			{
 				Payload: &types.Transaction{
+					UserID: []byte("testUser"),
 					DBName: worldstate.DefaultDBName,
 					Writes: []*types.KVWrite{
 						{
@@ -101,6 +133,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		TransactionEnvelopes: []*types.TransactionEnvelope{
 			{
 				Payload: &types.Transaction{
+					UserID: []byte("testUser"),
 					DBName: worldstate.DefaultDBName,
 					Writes: []*types.KVWrite{
 						{
@@ -117,6 +150,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 		t.Parallel()
 		env := newTestEnv(t)
 		defer env.cleanup()
+
+		require.NoError(t, env.db.Commit(createUser))
 
 		testCases := []struct {
 			block               *types.Block
@@ -174,6 +209,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 		t.Parallel()
 		env := newTestEnv(t)
 		defer env.cleanup()
+
+		require.NoError(t, env.db.Commit(createUser))
 
 		testCases := []struct {
 			blocks              []*types.Block

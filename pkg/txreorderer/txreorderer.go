@@ -47,21 +47,21 @@ func (b *TxReorderer) Run() {
 	for {
 		tx := b.txQueue.Dequeue().(*types.TransactionEnvelope)
 
-		if tx.Payload.Type == types.Transaction_CONFIG {
+		switch tx.Payload.Type {
+		case types.Transaction_CONFIG, types.Transaction_DB, types.Transaction_USER:
 			b.enqueueTxBatch(txBatch)
 			b.enqueueTxBatch([]*types.TransactionEnvelope{tx})
 			txBatch = nil
-			continue
-		}
+		default:
+			txBatch = append(txBatch, tx)
+			if uint32(len(txBatch)) < b.MaxTxCountPerBatch {
+				continue
+			}
 
-		txBatch = append(txBatch, tx)
-		if uint32(len(txBatch)) < b.MaxTxCountPerBatch {
-			continue
+			log.Printf("added %d transactions to the tx batch queue", len(txBatch))
+			b.enqueueTxBatch(txBatch)
+			txBatch = nil
 		}
-
-		log.Printf("added %d transactions to the tx batch queue", len(txBatch))
-		b.enqueueTxBatch(txBatch)
-		txBatch = nil
 	}
 }
 

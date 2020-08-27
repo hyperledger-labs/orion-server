@@ -9,6 +9,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -138,27 +139,74 @@ func TestGetStatus(t *testing.T) {
 func TestGetState(t *testing.T) {
 	t.Parallel()
 
-	t.Run("GetState-Returns-State", func(t *testing.T) {
-		t.Parallel()
-		env := newQueryProcessorTestEnv(t)
-		defer env.cleanup(t)
+	setup := func(db worldstate.DB, userID, dbName string) {
+		user := &types.User{
+			ID: userID,
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					dbName: types.Privilege_ReadWrite,
+				},
+			},
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + userID,
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createUser))
 
 		createDB := []*worldstate.DBUpdates{
 			{
 				DBName: worldstate.DatabasesDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key: "test-db",
+						Key: dbName,
 					},
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(createDB))
+		require.NoError(t, db.Commit(createDB))
+	}
+
+	t.Run("GetState-Returns-State", func(t *testing.T) {
+		t.Parallel()
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		setup(env.db, "testUser", "test-db")
 
 		val := []byte("value1")
-		metadata := &types.Metadata{
+		metadata1 := &types.Metadata{
 			Version: &types.Version{
-				BlockNum: 1,
+				BlockNum: 2,
+				TxNum:    1,
+			},
+			AccessControl: &types.AccessControl{
+				ReadUsers: map[string]bool{
+					"testUser": true,
+				},
+			},
+		}
+
+		metadata2 := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
 				TxNum:    1,
 			},
 		}
@@ -170,7 +218,12 @@ func TestGetState(t *testing.T) {
 					{
 						Key:      "key1",
 						Value:    val,
-						Metadata: metadata,
+						Metadata: metadata1,
+					},
+					{
+						Key:      "key2",
+						Value:    val,
+						Metadata: metadata2,
 					},
 				},
 			},
@@ -185,7 +238,12 @@ func TestGetState(t *testing.T) {
 			{
 				key:              "key1",
 				expectedValue:    val,
-				expectedMetadata: metadata,
+				expectedMetadata: metadata1,
+			},
+			{
+				key:              "key2",
+				expectedValue:    val,
+				expectedMetadata: metadata2,
 			},
 			{
 				key:              "not-present",
@@ -219,27 +277,97 @@ func TestGetState(t *testing.T) {
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
+		setup(env.db, "testUser1", "test-db")
+		setup(env.db, "testUser2", "")
+
+		val := []byte("value1")
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
+			},
+			AccessControl: &types.AccessControl{
+				ReadUsers: map[string]bool{
+					"testUser2": true,
+				},
+			},
+		}
+
+		dbsUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: "test-db",
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      "key1",
+						Value:    val,
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(dbsUpdates))
+
 		testCases := []struct {
+			name          string
 			request       *types.GetStateQueryEnvelope
 			expectedError string
 		}{
 			{
+				name:          "query envelope is nil",
 				request:       nil,
 				expectedError: "`GetStateQueryEnvelope` is nil",
 			},
 			{
+				name: "payload is nil",
 				request: &types.GetStateQueryEnvelope{
 					Payload: nil,
 				},
 				expectedError: "`Payload` in `GetStateQueryEnvelope` is nil",
 			},
 			{
+				name: "userID not set",
 				request: &types.GetStateQueryEnvelope{
 					Payload: &types.GetStateQuery{
 						UserID: "",
 					},
 				},
 				expectedError: "`UserID` is not set in `Payload`",
+			},
+			{
+				name: "user has no permission to read the key",
+				request: &types.GetStateQueryEnvelope{
+					Payload: &types.GetStateQuery{
+						UserID: "testUser1",
+						DBName: "test-db",
+						Key:    "key1",
+					},
+					Signature: []byte("signature"),
+				},
+				expectedError: "the user [testUser1] has no permission to read key [key1] from database [test-db]",
+			},
+			{
+				name: "user has no permission to read from the database",
+				request: &types.GetStateQueryEnvelope{
+					Payload: &types.GetStateQuery{
+						UserID: "testUser2",
+						DBName: "test-db",
+						Key:    "key1",
+					},
+					Signature: []byte("signature"),
+				},
+				expectedError: "the user [testUser2] has no permission to read from database [test-db]",
+			},
+			{
+				name: "user has no permission to read from the database",
+				request: &types.GetStateQueryEnvelope{
+					Payload: &types.GetStateQuery{
+						UserID: "testUser2",
+						DBName: "_config",
+						Key:    "config",
+					},
+					Signature: []byte("signature"),
+				},
+				expectedError: "the user [testUser2] has no permission to read from database [_config]",
 			},
 		}
 

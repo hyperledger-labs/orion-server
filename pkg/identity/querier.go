@@ -23,6 +23,18 @@ func NewQuerier(db worldstate.DB) *Querier {
 	}
 }
 
+// DoesUserExist returns true if the given user exist. Otherwise, it
+// return false
+func (q *Querier) DoesUserExist(userID string) (bool, error) {
+	// TODO: use Has() API from the levelDB
+	user, _, err := q.GetUser(userID)
+	if err != nil {
+		return false, err
+	}
+
+	return user != nil, nil
+}
+
 // GetUser returns the credentials associated with the given
 // non-admin userID
 func (q *Querier) GetUser(userID string) (*types.User, *types.Metadata, error) {
@@ -46,18 +58,27 @@ func (q *Querier) GetUser(userID string) (*types.User, *types.Metadata, error) {
 // HasReadAccess returns true if the given userID has read access on the given
 // dbName. Otherwise, it returns false
 func (q *Querier) HasReadAccess(userID, dbName string) (bool, error) {
-	user, _, err := q.GetUser(userID)
-	if err != nil {
-		return false, err
-	}
+	switch dbName {
+	case worldstate.ConfigDBName:
+		return q.HasClusterAdministrationPrivilege(userID)
+	case worldstate.DatabasesDBName:
+		return q.HasDBAdministrationPrivilege(userID)
+	case worldstate.UsersDBName:
+		return q.HasUserAdministrationPrivilege(userID)
+	default:
+		user, _, err := q.GetUser(userID)
+		if err != nil {
+			return false, err
+		}
 
-	dbPermission := user.GetPrivilege().GetDBPermission()
-	if dbPermission == nil {
-		return false, err
-	}
+		dbPermission := user.GetPrivilege().GetDBPermission()
+		if dbPermission == nil {
+			return false, err
+		}
 
-	_, ok := dbPermission[dbName]
-	return ok, nil
+		_, ok := dbPermission[dbName]
+		return ok, nil
+	}
 }
 
 // HasReadWriteAccess returns true if the given userID has read-write access on the given

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
+	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -86,13 +87,53 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 func TestTransactionProcessor(t *testing.T) {
 	t.Parallel()
 
-	t.Run("commit a simple transaction", func(t *testing.T) {
+	setup := func(env *txProcessorTestEnv, userID, dbName string) {
+		configTx, err := prepareConfigTx(testConfiguration(t))
+		require.NoError(t, err)
+		require.NoError(t, env.txProcessor.submitTransaction(context.Background(), configTx))
+
+		user := &types.User{
+			ID: userID,
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					dbName: types.Privilege_ReadWrite,
+				},
+			},
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + userID,
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(createUser))
+	}
+
+	t.Run("commit a data transaction", func(t *testing.T) {
 		t.Parallel()
 		env := newTxProcessorTestEnv(t)
 		defer env.cleanup()
 
+		setup(env, "testUser", worldstate.DefaultDBName)
+
 		tx := &types.TransactionEnvelope{
 			Payload: &types.Transaction{
+				UserID:    []byte("testUser"),
 				DBName:    worldstate.DefaultDBName,
 				TxID:      []byte("tx1"),
 				DataModel: types.Transaction_KV,
@@ -117,7 +158,7 @@ func TestTransactionProcessor(t *testing.T) {
 				proto.Equal(
 					&types.Metadata{
 						Version: &types.Version{
-							BlockNum: 1,
+							BlockNum: 2,
 							TxNum:    0,
 						},
 					},
@@ -133,11 +174,11 @@ func TestTransactionProcessor(t *testing.T) {
 
 		height, err := env.blockStore.Height()
 		require.NoError(t, err)
-		require.Equal(t, uint64(1), height)
+		require.Equal(t, uint64(2), height)
 
 		expectedBlock := &types.Block{
 			Header: &types.BlockHeader{
-				Number:                  1,
+				Number:                  2,
 				PreviousBlockHeaderHash: nil,
 				TransactionsHash:        nil,
 			},
@@ -146,7 +187,7 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		}
 
-		block, err := env.blockStore.Get(1)
+		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
 		require.True(t, proto.Equal(expectedBlock, block))
 	})

@@ -9,13 +9,15 @@ import (
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
+	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
 type queryProcessor struct {
-	nodeID     []byte
-	db         worldstate.DB
-	blockStore *blockstore.Store
+	nodeID          []byte
+	db              worldstate.DB
+	blockStore      *blockstore.Store
+	identityQuerier *identity.Querier
 }
 
 type queryProcessorConfig struct {
@@ -26,9 +28,10 @@ type queryProcessorConfig struct {
 
 func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 	return &queryProcessor{
-		nodeID:     conf.nodeID,
-		db:         conf.db,
-		blockStore: conf.blockStore,
+		nodeID:          conf.nodeID,
+		db:              conf.db,
+		blockStore:      conf.blockStore,
+		identityQuerier: identity.NewQuerier(conf.db),
 	}
 }
 
@@ -38,6 +41,9 @@ func (q *queryProcessor) getStatus(_ context.Context, req *types.GetStatusQueryE
 	if err = validateGetStatusQuery(req); err != nil {
 		return nil, err
 	}
+
+	// ACL is meaningless here as this call is to check whether a DB exist. Even with ACL,
+	// the user can infer the information.
 
 	status := &types.GetStatusResponseEnvelope{
 		Payload: &types.GetStatusResponse{
@@ -62,9 +68,26 @@ func (q *queryProcessor) getState(_ context.Context, req *types.GetStateQueryEnv
 		return nil, err
 	}
 
-	value, metadata, err := q.db.Get(req.Payload.DBName, req.Payload.Key)
+	r := req.Payload
+
+	hasPerm, err := q.identityQuerier.HasReadAccess(r.UserID, r.DBName)
 	if err != nil {
 		return nil, err
+	}
+	if !hasPerm {
+		return nil, errors.Errorf("the user [%s] has no permission to read from database [%s]", r.UserID, r.DBName)
+	}
+
+	value, metadata, err := q.db.Get(r.DBName, r.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	acl := metadata.GetAccessControl()
+	if acl != nil {
+		if !acl.ReadUsers[r.UserID] && !acl.ReadWriteUsers[r.UserID] {
+			return nil, errors.Errorf("the user [%s] has no permission to read key [%s] from database [%s]", r.UserID, r.Key, r.DBName)
+		}
 	}
 
 	s := &types.GetStateResponseEnvelope{

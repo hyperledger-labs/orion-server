@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
+	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
@@ -93,7 +94,7 @@ func TestStart(t *testing.T) {
 			},
 		)
 		require.Nil(t, valEnv)
-		require.Contains(t, err.Error(), "database db1 does not exist")
+		require.Contains(t, err.Error(), "the user [testUser] has no permission to read from database [db1]")
 
 		config, err := env.client.GetState(
 			ctx,
@@ -186,15 +187,50 @@ func TestHandleStatusQuery(t *testing.T) {
 func TestHandleStateQuery(t *testing.T) {
 	t.Parallel()
 
+	setup := func(env *serverTestEnv, userID, dbName string) {
+		user := &types.User{
+			ID: userID,
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					dbName: types.Privilege_ReadWrite,
+				},
+			},
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + userID,
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, env.server.dbServ.db.Commit(createUser))
+	}
+
 	t.Run("GetState-Returns-State", func(t *testing.T) {
 		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
+		setup(env, "testUser", worldstate.DefaultDBName)
+
 		val := []byte("Value1")
 		metadata := &types.Metadata{
 			Version: &types.Version{
-				BlockNum: 1,
+				BlockNum: 2,
 				TxNum:    1,
 			},
 		}
