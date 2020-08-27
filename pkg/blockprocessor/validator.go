@@ -68,6 +68,20 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 			continue
 		}
 
+		switch tx.Payload.Type {
+		case types.Transaction_USER:
+			// TODO: validate user entries
+			// valRes, err = v.validateUserEntries(tx.Payload)
+		case types.Transaction_DB:
+			// TODO: validate db entries
+			// valRes, err = v.validateDBEntries(tx.Payload)
+		case types.Transaction_CONFIG:
+			// TODO: validation of config entries
+			// valRes, err = v.validateConfigEntries(tx.Payload)
+		default:
+			// valRes, err = v.validateDataEntries(tx.Payload)
+		}
+
 		// except MVCC validation, all other validation can be executed in parallel for all
 		// transactions
 		if valInfo[txIndex], err = v.mvccValidation(tx.Payload, pendingWrites); err != nil {

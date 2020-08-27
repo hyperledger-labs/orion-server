@@ -1,7 +1,9 @@
 package blockprocessor
 
 import (
+	"fmt"
 	"log"
+	"runtime/debug"
 
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
@@ -37,6 +39,12 @@ func New(conf *Config) *BlockProcessor {
 
 // Run runs validator and committer
 func (b *BlockProcessor) Run() {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("stacktrace from panic: \n" + string(debug.Stack()))
+		}
+	}()
+
 	for {
 		block := b.blockQueue.Dequeue().(*types.Block)
 
