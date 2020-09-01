@@ -1,7 +1,13 @@
 package blockprocessor
 
 import (
+	"crypto/x509"
+	"encoding/json"
+	"fmt"
+	"net"
+
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
@@ -54,7 +60,8 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	for txIndex, tx := range block.TransactionEnvelopes {
 		if !v.db.Exist(tx.Payload.DBName) {
 			valInfo[txIndex] = &types.ValidationInfo{
-				Flag: types.Flag_INVALID_DB_NOT_EXIST,
+				Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
+				ReasonIfInvalid: fmt.Sprintf("the database [%s] does not exist", tx.Payload.DBName),
 			}
 			continue
 		}
@@ -70,16 +77,21 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 
 		switch tx.Payload.Type {
 		case types.Transaction_USER:
-			// TODO: validate user entries
-			// valRes, err = v.validateUserEntries(tx.Payload)
+			valRes = v.validateUserEntries(tx.Payload)
 		case types.Transaction_DB:
-			// TODO: validate db entries
-			// valRes, err = v.validateDBEntries(tx.Payload)
+			valRes = v.validateDBEntries(tx.Payload)
 		case types.Transaction_CONFIG:
-			// TODO: validation of config entries
-			// valRes, err = v.validateConfigEntries(tx.Payload)
+			valRes = v.validateConfigEntries(tx.Payload)
 		default:
-			// valRes, err = v.validateDataEntries(tx.Payload)
+			valRes, err = v.validateDataEntries(tx.Payload)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if valRes.Flag != types.Flag_VALID {
+			valInfo[txIndex] = valRes
+			continue
 		}
 
 		// except MVCC validation, all other validation can be executed in parallel for all
@@ -98,27 +110,57 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 }
 
 func (v *validator) validateWithACL(tx *types.Transaction) (*types.ValidationInfo, error) {
-	var hasPerm bool
-	var err error
+	userID := string(tx.UserID)
+	dbName := tx.DBName
 
 	switch tx.Type {
 	case types.Transaction_USER:
-		hasPerm, err = v.identityQuerier.HasUserAdministrationPrivilege(string(tx.UserID))
-	case types.Transaction_DB:
-		hasPerm, err = v.identityQuerier.HasDBAdministrationPrivilege(string(tx.UserID))
-	case types.Transaction_CONFIG:
-		hasPerm, err = v.identityQuerier.HasClusterAdministrationPrivilege(string(tx.UserID))
-	default:
-		hasPerm, err = v.identityQuerier.HasReadWriteAccess(string(tx.UserID), tx.DBName)
-	}
+		hasPerm, err := v.identityQuerier.HasUserAdministrationPrivilege(userID)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "error while checking user administrative privilege for user [%s]", userID)
+		}
+		if !hasPerm {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: fmt.Sprintf("the user [%s] has no privilege to perform user administrative operations", userID),
+			}, nil
+		}
 
-	if err != nil {
-		return nil, err
-	}
-	if !hasPerm {
-		return &types.ValidationInfo{
-			Flag: types.Flag_INVALID_NO_PERMISSION,
-		}, nil
+	case types.Transaction_DB:
+		hasPerm, err := v.identityQuerier.HasDBAdministrationPrivilege(userID)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "error while checking database administrative privilege for user [%s]", userID)
+		}
+		if !hasPerm {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: fmt.Sprintf("the user [%s] has no privilege to perform database administrative operations", userID),
+			}, nil
+		}
+
+	case types.Transaction_CONFIG:
+		hasPerm, err := v.identityQuerier.HasClusterAdministrationPrivilege(userID)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "error while checking cluster administrative privilege for user [%s]", userID)
+		}
+		if !hasPerm {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: fmt.Sprintf("the user [%s] has no privilege to perform cluster administrative operations", userID),
+			}, nil
+		}
+
+	default:
+		hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, dbName)
+		if err != nil {
+			return nil, errors.WithMessagef(err, "error while checking database [%s] read-write privilege for user [%s]", dbName, userID)
+		}
+		if !hasPerm {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: fmt.Sprintf("the user [%s] has no write permission on database [%s]", userID, dbName),
+			}, nil
+		}
 	}
 
 	for _, read := range tx.Reads {
@@ -142,24 +184,25 @@ func (v *validator) validateWithACL(tx *types.Transaction) (*types.ValidationInf
 		}
 	}
 
-	for _, write := range tx.Writes {
+	for _, w := range tx.Writes {
 		// TODO: move GetAccessControl API to the worldstate.DB interface
-		_, metadata, err := v.db.Get(tx.DBName, write.Key)
+		_, metadata, err := v.db.Get(tx.DBName, w.Key)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithMessagef(err, "error while checking acl for key [%s]", w.Key)
 		}
 
 		acl := metadata.GetAccessControl()
 		if acl == nil {
-			// we reach whem there is no existing entry or acl is not specified
+			// we reach here if there is no existing entry or acl is not specified
 			// for the existing entry. Hence, anyone who has read-write access
 			// to the database can write the key
 			continue
 		}
 
-		if !acl.ReadWriteUsers[string(tx.UserID)] {
+		if !acl.ReadWriteUsers[userID] {
 			return &types.ValidationInfo{
-				Flag: types.Flag_INVALID_NO_PERMISSION,
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: fmt.Sprintf("the user [%s] has no write permission on key [%s] present in the database [%s]", userID, w.Key, dbName),
 			}, nil
 		}
 	}
@@ -169,28 +212,230 @@ func (v *validator) validateWithACL(tx *types.Transaction) (*types.ValidationInf
 	}, nil
 }
 
-func (v *validator) mvccValidation(tx *types.Transaction, pendingWrites map[string]bool) (*types.ValidationInfo, error) {
-	valInfo := &types.ValidationInfo{
-		Flag: types.Flag_VALID,
+func (v *validator) validateUserEntries(tx *types.Transaction) *types.ValidationInfo {
+	for _, w := range tx.Writes {
+		u := &types.User{}
+		if err := json.Unmarshal(w.Value, u); err != nil {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("unmarshal error while retrieving user [%s] entry from the transaction: %s", w.Key, err.Error()),
+			}
+		}
+
+		if u.ID == "" {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "there is an user with empty ID. A valid userID must be non empty string",
+			}
+		}
+
+		if _, err := x509.ParseCertificate(u.Certificate); err != nil {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("the user [%s] has an invalid certificate: %s", u.ID, err.Error()),
+			}
+		}
+		// TODO: check who issued the certificate
 	}
 
-	for _, read := range tx.Reads {
-		if pendingWrites[read.Key] {
-			valInfo.Flag = types.Flag_INVALID_MVCC_CONFLICT
-			return valInfo, nil
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}
+}
+
+func (v *validator) validateDBEntries(tx *types.Transaction) *types.ValidationInfo {
+	toCreateDBs := make(map[string]bool)
+	toDeleteDBs := make(map[string]bool)
+
+	for _, w := range tx.Writes {
+		dbName := w.Key
+
+		switch {
+		case dbName == "":
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database name cannot be empty",
+			}
+
+		case worldstate.IsSystemDB(dbName):
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("the database name [%s] is a system database which cannot be administered", dbName),
+			}
 		}
 
-		committedVersion, err := v.db.GetVersion(tx.DBName, read.Key)
-		if err != nil {
-			return nil, err
+		switch {
+		case w.IsDelete:
+			if !v.db.Exist(w.Key) {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf("the database [%s] does not exist in the cluster and hence, it cannot be deleted", dbName),
+				}
+			}
+
+			if toDeleteDBs[w.Key] {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf("the database [%s] is duplicated in the delete list", dbName),
+				}
+			}
+
+			toDeleteDBs[w.Key] = true
+
+		default:
+			if v.db.Exist(w.Key) {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf("the database [%s] already exists in the cluster and hence, it cannot be created", dbName),
+				}
+			}
+
+			if toCreateDBs[w.Key] {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf("the database [%s] is duplicated in the create list", dbName),
+				}
+			}
+
+			toCreateDBs[w.Key] = true
 		}
-		if proto.Equal(read.Version, committedVersion) {
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}
+}
+
+func (v *validator) validateConfigEntries(tx *types.Transaction) *types.ValidationInfo {
+	newConfig := &types.ClusterConfig{}
+	if err := json.Unmarshal(tx.Writes[configTxIndex].Value, newConfig); err != nil {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "unmarshal error while retrieving new configuration from the transaction",
+		}
+	}
+
+	switch {
+	case len(newConfig.Nodes) == 0:
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "node entries are empty. There must be at least single node in the cluster",
+		}
+	case len(newConfig.Admins) == 0:
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "admin entries are empty. There must be at least single admin in the cluster",
+		}
+	}
+
+	for _, n := range newConfig.Nodes {
+		switch {
+		case n.ID == "":
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the nodeID cannot be empty",
+			}
+		case n.Address == "":
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("the node [%s] has an empty ip address", n.ID),
+			}
+		case net.ParseIP(n.Address) == nil:
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("the node [%s] has an invalid ip address [%s]", n.ID, n.Address),
+			}
+		default:
+			if _, err := x509.ParseCertificate(n.Certificate); err != nil {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf("the node [%s] has an invalid certificate: %s", n.ID, err.Error()),
+				}
+			}
+		}
+	}
+
+	for _, a := range newConfig.Admins {
+		switch {
+		case a.ID == "":
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the adminID cannot be empty",
+			}
+		default:
+			if _, err := x509.ParseCertificate(a.Certificate); err != nil {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf("the admin [%s] has an invalid certificate: %s", a.ID, err.Error()),
+				}
+			}
+		}
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}
+}
+
+func (v *validator) validateDataEntries(tx *types.Transaction) (*types.ValidationInfo, error) {
+	for _, w := range tx.Writes {
+		if w.ACL == nil {
 			continue
 		}
 
-		valInfo.Flag = types.Flag_INVALID_MVCC_CONFLICT
-		return valInfo, nil
+		var users []string
+
+		for user := range w.ACL.ReadUsers {
+			users = append(users, user)
+		}
+
+		for user := range w.ACL.ReadWriteUsers {
+			users = append(users, user)
+		}
+
+		for _, user := range users {
+			exist, err := v.identityQuerier.DoesUserExist(user)
+			if err != nil {
+				return nil, errors.WithMessagef(err, "error while validating access control definition")
+			}
+
+			if !exist {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf("the user [%s] defined in the access control for the key [%s] does not exist", user, w.Key),
+				}, nil
+			}
+		}
+	}
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}, nil
+}
+
+func (v *validator) mvccValidation(tx *types.Transaction, pendingWrites map[string]bool) (*types.ValidationInfo, error) {
+	for _, r := range tx.Reads {
+		if pendingWrites[r.Key] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: fmt.Sprintf("mvcc conflict has occurred within the block for the key [%s] in database [%s]", r.Key, tx.DBName),
+			}, nil
+		}
+
+		committedVersion, err := v.db.GetVersion(tx.DBName, r.Key)
+		if err != nil {
+			return nil, err
+		}
+		if proto.Equal(r.Version, committedVersion) {
+			continue
+		}
+
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
+			ReasonIfInvalid: fmt.Sprintf("mvcc conflict has occurred as the committed state for the key [%s] in database [%s] changed", r.Key, tx.DBName),
+		}, nil
 	}
 
-	return valInfo, nil
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}, nil
 }

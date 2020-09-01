@@ -790,7 +790,7 @@ func TestStateDBCommitterForData(t *testing.T) {
 				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: types.Flag_INVALID_DB_NOT_EXIST,
+				Flag: types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 			},
 			{
 				Flag: types.Flag_VALID,
@@ -802,7 +802,7 @@ func TestStateDBCommitterForData(t *testing.T) {
 				Flag: types.Flag_VALID,
 			},
 			{
-				Flag: types.Flag_INVALID_MVCC_CONFLICT,
+				Flag: types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 			},
 		}
 

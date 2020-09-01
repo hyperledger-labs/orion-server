@@ -49,3 +49,11 @@ type DBUpdates struct {
 	Writes  []*KVWithMetadata
 	Deletes []string
 }
+
+// IsSystemDB returns true of the given db is a system database
+func IsSystemDB(dbName string) bool {
+	return dbName == UsersDBName ||
+		dbName == DatabasesDBName ||
+		dbName == ConfigDBName ||
+		dbName == DefaultDBName
+}

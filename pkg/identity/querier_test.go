@@ -55,12 +55,14 @@ func TestQuerier(t *testing.T) {
 	tests := []struct {
 		name                   string
 		user                   *types.User
+		userID                 string
 		hasReadPermission      []string
 		hasReadWritePermission []string
 		hasNoPermission        []string
-		DBAdministration       bool
-		ClusterAdministration  bool
-		UserAdministration     bool
+		dbAdministration       bool
+		clusterAdministration  bool
+		userAdministration     bool
+		userExist              bool
 	}{
 		{
 			name: "less privilege",
@@ -79,12 +81,14 @@ func TestQuerier(t *testing.T) {
 					UserAdministration:    false,
 				},
 			},
+			userID:                 "userWithLessPrivilege",
 			hasReadPermission:      []string{"db1", "db2", "db3", "db4"},
 			hasReadWritePermission: []string{"db3", "db4"},
 			hasNoPermission:        []string{"db5", "db6"},
-			DBAdministration:       false,
-			ClusterAdministration:  false,
-			UserAdministration:     false,
+			dbAdministration:       false,
+			clusterAdministration:  false,
+			userAdministration:     false,
+			userExist:              true,
 		},
 		{
 			name: "more privilege",
@@ -104,12 +108,14 @@ func TestQuerier(t *testing.T) {
 					UserAdministration:    true,
 				},
 			},
+			userID:                 "userWithMorePrivilege",
 			hasReadPermission:      []string{"db1", "db2", "db3", "db4", "db5"},
 			hasReadWritePermission: []string{"db1", "db2", "db3", "db4", "db5"},
 			hasNoPermission:        []string{"db6"},
-			DBAdministration:       true,
-			ClusterAdministration:  true,
-			UserAdministration:     true,
+			dbAdministration:       true,
+			clusterAdministration:  true,
+			userAdministration:     true,
+			userExist:              true,
 		},
 		{
 			name: "no privilege",
@@ -118,22 +124,26 @@ func TestQuerier(t *testing.T) {
 				Certificate: []byte("certificate-3"),
 				Privilege:   nil,
 			},
+			userID:                 "no Privilege",
 			hasReadPermission:      nil,
 			hasReadWritePermission: nil,
 			hasNoPermission:        []string{"db1", "db2", "db3", "db4", "db5", "db6"},
-			DBAdministration:       false,
-			ClusterAdministration:  false,
-			UserAdministration:     false,
+			dbAdministration:       false,
+			clusterAdministration:  false,
+			userAdministration:     false,
+			userExist:              true,
 		},
 		{
 			name:                   "no user",
 			user:                   nil,
+			userID:                 "no user",
 			hasReadPermission:      nil,
 			hasReadWritePermission: nil,
 			hasNoPermission:        []string{"db1", "db2", "db3", "db4", "db5", "db6"},
-			DBAdministration:       false,
-			ClusterAdministration:  false,
-			UserAdministration:     false,
+			dbAdministration:       false,
+			clusterAdministration:  false,
+			userAdministration:     false,
+			userExist:              false,
 		},
 	}
 
@@ -146,9 +156,8 @@ func TestQuerier(t *testing.T) {
 			defer env.cleanup()
 
 			var metadata *types.Metadata
-			var userID string
 
-			if tt.user != nil {
+			if tt.userExist {
 				user, err := proto.Marshal(tt.user)
 				require.NoError(t, err)
 
@@ -173,48 +182,62 @@ func TestQuerier(t *testing.T) {
 				}
 
 				require.NoError(t, env.db.Commit(dbUpdates))
-
-				userID = tt.user.ID
 			}
 
-			persistedUser, persistedMetadata, err := env.q.GetUser(userID)
+			exist, err := env.q.DoesUserExist(tt.userID)
+			require.NoError(t, err)
+			require.Equal(t, tt.userExist, exist)
+
+			persistedUser, persistedMetadata, err := env.q.GetUser(tt.userID)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(metadata, persistedMetadata))
 			require.True(t, proto.Equal(tt.user, persistedUser))
 
 			for _, dbName := range tt.hasReadPermission {
-				canRead, err := env.q.HasReadAccess(userID, dbName)
+				canRead, err := env.q.HasReadAccess(tt.userID, dbName)
 				require.NoError(t, err)
 				require.True(t, canRead)
 			}
 
 			for _, dbName := range tt.hasReadWritePermission {
-				canReadWrite, err := env.q.HasReadWriteAccess(userID, dbName)
+				canReadWrite, err := env.q.HasReadWriteAccess(tt.userID, dbName)
 				require.NoError(t, err)
 				require.True(t, canReadWrite)
 			}
 
 			for _, dbName := range tt.hasNoPermission {
-				canRead, err := env.q.HasReadAccess(userID, dbName)
+				canRead, err := env.q.HasReadAccess(tt.userID, dbName)
 				require.NoError(t, err)
 				require.False(t, canRead)
 
-				canRead, err = env.q.HasReadWriteAccess(userID, dbName)
+				canRead, err = env.q.HasReadWriteAccess(tt.userID, dbName)
 				require.NoError(t, err)
 				require.False(t, canRead)
 			}
 
-			perm, err := env.q.HasDBAdministrationPrivilege(userID)
+			perm, err := env.q.HasDBAdministrationPrivilege(tt.userID)
 			require.NoError(t, err)
-			require.Equal(t, tt.DBAdministration, perm)
+			require.Equal(t, tt.dbAdministration, perm)
 
-			perm, err = env.q.HasClusterAdministrationPrivilege(userID)
+			canRead, err := env.q.HasReadAccess(tt.userID, worldstate.DatabasesDBName)
 			require.NoError(t, err)
-			require.Equal(t, tt.ClusterAdministration, perm)
+			require.Equal(t, tt.dbAdministration, canRead)
 
-			perm, err = env.q.HasUserAdministrationPrivilege(userID)
+			perm, err = env.q.HasClusterAdministrationPrivilege(tt.userID)
 			require.NoError(t, err)
-			require.Equal(t, tt.UserAdministration, perm)
+			require.Equal(t, tt.clusterAdministration, perm)
+
+			canRead, err = env.q.HasReadAccess(tt.userID, worldstate.ConfigDBName)
+			require.NoError(t, err)
+			require.Equal(t, tt.dbAdministration, canRead)
+
+			perm, err = env.q.HasUserAdministrationPrivilege(tt.userID)
+			require.NoError(t, err)
+			require.Equal(t, tt.userAdministration, perm)
+
+			canRead, err = env.q.HasReadAccess(tt.userID, worldstate.UsersDBName)
+			require.NoError(t, err)
+			require.Equal(t, tt.dbAdministration, canRead)
 		})
 	}
 }
