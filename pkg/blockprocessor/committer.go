@@ -1,11 +1,17 @@
 package blockprocessor
 
 import (
+	"encoding/json"
+
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
+)
+
+const (
+	configTxIndex = 0
 )
 
 type committer struct {
@@ -38,6 +44,7 @@ func (c *committer) commitToBlockStore(block *types.Block) error {
 
 func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
 	dbsUpdates := []*worldstate.DBUpdates{}
+
 	for txNum, txValidationInfo := range blockValidationInfo {
 		if txValidationInfo.Flag != types.Flag_VALID {
 			continue
@@ -63,18 +70,30 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 		// TODO: move worldstate.UsersDBName and ConfigDBName to
 		// the repo library and pkg types as they are common to
 		// both server and sdk -- issue 97
-		switch {
-		case tx.DBName == worldstate.UsersDBName:
+		switch tx.Type {
+		case types.Transaction_USER:
 			dbsUpdates = append(
 				dbsUpdates,
 				identity.ConstructDBEntriesForUsers(tx, version),
 			)
-		// TODO: construct node and cluster identity entries when
-		// the dbName is _config -- issue 98
+		case types.Transaction_CONFIG:
+			committedConfig, _, err := c.db.Get(worldstate.ConfigDBName, "config")
+			if err != nil {
+				return errors.WithMessage(err, "error while fetching committing config")
+			}
+
+			updates, err := constructDBEntriesForConfig(tx, committedConfig, version)
+			if err != nil {
+				return err
+			}
+			dbsUpdates = append(
+				dbsUpdates,
+				updates...,
+			)
 		default:
 			dbsUpdates = append(
 				dbsUpdates,
-				constructDBEntriesForData(tx, version),
+				constructDBEntries(tx, version),
 			)
 		}
 	}
@@ -85,7 +104,45 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 	return nil
 }
 
-func constructDBEntriesForData(tx *types.Transaction, version *types.Version) *worldstate.DBUpdates {
+func constructDBEntriesForConfig(tx *types.Transaction, committedConfig []byte, version *types.Version) ([]*worldstate.DBUpdates, error) {
+	newConfig := &types.ClusterConfig{}
+	if err := json.Unmarshal(tx.Writes[configTxIndex].Value, newConfig); err != nil {
+		return nil, errors.WithMessage(err, "error while unmarshaling new config")
+	}
+
+	oldConfig := &types.ClusterConfig{}
+	if committedConfig != nil {
+		if err := json.Unmarshal(committedConfig, oldConfig); err != nil {
+			return nil, errors.WithMessage(err, "error while unmarshaling old config")
+		}
+	}
+
+	adminUpdates, err := identity.ConstructDBEntriesForClusterAdmins(oldConfig.Admins, newConfig.Admins, version)
+	if err != nil {
+		return nil, err
+	}
+
+	config := &worldstate.KVWithMetadata{
+		Key:   tx.Writes[configTxIndex].Key,
+		Value: tx.Writes[configTxIndex].Value,
+		Metadata: &types.Metadata{
+			Version: version,
+		},
+	}
+	configUpdates := &worldstate.DBUpdates{
+		DBName: tx.DBName,
+		Writes: []*worldstate.KVWithMetadata{config},
+	}
+
+	var updates []*worldstate.DBUpdates
+
+	if adminUpdates != nil {
+		updates = append(updates, adminUpdates)
+	}
+	return append(updates, configUpdates), nil
+}
+
+func constructDBEntries(tx *types.Transaction, version *types.Version) *worldstate.DBUpdates {
 	var kvWrites []*worldstate.KVWithMetadata
 	var kvDeletes []string
 

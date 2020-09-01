@@ -26,7 +26,7 @@ func NewQuerier(db worldstate.DB) *Querier {
 // GetUser returns the credentials associated with the given
 // non-admin userID
 func (q *Querier) GetUser(userID string) (*types.User, *types.Metadata, error) {
-	val, meta, err := q.db.Get(worldstate.UsersDBName, string(userNamespace)+userID)
+	val, meta, err := q.db.Get(worldstate.UsersDBName, string(UserNamespace)+userID)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "error while fetching userID [%s]", userID)
 	}

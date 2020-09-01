@@ -164,7 +164,7 @@ func TestQuerier(t *testing.T) {
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
 							{
-								Key:      string(userNamespace) + tt.user.ID,
+								Key:      string(UserNamespace) + tt.user.ID,
 								Value:    user,
 								Metadata: metadata,
 							},

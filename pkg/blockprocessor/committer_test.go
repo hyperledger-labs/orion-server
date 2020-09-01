@@ -1,6 +1,7 @@
 package blockprocessor
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -955,6 +956,7 @@ func TestStateDBCommitterForUsers(t *testing.T) {
 			TransactionEnvelopes: []*types.TransactionEnvelope{
 				{
 					Payload: &types.Transaction{
+						Type:   types.Transaction_USER,
 						DBName: worldstate.UsersDBName,
 						Writes: []*types.KVWrite{
 							{
@@ -966,6 +968,7 @@ func TestStateDBCommitterForUsers(t *testing.T) {
 				},
 				{
 					Payload: &types.Transaction{
+						Type:   types.Transaction_USER,
 						DBName: worldstate.UsersDBName,
 						Writes: []*types.KVWrite{
 							{
@@ -1046,4 +1049,209 @@ func TestStateDBCommitterForUsers(t *testing.T) {
 		require.True(t, proto.Equal(expectedMetadata, metadata))
 		require.True(t, proto.Equal(users[1], persistedUser))
 	})
+}
+
+func TestStateDBCommitterForConfig(t *testing.T) {
+	t.Parallel()
+
+	generateSampleConfigBlock := func(number uint64, adminsID []string) *types.Block {
+		var admins []*types.Admin
+		for _, id := range adminsID {
+			admins = append(admins, &types.Admin{
+				ID:          id,
+				Certificate: []byte("certificate~" + id),
+			})
+		}
+
+		clusterConfig := &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					ID:          "bdb-node-1",
+					Certificate: []byte("node-cert"),
+					Address:     "127.0.0.1",
+					Port:        0,
+				},
+			},
+			Admins:            admins,
+			RootCACertificate: []byte("root-ca"),
+		}
+
+		expectedConfigValue, err := json.Marshal(clusterConfig)
+		require.NoError(t, err)
+
+		configBlock := &types.Block{
+			Header: &types.BlockHeader{
+				Number: number,
+			},
+			TransactionEnvelopes: []*types.TransactionEnvelope{
+				{
+					Payload: &types.Transaction{
+						Type:   types.Transaction_CONFIG,
+						DBName: worldstate.ConfigDBName,
+						Writes: []*types.KVWrite{
+							{
+								Key:   "config", // TODO: need to define a constant and put in library package
+								Value: expectedConfigValue,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		return configBlock
+	}
+
+	assertExpectedUsers := func(q *identity.Querier, expectedUsers []*types.User) {
+		for _, expectedUser := range expectedUsers {
+			user, _, err := q.GetUser(expectedUser.ID)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedUser, user))
+		}
+	}
+
+	tests := []struct {
+		name                        string
+		adminsInCommittedConfigTx   []string
+		expectedClusterAdminsBefore []*types.User
+		adminsInNewConfigTx         []string
+		expectedClusterAdminsAfter  []*types.User
+	}{
+		{
+			name:                      "no change in the set of admins",
+			adminsInCommittedConfigTx: []string{"admin1", "admin2"},
+			expectedClusterAdminsBefore: []*types.User{
+				{
+					ID:          "admin1",
+					Certificate: []byte("certificate~" + "admin1"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+				{
+					ID:          "admin2",
+					Certificate: []byte("certificate~" + "admin2"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+			},
+			adminsInNewConfigTx: []string{"admin1", "admin2"},
+			expectedClusterAdminsAfter: []*types.User{
+				{
+					ID:          "admin1",
+					Certificate: []byte("certificate~" + "admin1"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+				{
+					ID:          "admin2",
+					Certificate: []byte("certificate~" + "admin2"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+			},
+		},
+		{
+			name:                      "add and delete admins",
+			adminsInCommittedConfigTx: []string{"admin1", "admin2", "admin3"},
+			expectedClusterAdminsBefore: []*types.User{
+				{
+					ID:          "admin1",
+					Certificate: []byte("certificate~" + "admin1"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+				{
+					ID:          "admin2",
+					Certificate: []byte("certificate~" + "admin2"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+				{
+					ID:          "admin3",
+					Certificate: []byte("certificate~" + "admin3"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+			},
+			adminsInNewConfigTx: []string{"admin3", "admin4", "admin5"},
+			expectedClusterAdminsAfter: []*types.User{
+				{
+					ID:          "admin3",
+					Certificate: []byte("certificate~" + "admin3"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+				{
+					ID:          "admin4",
+					Certificate: []byte("certificate~" + "admin4"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+				{
+					ID:          "admin5",
+					Certificate: []byte("certificate~" + "admin5"),
+					Privilege: &types.Privilege{
+						DBAdministration:      true,
+						ClusterAdministration: true,
+						UserAdministration:    true,
+					},
+				},
+			},
+		},
+	}
+
+	valInfo := []*types.ValidationInfo{
+		{
+			Flag: types.Flag_VALID,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+
+			var blockNumber uint64
+
+			blockNumber = 1
+			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx)
+			env.committer.commitToStateDB(configBlock, valInfo)
+			assertExpectedUsers(env.identityQuerier, tt.expectedClusterAdminsBefore)
+
+			blockNumber++
+			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx)
+			env.committer.commitToStateDB(configBlock, valInfo)
+			assertExpectedUsers(env.identityQuerier, tt.expectedClusterAdminsAfter)
+		})
+	}
 }
