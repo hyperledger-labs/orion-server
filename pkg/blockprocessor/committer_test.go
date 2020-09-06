@@ -1102,7 +1102,7 @@ func TestStateDBCommitterForConfig(t *testing.T) {
 		return configBlock
 	}
 
-	assertExpectedUsers := func(q *identity.Querier, expectedUsers []*types.User) {
+	assertExpectedUsers := func(t *testing.T, q *identity.Querier, expectedUsers []*types.User) {
 		for _, expectedUser := range expectedUsers {
 			user, _, err := q.GetUser(expectedUser.ID)
 			require.NoError(t, err)
@@ -1246,12 +1246,12 @@ func TestStateDBCommitterForConfig(t *testing.T) {
 			blockNumber = 1
 			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx)
 			env.committer.commitToStateDB(configBlock, valInfo)
-			assertExpectedUsers(env.identityQuerier, tt.expectedClusterAdminsBefore)
+			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsBefore)
 
 			blockNumber++
 			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx)
 			env.committer.commitToStateDB(configBlock, valInfo)
-			assertExpectedUsers(env.identityQuerier, tt.expectedClusterAdminsAfter)
+			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsAfter)
 		})
 	}
 }
