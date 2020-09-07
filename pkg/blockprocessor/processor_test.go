@@ -1,6 +1,7 @@
 package blockprocessor
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -247,14 +248,32 @@ func TestValidatorAndCommitter(t *testing.T) {
 			}
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
-			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedValue, val)
-			require.True(t, proto.Equal(tt.expectedMetadata, metadata))
+			assertCommittedValue := func() bool {
+				val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
+				if err != nil {
+					return false
+				}
 
-			height, err := env.blockStore.Height()
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedBlockHeight, height)
+				if !bytes.Equal(tt.expectedValue, val) {
+					return false
+				}
+
+				if !proto.Equal(tt.expectedMetadata, metadata) {
+					return false
+				}
+
+				height, err := env.blockStore.Height()
+				if err != nil {
+					return false
+				}
+				if !(tt.expectedBlockHeight == height) {
+					return false
+				}
+
+				return true
+			}
+
+			require.Eventually(t, assertCommittedValue, 2*time.Second, 100*time.Millisecond)
 
 			for _, expectedBlock := range tt.blocks {
 				block, err := env.blockStore.Get(expectedBlock.Header.Number)
