@@ -86,7 +86,7 @@ func TestStart(t *testing.T) {
 			ctx,
 			&types.GetStateQueryEnvelope{
 				Payload: &types.GetStateQuery{
-					UserID: "testUser",
+					UserID: "admin",
 					DBName: "db1",
 					Key:    "key1",
 				},
@@ -94,7 +94,7 @@ func TestStart(t *testing.T) {
 			},
 		)
 		require.Nil(t, valEnv)
-		require.Contains(t, err.Error(), "the user [testUser] has no permission to read from database [db1]")
+		require.Contains(t, err.Error(), "the user [admin] has no permission to read from database [db1]")
 
 		config, err := env.client.GetState(
 			ctx,

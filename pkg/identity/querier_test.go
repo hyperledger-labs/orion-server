@@ -207,36 +207,76 @@ func TestQuerier(t *testing.T) {
 
 			for _, dbName := range tt.hasNoPermission {
 				canRead, err := env.q.HasReadAccess(tt.userID, dbName)
-				require.NoError(t, err)
+				if tt.user != nil {
+					require.NoError(t, err)
+				} else {
+					require.Error(t, err)
+				}
+
 				require.False(t, canRead)
 
 				canRead, err = env.q.HasReadWriteAccess(tt.userID, dbName)
-				require.NoError(t, err)
+				if tt.user != nil {
+					require.NoError(t, err)
+				} else {
+					require.Error(t, err)
+				}
+
 				require.False(t, canRead)
 			}
 
 			perm, err := env.q.HasDBAdministrationPrivilege(tt.userID)
-			require.NoError(t, err)
+			if tt.user != nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
 			require.Equal(t, tt.dbAdministration, perm)
 
 			canRead, err := env.q.HasReadAccess(tt.userID, worldstate.DatabasesDBName)
-			require.NoError(t, err)
+			if tt.user != nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
 			require.Equal(t, tt.dbAdministration, canRead)
 
 			perm, err = env.q.HasClusterAdministrationPrivilege(tt.userID)
-			require.NoError(t, err)
+			if tt.user != nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
 			require.Equal(t, tt.clusterAdministration, perm)
 
 			canRead, err = env.q.HasReadAccess(tt.userID, worldstate.ConfigDBName)
-			require.NoError(t, err)
+			if tt.user != nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
 			require.Equal(t, tt.dbAdministration, canRead)
 
 			perm, err = env.q.HasUserAdministrationPrivilege(tt.userID)
-			require.NoError(t, err)
+			if tt.user != nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
 			require.Equal(t, tt.userAdministration, perm)
 
 			canRead, err = env.q.HasReadAccess(tt.userID, worldstate.UsersDBName)
-			require.NoError(t, err)
+			if tt.user != nil {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+
 			require.Equal(t, tt.dbAdministration, canRead)
 		})
 	}

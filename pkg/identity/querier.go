@@ -1,6 +1,8 @@
 package identity
 
 import (
+	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
@@ -71,6 +73,10 @@ func (q *Querier) HasReadAccess(userID, dbName string) (bool, error) {
 			return false, err
 		}
 
+		if user == nil {
+			return false, fmt.Errorf("user with id [%s] was not found", userID)
+		}
+
 		dbPermission := user.GetPrivilege().GetDBPermission()
 		if dbPermission == nil {
 			return false, err
@@ -87,6 +93,10 @@ func (q *Querier) HasReadWriteAccess(userID, dbName string) (bool, error) {
 	user, _, err := q.GetUser(userID)
 	if err != nil {
 		return false, err
+	}
+
+	if user == nil {
+		return false, fmt.Errorf("user with id [%s] was not found", userID)
 	}
 
 	dbPermission := user.GetPrivilege().GetDBPermission()
@@ -110,6 +120,10 @@ func (q *Querier) HasDBAdministrationPrivilege(userID string) (bool, error) {
 		return false, err
 	}
 
+	if user == nil {
+		return false, fmt.Errorf("user with id [%s] was not found", userID)
+	}
+
 	return user.GetPrivilege().GetDBAdministration(), nil
 }
 
@@ -119,6 +133,10 @@ func (q *Querier) HasUserAdministrationPrivilege(userID string) (bool, error) {
 	user, _, err := q.GetUser(userID)
 	if err != nil {
 		return false, err
+	}
+
+	if user == nil {
+		return false, fmt.Errorf("user with id [%s] was not found", userID)
 	}
 
 	return user.GetPrivilege().GetUserAdministration(), nil
@@ -131,6 +149,10 @@ func (q *Querier) HasClusterAdministrationPrivilege(userID string) (bool, error)
 	user, _, err := q.GetUser(userID)
 	if err != nil {
 		return false, err
+	}
+
+	if user == nil {
+		return false, fmt.Errorf("user with id [%s] was not found", userID)
 	}
 
 	return user.GetPrivilege().GetClusterAdministration(), nil
