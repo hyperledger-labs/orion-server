@@ -52,6 +52,11 @@ func newTestEnv(t *testing.T) *testEnv {
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close the db instance, %v", err)
 		}
+
+		if err := blockStore.Close(); err != nil {
+			t.Errorf("failed to close the blockstore, %v", err)
+		}
+
 		if err := os.RemoveAll(dir); err != nil {
 			t.Errorf("failed to remove directory %s, %v", dir, err)
 		}
