@@ -29,6 +29,9 @@ type DB interface {
 	// GetVersion returns the version of the key present
 	// in the database
 	GetVersion(dbName, key string) (*types.Version, error)
+	// GetACL returns the access control rule for the given
+	// key
+	GetACL(dbName, key string) (*types.AccessControl, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates []*DBUpdates) error
 	// Close closes the DB instance

@@ -84,6 +84,16 @@ func (l *LevelDB) GetVersion(dbName string, key string) (*types.Version, error) 
 	return metadata.GetVersion(), nil
 }
 
+// GetACL returns the access control rule for the given key present in the database
+func (l *LevelDB) GetACL(dbName, key string) (*types.AccessControl, error) {
+	_, metadata, err := l.Get(dbName, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata.GetAccessControl(), nil
+}
+
 // Commit commits the updates to the database
 func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
 	for _, updates := range dbsUpdates {

@@ -164,16 +164,11 @@ func (v *validator) validateWithACL(tx *types.Transaction) (*types.ValidationInf
 	}
 
 	for _, read := range tx.Reads {
-		_, metadata, err := v.db.Get(tx.DBName, read.Key)
+		acl, err := v.db.GetACL(tx.DBName, read.Key)
 		if err != nil {
 			return nil, err
 		}
-
-		acl := metadata.GetAccessControl()
 		if acl == nil {
-			// we reach whem there is no existing entry or acl is not specified
-			// for the read key. Hence, anyone who has read-write access
-			// to the database can read the key
 			continue
 		}
 
@@ -185,17 +180,11 @@ func (v *validator) validateWithACL(tx *types.Transaction) (*types.ValidationInf
 	}
 
 	for _, w := range tx.Writes {
-		// TODO: move GetAccessControl API to the worldstate.DB interface
-		_, metadata, err := v.db.Get(tx.DBName, w.Key)
+		acl, err := v.db.GetACL(tx.DBName, w.Key)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "error while checking acl for key [%s]", w.Key)
+			return nil, err
 		}
-
-		acl := metadata.GetAccessControl()
 		if acl == nil {
-			// we reach here if there is no existing entry or acl is not specified
-			// for the existing entry. Hence, anyone who has read-write access
-			// to the database can write the key
 			continue
 		}
 

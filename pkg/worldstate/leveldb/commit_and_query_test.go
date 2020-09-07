@@ -182,6 +182,14 @@ func TestCommitAndGet(t *testing.T) {
 					BlockNum: 1,
 					TxNum:    1,
 				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"user1": true,
+					},
+					ReadWriteUsers: map[string]bool{
+						"user2": true,
+					},
+				},
 			},
 		}
 		db1valAndMetadata2 := &ValueAndMetadata{
@@ -199,6 +207,14 @@ func TestCommitAndGet(t *testing.T) {
 				Version: &types.Version{
 					BlockNum: 1,
 					TxNum:    3,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"user1": true,
+					},
+					ReadWriteUsers: map[string]bool{
+						"user2": true,
+					},
 				},
 			},
 		}
@@ -306,6 +322,10 @@ func TestCommitAndGet(t *testing.T) {
 			ver, err := l.GetVersion("db1", key)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
+
+			acl, err := l.GetACL("db1", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetAccessControl(), acl))
 		}
 
 		for key, expectedValAndMetadata := range db2KVs {
@@ -319,6 +339,10 @@ func TestCommitAndGet(t *testing.T) {
 			ver, err := l.GetVersion("db2", key)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
+
+			acl, err := l.GetACL("db2", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetAccessControl(), acl))
 		}
 	})
 
@@ -340,6 +364,14 @@ func TestCommitAndGet(t *testing.T) {
 				Version: &types.Version{
 					BlockNum: 2,
 					TxNum:    1,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"user3": true,
+					},
+					ReadWriteUsers: map[string]bool{
+						"user4": true,
+					},
 				},
 			},
 		}
@@ -390,6 +422,10 @@ func TestCommitAndGet(t *testing.T) {
 			ver, err := l.GetVersion("db1", key)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
+
+			acl, err := l.GetACL("db1", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetAccessControl(), acl))
 		}
 
 		db2KVs["db2-key1"] = db2valAndMetadata1New
@@ -403,6 +439,10 @@ func TestCommitAndGet(t *testing.T) {
 			ver, err := l.GetVersion("db2", key)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetVersion(), ver))
+
+			acl, err := l.GetACL("db2", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetAccessControl(), acl))
 		}
 	})
 }
