@@ -2,7 +2,6 @@ package server
 
 import (
 	"bytes"
-	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -114,7 +113,7 @@ func TestTransactionProcessor(t *testing.T) {
 	setup := func(env *txProcessorTestEnv, userID, dbName string) {
 		configTx, err := prepareConfigTx(conf)
 		require.NoError(t, err)
-		require.NoError(t, env.txProcessor.submitTransaction(context.Background(), configTx))
+		require.NoError(t, env.txProcessor.submitTransaction(configTx))
 
 		user := &types.User{
 			ID: userID,
@@ -170,7 +169,7 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, env.txProcessor.submitTransaction(context.Background(), tx))
+		require.NoError(t, env.txProcessor.submitTransaction(tx))
 
 		assertTestKey1InDB := func() bool {
 			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "test-key1")

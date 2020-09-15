@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -51,8 +50,10 @@ func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
 	}
 
 	router := mux.NewRouter()
+	router.HandleFunc(constants.GetDBStatus, dbServ.handleDBStatusQuery).Methods(http.MethodGet)
 	router.HandleFunc(constants.GetData, dbServ.handleDataQuery).Methods(http.MethodGet)
-	router.HandleFunc(constants.GetDBStatus, dbServ.handleStatusQuery).Methods(http.MethodGet)
+	router.HandleFunc(constants.GetUser, dbServ.handleUserQuery).Methods(http.MethodGet)
+	router.HandleFunc(constants.GetConfig, dbServ.handleConfigQuery).Methods(http.MethodGet)
 	router.HandleFunc(constants.PostDataTx, dbServ.handleDataTransaction).Methods(http.MethodPost)
 	router.HandleFunc(constants.PostUserTx, dbServ.handleUserAdminTransaction).Methods(http.MethodPost)
 	router.HandleFunc(constants.PostDBTx, dbServ.handleDBAdminTransaction).Methods(http.MethodPost)
@@ -185,88 +186,170 @@ func (db *dbServer) close() error {
 	return db.transactionProcessor.close()
 }
 
-func (db *dbServer) handleStatusQuery(w http.ResponseWriter, r *http.Request) {
-	userID, signature, err := validateAndParseHeader(&r.Header)
-	if err != nil {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+func (db *dbServer) handleDBStatusQuery(w http.ResponseWriter, r *http.Request) {
+	_, _, composedErr := db.preProcessQuery(w, r)
+	if composedErr {
 		return
 	}
 
 	params := mux.Vars(r)
-	dbname, ok := params["dbname"]
+	dbName, ok := params["dbname"]
 	if !ok {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: "query error - bad or missing database name"})
+		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing database name")
 		return
-	}
-
-	dbQueryEnvelope := &types.GetStatusQueryEnvelope{
-		Payload: &types.GetStatusQuery{
-			UserID: userID,
-			DBName: dbname,
-		},
-		Signature: signature,
 	}
 
 	//TODO: verify signature
 
-	statusEnvelope, err := db.getStatus(context.Background(), dbQueryEnvelope)
+	dbStatus, err := db.getDBStatus(dbName)
 	if err != nil {
-		composeResponse(w, http.StatusInternalServerError,
-			&ResponseErr{Error: fmt.Sprintf("error while processing %v, %v", dbQueryEnvelope, err)})
+		composeResponseErr(
+			w,
+			http.StatusInternalServerError,
+			"error while processing ["+r.URL.String()+"] because "+err.Error(),
+		)
 		return
 	}
-	composeResponse(w, http.StatusOK, statusEnvelope)
+
+	composeResponse(w, http.StatusOK, dbStatus)
 }
 
 func (db *dbServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
-	userid, signature, err := validateAndParseHeader(&r.Header)
-	if err != nil {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+	userID, _, composedErr := db.preProcessQuery(w, r)
+	if composedErr {
 		return
 	}
 
 	params := mux.Vars(r)
-	dbname, ok := params["dbname"]
+	dbName, ok := params["dbname"]
 	if !ok {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: "query error - bad or missing database name"})
+		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing database name")
 		return
 	}
 	key, ok := params["key"]
 	if !ok {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: "query error - bad or missing key"})
+		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing key")
 		return
-	}
-
-	dataQueryEnvelope := &types.GetStateQueryEnvelope{
-		Payload: &types.GetStateQuery{
-			UserID: userid,
-			DBName: dbname,
-			Key:    key,
-		},
-		Signature: signature,
 	}
 
 	//TODO: verify signature
 
-	valueEnvelope, err := db.getState(context.Background(), dataQueryEnvelope)
+	data, err := db.getData(dbName, userID, key)
 	if err != nil {
-		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: fmt.Sprintf("error while processing %v, %v", dataQueryEnvelope, err)})
+		var status int
+
+		switch err.(type) {
+		case *permissionErr:
+			status = http.StatusForbidden
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		composeResponseErr(
+			w,
+			status,
+			"error while processing ["+r.URL.String()+"] because "+err.Error(),
+		)
 		return
 	}
-	composeResponse(w, http.StatusOK, valueEnvelope)
+
+	composeResponse(w, http.StatusOK, data)
 }
+
+func (db *dbServer) handleUserQuery(w http.ResponseWriter, r *http.Request) {
+	querierUserID, _, composedErr := db.preProcessQuery(w, r)
+	if composedErr {
+		return
+	}
+
+	params := mux.Vars(r)
+	targetUserID, ok := params["userid"]
+	if !ok {
+		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing userid")
+		return
+	}
+
+	//TODO: verify signature
+
+	user, err := db.getUser(querierUserID, targetUserID)
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *permissionErr:
+			status = http.StatusForbidden
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		composeResponseErr(
+			w,
+			status,
+			"error while processing ["+r.URL.String()+"] because "+err.Error(),
+		)
+		return
+	}
+
+	composeResponse(w, http.StatusOK, user)
+}
+
+func (db *dbServer) handleConfigQuery(w http.ResponseWriter, r *http.Request) {
+	_, _, composedErr := db.preProcessQuery(w, r)
+	if composedErr {
+		return
+	}
+
+	config, err := db.getConfig()
+	if err != nil {
+		composeResponseErr(
+			w,
+			http.StatusInternalServerError,
+			"error while processing ["+r.URL.String()+"] because "+err.Error(),
+		)
+		return
+	}
+
+	composeResponse(w, http.StatusOK, config)
+}
+
+func (db *dbServer) preProcessQuery(w http.ResponseWriter, r *http.Request) (string, []byte, bool) {
+	composedErr := true
+
+	querierUserID, signature, err := validateAndParseHeader(&r.Header)
+	if err != nil {
+		composeResponseErr(w, http.StatusBadRequest, err.Error())
+		return "", nil, composedErr
+	}
+
+	exist, err := db.identityQuerier.DoesUserExist(querierUserID)
+	if err != nil {
+		composeResponseErr(w, http.StatusInternalServerError, err.Error())
+		return "", nil, composedErr
+	}
+	if !exist {
+		composeResponseErr(
+			w,
+			http.StatusForbidden,
+			r.URL.String()+" query is rejected as the submitting user ["+querierUserID+"] does not exist in the cluster",
+		)
+		return "", nil, composedErr
+	}
+
+	return querierUserID, signature, !composedErr
+}
+
 func (db *dbServer) handleDataTransaction(w http.ResponseWriter, r *http.Request) {
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 
 	tx := &types.DataTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		composeResponseErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// TODO: verify signature
-	db.handleTransaction(w, tx)
+	db.handleTransaction(w, tx.Payload.UserID, tx)
 }
 
 func (db *dbServer) handleUserAdminTransaction(w http.ResponseWriter, r *http.Request) {
@@ -275,12 +358,12 @@ func (db *dbServer) handleUserAdminTransaction(w http.ResponseWriter, r *http.Re
 
 	tx := &types.UserAdministrationTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		composeResponseErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// TODO: verify signature
-	db.handleTransaction(w, tx)
+	db.handleTransaction(w, tx.Payload.UserID, tx)
 }
 
 func (db *dbServer) handleDBAdminTransaction(w http.ResponseWriter, r *http.Request) {
@@ -289,12 +372,12 @@ func (db *dbServer) handleDBAdminTransaction(w http.ResponseWriter, r *http.Requ
 
 	tx := &types.DBAdministrationTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		composeResponseErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// TODO: verify signature
-	db.handleTransaction(w, tx)
+	db.handleTransaction(w, tx.Payload.UserID, tx)
 }
 
 func (db *dbServer) handleConfigTransaction(w http.ResponseWriter, r *http.Request) {
@@ -303,16 +386,30 @@ func (db *dbServer) handleConfigTransaction(w http.ResponseWriter, r *http.Reque
 
 	tx := &types.ConfigTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		composeResponseErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	// TODO: verify signature
-	db.handleTransaction(w, tx)
+	db.handleTransaction(w, tx.Payload.UserID, tx)
 }
 
-func (db *dbServer) handleTransaction(w http.ResponseWriter, tx interface{}) {
-	if err := db.submitTransaction(context.Background(), tx); err != nil {
+func (db *dbServer) handleTransaction(w http.ResponseWriter, userID string, tx interface{}) {
+	exist, err := db.identityQuerier.DoesUserExist(userID)
+	if err != nil {
+		composeResponseErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !exist {
+		composeResponseErr(
+			w,
+			http.StatusForbidden,
+			"transaction is rejected as the submitting user ["+userID+"] does not exist in the cluster",
+		)
+		return
+	}
+
+	if err := db.submitTransaction(tx); err != nil {
 		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
 		return
 	}
@@ -326,7 +423,7 @@ func (db *dbServer) prepareAndCommitConfigTx(conf *config.Configurations) error 
 		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
 	}
 
-	if err := db.submitTransaction(context.Background(), configTx); err != nil {
+	if err := db.submitTransaction(configTx); err != nil {
 		return errors.Wrap(err, "error while committing configuration transaction")
 	}
 	return nil
@@ -348,6 +445,13 @@ func validateAndParseHeader(h *http.Header) (string, []byte, error) {
 	}
 
 	return userID, signatureBytes, nil
+}
+
+func composeResponseErr(w http.ResponseWriter, code int, errMsg string) {
+	err := &ResponseErr{
+		Error: errMsg,
+	}
+	composeResponse(w, code, err)
 }
 
 func composeResponse(w http.ResponseWriter, code int, payload interface{}) {

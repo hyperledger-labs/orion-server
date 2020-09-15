@@ -9,9 +9,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -564,4 +564,90 @@ func TestCommitWithDBManagement(t *testing.T) {
 			require.ElementsMatch(t, tt.expectedDBsAfterCommit, l.ListDBs())
 		})
 	}
+}
+
+func TestGetConfig(t *testing.T) {
+	t.Parallel()
+
+	t.Run("commit and query cluster config", func(t *testing.T) {
+		env := newTestEnv(t)
+		defer env.cleanup()
+
+		clusterConfig := &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					ID:          "node1",
+					Address:     "127.0.0.1",
+					Port:        1234,
+					Certificate: []byte("cert"),
+				},
+			},
+			Admins: []*types.Admin{
+				{
+					ID:          "admin",
+					Certificate: []byte("cert"),
+				},
+			},
+			RootCACertificate: []byte("cert"),
+		}
+
+		config, err := proto.Marshal(clusterConfig)
+		require.NoError(t, err)
+
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		}
+
+		dbUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      worldstate.ConfigKey,
+						Value:    config,
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.l.Commit(dbUpdates))
+
+		actualConfig, actualMetadata, err := env.l.GetConfig()
+		require.NoError(t, err)
+		require.True(t, proto.Equal(clusterConfig, actualConfig))
+		require.True(t, proto.Equal(metadata, actualMetadata))
+	})
+
+	t.Run("querying config returns error", func(t *testing.T) {
+		env := newTestEnv(t)
+		defer env.cleanup()
+
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		}
+		dbUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      worldstate.ConfigKey,
+						Value:    []byte("config"),
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.l.Commit(dbUpdates))
+
+		actualConfig, actualMetadata, err := env.l.GetConfig()
+		require.Contains(t, err.Error(), "error while unmarshaling committed cluster configuration")
+		require.Nil(t, actualConfig)
+		require.Nil(t, actualMetadata)
+	})
 }

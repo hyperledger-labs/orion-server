@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -83,7 +82,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 }
 
 // submitTransaction enqueue the transaction to the transaction queue
-func (t *transactionProcessor) submitTransaction(_ context.Context, tx interface{}) error {
+func (t *transactionProcessor) submitTransaction(tx interface{}) error {
 	t.Lock()
 	defer t.Unlock()
 

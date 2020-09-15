@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -80,12 +79,9 @@ func TestStart(t *testing.T) {
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		valEnv, err := env.client.GetState(
-			ctx,
-			&types.GetStateQueryEnvelope{
-				Payload: &types.GetStateQuery{
+		valEnv, err := env.client.GetData(
+			&types.GetDataQueryEnvelope{
+				Payload: &types.GetDataQuery{
 					UserID: "admin",
 					DBName: "db1",
 					Key:    "key1",
@@ -96,13 +92,12 @@ func TestStart(t *testing.T) {
 		require.Nil(t, valEnv)
 		require.Contains(t, err.Error(), "the user [admin] has no permission to read from database [db1]")
 
-		configSerialized, err := env.client.GetState(
-			ctx,
-			&types.GetStateQueryEnvelope{
-				Payload: &types.GetStateQuery{
+		configSerialized, err := env.client.GetData(
+			&types.GetDataQueryEnvelope{
+				Payload: &types.GetDataQuery{
 					UserID: "admin",
-					DBName: "_config",
-					Key:    "config",
+					DBName: worldstate.ConfigDBName,
+					Key:    worldstate.ConfigKey,
 				},
 				Signature: []byte("hello"),
 			},
@@ -128,38 +123,72 @@ func TestStart(t *testing.T) {
 	})
 }
 
-func TestHandleStatusQuery(t *testing.T) {
+func TestHandleDBStatusQuery(t *testing.T) {
 	t.Parallel()
 
-	t.Run("GetStatus-Returns-True", func(t *testing.T) {
+	setup := func(db worldstate.DB, userID string) {
+		user := &types.User{
+			ID: userID,
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + userID,
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createUser))
+	}
+
+	t.Run("GetDBStatus-Returns-True", func(t *testing.T) {
 		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
-		req := &types.GetStatusQueryEnvelope{
-			Payload: &types.GetStatusQuery{
+		setup(env.server.dbServ.db, "testUser")
+
+		req := &types.GetDBStatusQueryEnvelope{
+			Payload: &types.GetDBStatusQuery{
 				UserID: "testUser",
 				DBName: worldstate.DefaultDBName,
 			},
 			Signature: []byte("signature"),
 		}
-		resp, err := env.client.GetStatus(context.Background(), req)
+		resp, err := env.client.GetDBStatus(req)
 		require.NoError(t, err)
 		require.True(t, resp.Payload.Exist)
 	})
 
-	t.Run("GetStatus-Returns-Error", func(t *testing.T) {
+	t.Run("GetDBStatus-Returns-Error", func(t *testing.T) {
 		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
+		setup(env.server.dbServ.db, "testUser")
+
 		testCases := []struct {
-			request       *types.GetStatusQueryEnvelope
+			name          string
+			request       *types.GetDBStatusQueryEnvelope
 			expectedError string
 		}{
 			{
-				request: &types.GetStatusQueryEnvelope{
-					Payload: &types.GetStatusQuery{
+				name: "signature is missing",
+				request: &types.GetDBStatusQueryEnvelope{
+					Payload: &types.GetDBStatusQuery{
 						UserID: "testUser",
 						DBName: worldstate.DefaultDBName,
 					},
@@ -167,8 +196,9 @@ func TestHandleStatusQuery(t *testing.T) {
 				expectedError: "Signature is not set in the http request header",
 			},
 			{
-				request: &types.GetStatusQueryEnvelope{
-					Payload: &types.GetStatusQuery{
+				name: "userID is missing",
+				request: &types.GetDBStatusQueryEnvelope{
+					Payload: &types.GetDBStatusQuery{
 						UserID: "",
 						DBName: worldstate.DefaultDBName,
 					},
@@ -179,14 +209,14 @@ func TestHandleStatusQuery(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			resp, err := env.client.GetStatus(context.Background(), testCase.request)
+			resp, err := env.client.GetDBStatus(testCase.request)
 			require.Contains(t, err.Error(), testCase.expectedError)
 			require.Nil(t, resp)
 		}
 	})
 }
 
-func TestHandleStateQuery(t *testing.T) {
+func TestHandleDataQuery(t *testing.T) {
 	t.Parallel()
 
 	setup := func(env *serverTestEnv, userID, dbName string) {
@@ -222,7 +252,7 @@ func TestHandleStateQuery(t *testing.T) {
 		require.NoError(t, env.server.dbServ.db.Commit(createUser))
 	}
 
-	t.Run("GetState-Returns-State", func(t *testing.T) {
+	t.Run("GetData-Returns-Data", func(t *testing.T) {
 		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
@@ -267,33 +297,33 @@ func TestHandleStateQuery(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			req := &types.GetStateQueryEnvelope{
-				Payload: &types.GetStateQuery{
+			req := &types.GetDataQueryEnvelope{
+				Payload: &types.GetDataQuery{
 					UserID: "testUser",
 					DBName: worldstate.DefaultDBName,
 					Key:    testCase.key,
 				},
 				Signature: []byte("signature"),
 			}
-			resp, err := env.client.GetState(context.Background(), req)
+			resp, err := env.client.GetData(req)
 			require.NoError(t, err)
 			require.Equal(t, testCase.expectedValue, resp.Payload.Value)
 			require.True(t, proto.Equal(testCase.expectedMetadata, resp.Payload.Metadata))
 		}
 	})
 
-	t.Run("GetState-Returns-Error", func(t *testing.T) {
+	t.Run("GetData-Returns-Error", func(t *testing.T) {
 		t.Parallel()
 		env := newServerTestEnv(t)
 		defer env.cleanup(t)
 
 		testCases := []struct {
-			request       *types.GetStateQueryEnvelope
+			request       *types.GetDataQueryEnvelope
 			expectedError string
 		}{
 			{
-				request: &types.GetStateQueryEnvelope{
-					Payload: &types.GetStateQuery{
+				request: &types.GetDataQueryEnvelope{
+					Payload: &types.GetDataQuery{
 						UserID: "testUser",
 						DBName: worldstate.DefaultDBName,
 						Key:    "key1",
@@ -302,8 +332,8 @@ func TestHandleStateQuery(t *testing.T) {
 				expectedError: "Signature is not set in the http request header",
 			},
 			{
-				request: &types.GetStateQueryEnvelope{
-					Payload: &types.GetStateQuery{
+				request: &types.GetDataQueryEnvelope{
+					Payload: &types.GetDataQuery{
 						UserID: "",
 						DBName: worldstate.DefaultDBName,
 						Key:    "key1",
@@ -315,10 +345,279 @@ func TestHandleStateQuery(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			resp, err := env.client.GetState(context.Background(), testCase.request)
+			resp, err := env.client.GetData(testCase.request)
 			require.Contains(t, err.Error(), testCase.expectedError)
 			require.Nil(t, resp)
 		}
+	})
+}
+
+func TestHandleUserQuery(t *testing.T) {
+	t.Parallel()
+
+	metadata := &types.Metadata{
+		Version: &types.Version{
+			BlockNum: 2,
+			TxNum:    1,
+		},
+	}
+
+	targetUser := &types.User{
+		ID:          "targetUser",
+		Certificate: []byte("cert"),
+	}
+	targetUserSerialized, err := proto.Marshal(targetUser)
+	require.NoError(t, err)
+
+	commonSetup := func(db worldstate.DB) {
+		querierUser := &types.User{
+			ID:          "querierUser",
+			Certificate: []byte("cert"),
+		}
+		querierUserSerialized, err := proto.Marshal(querierUser)
+		require.NoError(t, err)
+
+		dbUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      string(identity.UserNamespace) + "querierUser",
+						Value:    querierUserSerialized,
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+
+		require.NoError(t, db.Commit(dbUpdates))
+	}
+
+	t.Run("getUser returns user", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name            string
+			querierUserID   string
+			targetUserID    string
+			setup           func(db worldstate.DB)
+			expectedRespose *types.GetUserResponseEnvelope
+		}{
+			{
+				name:          "targetUser does not exist",
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				setup: func(db worldstate.DB) {
+					commonSetup(db)
+				},
+				expectedRespose: &types.GetUserResponseEnvelope{
+					Payload: &types.GetUserResponse{
+						Header: &types.ResponseHeader{
+							NodeID: []byte("bdb-node-1"),
+						},
+						User:     nil,
+						Metadata: nil,
+					},
+				},
+			},
+			{
+				name:          "targetUser",
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				setup: func(db worldstate.DB) {
+					commonSetup(db)
+					dbsUpdates := []*worldstate.DBUpdates{
+						{
+							DBName: worldstate.UsersDBName,
+							Writes: []*worldstate.KVWithMetadata{
+								{
+									Key:      string(identity.UserNamespace) + "targetUser",
+									Value:    targetUserSerialized,
+									Metadata: metadata,
+								},
+							},
+						},
+					}
+					require.NoError(t, db.Commit(dbsUpdates))
+				},
+				expectedRespose: &types.GetUserResponseEnvelope{
+					Payload: &types.GetUserResponse{
+						Header: &types.ResponseHeader{
+							NodeID: []byte("bdb-node-1"),
+						},
+						User:     targetUser,
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				env := newServerTestEnv(t)
+				defer env.cleanup(t)
+
+				tt.setup(env.server.dbServ.db)
+
+				req := &types.GetUserQueryEnvelope{
+					Payload: &types.GetUserQuery{
+						UserID:       "querierUser",
+						TargetUserID: "targetUser",
+					},
+					Signature: []byte("signature"),
+				}
+				resp, err := env.client.GetUser(req)
+				require.NoError(t, err)
+				require.True(t, proto.Equal(tt.expectedRespose, resp))
+			})
+		}
+	})
+
+	t.Run("getUser returns error", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name          string
+			querierUserID string
+			targetUserID  string
+			setup         func(db worldstate.DB)
+			expectedError string
+		}{
+			{
+				name:          "targetUser does not exist",
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				setup:         func(db worldstate.DB) {},
+				expectedError: "/user/targetUser query is rejected as the submitting user [querierUser] does not exist in the cluster",
+			},
+			{
+				name:          "targetUser",
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				setup: func(db worldstate.DB) {
+					commonSetup(db)
+					dbsUpdates := []*worldstate.DBUpdates{
+						{
+							DBName: worldstate.UsersDBName,
+							Writes: []*worldstate.KVWithMetadata{
+								{
+									Key:   string(identity.UserNamespace) + "targetUser",
+									Value: targetUserSerialized,
+									Metadata: &types.Metadata{
+										Version: metadata.Version,
+										AccessControl: &types.AccessControl{
+											ReadUsers: map[string]bool{
+												"user1": true,
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+					require.NoError(t, db.Commit(dbsUpdates))
+				},
+				expectedError: "error while processing [/user/targetUser] because the user [querierUser] has no permission to read info of user [targetUser]",
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				env := newServerTestEnv(t)
+				defer env.cleanup(t)
+
+				tt.setup(env.server.dbServ.db)
+
+				req := &types.GetUserQueryEnvelope{
+					Payload: &types.GetUserQuery{
+						UserID:       "querierUser",
+						TargetUserID: "targetUser",
+					},
+					Signature: []byte("signature"),
+				}
+				resp, err := env.client.GetUser(req)
+				require.EqualError(t, err, tt.expectedError)
+				require.Nil(t, resp)
+			})
+		}
+	})
+}
+
+func TestHandleConfigQuery(t *testing.T) {
+	t.Parallel()
+
+	commonSetup := func(db worldstate.DB) {
+		querierUser := &types.User{
+			ID:          "querierUser",
+			Certificate: []byte("cert"),
+		}
+		querierUserSerialized, err := proto.Marshal(querierUser)
+		require.NoError(t, err)
+
+		dbUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + "querierUser",
+						Value: querierUserSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    5,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		require.NoError(t, db.Commit(dbUpdates))
+	}
+
+	t.Run("getConfig returns config", func(t *testing.T) {
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		commonSetup(env.server.dbServ.db)
+
+		conf := testConfiguration(t)
+		confEnvp, err := prepareConfigTx(conf)
+		require.NoError(t, err)
+		expectedConfig := confEnvp.Payload.NewConfig
+
+		e := &types.GetConfigQueryEnvelope{
+			Payload: &types.GetConfigQuery{
+				UserID: "querierUser",
+			},
+			Signature: []byte("signature"),
+		}
+
+		confResp, err := env.client.GetConfig(e)
+		require.NoError(t, err)
+		require.Equal(t, expectedConfig, confResp.Payload.Config)
+	})
+
+	t.Run("getConfig returns error", func(t *testing.T) {
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		e := &types.GetConfigQueryEnvelope{
+			Payload: &types.GetConfigQuery{
+				UserID: "querierUser",
+			},
+			Signature: []byte("signature"),
+		}
+
+		confResp, err := env.client.GetConfig(e)
+		require.EqualError(t, err, "/config query is rejected as the submitting user [querierUser] does not exist in the cluster")
+		require.Nil(t, confResp)
 	})
 }
 
@@ -333,7 +632,7 @@ func TestHandleTransaction(t *testing.T) {
 
 		dataTx := &types.DataTxEnvelope{
 			Payload: &types.DataTx{
-				UserID: "user1",
+				UserID: "admin",
 				TxID:   "tx1",
 				DBName: "db1",
 				DataReads: []*types.DataRead{
@@ -367,7 +666,7 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDataTx, dataTx)
+		resp, err := env.client.SubmitTransaction(constants.PostDataTx, dataTx)
 		require.NoError(t, err)
 		require.Nil(t, resp)
 
@@ -438,7 +737,7 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostUserTx, userAdminTx)
+		resp, err := env.client.SubmitTransaction(constants.PostUserTx, userAdminTx)
 		require.NoError(t, err)
 		require.Nil(t, resp)
 
@@ -469,7 +768,7 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDBTx, dbAdminTx)
+		resp, err := env.client.SubmitTransaction(constants.PostDBTx, dbAdminTx)
 		require.NoError(t, err)
 		require.Nil(t, resp)
 
@@ -519,7 +818,7 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostConfigTx, configTx)
+		resp, err := env.client.SubmitTransaction(constants.PostConfigTx, configTx)
 		require.NoError(t, err)
 		require.Nil(t, resp)
 
@@ -552,7 +851,7 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDataTx, configTx)
+		resp, err := env.client.SubmitTransaction(constants.PostDataTx, configTx)
 		require.Contains(t, err.Error(), "json: unknown field \"read_old_config_version\"")
 		require.Nil(t, resp)
 	})
@@ -575,7 +874,7 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostConfigTx, dataTx)
+		resp, err := env.client.SubmitTransaction(constants.PostConfigTx, dataTx)
 		require.Contains(t, err.Error(), "json: unknown field \"data_deletes\"")
 		require.Nil(t, resp)
 	})
@@ -598,7 +897,7 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDBTx, dataTx)
+		resp, err := env.client.SubmitTransaction(constants.PostDBTx, dataTx)
 		require.Contains(t, err.Error(), "json: unknown field \"data_deletes\"")
 		require.Nil(t, resp)
 	})
@@ -621,8 +920,31 @@ func TestHandleTransaction(t *testing.T) {
 			},
 		}
 
-		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostUserTx, dataTx)
+		resp, err := env.client.SubmitTransaction(constants.PostUserTx, dataTx)
 		require.Contains(t, err.Error(), "json: unknown field \"data_deletes\"")
+		require.Nil(t, resp)
+	})
+
+	t.Run("error as the submitting user does not exist", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		dataTx := &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				UserID: "querierUser",
+				TxID:   "tx1",
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key1",
+					},
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(constants.PostDataTx, dataTx)
+		require.EqualError(t, err, "transaction is rejected as the submitting user [querierUser] does not exist in the cluster")
 		require.Nil(t, resp)
 	})
 }

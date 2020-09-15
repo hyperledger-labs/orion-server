@@ -13,6 +13,9 @@ const (
 	// DefaultDBName is the default database created during
 	// node bootstrap
 	DefaultDBName = "bdb"
+	// ConfigKey holds the name of the key in the ConfigDB that
+	// stores the cluster configuration
+	ConfigKey = "config"
 )
 
 // DB provides method to create and access states stored in
@@ -34,6 +37,8 @@ type DB interface {
 	GetACL(dbName, key string) (*types.AccessControl, error)
 	// Has returns true if the key exist in the database
 	Has(dbName, key string) (bool, error)
+	// GetConfig returns the cluster configuration
+	GetConfig() (*types.ClusterConfig, *types.Metadata, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates []*DBUpdates) error
 	// Close closes the DB instance

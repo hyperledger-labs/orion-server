@@ -2,10 +2,8 @@ package mock
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -37,24 +35,91 @@ func NewRESTClient(rawurl string) (*Client, error) {
 	return res, nil
 }
 
-func (c *Client) GetStatus(ctx context.Context, in *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
-	rel := &url.URL{Path: fmt.Sprintf("/db/%s", in.Payload.DBName)}
-	u := c.BaseURL.ResolveReference(rel)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBStatusResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetDBStatus(e.Payload.DBName),
+		e.Payload.UserID,
+		e.Signature,
+	)
 	if err != nil {
 		return nil, err
 	}
+
+	res := &types.GetDBStatusResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetData(e.Payload.DBName, e.Payload.Key),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &types.GetDataResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetUser(e.Payload.TargetUserID),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	res := &types.GetUserResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetConfig(),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetConfigResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*http.Response, error) {
+	u := c.BaseURL.ResolveReference(
+		&url.URL{
+			Path: urlPath,
+		},
+	)
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(constants.UserHeader, in.Payload.UserID)
-	req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
+	req.Header.Set(constants.UserHeader, userID)
+	req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(signature))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
 		errorRes := new(ResponseErr)
 		err = json.NewDecoder(resp.Body).Decode(errorRes)
 		if err != nil {
@@ -62,42 +127,11 @@ func (c *Client) GetStatus(ctx context.Context, in *types.GetStatusQueryEnvelope
 		}
 		return nil, errors.New(errorRes.Error)
 	}
-	res := &types.GetStatusResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
-	return res, err
+
+	return resp, nil
 }
 
-func (c *Client) GetState(ctx context.Context, in *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
-	rel := &url.URL{Path: fmt.Sprintf("/data/%s/%s", in.Payload.DBName, in.Payload.Key)}
-	u := c.BaseURL.ResolveReference(rel)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.UserAgent)
-	req.Header.Set(constants.UserHeader, in.Payload.UserID)
-	req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(in.Signature))
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		errorRes := new(ResponseErr)
-		err = json.NewDecoder(resp.Body).Decode(errorRes)
-		if err != nil {
-			return nil, err
-		}
-		return nil, errors.New(errorRes.Error)
-	}
-	res := &types.GetStateResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
-	return res, err
-}
-
-func (c *Client) SubmitTransaction(ctx context.Context, urlPath string, tx interface{}) (*types.ResponseEnvelope, error) {
+func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*types.ResponseEnvelope, error) {
 	u := c.BaseURL.ResolveReference(
 		&url.URL{
 			Path: urlPath,
@@ -109,7 +143,7 @@ func (c *Client) SubmitTransaction(ctx context.Context, urlPath string, tx inter
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), buf)
+	req, err := http.NewRequest(http.MethodPost, u.String(), buf)
 	if err != nil {
 		return nil, err
 	}

@@ -94,12 +94,28 @@ func (l *LevelDB) GetACL(dbName, key string) (*types.AccessControl, error) {
 	return metadata.GetAccessControl(), nil
 }
 
+// Has returns true if the key exist in the database
 func (l *LevelDB) Has(dbName, key string) (bool, error) {
 	l.dbsList.RLock()
 	db := l.dbs[dbName]
 	l.dbsList.RUnlock()
 
 	return db.file.Has([]byte(key), nil)
+}
+
+// GetConfig returns the cluster configuration
+func (l *LevelDB) GetConfig() (*types.ClusterConfig, *types.Metadata, error) {
+	configSerialized, metadata, err := l.Get(worldstate.ConfigDBName, worldstate.ConfigKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	config := &types.ClusterConfig{}
+	if err := proto.Unmarshal(configSerialized, config); err != nil {
+		return nil, nil, errors.Wrap(err, "error while unmarshaling committed cluster configuration")
+	}
+
+	return config, metadata, nil
 }
 
 // Commit commits the updates to the database

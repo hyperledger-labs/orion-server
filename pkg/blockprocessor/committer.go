@@ -113,7 +113,7 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 			TxNum:    configTxIndex,
 		}
 
-		committedConfig, _, err := c.db.Get(worldstate.ConfigDBName, "config")
+		committedConfig, _, err := c.db.GetConfig()
 		if err != nil {
 			return errors.WithMessage(err, "error while fetching committed configuration")
 		}
@@ -179,14 +179,7 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 	}
 }
 
-func constructDBEntriesForConfigTx(tx *types.ConfigTx, committedConfig []byte, version *types.Version) ([]*worldstate.DBUpdates, error) {
-	oldConfig := &types.ClusterConfig{}
-	if committedConfig != nil {
-		if err := proto.Unmarshal(committedConfig, oldConfig); err != nil {
-			return nil, errors.WithMessage(err, "error while unmarshaling old config")
-		}
-	}
-
+func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterConfig, version *types.Version) ([]*worldstate.DBUpdates, error) {
 	adminUpdates, err := identity.ConstructDBEntriesForClusterAdmins(oldConfig.Admins, tx.NewConfig.Admins, version)
 	if err != nil {
 		return nil, err
@@ -201,7 +194,7 @@ func constructDBEntriesForConfigTx(tx *types.ConfigTx, committedConfig []byte, v
 		DBName: worldstate.ConfigDBName,
 		Writes: []*worldstate.KVWithMetadata{
 			{
-				Key:   "config",
+				Key:   worldstate.ConfigKey,
 				Value: newConfigSerialized,
 				Metadata: &types.Metadata{
 					Version: version,

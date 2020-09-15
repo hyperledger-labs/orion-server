@@ -6,9 +6,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -149,7 +149,7 @@ func validateAdminConfig(admins []*types.Admin) *types.ValidationInfo {
 }
 
 func (v *configTxValidator) mvccValidation(readOldConfigVersion *types.Version) (*types.ValidationInfo, error) {
-	_, metadata, err := v.db.Get(worldstate.ConfigDBName, "config")
+	_, metadata, err := v.db.GetConfig()
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while executing mvcc validation on read config")
 	}

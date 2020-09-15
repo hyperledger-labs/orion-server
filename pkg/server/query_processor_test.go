@@ -1,16 +1,15 @@
 package server
 
 import (
-	"context"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -70,10 +69,10 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	}
 }
 
-func TestGetStatus(t *testing.T) {
+func TestGetDBStatus(t *testing.T) {
 	t.Parallel()
 
-	t.Run("GetStatus-Returns-Status", func(t *testing.T) {
+	t.Run("getDBStatus-Returns-Status", func(t *testing.T) {
 		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
@@ -105,14 +104,7 @@ func TestGetStatus(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			req := &types.GetStatusQueryEnvelope{
-				Payload: &types.GetStatusQuery{
-					UserID: "testUser",
-					DBName: testCase.dbName,
-				},
-				Signature: []byte("signature"),
-			}
-			status, err := env.q.getStatus(context.Background(), req)
+			status, err := env.q.getDBStatus(testCase.dbName)
 			require.NoError(t, err)
 			require.NotNil(t, status.Payload)
 			require.Equal(t, testCase.isExist, status.Payload.Exist)
@@ -120,45 +112,9 @@ func TestGetStatus(t *testing.T) {
 			require.Equal(t, "test-node-id1", string(status.Payload.Header.NodeID))
 		}
 	})
-
-	t.Run("GetStatus-Returns-Error", func(t *testing.T) {
-		t.Parallel()
-		env := newQueryProcessorTestEnv(t)
-		defer env.cleanup(t)
-
-		testCases := []struct {
-			request       *types.GetStatusQueryEnvelope
-			expectedError string
-		}{
-			{
-				request:       nil,
-				expectedError: "`GetStatusQueryEnvelope` is nil",
-			},
-			{
-				request: &types.GetStatusQueryEnvelope{
-					Payload: nil,
-				},
-				expectedError: "`Payload` in `GetStatusQueryEnvelope` is nil",
-			},
-			{
-				request: &types.GetStatusQueryEnvelope{
-					Payload: &types.GetStatusQuery{
-						UserID: "",
-					},
-				},
-				expectedError: "`UserID` is not set in `Payload`",
-			},
-		}
-
-		for _, testCase := range testCases {
-			status, err := env.q.getStatus(context.Background(), testCase.request)
-			require.Contains(t, err.Error(), testCase.expectedError)
-			require.Nil(t, status)
-		}
-	})
 }
 
-func TestGetState(t *testing.T) {
+func TestGetData(t *testing.T) {
 	t.Parallel()
 
 	setup := func(db worldstate.DB, userID, dbName string) {
@@ -206,7 +162,7 @@ func TestGetState(t *testing.T) {
 		require.NoError(t, db.Commit(createDB))
 	}
 
-	t.Run("GetState-Returns-State", func(t *testing.T) {
+	t.Run("getData returns data", func(t *testing.T) {
 		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
@@ -275,16 +231,7 @@ func TestGetState(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			req := &types.GetStateQueryEnvelope{
-				Payload: &types.GetStateQuery{
-					UserID: "testUser",
-					DBName: "test-db",
-					Key:    testCase.key,
-				},
-				Signature: []byte("signature"),
-			}
-
-			val, err := env.q.getState(context.Background(), req)
+			val, err := env.q.getData("test-db", "testUser", testCase.key)
 			require.NoError(t, err)
 			require.NotNil(t, val.Payload)
 			require.Equal(t, testCase.expectedValue, val.Payload.Value)
@@ -294,13 +241,12 @@ func TestGetState(t *testing.T) {
 		}
 	})
 
-	t.Run("GetState-Returns-Error", func(t *testing.T) {
+	t.Run("getData returns permission error", func(t *testing.T) {
 		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
-		setup(env.db, "testUser1", "test-db")
-		setup(env.db, "testUser2", "")
+		setup(env.db, "testUser", "test-db")
 
 		val := []byte("value1")
 		metadata := &types.Metadata{
@@ -310,7 +256,10 @@ func TestGetState(t *testing.T) {
 			},
 			AccessControl: &types.AccessControl{
 				ReadUsers: map[string]bool{
-					"testUser2": true,
+					"user5": true,
+				},
+				ReadWriteUsers: map[string]bool{
+					"user6": true,
 				},
 			},
 		}
@@ -329,74 +278,398 @@ func TestGetState(t *testing.T) {
 		}
 		require.NoError(t, env.db.Commit(dbsUpdates))
 
-		testCases := []struct {
-			name          string
-			request       *types.GetStateQueryEnvelope
-			expectedError string
-		}{
-			{
-				name:          "query envelope is nil",
-				request:       nil,
-				expectedError: "`GetStateQueryEnvelope` is nil",
-			},
-			{
-				name: "payload is nil",
-				request: &types.GetStateQueryEnvelope{
-					Payload: nil,
+		actualVal, err := env.q.getData("test-db", "testUser", "key1")
+		require.EqualError(t, err, "the user [testUser] has no permission to read key [key1] from database [test-db]")
+		require.Nil(t, actualVal)
+	})
+}
+
+func TestGetUser(t *testing.T) {
+	t.Parallel()
+
+	t.Run("query existing user", func(t *testing.T) {
+		querierUser := &types.User{
+			ID: "querierUser",
+		}
+		querierUserSerialized, err := proto.Marshal(querierUser)
+		require.NoError(t, err)
+
+		targetUser := &types.User{
+			ID: "targetUser",
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					"db1": types.Privilege_ReadWrite,
 				},
-				expectedError: "`Payload` in `GetStateQueryEnvelope` is nil",
+				DBAdministration: true,
 			},
-			{
-				name: "userID not set",
-				request: &types.GetStateQueryEnvelope{
-					Payload: &types.GetStateQuery{
-						UserID: "",
-					},
-				},
-				expectedError: "`UserID` is not set in `Payload`",
+		}
+		targetUserSerialized, err := proto.Marshal(targetUser)
+		require.NoError(t, err)
+
+		targetUserMetadataReadPerm := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
 			},
-			{
-				name: "user has no permission to read the key",
-				request: &types.GetStateQueryEnvelope{
-					Payload: &types.GetStateQuery{
-						UserID: "testUser1",
-						DBName: "test-db",
-						Key:    "key1",
-					},
-					Signature: []byte("signature"),
+			AccessControl: &types.AccessControl{
+				ReadUsers: map[string]bool{
+					"querierUser": true,
 				},
-				expectedError: "the user [testUser1] has no permission to read key [key1] from database [test-db]",
-			},
-			{
-				name: "user has no permission to read from the database",
-				request: &types.GetStateQueryEnvelope{
-					Payload: &types.GetStateQuery{
-						UserID: "testUser2",
-						DBName: "test-db",
-						Key:    "key1",
-					},
-					Signature: []byte("signature"),
-				},
-				expectedError: "the user [testUser2] has no permission to read from database [test-db]",
-			},
-			{
-				name: "user has no permission to read from the database",
-				request: &types.GetStateQueryEnvelope{
-					Payload: &types.GetStateQuery{
-						UserID: "testUser2",
-						DBName: "_config",
-						Key:    "config",
-					},
-					Signature: []byte("signature"),
-				},
-				expectedError: "the user [testUser2] has no permission to read from database [_config]",
 			},
 		}
 
-		for _, testCase := range testCases {
-			state, err := env.q.getState(context.Background(), testCase.request)
-			require.Contains(t, err.Error(), testCase.expectedError)
-			require.Nil(t, state)
+		targetUserMetadataReadWritePerm := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
+			},
+			AccessControl: &types.AccessControl{
+				ReadUsers: map[string]bool{
+					"querierUser": true,
+				},
+			},
 		}
+
+		targetUserMetadataNoACL := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
+			},
+		}
+
+		tests := []struct {
+			name            string
+			setup           func(db worldstate.DB)
+			querierUserID   string
+			targetUserID    string
+			expectedRespose *types.GetUserResponseEnvelope
+		}{
+			{
+				name: "querierUser has read permission on targetUser",
+				setup: func(db worldstate.DB) {
+					addUser := []*worldstate.DBUpdates{
+						{
+							DBName: worldstate.UsersDBName,
+							Writes: []*worldstate.KVWithMetadata{
+								{
+									Key:   string(identity.UserNamespace) + "querierUser",
+									Value: querierUserSerialized,
+								},
+								{
+									Key:      string(identity.UserNamespace) + "targetUser",
+									Value:    targetUserSerialized,
+									Metadata: targetUserMetadataReadPerm,
+								},
+							},
+						},
+					}
+
+					require.NoError(t, db.Commit(addUser))
+				},
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				expectedRespose: &types.GetUserResponseEnvelope{
+					Payload: &types.GetUserResponse{
+						Header: &types.ResponseHeader{
+							NodeID: []byte("test-node-id1"),
+						},
+						User:     targetUser,
+						Metadata: targetUserMetadataReadPerm,
+					},
+				},
+			},
+			{
+				name: "querierUser has read-write permission on targetUser",
+				setup: func(db worldstate.DB) {
+					addUser := []*worldstate.DBUpdates{
+						{
+							DBName: worldstate.UsersDBName,
+							Writes: []*worldstate.KVWithMetadata{
+								{
+									Key:   string(identity.UserNamespace) + "querierUser",
+									Value: querierUserSerialized,
+								},
+								{
+									Key:      string(identity.UserNamespace) + "targetUser",
+									Value:    targetUserSerialized,
+									Metadata: targetUserMetadataReadWritePerm,
+								},
+							},
+						},
+					}
+
+					require.NoError(t, db.Commit(addUser))
+				},
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				expectedRespose: &types.GetUserResponseEnvelope{
+					Payload: &types.GetUserResponse{
+						Header: &types.ResponseHeader{
+							NodeID: []byte("test-node-id1"),
+						},
+						User:     targetUser,
+						Metadata: targetUserMetadataReadWritePerm,
+					},
+				},
+			},
+			{
+				name: "target user has no ACL",
+				setup: func(db worldstate.DB) {
+					addUser := []*worldstate.DBUpdates{
+						{
+							DBName: worldstate.UsersDBName,
+							Writes: []*worldstate.KVWithMetadata{
+								{
+									Key:   string(identity.UserNamespace) + "querierUser",
+									Value: querierUserSerialized,
+								},
+								{
+									Key:      string(identity.UserNamespace) + "targetUser",
+									Value:    targetUserSerialized,
+									Metadata: targetUserMetadataNoACL,
+								},
+							},
+						},
+					}
+
+					require.NoError(t, db.Commit(addUser))
+				},
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				expectedRespose: &types.GetUserResponseEnvelope{
+					Payload: &types.GetUserResponse{
+						Header: &types.ResponseHeader{
+							NodeID: []byte("test-node-id1"),
+						},
+						User:     targetUser,
+						Metadata: targetUserMetadataNoACL,
+					},
+				},
+			},
+			{
+				name: "target user does not exist",
+				setup: func(db worldstate.DB) {
+					addUser := []*worldstate.DBUpdates{
+						{
+							DBName: worldstate.UsersDBName,
+							Writes: []*worldstate.KVWithMetadata{
+								{
+									Key:   string(identity.UserNamespace) + "querierUser",
+									Value: querierUserSerialized,
+								},
+							},
+						},
+					}
+
+					require.NoError(t, db.Commit(addUser))
+				},
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				expectedRespose: &types.GetUserResponseEnvelope{
+					Payload: &types.GetUserResponse{
+						Header: &types.ResponseHeader{
+							NodeID: []byte("test-node-id1"),
+						},
+						User:     nil,
+						Metadata: nil,
+					},
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				env := newQueryProcessorTestEnv(t)
+				defer env.cleanup(t)
+
+				tt.setup(env.db)
+
+				response, err := env.q.getUser(tt.querierUserID, tt.targetUserID)
+				require.NoError(t, err)
+				require.True(t, proto.Equal(tt.expectedRespose, response))
+			})
+		}
+	})
+
+	t.Run("error expected", func(t *testing.T) {
+		t.Parallel()
+
+		querierUser := &types.User{
+			ID: "querierUser",
+		}
+		querierUserSerialized, err := proto.Marshal(querierUser)
+		require.NoError(t, err)
+
+		targetUser := &types.User{
+			ID: "targetUser",
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					"db1": types.Privilege_ReadWrite,
+				},
+				DBAdministration: true,
+			},
+		}
+		targetUserSerialized, err := proto.Marshal(targetUser)
+		require.NoError(t, err)
+
+		targetUserMetadataNoReadPerm := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
+			},
+			AccessControl: &types.AccessControl{
+				ReadUsers: map[string]bool{
+					"user1": true,
+				},
+			},
+		}
+
+		tests := []struct {
+			name          string
+			setup         func(db worldstate.DB)
+			querierUserID string
+			targetUserID  string
+			expectedError string
+		}{
+			{
+				name: "querierUser has no read permission on the target user",
+				setup: func(db worldstate.DB) {
+					addUser := []*worldstate.DBUpdates{
+						{
+							DBName: worldstate.UsersDBName,
+							Writes: []*worldstate.KVWithMetadata{
+								{
+									Key:   string(identity.UserNamespace) + "querierUser",
+									Value: querierUserSerialized,
+								},
+								{
+									Key:      string(identity.UserNamespace) + "targetUser",
+									Value:    targetUserSerialized,
+									Metadata: targetUserMetadataNoReadPerm,
+								},
+							},
+						},
+					}
+
+					require.NoError(t, db.Commit(addUser))
+				},
+				querierUserID: "querierUser",
+				targetUserID:  "targetUser",
+				expectedError: "the user [querierUser] has no permission to read info of user [targetUser]",
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				env := newQueryProcessorTestEnv(t)
+				defer env.cleanup(t)
+
+				tt.setup(env.db)
+
+				response, err := env.q.getUser(tt.querierUserID, tt.targetUserID)
+				require.EqualError(t, err, tt.expectedError)
+				require.Nil(t, response)
+			})
+		}
+	})
+}
+
+func TestGetConfig(t *testing.T) {
+	t.Parallel()
+
+	t.Run("getConfig returns config", func(t *testing.T) {
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		clusterConfig := &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					ID:          "node1",
+					Address:     "127.0.0.1",
+					Port:        1234,
+					Certificate: []byte("cert"),
+				},
+			},
+			Admins: []*types.Admin{
+				{
+					ID:          "admin",
+					Certificate: []byte("cert"),
+				},
+			},
+			RootCACertificate: []byte("cert"),
+		}
+
+		config, err := proto.Marshal(clusterConfig)
+		require.NoError(t, err)
+
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		}
+
+		dbUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      worldstate.ConfigKey,
+						Value:    config,
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(dbUpdates))
+
+		configEnvelope, err := env.q.getConfig()
+		require.NoError(t, err)
+
+		expectedConfigEnvelope := &types.GetConfigResponseEnvelope{
+			Payload: &types.GetConfigResponse{
+				Header: &types.ResponseHeader{
+					NodeID: env.q.nodeID,
+				},
+				Config:   clusterConfig,
+				Metadata: metadata,
+			},
+			Signature: nil,
+		}
+		require.True(t, proto.Equal(expectedConfigEnvelope, configEnvelope))
+	})
+
+	t.Run("getConfig returns err", func(t *testing.T) {
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		}
+
+		dbUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      worldstate.ConfigKey,
+						Value:    []byte("config"),
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(dbUpdates))
+
+		configEnvelope, err := env.q.getConfig()
+		require.Contains(t, err.Error(), "error while unmarshaling committed cluster configuration")
+		require.Nil(t, configEnvelope)
 	})
 }

@@ -1,11 +1,6 @@
 package server
 
 import (
-	"context"
-	"encoding/json"
-	"fmt"
-
-	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
@@ -37,26 +32,21 @@ func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 	}
 }
 
-// getStatus returns the status about a database, i.e., whether a database exist or not
-func (q *queryProcessor) getStatus(_ context.Context, req *types.GetStatusQueryEnvelope) (*types.GetStatusResponseEnvelope, error) {
-	var err error
-	if err = validateGetStatusQuery(req); err != nil {
-		return nil, err
-	}
-
+// getDBStatus returns the status about a database, i.e., whether a database exist or not
+func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
 	// ACL is meaningless here as this call is to check whether a DB exist. Even with ACL,
 	// the user can infer the information.
-
-	status := &types.GetStatusResponseEnvelope{
-		Payload: &types.GetStatusResponse{
+	status := &types.GetDBStatusResponseEnvelope{
+		Payload: &types.GetDBStatusResponse{
 			Header: &types.ResponseHeader{
 				NodeID: q.nodeID,
 			},
-			Exist: q.db.Exist(req.Payload.DBName),
+			Exist: q.db.Exist(dbName),
 		},
 		Signature: nil,
 	}
 
+	var err error
 	if status.Signature, err = crypto.Sign(status.Payload); err != nil {
 		return nil, err
 	}
@@ -64,36 +54,33 @@ func (q *queryProcessor) getStatus(_ context.Context, req *types.GetStatusQueryE
 }
 
 // getState return the state associated with a given key
-func (q *queryProcessor) getState(_ context.Context, req *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
-	var err error
-	if err = validateGetStateQuery(req); err != nil {
-		return nil, err
-	}
-
-	r := req.Payload
-
-	hasPerm, err := q.identityQuerier.HasReadAccess(r.UserID, r.DBName)
+func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
+	hasPerm, err := q.identityQuerier.HasReadAccess(querierUserID, dbName)
 	if err != nil {
 		return nil, err
 	}
 	if !hasPerm {
-		return nil, errors.Errorf("the user [%s] has no permission to read from database [%s]", r.UserID, r.DBName)
+		return nil, &permissionErr{
+			errMsg: "the user [" + querierUserID + "] has no permission to read from database [" + dbName + "]",
+		}
 	}
 
-	value, metadata, err := q.db.Get(r.DBName, r.Key)
+	value, metadata, err := q.db.Get(dbName, key)
 	if err != nil {
 		return nil, err
 	}
 
 	acl := metadata.GetAccessControl()
 	if acl != nil {
-		if !acl.ReadUsers[r.UserID] && !acl.ReadWriteUsers[r.UserID] {
-			return nil, errors.Errorf("the user [%s] has no permission to read key [%s] from database [%s]", r.UserID, r.Key, r.DBName)
+		if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
+			return nil, &permissionErr{
+				errMsg: "the user [" + querierUserID + "] has no permission to read key [" + key + "] from database [" + dbName + "]",
+			}
 		}
 	}
 
-	s := &types.GetStateResponseEnvelope{
-		Payload: &types.GetStateResponse{
+	state := &types.GetDataResponseEnvelope{
+		Payload: &types.GetDataResponse{
 			Header: &types.ResponseHeader{
 				NodeID: q.nodeID,
 			},
@@ -103,11 +90,72 @@ func (q *queryProcessor) getState(_ context.Context, req *types.GetStateQueryEnv
 		Signature: nil,
 	}
 
-	if s.Signature, err = crypto.Sign(s.Payload); err != nil {
+	if state.Signature, err = crypto.Sign(state.Payload); err != nil {
 		return nil, err
 	}
 
-	return s, nil
+	return state, nil
+}
+
+func (q *queryProcessor) getUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error) {
+	user, metadata, err := q.identityQuerier.GetUser(targetUserID)
+	if err != nil {
+		if _, ok := err.(*identity.UserNotFoundErr); !ok {
+			return nil, err
+		}
+	}
+
+	acl := metadata.GetAccessControl()
+	if acl != nil {
+		if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
+			return nil, &permissionErr{
+				errMsg: "the user [" + querierUserID + "] has no permission to read info of user [" + targetUserID + "]",
+			}
+		}
+	}
+
+	u := &types.GetUserResponseEnvelope{
+		Payload: &types.GetUserResponse{
+			Header: &types.ResponseHeader{
+				NodeID: q.nodeID,
+			},
+			User:     user,
+			Metadata: metadata,
+		},
+		Signature: nil,
+	}
+
+	if u.Signature, err = crypto.Sign(u.Payload); err != nil {
+		return nil, err
+	}
+
+	return u, nil
+}
+
+func (q *queryProcessor) getConfig() (*types.GetConfigResponseEnvelope, error) {
+	// ACL may not be needed for the read as it would be useful to fetch IPs of
+	// all nodes even without cluster admin privilege. We can add it later if needed
+	config, metadata, err := q.db.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	c := &types.GetConfigResponseEnvelope{
+		Payload: &types.GetConfigResponse{
+			Header: &types.ResponseHeader{
+				NodeID: q.nodeID,
+			},
+			Config:   config,
+			Metadata: metadata,
+		},
+		Signature: nil,
+	}
+
+	if c.Signature, err = crypto.Sign(c.Payload); err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 func (q *queryProcessor) close() error {
@@ -118,44 +166,10 @@ func (q *queryProcessor) close() error {
 	return q.blockStore.Close()
 }
 
-func validateGetStatusQuery(req *types.GetStatusQueryEnvelope) error {
-	switch {
-	case req == nil:
-		return fmt.Errorf("`GetStatusQueryEnvelope` is nil, %v", req)
-	case req.Payload == nil:
-		return fmt.Errorf("`Payload` in `GetStatusQueryEnvelope` is nil, %v", req)
-	case req.Payload.UserID == "":
-		return fmt.Errorf("`UserID` is not set in `Payload`, %v", req.Payload)
-	}
-
-	queryBytes, err := json.Marshal(req.Payload)
-	if err != nil {
-		return errors.Wrapf(err, "error while encoding `Payload` in the `GetStatusQueryEnvelope`, %v", req)
-	}
-
-	if err := crypto.Validate(req.Payload.UserID, req.Signature, queryBytes); err != nil {
-		return errors.Wrap(err, "signature validation failed")
-	}
-	return nil
+type permissionErr struct {
+	errMsg string
 }
 
-func validateGetStateQuery(req *types.GetStateQueryEnvelope) error {
-	switch {
-	case req == nil:
-		return fmt.Errorf("`GetStateQueryEnvelope` is nil")
-	case req.Payload == nil:
-		return fmt.Errorf("`Payload` in `GetStateQueryEnvelope` is nil, %v", req)
-	case req.Payload.UserID == "":
-		return fmt.Errorf("`UserID` is not set in `Payload`, %v", req.Payload)
-	}
-
-	queryBytes, err := json.Marshal(req.Payload)
-	if err != nil {
-		return errors.Wrapf(err, "error while encoding `Payload` in the `GetStateQueryEnvelope`, %v", req)
-	}
-
-	if err := crypto.Validate(req.Payload.UserID, req.Signature, queryBytes); err != nil {
-		return errors.Wrap(err, "signature validation failed")
-	}
-	return nil
+func (e *permissionErr) Error() string {
+	return e.errMsg
 }

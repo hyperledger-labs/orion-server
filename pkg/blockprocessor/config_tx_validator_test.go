@@ -433,7 +433,7 @@ func TestMVCCOnConfigTx(t *testing.T) {
 						DBName: worldstate.ConfigDBName,
 						Writes: []*worldstate.KVWithMetadata{
 							{
-								Key: "config",
+								Key: worldstate.ConfigKey,
 								Metadata: &types.Metadata{
 									Version: &types.Version{
 										BlockNum: 5,
@@ -464,7 +464,7 @@ func TestMVCCOnConfigTx(t *testing.T) {
 						DBName: worldstate.ConfigDBName,
 						Writes: []*worldstate.KVWithMetadata{
 							{
-								Key: "config",
+								Key: worldstate.ConfigKey,
 								Metadata: &types.Metadata{
 									Version: &types.Version{
 										BlockNum: 5,
