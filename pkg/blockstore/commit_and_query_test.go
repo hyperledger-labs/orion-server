@@ -82,11 +82,15 @@ func TestCommitAndQuery(t *testing.T) {
 					PreviousBlockHeaderHash: []byte(fmt.Sprintf("hash-%d", blockNumber-1)),
 					TransactionsHash:        []byte(fmt.Sprintf("hash-%d", blockNumber)),
 				},
-				TransactionEnvelopes: []*types.TransactionEnvelope{
-					{
-						Payload: &types.Transaction{
-							Type:   0,
-							DBName: "bdb",
+				Payload: &types.Block_UserAdministrationTxEnvelope{
+					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+						Payload: &types.UserAdministrationTx{
+							UserID: "user1",
+							UserDeletes: []*types.UserDelete{
+								{
+									UserID: "user1",
+								},
+							},
 						},
 						Signature: []byte("sign"),
 					},
@@ -108,11 +112,15 @@ func TestCommitAndQuery(t *testing.T) {
 						PreviousBlockHeaderHash: []byte(fmt.Sprintf("hash-%d", blockNumber-1)),
 						TransactionsHash:        []byte(fmt.Sprintf("hash-%d", blockNumber)),
 					},
-					TransactionEnvelopes: []*types.TransactionEnvelope{
-						{
-							Payload: &types.Transaction{
-								Type:   0,
-								DBName: "bdb",
+					Payload: &types.Block_UserAdministrationTxEnvelope{
+						UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+							Payload: &types.UserAdministrationTx{
+								UserID: "user1",
+								UserDeletes: []*types.UserDelete{
+									{
+										UserID: "user1",
+									},
+								},
 							},
 							Signature: []byte("sign"),
 						},

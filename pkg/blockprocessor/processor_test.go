@@ -2,6 +2,7 @@ package blockprocessor
 
 import (
 	"bytes"
+	"encoding/pem"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -83,68 +84,114 @@ func newTestEnv(t *testing.T) *testEnv {
 func TestValidatorAndCommitter(t *testing.T) {
 	t.Parallel()
 
-	user := &types.User{
-		ID: "testUser",
-		Privilege: &types.Privilege{
-			DBPermission: map[string]types.Privilege_Access{
-				worldstate.DefaultDBName: types.Privilege_ReadWrite,
+	setup := func(db worldstate.DB) {
+		user := &types.User{
+			ID: "testUser",
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					worldstate.DefaultDBName: types.Privilege_ReadWrite,
+				},
 			},
-		},
-	}
+		}
 
-	u, err := proto.Marshal(user)
-	require.NoError(t, err)
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
 
-	createUser := []*worldstate.DBUpdates{
-		{
-			DBName: worldstate.UsersDBName,
-			Writes: []*worldstate.KVWithMetadata{
-				{
-					Key:   string(identity.UserNamespace) + "testUser",
-					Value: u,
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
+		createUser := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + "testUser",
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
 						},
 					},
 				},
 			},
-		},
+		}
+
+		require.NoError(t, db.Commit(createUser))
 	}
 
-	block1 := &types.Block{
+	cert, err := ioutil.ReadFile("./testdata/sample.cert")
+	require.NoError(t, err)
+	dcCert, _ := pem.Decode(cert)
+
+	configBlock := &types.Block{
 		Header: &types.BlockHeader{
 			Number: 1,
 		},
-		TransactionEnvelopes: []*types.TransactionEnvelope{
-			{
-				Payload: &types.Transaction{
-					UserID: []byte("testUser"),
-					DBName: worldstate.DefaultDBName,
-					Writes: []*types.KVWrite{
-						{
-							Key:   "key1",
-							Value: []byte("value-1"),
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					UserID:               "adminUser",
+					ReadOldConfigVersion: nil,
+					NewConfig: &types.ClusterConfig{
+						Nodes: []*types.NodeConfig{
+							{
+								ID:          "node1",
+								Address:     "127.0.0.1",
+								Certificate: dcCert.Bytes,
+							},
+						},
+						Admins: []*types.Admin{
+							{
+								ID:          "admin1",
+								Certificate: dcCert.Bytes,
+							},
 						},
 					},
 				},
 			},
 		},
 	}
+
 	block2 := &types.Block{
 		Header: &types.BlockHeader{
 			Number: 2,
 		},
-		TransactionEnvelopes: []*types.TransactionEnvelope{
-			{
-				Payload: &types.Transaction{
-					UserID: []byte("testUser"),
-					DBName: worldstate.DefaultDBName,
-					Writes: []*types.KVWrite{
-						{
-							Key:   "key1",
-							Value: []byte("value-2"),
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							UserID: "testUser",
+							DBName: worldstate.DefaultDBName,
+							DataWrites: []*types.DataWrite{
+								{
+									Key:   "key1",
+									Value: []byte("value-1"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	block3 := &types.Block{
+		Header: &types.BlockHeader{
+			Number: 3,
+		},
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							UserID: "testUser",
+							DBName: worldstate.DefaultDBName,
+							DataWrites: []*types.DataWrite{
+								{
+									Key:   "key1",
+									Value: []byte("new-value-1"),
+								},
+							},
 						},
 					},
 				},
@@ -154,34 +201,30 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 	t.Run("enqueue-one-block", func(t *testing.T) {
 		t.Parallel()
+
 		env := newTestEnv(t)
 		defer env.cleanup()
 
-		require.NoError(t, env.db.Commit(createUser))
+		setup(env.db)
+
+		env.v.blockQueue.Enqueue(configBlock)
+		require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
+		exist, err := env.v.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
+		require.NoError(t, err)
+		require.True(t, exist)
 
 		testCases := []struct {
 			block               *types.Block
+			dbName              string
 			key                 string
 			expectedValue       []byte
 			expectedMetadata    *types.Metadata
 			expectedBlockHeight uint64
 		}{
 			{
-				block:         block1,
-				key:           "key1",
-				expectedValue: []byte("value-1"),
-				expectedMetadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 1,
-						TxNum:    0,
-					},
-				},
-				expectedBlockHeight: 1,
-			},
-			{
 				block:         block2,
 				key:           "key1",
-				expectedValue: []byte("value-2"),
+				expectedValue: []byte("value-1"),
 				expectedMetadata: &types.Metadata{
 					Version: &types.Version{
 						BlockNum: 2,
@@ -190,13 +233,25 @@ func TestValidatorAndCommitter(t *testing.T) {
 				},
 				expectedBlockHeight: 2,
 			},
+			{
+				block:         block3,
+				key:           "key1",
+				expectedValue: []byte("new-value-1"),
+				expectedMetadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 3,
+						TxNum:    0,
+					},
+				},
+				expectedBlockHeight: 3,
+			},
 		}
 
 		for _, tt := range testCases {
 			env.v.blockQueue.Enqueue(tt.block)
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
-			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
+			val, metadata, err := env.db.Get(worldstate.DefaultDBName, tt.key)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedValue, val)
 			require.True(t, proto.Equal(tt.expectedMetadata, metadata))
@@ -213,10 +268,17 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 	t.Run("enqueue-more-than-one-block", func(t *testing.T) {
 		t.Parallel()
+
 		env := newTestEnv(t)
 		defer env.cleanup()
 
-		require.NoError(t, env.db.Commit(createUser))
+		setup(env.db)
+
+		env.v.blockQueue.Enqueue(configBlock)
+		require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
+		exist, err := env.v.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
+		require.NoError(t, err)
+		require.True(t, exist)
 
 		testCases := []struct {
 			blocks              []*types.Block
@@ -227,18 +289,18 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}{
 			{
 				blocks: []*types.Block{
-					block1,
 					block2,
+					block3,
 				},
 				key:           "key1",
-				expectedValue: []byte("value-2"),
+				expectedValue: []byte("new-value-1"),
 				expectedMetadata: &types.Metadata{
 					Version: &types.Version{
-						BlockNum: 2,
+						BlockNum: 3,
 						TxNum:    0,
 					},
 				},
-				expectedBlockHeight: 2,
+				expectedBlockHeight: 3,
 			},
 		}
 

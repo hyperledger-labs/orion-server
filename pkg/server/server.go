@@ -19,7 +19,6 @@ import (
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
-	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -39,9 +38,12 @@ func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
 	}
 
 	router := mux.NewRouter()
-	router.HandleFunc("/db/{dbname}/state/{key}", dbServ.handleDataQuery).Methods(http.MethodGet)
-	router.HandleFunc("/db/{dbname}", dbServ.handleStatusQuery).Methods(http.MethodGet)
-	router.HandleFunc("/tx", dbServ.handleTransaction).Methods(http.MethodPost)
+	router.HandleFunc(constants.GetData, dbServ.handleDataQuery).Methods(http.MethodGet)
+	router.HandleFunc(constants.GetDBStatus, dbServ.handleStatusQuery).Methods(http.MethodGet)
+	router.HandleFunc(constants.PostDataTx, dbServ.handleDataTransaction).Methods(http.MethodPost)
+	router.HandleFunc(constants.PostUserTx, dbServ.handleUserAdminTransaction).Methods(http.MethodPost)
+	router.HandleFunc(constants.PostDBTx, dbServ.handleDBAdminTransaction).Methods(http.MethodPost)
+	router.HandleFunc(constants.PostConfigTx, dbServ.handleConfigTransaction).Methods(http.MethodPost)
 
 	netConf := conf.Node.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
@@ -230,22 +232,69 @@ func (db *dbServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
 	}
 	composeResponse(w, http.StatusOK, valueEnvelope)
 }
+func (db *dbServer) handleDataTransaction(w http.ResponseWriter, r *http.Request) {
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
 
-func (db *dbServer) handleTransaction(w http.ResponseWriter, r *http.Request) {
-	tx := &types.TransactionEnvelope{}
-	err := json.NewDecoder(r.Body).Decode(tx)
-	if err != nil {
+	tx := &types.DataTxEnvelope{}
+	if err := d.Decode(tx); err != nil {
 		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
 		return
 	}
 
 	// TODO: verify signature
+	db.handleTransaction(w, tx)
+}
 
-	err = db.submitTransaction(context.Background(), tx)
-	if err != nil {
+func (db *dbServer) handleUserAdminTransaction(w http.ResponseWriter, r *http.Request) {
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+
+	tx := &types.UserAdministrationTxEnvelope{}
+	if err := d.Decode(tx); err != nil {
+		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		return
+	}
+
+	// TODO: verify signature
+	db.handleTransaction(w, tx)
+}
+
+func (db *dbServer) handleDBAdminTransaction(w http.ResponseWriter, r *http.Request) {
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+
+	tx := &types.DBAdministrationTxEnvelope{}
+	if err := d.Decode(tx); err != nil {
+		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		return
+	}
+
+	// TODO: verify signature
+	db.handleTransaction(w, tx)
+}
+
+func (db *dbServer) handleConfigTransaction(w http.ResponseWriter, r *http.Request) {
+	d := json.NewDecoder(r.Body)
+	d.DisallowUnknownFields()
+
+	tx := &types.ConfigTxEnvelope{}
+	if err := d.Decode(tx); err != nil {
+		composeResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		return
+	}
+
+	// TODO: verify signature
+	db.handleTransaction(w, tx)
+
+}
+
+func (db *dbServer) handleTransaction(w http.ResponseWriter, tx interface{}) {
+	if err := db.submitTransaction(context.Background(), tx); err != nil {
 		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
 		return
 	}
+
 	composeResponse(w, http.StatusOK, empty.Empty{})
 }
 
@@ -293,7 +342,7 @@ type ResponseErr struct {
 	Error string `json:"error,omitempty"`
 }
 
-func prepareConfigTx(conf *config.Configurations) (*types.TransactionEnvelope, error) {
+func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {
 	nodeCert, err := ioutil.ReadFile(conf.Node.Identity.CertificatePath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while reading node certificate %s", conf.Node.Identity.CertificatePath)
@@ -327,23 +376,10 @@ func prepareConfigTx(conf *config.Configurations) (*types.TransactionEnvelope, e
 		RootCACertificate: rootCACert,
 	}
 
-	configValue, err := json.Marshal(clusterConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.TransactionEnvelope{
-		Payload: &types.Transaction{
-			Type:      types.Transaction_CONFIG,
-			DBName:    worldstate.ConfigDBName,
-			TxID:      []byte(uuid.New().String()), // TODO: we need to change TxID to string
-			DataModel: types.Transaction_KV,
-			Writes: []*types.KVWrite{
-				{
-					Key:   "config", // TODO: need to define a constant and put in library package
-					Value: configValue,
-				},
-			},
+	return &types.ConfigTxEnvelope{
+		Payload: &types.ConfigTx{
+			TxID:      uuid.New().String(), // TODO: we need to change TxID to string
+			NewConfig: clusterConfig,
 		},
 		// TODO: we can make the node itself sign the transaction
 	}, nil

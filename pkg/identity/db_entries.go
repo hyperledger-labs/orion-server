@@ -12,36 +12,38 @@ var (
 	UserNamespace = []byte{0}
 )
 
-// ConstructDBEntriesForUsers constructs database entries for the transaction that manipulates
+// ConstructDBEntriesForUserAdminTx constructs database entries for the transaction that manipulates
 // user information
-func ConstructDBEntriesForUsers(tx *types.Transaction, version *types.Version) *worldstate.DBUpdates {
-	var kvWrites []*worldstate.KVWithMetadata
-	var kvDeletes []string
+func ConstructDBEntriesForUserAdminTx(tx *types.UserAdministrationTx, version *types.Version) (*worldstate.DBUpdates, error) {
+	var userWrites []*worldstate.KVWithMetadata
+	var userDeletes []string
 
-	for _, write := range tx.Writes {
-		if write.IsDelete {
-			kvDeletes = append(
-				kvDeletes,
-				string(UserNamespace)+write.Key,
-			)
-			continue
+	for _, w := range tx.UserWrites {
+		userSerialized, err := proto.Marshal(w.User)
+		if err != nil {
+			return nil, errors.Wrap(err, "error while marshaling user")
 		}
 
 		kv := &worldstate.KVWithMetadata{
-			Key:   string(UserNamespace) + write.Key,
-			Value: write.Value,
+			Key:   string(UserNamespace) + w.User.ID,
+			Value: userSerialized,
 			Metadata: &types.Metadata{
-				Version: version,
+				Version:       version,
+				AccessControl: w.ACL,
 			},
 		}
-		kvWrites = append(kvWrites, kv)
+		userWrites = append(userWrites, kv)
+	}
+
+	for _, d := range tx.UserDeletes {
+		userDeletes = append(userDeletes, string(UserNamespace)+d.UserID)
 	}
 
 	return &worldstate.DBUpdates{
 		DBName:  worldstate.UsersDBName,
-		Writes:  kvWrites,
-		Deletes: kvDeletes,
-	}
+		Writes:  userWrites,
+		Deletes: userDeletes,
+	}, nil
 }
 
 // ConstructDBEntriesForClusterAdmins constructs database entries for the cluster admins
@@ -55,12 +57,10 @@ func ConstructDBEntriesForClusterAdmins(oldAdmins, newAdmins []*types.Admin, ver
 	}
 
 	for _, oldAdm := range oldAdmins {
-		if newAdm, ok := newAdms[oldAdm.ID]; ok {
-			if proto.Equal(oldAdm, newAdm) {
-				delete(newAdms, oldAdm.ID)
-			}
+		if _, ok := newAdms[oldAdm.ID]; ok {
 			continue
 		}
+
 		deletes = append(deletes, string(UserNamespace)+oldAdm.ID)
 	}
 

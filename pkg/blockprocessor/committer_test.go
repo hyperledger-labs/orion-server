@@ -1,7 +1,6 @@
 package blockprocessor
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -79,7 +78,11 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 }
 
 func TestCommitter(t *testing.T) {
+	t.Parallel()
+
 	t.Run("commit block to block store and state db", func(t *testing.T) {
+		t.Parallel()
+
 		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 
@@ -99,14 +102,18 @@ func TestCommitter(t *testing.T) {
 			Header: &types.BlockHeader{
 				Number: 1,
 			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db1-key1",
-								Value: []byte("value-1"),
+			Payload: &types.Block_DataTxEnvelopes{
+				DataTxEnvelopes: &types.DataTxEnvelopes{
+					Envelopes: []*types.DataTxEnvelope{
+						{
+							Payload: &types.DataTx{
+								DBName: "db1",
+								DataWrites: []*types.DataWrite{
+									{
+										Key:   "db1-key1",
+										Value: []byte("value-1"),
+									},
+								},
 							},
 						},
 					},
@@ -147,30 +154,36 @@ func TestCommitter(t *testing.T) {
 }
 
 func TestBlockStoreCommitter(t *testing.T) {
+	t.Parallel()
+
 	getSampleBlock := func(number uint64) *types.Block {
 		return &types.Block{
 			Header: &types.BlockHeader{
 				Number: number,
 			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:   fmt.Sprintf("db1-key%d", number),
-								Value: []byte(fmt.Sprintf("new-value-%d", number)),
+			Payload: &types.Block_DataTxEnvelopes{
+				DataTxEnvelopes: &types.DataTxEnvelopes{
+					Envelopes: []*types.DataTxEnvelope{
+						{
+							Payload: &types.DataTx{
+								DBName: "db1",
+								DataWrites: []*types.DataWrite{
+									{
+										Key:   fmt.Sprintf("db1-key%d", number),
+										Value: []byte(fmt.Sprintf("value-%d", number)),
+									},
+								},
 							},
 						},
-					},
-				},
-				{
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{
-							{
-								Key:   fmt.Sprintf("db2-key%d", number),
-								Value: []byte(fmt.Sprintf("new-value-%d", number)),
+						{
+							Payload: &types.DataTx{
+								DBName: "db2",
+								DataWrites: []*types.DataWrite{
+									{
+										Key:   fmt.Sprintf("db2-key%d", number),
+										Value: []byte(fmt.Sprintf("value-%d", number)),
+									},
+								},
 							},
 						},
 					},
@@ -180,6 +193,8 @@ func TestBlockStoreCommitter(t *testing.T) {
 	}
 
 	t.Run("commit multiple blocks to the block store and query the same", func(t *testing.T) {
+		t.Parallel()
+
 		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 
@@ -203,6 +218,8 @@ func TestBlockStoreCommitter(t *testing.T) {
 	})
 
 	t.Run("commit unexpected block to the block store", func(t *testing.T) {
+		t.Parallel()
+
 		env := newCommitterTestEnv(t)
 		defer env.cleanup()
 
@@ -212,846 +229,445 @@ func TestBlockStoreCommitter(t *testing.T) {
 	})
 }
 
-func TestStateDBCommitterForData(t *testing.T) {
+func TestStateDBCommitterForDataBlock(t *testing.T) {
 	t.Parallel()
 
-	setup := func(db worldstate.DB) []*worldstate.DBUpdates {
-		dbsUpdates := []*worldstate.DBUpdates{
+	setup := func(db worldstate.DB) {
+		data := []*worldstate.DBUpdates{
 			{
-				DBName: "db1",
+				DBName: worldstate.DefaultDBName,
 				Writes: []*worldstate.KVWithMetadata{
-					{
-						Key:   "db1-key1",
-						Value: []byte("db1-value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    1,
+					constructDataEntryForTest("key1", []byte("value1"), &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    1,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{
+								"user1": true,
 							},
 						},
-					},
-					{
-						Key:   "db1-key2",
-						Value: []byte("db1-value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    2,
-							},
-						},
-					},
-				},
-			},
-			{
-				DBName: "db2",
-				Writes: []*worldstate.KVWithMetadata{
-					{
-						Key:   "db2-key1",
-						Value: []byte("db2-value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    3,
-							},
-						},
-					},
-					{
-						Key:   "db2-key2",
-						Value: []byte("db2-value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    4,
-							},
-						},
-					},
+					}),
+					constructDataEntryForTest("key2", []byte("value2"), nil),
+					constructDataEntryForTest("key3", []byte("value3"), nil),
 				},
 			},
 		}
 
-		createDBs := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.DatabasesDBName,
-				Writes: []*worldstate.KVWithMetadata{
-					{
-						Key: "db1",
-					},
-					{
-						Key: "db2",
-					},
-				},
-			},
-		}
-		require.NoError(t, db.Commit(createDBs))
-
-		require.NoError(t, db.Commit(dbsUpdates))
-		return dbsUpdates
+		require.NoError(t, db.Commit(data))
 	}
 
-	t.Run("commit block to replace all existing entries", func(t *testing.T) {
-		t.Parallel()
-		env := newCommitterTestEnv(t)
-		defer env.cleanup()
-		initialKVsPerDB := setup(env.db)
-
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.Equal(t, kv.Value, val)
-				require.True(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		// create a block to update all existing entries in the database
-		// In db1, we update db1-key1, db1-key2
-		// In db2, we update db2-key1, db2-key2
-		block := &types.Block{
-			Header: &types.BlockHeader{
-				Number: 2,
-			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db1-key1",
-								Value: []byte("new-value-1"),
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db1-key2",
-								Value: []byte("new-value-2"),
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db2-key1",
-								Value: []byte("new-value-1"),
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db2-key2",
-								Value: []byte("new-value-2"),
-							},
-						},
-					},
-				},
-			},
-		}
-
-		validationInfo := []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-		}
-
-		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
-
-		// as the last block commit has updated all existing entries,
-		// kvs in initialKVsPerDB should not match with the committed versions
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.NotEqual(t, kv.Value, val)
-				require.False(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		val, metadata, err := env.db.Get("db1", "db1-key1")
-		require.NoError(t, err)
-		expectedVal := []byte("new-value-1")
-		expectedMetadata := &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    0,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db1", "db1-key2")
-		require.NoError(t, err)
-		expectedVal = []byte("new-value-2")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    1,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db2", "db2-key1")
-		require.NoError(t, err)
-		expectedVal = []byte("new-value-1")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    2,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db2", "db2-key2")
-		require.NoError(t, err)
-		expectedVal = []byte("new-value-2")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    3,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-	})
-
-	t.Run("commit block to delete all existing entries", func(t *testing.T) {
-		t.Parallel()
-		env := newCommitterTestEnv(t)
-		defer env.cleanup()
-		initialKVsPerDB := setup(env.db)
-
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.Equal(t, kv.Value, val)
-				require.True(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		// create a block to delete all existing entries in the database
-		// In db1, we delete db1-key1, db1-key2
-		// In db2, we delete db2-key1, db2-key2
-		block := &types.Block{
-			Header: &types.BlockHeader{
-				Number: 2,
-			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:      "db1-key1",
-								IsDelete: true,
-							},
-							{
-								Key:      "db1-key2",
-								IsDelete: true,
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{
-							{
-								Key:      "db2-key1",
-								IsDelete: true,
-							},
-							{
-								Key:      "db2-key2",
-								IsDelete: true,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		validationInfo := []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-		}
-
-		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
-
-		// as the last block commit has deleted all existing entries,
-		// kvs in initialKVsPerDB should not match with the committed versions
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.NotEqual(t, kv.Value, val)
-				require.False(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		val, metadata, err := env.db.Get("db1", "db1-key1")
-		require.NoError(t, err)
-		require.Nil(t, val)
-		require.Nil(t, metadata)
-
-		val, metadata, err = env.db.Get("db1", "db1-key2")
-		require.NoError(t, err)
-		require.Nil(t, val)
-		require.Nil(t, metadata)
-
-		val, metadata, err = env.db.Get("db1", "db2-key1")
-		require.NoError(t, err)
-		require.Nil(t, val)
-		require.Nil(t, metadata)
-
-		val, metadata, err = env.db.Get("db1", "db2-key2")
-		require.NoError(t, err)
-		require.Nil(t, val)
-		require.Nil(t, metadata)
-	})
-
-	t.Run("commit block to only insert new entries", func(t *testing.T) {
-		t.Parallel()
-		env := newCommitterTestEnv(t)
-		defer env.cleanup()
-		initialKVsPerDB := setup(env.db)
-
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.Equal(t, kv.Value, val)
-				require.True(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		// create a block to insert new entries without touching the
-		// existing entries in the database
-		// In db1, insert db1-key3, db1-key4
-		// In db2, insert db2-key3, db2-key4
-		block := &types.Block{
-			Header: &types.BlockHeader{
-				Number: 2,
-			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db1-key3",
-								Value: []byte("value-3"),
-							},
-							{
-								Key:   "db1-key4",
-								Value: []byte("value-4"),
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db2-key3",
-								Value: []byte("value-3"),
-							},
-							{
-								Key:   "db2-key4",
-								Value: []byte("value-4"),
-							},
-						},
-					},
-				},
-			},
-		}
-
-		validationInfo := []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-		}
-
-		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
-
-		// as the last block commit has not modified existing entries,
-		// kvs in initialKVsPerDB should match with the committed versions
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.Equal(t, kv.Value, val)
-				require.True(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		val, metadata, err := env.db.Get("db1", "db1-key3")
-		require.NoError(t, err)
-		expectedVal := []byte("value-3")
-		expectedMetadata := &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    0,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db1", "db1-key4")
-		require.NoError(t, err)
-		expectedVal = []byte("value-4")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    0,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db2", "db2-key3")
-		require.NoError(t, err)
-		expectedVal = []byte("value-3")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    1,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db2", "db2-key4")
-		require.NoError(t, err)
-		expectedVal = []byte("value-4")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 2,
-				TxNum:    1,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-	})
-
-	t.Run("commit block to update and delete existing entries while inserting new", func(t *testing.T) {
-		t.Parallel()
-		env := newCommitterTestEnv(t)
-		defer env.cleanup()
-		initialKVsPerDB := setup(env.db)
-
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.Equal(t, kv.Value, val)
-				require.True(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		// create a block to update & delete existing entries in the database
-		// add a new entry
-		// In db1, we delete db1-key1, update db1-key2, newly add db1-key3
-		// In db2, we update db2-key1, delete db2-key2, newly add db2-key3
-		block := &types.Block{
-			Header: &types.BlockHeader{
-				Number: 10,
-			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					// we mark this transaction valid
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:      "db1-key1",
-								IsDelete: true,
-							},
-							{
-								Key:   "db1-key2",
-								Value: []byte("new-value-2"),
-							},
-							{
-								Key:   "db1-key3",
-								Value: []byte("value-3"),
-							},
-							{
-								Key:      "db1-key4",
-								IsDelete: true,
-							},
-						},
-					},
-				},
-				{
-					// we mark this transaction invalid
-					Payload: &types.Transaction{
-						DBName: "db3",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db3-key2",
-								Value: []byte("value-2"),
-							},
-						},
-					},
-				},
-				{
-					// we mark this transaction valid
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Reads: []*types.KVRead{
-							{
-								Key: "db2-key1",
-								Version: &types.Version{
-									BlockNum: 1,
-									TxNum:    3,
-								},
-							},
-						},
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db2-key1",
-								Value: []byte("new-value-1"),
-							},
-						},
-					},
-				},
-				{
-					// we mark this transaction valid
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{
-							{
-								Key:      "db2-key2",
-								IsDelete: true,
-							},
-							{
-								Key:   "db2-key3",
-								Value: []byte("value-3"),
-							},
-						},
-					},
-				},
-				{
-					// we mark this transaction valid
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{},
-					},
-				},
-				{
-					// we mark this transaction invalid
-					Payload: &types.Transaction{
-						DBName: "db2",
-						Writes: []*types.KVWrite{
-							{
-								Key:      "db2-key2",
-								IsDelete: true,
-							},
-							{
-								Key:   "db2-key3",
-								Value: []byte("value-3"),
-							},
-						},
-					},
-				},
-			},
-		}
-
-		validationInfo := []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
-			},
-		}
-
-		require.NoError(t, env.committer.commitToStateDB(block, validationInfo))
-
-		// as the last block commit has either updated or deleted
-		// existing entries, kvs in initialKVsPerDB should not
-		// match with the committed versions
-		for _, kvs := range initialKVsPerDB {
-			for _, kv := range kvs.Writes {
-				val, metadata, err := env.db.Get(kvs.DBName, kv.Key)
-				require.NoError(t, err)
-				require.NotEqual(t, kv.Value, val)
-				require.False(t, proto.Equal(kv.Metadata, metadata))
-			}
-		}
-
-		// In db1, we delete db1-key1, update db1-key2, newly add db1-key3
-		val, metadata, err := env.db.Get("db1", "db1-key1")
-		require.NoError(t, err)
-		require.Nil(t, val)
-		require.Nil(t, metadata)
-
-		val, metadata, err = env.db.Get("db1", "db1-key2")
-		require.NoError(t, err)
-		expectedVal := []byte("new-value-2")
-		expectedMetadata := &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 10,
-				TxNum:    0,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db1", "db1-key3")
-		require.NoError(t, err)
-		expectedVal = []byte("value-3")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 10,
-				TxNum:    0,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		// In db2, we update db2-key1, delete db2-key2, newly add db2-key3
-		val, metadata, err = env.db.Get("db2", "db2-key1")
-		require.NoError(t, err)
-		expectedVal = []byte("new-value-1")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 10,
-				TxNum:    2,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-
-		val, metadata, err = env.db.Get("db2", "db2-key2")
-		require.NoError(t, err)
-		require.Nil(t, val)
-
-		val, metadata, err = env.db.Get("db2", "db2-key3")
-		require.NoError(t, err)
-		expectedVal = []byte("value-3")
-		expectedMetadata = &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 10,
-				TxNum:    3,
-			},
-		}
-		require.Equal(t, expectedVal, val)
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-	})
-
-	t.Run("commit block and expect error", func(t *testing.T) {
-		t.Parallel()
-		env := newCommitterTestEnv(t)
-		defer env.cleanup()
-
-		block := &types.Block{
-			Header: &types.BlockHeader{
-				Number: 2,
-			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						DBName: "db1",
-						Writes: []*types.KVWrite{
-							{
-								Key:   "db1-key3",
-								Value: []byte("value-3"),
-							},
-						},
-					},
-				},
-			},
-		}
-
-		validationInfo := []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
-		}
-
-		require.EqualError(t, env.committer.commitToStateDB(block, validationInfo), "failed to commit block 2 to state database: database db1 does not exist")
-	})
-}
-
-func TestStateDBCommitterForUsers(t *testing.T) {
-	t.Parallel()
-
-	getSampleBlock := func(number uint64) (*types.Block, []*types.ValidationInfo, []*types.User) {
-		userWithLessPrivilege := &types.User{
-			ID:          fmt.Sprintf("%s:%d", "userWithLessPrivilege", number),
-			Certificate: []byte("certificate-1"),
-			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
-					fmt.Sprintf("db-%d", number): types.Privilege_Read,
-				},
-				DBAdministration:      false,
-				ClusterAdministration: false,
-				UserAdministration:    false,
-			},
-		}
-
-		userWithMorePrivilege := &types.User{
-			ID:          fmt.Sprintf("%s:%d", "userWithMorePrivilege", number),
-			Certificate: []byte("certificate-2"),
-			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
-					fmt.Sprintf("db-%d", number): types.Privilege_ReadWrite,
-				},
-				DBAdministration:      true,
-				ClusterAdministration: true,
-				UserAdministration:    true,
-			},
-		}
-
-		user1, err := proto.Marshal(userWithLessPrivilege)
-		require.NoError(t, err)
-		user2, err := proto.Marshal(userWithMorePrivilege)
-		require.NoError(t, err)
-
-		block := &types.Block{
-			Header: &types.BlockHeader{
-				Number: number,
-			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						Type:   types.Transaction_USER,
-						DBName: worldstate.UsersDBName,
-						Writes: []*types.KVWrite{
-							{
-								Key:   fmt.Sprintf("%s:%d", "userWithLessPrivilege", number),
-								Value: user1,
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.Transaction{
-						Type:   types.Transaction_USER,
-						DBName: worldstate.UsersDBName,
-						Writes: []*types.KVWrite{
-							{
-								Key:   fmt.Sprintf("%s:%d", "userWithMorePrivilege", number),
-								Value: user2,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		valInfo := []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
-			{
-				Flag: types.Flag_VALID,
-			},
-		}
-
-		return block, valInfo, []*types.User{
-			userWithLessPrivilege,
-			userWithMorePrivilege,
-		}
-	}
-
-	t.Run("commit block with all valid transactions", func(t *testing.T) {
-		t.Parallel()
-
-		env := newCommitterTestEnv(t)
-		defer env.cleanup()
-
-		block, valInfo, users := getSampleBlock(1)
-		require.NoError(t, env.committer.commitToStateDB(block, valInfo))
-
-		for i, expectedUser := range users {
-			persistedUser, metadata, err := env.identityQuerier.GetUser(expectedUser.ID)
-			require.NoError(t, err)
-
-			expectedMetadata := &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    uint64(i),
-				},
-			}
-			require.True(t, proto.Equal(expectedMetadata, metadata))
-			require.True(t, proto.Equal(expectedUser, persistedUser))
-		}
-	})
-
-	t.Run("commit block with a mix of valid and invalid transactions", func(t *testing.T) {
-		t.Parallel()
-
-		env := newCommitterTestEnv(t)
-		defer env.cleanup()
-
-		block, valInfo, users := getSampleBlock(1)
-		valInfo[0] = &types.ValidationInfo{
-			Flag: types.Flag_INVALID_NO_PERMISSION,
-		}
-		require.NoError(t, env.committer.commitToStateDB(block, valInfo))
-
-		persistedUser, metadata, err := env.identityQuerier.GetUser(users[0].ID)
-		require.NoError(t, err)
-		require.Nil(t, metadata)
-		require.Nil(t, persistedUser)
-
-		persistedUser, metadata, err = env.identityQuerier.GetUser(users[1].ID)
-		require.NoError(t, err)
-
-		expectedMetadata := &types.Metadata{
+	expectedDataBefore := []*worldstate.KVWithMetadata{
+		constructDataEntryForTest("key1", []byte("value1"), &types.Metadata{
 			Version: &types.Version{
 				BlockNum: 1,
 				TxNum:    1,
 			},
-		}
-		require.True(t, proto.Equal(expectedMetadata, metadata))
-		require.True(t, proto.Equal(users[1], persistedUser))
-	})
+			AccessControl: &types.AccessControl{
+				ReadWriteUsers: map[string]bool{
+					"user1": true,
+				},
+			},
+		}),
+		constructDataEntryForTest("key2", []byte("value2"), nil),
+		constructDataEntryForTest("key3", []byte("value3"), nil),
+	}
+
+	tests := []struct {
+		name              string
+		txs               []*types.DataTxEnvelope
+		valInfo           []*types.ValidationInfo
+		expectedDataAfter []*worldstate.KVWithMetadata
+	}{
+		{
+			name: "update existing, add new, and delete existing",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key2",
+								Value: []byte("new-value2"),
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key3",
+								Value: []byte("new-value3"),
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key4",
+								Value: []byte("value4"),
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key1",
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key2",
+							},
+						},
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				},
+			},
+			expectedDataAfter: []*worldstate.KVWithMetadata{
+				constructDataEntryForTest("key2", []byte("new-value2"), &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    0,
+					},
+				}),
+				constructDataEntryForTest("key3", []byte("new-value3"), &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+				}),
+				constructDataEntryForTest("key4", []byte("value4"), &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    2,
+					},
+				}),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+
+			setup(env.db)
+
+			for _, kv := range expectedDataBefore {
+				val, meta, err := env.db.Get(worldstate.DefaultDBName, kv.Key)
+				require.NoError(t, err)
+				require.Equal(t, kv.Value, val)
+				require.Equal(t, kv.Metadata, meta)
+			}
+
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					Number: 2,
+				},
+				Payload: &types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: tt.txs,
+					},
+				},
+			}
+			require.NoError(t, env.committer.commitToStateDB(block, tt.valInfo))
+
+			for _, kv := range tt.expectedDataAfter {
+				val, meta, err := env.db.Get(worldstate.DefaultDBName, kv.Key)
+				require.NoError(t, err)
+				require.Equal(t, kv.Value, val)
+				require.Equal(t, kv.Metadata, meta)
+			}
+		})
+	}
 }
 
-func TestStateDBCommitterForConfig(t *testing.T) {
+func TestStateDBCommitterForUserBlock(t *testing.T) {
+	t.Parallel()
+
+	sampleVersion := &types.Version{
+		BlockNum: 1,
+		TxNum:    1,
+	}
+
+	tests := []struct {
+		name                string
+		setup               func(db worldstate.DB)
+		expectedUsersBefore []string
+		tx                  *types.UserAdministrationTx
+		valInfo             []*types.ValidationInfo
+		expectedUsersAfter  []string
+	}{
+		{
+			name: "add and delete users",
+			setup: func(db worldstate.DB) {
+				users := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, "user1", sampleVersion, nil),
+							constructUserForTest(t, "user2", sampleVersion, nil),
+							constructUserForTest(t, "user3", sampleVersion, nil),
+							constructUserForTest(t, "user4", sampleVersion, nil),
+						},
+					},
+				}
+				require.NoError(t, db.Commit(users))
+			},
+			expectedUsersBefore: []string{"user1", "user2", "user3", "user4"},
+			tx: &types.UserAdministrationTx{
+				UserWrites: []*types.UserWrite{
+					{
+						User: &types.User{
+							ID:          "user4",
+							Certificate: []byte("new-certificate~user4"),
+						},
+					},
+					{
+						User: &types.User{
+							ID:          "user5",
+							Certificate: []byte("certificate~user5"),
+						},
+					},
+					{
+						User: &types.User{
+							ID:          "user6",
+							Certificate: []byte("certificate~user6"),
+						},
+					},
+				},
+				UserDeletes: []*types.UserDelete{
+					{
+						UserID: "user1",
+					},
+					{
+						UserID: "user2",
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+			expectedUsersAfter: []string{"user3", "user4", "user5", "user6"},
+		},
+		{
+			name: "tx is marked invalid",
+			setup: func(db worldstate.DB) {
+				users := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, "user1", sampleVersion, nil),
+						},
+					},
+				}
+				require.NoError(t, db.Commit(users))
+			},
+			expectedUsersBefore: []string{"user1"},
+			tx: &types.UserAdministrationTx{
+				UserWrites: []*types.UserWrite{
+					{
+						User: &types.User{
+							ID:          "user2",
+							Certificate: []byte("new-certificate~user2"),
+						},
+					},
+				},
+				UserDeletes: []*types.UserDelete{
+					{
+						UserID: "user1",
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_INVALID_NO_PERMISSION,
+				},
+			},
+			expectedUsersAfter: []string{"user1"},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+
+			tt.setup(env.db)
+
+			for _, user := range tt.expectedUsersBefore {
+				exist, err := env.identityQuerier.DoesUserExist(user)
+				require.NoError(t, err)
+				require.True(t, exist)
+			}
+
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					Number: 2,
+				},
+				Payload: &types.Block_UserAdministrationTxEnvelope{
+					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+						Payload: tt.tx,
+					},
+				},
+			}
+			require.NoError(t, env.committer.commitToStateDB(block, tt.valInfo))
+
+			for _, user := range tt.expectedUsersAfter {
+				exist, err := env.identityQuerier.DoesUserExist(user)
+				require.NoError(t, err)
+				require.True(t, exist)
+			}
+		})
+	}
+}
+
+func TestStateDBCommitterForDBBlock(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name              string
+		setup             func(db worldstate.DB)
+		expectedDBsBefore []string
+		dbAdminTx         *types.DBAdministrationTx
+		expectedDBsAfter  []string
+		valInfo           []*types.ValidationInfo
+	}{
+		{
+			name: "create new DBss and delete existing DBs",
+			setup: func(db worldstate.DB) {
+				createDBs := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "db1",
+							},
+							{
+								Key: "db2",
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(createDBs))
+			},
+			expectedDBsBefore: []string{"db1", "db2"},
+			dbAdminTx: &types.DBAdministrationTx{
+				CreateDBs: []string{"db3", "db4"},
+				DeleteDBs: []string{"db1", "db2"},
+			},
+			expectedDBsAfter: []string{"db3", "db4"},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		},
+		{
+			name: "tx marked invalid",
+			setup: func(db worldstate.DB) {
+				createDBs := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "db1",
+							},
+							{
+								Key: "db2",
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(createDBs))
+			},
+			expectedDBsBefore: []string{"db1", "db2"},
+			dbAdminTx: &types.DBAdministrationTx{
+				DeleteDBs: []string{"db1", "db2"},
+			},
+			expectedDBsAfter: []string{"db1", "db2"},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_INVALID_NO_PERMISSION,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+
+			tt.setup(env.db)
+
+			for _, dbName := range tt.expectedDBsBefore {
+				require.True(t, env.db.Exist(dbName))
+			}
+
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					Number: 2,
+				},
+				Payload: &types.Block_DBAdministrationTxEnvelope{
+					DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
+						Payload: tt.dbAdminTx,
+					},
+				},
+			}
+			require.NoError(t, env.committer.commitToStateDB(block, tt.valInfo))
+
+			for _, dbName := range tt.expectedDBsAfter {
+				require.True(t, env.db.Exist(dbName))
+			}
+		})
+	}
+}
+
+func TestStateDBCommitterForConfigBlock(t *testing.T) {
 	t.Parallel()
 
 	generateSampleConfigBlock := func(number uint64, adminsID []string) *types.Block {
@@ -1076,24 +692,14 @@ func TestStateDBCommitterForConfig(t *testing.T) {
 			RootCACertificate: []byte("root-ca"),
 		}
 
-		expectedConfigValue, err := json.Marshal(clusterConfig)
-		require.NoError(t, err)
-
 		configBlock := &types.Block{
 			Header: &types.BlockHeader{
 				Number: number,
 			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				{
-					Payload: &types.Transaction{
-						Type:   types.Transaction_CONFIG,
-						DBName: worldstate.ConfigDBName,
-						Writes: []*types.KVWrite{
-							{
-								Key:   "config", // TODO: need to define a constant and put in library package
-								Value: expectedConfigValue,
-							},
-						},
+			Payload: &types.Block_ConfigTxEnvelope{
+				ConfigTxEnvelope: &types.ConfigTxEnvelope{
+					Payload: &types.ConfigTx{
+						NewConfig: clusterConfig,
 					},
 				},
 			},
@@ -1116,49 +722,23 @@ func TestStateDBCommitterForConfig(t *testing.T) {
 		expectedClusterAdminsBefore []*types.User
 		adminsInNewConfigTx         []string
 		expectedClusterAdminsAfter  []*types.User
+		valInfo                     []*types.ValidationInfo
 	}{
 		{
 			name:                      "no change in the set of admins",
 			adminsInCommittedConfigTx: []string{"admin1", "admin2"},
 			expectedClusterAdminsBefore: []*types.User{
-				{
-					ID:          "admin1",
-					Certificate: []byte("certificate~" + "admin1"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
-				{
-					ID:          "admin2",
-					Certificate: []byte("certificate~" + "admin2"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
+				constructAdminEntryForTest("admin1"),
+				constructAdminEntryForTest("admin2"),
 			},
 			adminsInNewConfigTx: []string{"admin1", "admin2"},
 			expectedClusterAdminsAfter: []*types.User{
+				constructAdminEntryForTest("admin1"),
+				constructAdminEntryForTest("admin2"),
+			},
+			valInfo: []*types.ValidationInfo{
 				{
-					ID:          "admin1",
-					Certificate: []byte("certificate~" + "admin1"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
-				{
-					ID:          "admin2",
-					Certificate: []byte("certificate~" + "admin2"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
+					Flag: types.Flag_VALID,
 				},
 			},
 		},
@@ -1166,70 +746,37 @@ func TestStateDBCommitterForConfig(t *testing.T) {
 			name:                      "add and delete admins",
 			adminsInCommittedConfigTx: []string{"admin1", "admin2", "admin3"},
 			expectedClusterAdminsBefore: []*types.User{
-				{
-					ID:          "admin1",
-					Certificate: []byte("certificate~" + "admin1"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
-				{
-					ID:          "admin2",
-					Certificate: []byte("certificate~" + "admin2"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
-				{
-					ID:          "admin3",
-					Certificate: []byte("certificate~" + "admin3"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
+				constructAdminEntryForTest("admin1"),
+				constructAdminEntryForTest("admin2"),
+				constructAdminEntryForTest("admin3"),
 			},
 			adminsInNewConfigTx: []string{"admin3", "admin4", "admin5"},
 			expectedClusterAdminsAfter: []*types.User{
+				constructAdminEntryForTest("admin3"),
+				constructAdminEntryForTest("admin4"),
+				constructAdminEntryForTest("admin5"),
+			},
+			valInfo: []*types.ValidationInfo{
 				{
-					ID:          "admin3",
-					Certificate: []byte("certificate~" + "admin3"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
-				{
-					ID:          "admin4",
-					Certificate: []byte("certificate~" + "admin4"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
-				},
-				{
-					ID:          "admin5",
-					Certificate: []byte("certificate~" + "admin5"),
-					Privilege: &types.Privilege{
-						DBAdministration:      true,
-						ClusterAdministration: true,
-						UserAdministration:    true,
-					},
+					Flag: types.Flag_VALID,
 				},
 			},
 		},
-	}
-
-	valInfo := []*types.ValidationInfo{
 		{
-			Flag: types.Flag_VALID,
+			name:                      "tx is marked invalid",
+			adminsInCommittedConfigTx: []string{"admin1"},
+			expectedClusterAdminsBefore: []*types.User{
+				constructAdminEntryForTest("admin1"),
+			},
+			adminsInNewConfigTx: []string{"admin1", "admin2"},
+			expectedClusterAdminsAfter: []*types.User{
+				constructAdminEntryForTest("admin1"),
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_INVALID_NO_PERMISSION,
+				},
+			},
 		},
 	}
 
@@ -1242,6 +789,11 @@ func TestStateDBCommitterForConfig(t *testing.T) {
 			defer env.cleanup()
 
 			var blockNumber uint64
+			valInfo := []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			}
 
 			blockNumber = 1
 			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx)
@@ -1250,8 +802,28 @@ func TestStateDBCommitterForConfig(t *testing.T) {
 
 			blockNumber++
 			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx)
-			env.committer.commitToStateDB(configBlock, valInfo)
+			env.committer.commitToStateDB(configBlock, tt.valInfo)
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsAfter)
 		})
+	}
+}
+
+func constructDataEntryForTest(key string, value []byte, metadata *types.Metadata) *worldstate.KVWithMetadata {
+	return &worldstate.KVWithMetadata{
+		Key:      key,
+		Value:    value,
+		Metadata: metadata,
+	}
+}
+
+func constructAdminEntryForTest(userID string) *types.User {
+	return &types.User{
+		ID:          userID,
+		Certificate: []byte("certificate~" + userID),
+		Privilege: &types.Privilege{
+			DBAdministration:      true,
+			ClusterAdministration: true,
+			UserAdministration:    true,
+		},
 	}
 }

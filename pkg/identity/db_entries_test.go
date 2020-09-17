@@ -9,11 +9,11 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
-func TestConstructDBEntriesForUsers(t *testing.T) {
+func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 	t.Parallel()
 
-	sampleUser := func(userID string) []byte {
-		user := &types.User{
+	sampleUser := func(userID string) *types.User {
+		return &types.User{
 			ID:          userID,
 			Certificate: []byte("certificate-" + userID),
 			Privilege: &types.Privilege{
@@ -25,31 +25,32 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 				UserAdministration:    false,
 			},
 		}
+	}
 
-		u, err := proto.Marshal(user)
+	sampleUserSerialized := func(t *testing.T, userID string) []byte {
+		user := sampleUser(userID)
+
+		userSerialized, err := proto.Marshal(user)
 		require.NoError(t, err)
-		return u
+
+		return userSerialized
 	}
 
 	tests := []struct {
 		name              string
-		transaction       *types.Transaction
+		transaction       *types.UserAdministrationTx
 		version           *types.Version
 		expectedDBUpdates *worldstate.DBUpdates
 	}{
 		{
 			name: "only writes",
-			transaction: &types.Transaction{
-				Type:   0,
-				DBName: worldstate.UsersDBName,
-				Writes: []*types.KVWrite{
+			transaction: &types.UserAdministrationTx{
+				UserWrites: []*types.UserWrite{
 					{
-						Key:   "user1",
-						Value: sampleUser("user1"),
+						User: sampleUser("user1"),
 					},
 					{
-						Key:   "user2",
-						Value: sampleUser("user2"),
+						User: sampleUser("user2"),
 					},
 				},
 			},
@@ -62,7 +63,7 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(UserNamespace) + "user1",
-						Value: sampleUser("user1"),
+						Value: sampleUserSerialized(t, "user1"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
 								BlockNum: 1,
@@ -72,7 +73,7 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 					},
 					{
 						Key:   string(UserNamespace) + "user2",
-						Value: sampleUser("user2"),
+						Value: sampleUserSerialized(t, "user2"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
 								BlockNum: 1,
@@ -86,17 +87,13 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 		},
 		{
 			name: "only deletes",
-			transaction: &types.Transaction{
-				Type:   0,
-				DBName: worldstate.UsersDBName,
-				Writes: []*types.KVWrite{
+			transaction: &types.UserAdministrationTx{
+				UserDeletes: []*types.UserDelete{
 					{
-						Key:      "user3",
-						IsDelete: true,
+						UserID: "user3",
 					},
 					{
-						Key:      "user4",
-						IsDelete: true,
+						UserID: "user4",
 					},
 				},
 			},
@@ -112,25 +109,21 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 		},
 		{
 			name: "both writes and deletes",
-			transaction: &types.Transaction{
-				Type:   0,
-				DBName: worldstate.UsersDBName,
-				Writes: []*types.KVWrite{
+			transaction: &types.UserAdministrationTx{
+				UserWrites: []*types.UserWrite{
 					{
-						Key:   "user1",
-						Value: sampleUser("user1"),
+						User: sampleUser("user1"),
 					},
 					{
-						Key:   "user2",
-						Value: sampleUser("user2"),
+						User: sampleUser("user2"),
+					},
+				},
+				UserDeletes: []*types.UserDelete{
+					{
+						UserID: "user3",
 					},
 					{
-						Key:      "user3",
-						IsDelete: true,
-					},
-					{
-						Key:      "user4",
-						IsDelete: true,
+						UserID: "user4",
 					},
 				},
 			},
@@ -143,7 +136,7 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(UserNamespace) + "user1",
-						Value: sampleUser("user1"),
+						Value: sampleUserSerialized(t, "user1"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
 								BlockNum: 2,
@@ -153,7 +146,7 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 					},
 					{
 						Key:   string(UserNamespace) + "user2",
-						Value: sampleUser("user2"),
+						Value: sampleUserSerialized(t, "user2"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
 								BlockNum: 2,
@@ -175,7 +168,8 @@ func TestConstructDBEntriesForUsers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			dbUpdates := ConstructDBEntriesForUsers(tt.transaction, tt.version)
+			dbUpdates, err := ConstructDBEntriesForUserAdminTx(tt.transaction, tt.version)
+			require.NoError(t, err)
 			require.Equal(t, tt.expectedDBUpdates, dbUpdates)
 		})
 	}
@@ -234,8 +228,32 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 					Certificate: []byte("certificate 2"),
 				},
 			},
-			version:         nil,
-			expectedUpdates: nil,
+			version: sampleVersion,
+			expectedUpdates: &worldstate.DBUpdates{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(UserNamespace) + "admin1",
+						Value: sampleAdmin("admin1", []byte("certificate 1")),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
+						},
+					},
+					{
+						Key:   string(UserNamespace) + "admin2",
+						Value: sampleAdmin("admin2", []byte("certificate 2")),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "add, update, and delete admins",

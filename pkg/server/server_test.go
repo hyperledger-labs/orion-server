@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
@@ -96,7 +96,7 @@ func TestStart(t *testing.T) {
 		require.Nil(t, valEnv)
 		require.Contains(t, err.Error(), "the user [admin] has no permission to read from database [db1]")
 
-		config, err := env.client.GetState(
+		configSerialized, err := env.client.GetState(
 			ctx,
 			&types.GetStateQueryEnvelope{
 				Payload: &types.GetStateQuery{
@@ -108,11 +108,13 @@ func TestStart(t *testing.T) {
 			},
 		)
 		require.NoError(t, err)
-		require.NotNil(t, config)
+
+		config := &types.ClusterConfig{}
+		proto.Unmarshal(configSerialized.Payload.Value, config)
 
 		configTx, err := prepareConfigTx(env.conf)
 		require.NoError(t, err)
-		require.Equal(t, configTx.Payload.Writes[0].Value, config.Payload.Value)
+		require.Equal(t, configTx.Payload.NewConfig, config)
 
 		blockStore := env.server.dbServ.blockStore
 		height, err := blockStore.Height()
@@ -121,8 +123,8 @@ func TestStart(t *testing.T) {
 
 		configBlock, err := blockStore.Get(1)
 		require.NoError(t, err)
-		configTx.Payload.TxID = configBlock.TransactionEnvelopes[0].Payload.TxID
-		require.True(t, proto.Equal(configTx, configBlock.TransactionEnvelopes[0]))
+		configTx.Payload.TxID = configBlock.GetConfigTxEnvelope().Payload.GetTxID()
+		require.True(t, proto.Equal(configTx, configBlock.GetConfigTxEnvelope()))
 	})
 }
 
@@ -162,7 +164,7 @@ func TestHandleStatusQuery(t *testing.T) {
 						DBName: worldstate.DefaultDBName,
 					},
 				},
-				expectedError: "X-BLockchain-DB-Signature is not set in the http request header",
+				expectedError: "Signature is not set in the http request header",
 			},
 			{
 				request: &types.GetStatusQueryEnvelope{
@@ -172,7 +174,7 @@ func TestHandleStatusQuery(t *testing.T) {
 					},
 					Signature: []byte("signature"),
 				},
-				expectedError: "X-BLockchain-DB-User-ID is not set in the http request header",
+				expectedError: "UserID is not set in the http request header",
 			},
 		}
 
@@ -297,7 +299,7 @@ func TestHandleStateQuery(t *testing.T) {
 						Key:    "key1",
 					},
 				},
-				expectedError: "X-BLockchain-DB-Signature is not set in the http request header",
+				expectedError: "Signature is not set in the http request header",
 			},
 			{
 				request: &types.GetStateQueryEnvelope{
@@ -308,7 +310,7 @@ func TestHandleStateQuery(t *testing.T) {
 					},
 					Signature: []byte("signature"),
 				},
-				expectedError: "X-BLockchain-DB-User-ID is not set in the http request header",
+				expectedError: "UserID is not set in the http request header",
 			},
 		}
 
@@ -317,6 +319,311 @@ func TestHandleStateQuery(t *testing.T) {
 			require.Contains(t, err.Error(), testCase.expectedError)
 			require.Nil(t, resp)
 		}
+	})
+}
+
+func TestHandleTransaction(t *testing.T) {
+	t.Parallel()
+
+	t.Run("submit a data transaction", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		dataTx := &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				UserID: "user1",
+				TxID:   "tx1",
+				DBName: "db1",
+				DataReads: []*types.DataRead{
+					{
+						Key: "key1",
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    2,
+						},
+					},
+				},
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "key2",
+						Value: []byte("value2"),
+						ACL: &types.AccessControl{
+							ReadUsers: map[string]bool{
+								"user1": true,
+							},
+							ReadWriteUsers: map[string]bool{
+								"user2": true,
+							},
+						},
+					},
+				},
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key1",
+					},
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDataTx, dataTx)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
+		assertTxInBlockStore := func() bool {
+			block, err := env.server.dbServ.blockStore.Get(2)
+			if err != nil {
+				return false
+			}
+
+			if proto.Equal(dataTx, block.GetDataTxEnvelopes().GetEnvelopes()[0]) {
+				return true
+			}
+			return false
+		}
+
+		require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
+	})
+
+	t.Run("submit a user admin transaction", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		userAdminTx := &types.UserAdministrationTxEnvelope{
+			Payload: &types.UserAdministrationTx{
+				UserID: "admin",
+				TxID:   "tx1",
+				UserReads: []*types.UserRead{
+					{
+						UserID: "user1",
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    2,
+						},
+					},
+				},
+				UserWrites: []*types.UserWrite{
+					{
+						User: &types.User{
+							ID:          "user2",
+							Certificate: []byte("certificate"),
+							Privilege: &types.Privilege{
+								DBPermission: map[string]types.Privilege_Access{
+									"db1": types.Privilege_Read,
+									"db2": types.Privilege_ReadWrite,
+								},
+								DBAdministration:      true,
+								ClusterAdministration: true,
+								UserAdministration:    true,
+							},
+						},
+						ACL: &types.AccessControl{
+							ReadUsers: map[string]bool{
+								"user3": true,
+							},
+							ReadWriteUsers: map[string]bool{
+								"user4": true,
+							},
+						},
+					},
+				},
+				UserDeletes: []*types.UserDelete{
+					{
+						UserID: "user5",
+					},
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostUserTx, userAdminTx)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
+		assertTxInBlockStore := func() bool {
+			block, err := env.server.dbServ.blockStore.Get(2)
+			if err != nil {
+				return false
+			}
+
+			return proto.Equal(userAdminTx, block.GetUserAdministrationTxEnvelope())
+		}
+
+		require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
+	})
+
+	t.Run("submit a db admin transaction", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		dbAdminTx := &types.DBAdministrationTxEnvelope{
+			Payload: &types.DBAdministrationTx{
+				UserID:    "admin",
+				TxID:      "tx1",
+				CreateDBs: []string{"db1", "db2"},
+				DeleteDBs: []string{"db3", "db4"},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDBTx, dbAdminTx)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
+		assertTxInBlockStore := func() bool {
+			block, err := env.server.dbServ.blockStore.Get(2)
+			if err != nil {
+				return false
+			}
+
+			return proto.Equal(dbAdminTx, block.GetDBAdministrationTxEnvelope())
+		}
+
+		require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
+	})
+
+	t.Run("submit a cluster config transaction", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		configTx := &types.ConfigTxEnvelope{
+			Payload: &types.ConfigTx{
+				UserID: "admin",
+				TxID:   "tx1",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+				NewConfig: &types.ClusterConfig{
+					Nodes: []*types.NodeConfig{
+						{
+							ID:          "bdb-node-1",
+							Certificate: []byte("node-cert"),
+							Address:     "127.0.0.1",
+							Port:        5000,
+						},
+					},
+					Admins: []*types.Admin{
+						{
+							ID:          "admin",
+							Certificate: []byte("admin-cert"),
+						},
+					},
+					RootCACertificate: []byte("root-cert"),
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostConfigTx, configTx)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
+		assertTxInBlockStore := func() bool {
+			block, err := env.server.dbServ.blockStore.Get(2)
+			if err != nil {
+				return false
+			}
+
+			return proto.Equal(configTx, block.GetConfigTxEnvelope())
+		}
+
+		require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
+	})
+
+	t.Run("error while submitting a wrong data tx", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		configTx := &types.ConfigTxEnvelope{
+			Payload: &types.ConfigTx{
+				UserID: "admin",
+				TxID:   "tx1",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDataTx, configTx)
+		require.Contains(t, err.Error(), "json: unknown field \"read_old_config_version\"")
+		require.Nil(t, resp)
+	})
+
+	t.Run("error while submitting a wrong config tx", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		dataTx := &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				UserID: "admin",
+				TxID:   "tx1",
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key1",
+					},
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostConfigTx, dataTx)
+		require.Contains(t, err.Error(), "json: unknown field \"data_deletes\"")
+		require.Nil(t, resp)
+	})
+
+	t.Run("error while submitting a wrong db admin tx", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		dataTx := &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				UserID: "admin",
+				TxID:   "tx1",
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key1",
+					},
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostDBTx, dataTx)
+		require.Contains(t, err.Error(), "json: unknown field \"data_deletes\"")
+		require.Nil(t, resp)
+	})
+
+	t.Run("error while submitting a wrong user admin tx", func(t *testing.T) {
+		t.Parallel()
+
+		env := newServerTestEnv(t)
+		defer env.cleanup(t)
+
+		dataTx := &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				UserID: "admin",
+				TxID:   "tx1",
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key1",
+					},
+				},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(context.Background(), constants.PostUserTx, dataTx)
+		require.Contains(t, err.Error(), "json: unknown field \"data_deletes\"")
+		require.Nil(t, resp)
 	})
 }
 
@@ -352,27 +659,18 @@ func TestPrepareConfigTransaction(t *testing.T) {
 			RootCACertificate: rootCACert,
 		}
 
-		expectedConfigValue, err := json.Marshal(expectedClusterConfig)
-		require.NoError(t, err)
-
-		expectedConfigTx := &types.TransactionEnvelope{
-			Payload: &types.Transaction{
-				Type:      1,
-				DBName:    "_config",
-				DataModel: 0,
-				Writes: []*types.KVWrite{
-					{
-						Key:   "config", // TODO: need to define a constant and put in library package
-						Value: expectedConfigValue,
-					},
-				},
+		expectedConfigTx := &types.ConfigTxEnvelope{
+			Payload: &types.ConfigTx{
+				NewConfig: expectedClusterConfig,
 			},
 		}
 
-		configTx, err := prepareConfigTx(testConfiguration(t))
+		conf := testConfiguration(t)
+		defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
+		configTx, err := prepareConfigTx(conf)
 		require.NoError(t, err)
 		require.NotEmpty(t, configTx.Payload.TxID)
-		configTx.Payload.TxID = []byte{}
+		configTx.Payload.TxID = ""
 		require.True(t, proto.Equal(expectedConfigTx, configTx))
 	})
 }

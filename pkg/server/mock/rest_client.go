@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 
@@ -69,7 +68,7 @@ func (c *Client) GetStatus(ctx context.Context, in *types.GetStatusQueryEnvelope
 }
 
 func (c *Client) GetState(ctx context.Context, in *types.GetStateQueryEnvelope) (*types.GetStateResponseEnvelope, error) {
-	rel := &url.URL{Path: fmt.Sprintf("/db/%s/state/%s", in.Payload.DBName, in.Payload.Key)}
+	rel := &url.URL{Path: fmt.Sprintf("/data/%s/%s", in.Payload.DBName, in.Payload.Key)}
 	u := c.BaseURL.ResolveReference(rel)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
@@ -98,18 +97,18 @@ func (c *Client) GetState(ctx context.Context, in *types.GetStateQueryEnvelope) 
 	return res, err
 }
 
-func (c *Client) SubmitTransaction(ctx context.Context, in *types.TransactionEnvelope) (*types.ResponseEnvelope, error) {
-	rel := &url.URL{Path: "/tx"}
-	u := c.BaseURL.ResolveReference(rel)
+func (c *Client) SubmitTransaction(ctx context.Context, urlPath string, tx interface{}) (*types.ResponseEnvelope, error) {
+	u := c.BaseURL.ResolveReference(
+		&url.URL{
+			Path: urlPath,
+		},
+	)
 
-	var buf io.ReadWriter
-	if in != nil {
-		buf = new(bytes.Buffer)
-		err := json.NewEncoder(buf).Encode(in)
-		if err != nil {
-			return nil, err
-		}
+	buf := &bytes.Buffer{}
+	if err := json.NewEncoder(buf).Encode(tx); err != nil {
+		return nil, err
 	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), buf)
 	if err != nil {
 		return nil, err
@@ -123,16 +122,21 @@ func (c *Client) SubmitTransaction(ctx context.Context, in *types.TransactionEnv
 		return nil, err
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		errorRes := new(ResponseErr)
-		err = json.NewDecoder(resp.Body).Decode(errorRes)
-		if err != nil {
+		errorRes := &ResponseErr{}
+		if err = json.NewDecoder(resp.Body).Decode(errorRes); err != nil {
 			return nil, err
 		}
+
 		return nil, errors.New(errorRes.Error)
 	}
-	res := new(types.ResponseEnvelope)
-	err = json.NewDecoder(resp.Body).Decode(res)
+
+	res := &types.ResponseEnvelope{}
+	if err = json.NewDecoder(resp.Body).Decode(res); err != nil {
+		return nil, err
+	}
+
 	if res.Data == nil {
 		return nil, nil
 	}

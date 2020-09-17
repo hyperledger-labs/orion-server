@@ -87,8 +87,11 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 func TestTransactionProcessor(t *testing.T) {
 	t.Parallel()
 
+	conf := testConfiguration(t)
+	defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
+
 	setup := func(env *txProcessorTestEnv, userID, dbName string) {
-		configTx, err := prepareConfigTx(testConfiguration(t))
+		configTx, err := prepareConfigTx(conf)
 		require.NoError(t, err)
 		require.NoError(t, env.txProcessor.submitTransaction(context.Background(), configTx))
 
@@ -131,14 +134,13 @@ func TestTransactionProcessor(t *testing.T) {
 
 		setup(env, "testUser", worldstate.DefaultDBName)
 
-		tx := &types.TransactionEnvelope{
-			Payload: &types.Transaction{
-				UserID:    []byte("testUser"),
+		tx := &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				UserID:    "testUser",
 				DBName:    worldstate.DefaultDBName,
-				TxID:      []byte("tx1"),
-				DataModel: types.Transaction_KV,
-				Reads:     []*types.KVRead{},
-				Writes: []*types.KVWrite{
+				TxID:      "tx1",
+				DataReads: []*types.DataRead{},
+				DataWrites: []*types.DataWrite{
 					{
 						Key:   "test-key1",
 						Value: []byte("test-value1"),
@@ -182,8 +184,12 @@ func TestTransactionProcessor(t *testing.T) {
 				PreviousBlockHeaderHash: nil,
 				TransactionsHash:        nil,
 			},
-			TransactionEnvelopes: []*types.TransactionEnvelope{
-				tx,
+			Payload: &types.Block_DataTxEnvelopes{
+				DataTxEnvelopes: &types.DataTxEnvelopes{
+					Envelopes: []*types.DataTxEnvelope{
+						tx,
+					},
+				},
 			},
 		}
 

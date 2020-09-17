@@ -43,32 +43,65 @@ func New(conf *Config) *TxReorderer {
 
 // Run runs the transactions batch creator
 func (b *TxReorderer) Run() {
-	var txBatch []*types.TransactionEnvelope
-	for {
-		tx := b.txQueue.Dequeue().(*types.TransactionEnvelope)
+	txs := &types.DataTxEnvelopes{}
 
-		switch tx.Payload.Type {
-		case types.Transaction_CONFIG, types.Transaction_DB, types.Transaction_USER:
-			b.enqueueTxBatch(txBatch)
-			b.enqueueTxBatch([]*types.TransactionEnvelope{tx})
-			txBatch = nil
-		default:
-			txBatch = append(txBatch, tx)
-			if uint32(len(txBatch)) < b.MaxTxCountPerBatch {
-				continue
+	for {
+		tx := b.txQueue.Dequeue()
+
+		switch tx.(type) {
+		case *types.DataTxEnvelope:
+			txs.Envelopes = append(txs.Envelopes, tx.(*types.DataTxEnvelope))
+
+			if uint32(len(txs.Envelopes)) == b.MaxTxCountPerBatch {
+				log.Printf("enqueueing data transactions")
+				b.enqueueDataTxBatch(txs)
+				txs = &types.DataTxEnvelopes{}
+			}
+		case *types.UserAdministrationTxEnvelope:
+			if len(txs.Envelopes) > 0 {
+				b.enqueueDataTxBatch(txs)
+				txs = &types.DataTxEnvelopes{}
 			}
 
-			log.Printf("added %d transactions to the tx batch queue", len(txBatch))
-			b.enqueueTxBatch(txBatch)
-			txBatch = nil
+			log.Printf("enqueueing user administrative transaction")
+			b.txBatchQueue.Enqueue(
+				&types.Block_UserAdministrationTxEnvelope{
+					UserAdministrationTxEnvelope: tx.(*types.UserAdministrationTxEnvelope),
+				},
+			)
+		case *types.DBAdministrationTxEnvelope:
+			if len(txs.Envelopes) > 0 {
+				b.enqueueDataTxBatch(txs)
+				txs = &types.DataTxEnvelopes{}
+			}
+
+			log.Printf("enqueueing db administrative transaction")
+			b.txBatchQueue.Enqueue(
+				&types.Block_DBAdministrationTxEnvelope{
+					DBAdministrationTxEnvelope: tx.(*types.DBAdministrationTxEnvelope),
+				},
+			)
+		case *types.ConfigTxEnvelope:
+			if len(txs.Envelopes) > 0 {
+				b.enqueueDataTxBatch(txs)
+				txs = &types.DataTxEnvelopes{}
+			}
+
+			log.Printf("enqueueing cluster config transaction")
+			b.txBatchQueue.Enqueue(
+				&types.Block_ConfigTxEnvelope{
+					ConfigTxEnvelope: tx.(*types.ConfigTxEnvelope),
+				},
+			)
 		}
 	}
 }
 
-func (b *TxReorderer) enqueueTxBatch(txBatch []*types.TransactionEnvelope) {
-	if len(txBatch) == 0 {
-		return
-	}
-	b.txBatchQueue.Enqueue(txBatch)
-	log.Printf("created a transaction batch with %d transactions", len(txBatch))
+func (b *TxReorderer) enqueueDataTxBatch(txBatch *types.DataTxEnvelopes) {
+	log.Printf("enqueueing [%d] data transactions", len(txBatch.Envelopes))
+	b.txBatchQueue.Enqueue(
+		&types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: txBatch,
+		},
+	)
 }

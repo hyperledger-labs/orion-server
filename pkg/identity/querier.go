@@ -29,12 +29,16 @@ func NewQuerier(db worldstate.DB) *Querier {
 // return false
 func (q *Querier) DoesUserExist(userID string) (bool, error) {
 	// TODO: use Has() API from the levelDB
-	user, _, err := q.GetUser(userID)
+	_, _, err := q.GetUser(userID)
 	if err != nil {
-		return false, err
+		if _, ok := err.(*UserNotFoundErr); !ok {
+			return false, err
+		}
+
+		return false, nil
 	}
 
-	return user != nil, nil
+	return true, nil
 }
 
 // GetUser returns the credentials associated with the given
@@ -46,7 +50,9 @@ func (q *Querier) GetUser(userID string) (*types.User, *types.Metadata, error) {
 	}
 
 	if val == nil {
-		return nil, nil, nil
+		return nil, nil, &UserNotFoundErr{
+			userID: userID,
+		}
 	}
 
 	user := &types.User{}
@@ -55,6 +61,24 @@ func (q *Querier) GetUser(userID string) (*types.User, *types.Metadata, error) {
 	}
 
 	return user, meta, nil
+}
+
+func (q *Querier) GetAccessControl(userID string) (*types.AccessControl, error) {
+	_, metadata, err := q.GetUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata.GetAccessControl(), nil
+}
+
+func (q *Querier) GetVersion(userID string) (*types.Version, error) {
+	_, metadata, err := q.GetUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata.Version, nil
 }
 
 // HasReadAccess returns true if the given userID has read access on the given
@@ -73,10 +97,6 @@ func (q *Querier) HasReadAccess(userID, dbName string) (bool, error) {
 			return false, err
 		}
 
-		if user == nil {
-			return false, fmt.Errorf("user with id [%s] was not found", userID)
-		}
-
 		dbPermission := user.GetPrivilege().GetDBPermission()
 		if dbPermission == nil {
 			return false, err
@@ -93,10 +113,6 @@ func (q *Querier) HasReadWriteAccess(userID, dbName string) (bool, error) {
 	user, _, err := q.GetUser(userID)
 	if err != nil {
 		return false, err
-	}
-
-	if user == nil {
-		return false, fmt.Errorf("user with id [%s] was not found", userID)
 	}
 
 	dbPermission := user.GetPrivilege().GetDBPermission()
@@ -120,10 +136,6 @@ func (q *Querier) HasDBAdministrationPrivilege(userID string) (bool, error) {
 		return false, err
 	}
 
-	if user == nil {
-		return false, fmt.Errorf("user with id [%s] was not found", userID)
-	}
-
 	return user.GetPrivilege().GetDBAdministration(), nil
 }
 
@@ -133,10 +145,6 @@ func (q *Querier) HasUserAdministrationPrivilege(userID string) (bool, error) {
 	user, _, err := q.GetUser(userID)
 	if err != nil {
 		return false, err
-	}
-
-	if user == nil {
-		return false, fmt.Errorf("user with id [%s] was not found", userID)
 	}
 
 	return user.GetPrivilege().GetUserAdministration(), nil
@@ -151,9 +159,34 @@ func (q *Querier) HasClusterAdministrationPrivilege(userID string) (bool, error)
 		return false, err
 	}
 
-	if user == nil {
-		return false, fmt.Errorf("user with id [%s] was not found", userID)
+	return user.GetPrivilege().GetClusterAdministration(), nil
+}
+
+func (q *Querier) HasReadAccessOnTargetUser(srcUser, targetUser string) (bool, error) {
+	acl, err := q.GetAccessControl(targetUser)
+	if err != nil {
+		return false, err
 	}
 
-	return user.GetPrivilege().GetClusterAdministration(), nil
+	return acl == nil ||
+		acl.ReadUsers[srcUser] ||
+		acl.ReadWriteUsers[srcUser], nil
+}
+
+func (q *Querier) HasReadWriteAccessOnTargetUser(srcUser, targetUser string) (bool, error) {
+	acl, err := q.GetAccessControl(targetUser)
+	if err != nil {
+		return false, err
+	}
+
+	return acl == nil ||
+		acl.ReadWriteUsers[srcUser], nil
+}
+
+type UserNotFoundErr struct {
+	userID string
+}
+
+func (e *UserNotFoundErr) Error() string {
+	return fmt.Sprintf("the user [%s] does not exist", e.userID)
 }

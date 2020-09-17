@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockcreator"
 	"github.ibm.com/blockchaindb/server/pkg/blockprocessor"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
@@ -58,7 +57,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 		&blockcreator.Config{
 			TxBatchQueue:    p.txBatchQueue,
 			BlockQueue:      p.blockQueue,
-			LastBlockNumber: conf.blockHeight,
+			NextBlockNumber: conf.blockHeight + 1,
 		},
 	)
 
@@ -78,7 +77,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 }
 
 // submitTransaction enqueue the transaction to the transaction queue
-func (t *transactionProcessor) submitTransaction(_ context.Context, tx *types.TransactionEnvelope) error {
+func (t *transactionProcessor) submitTransaction(_ context.Context, tx interface{}) error {
 	t.Lock()
 	defer t.Unlock()
 

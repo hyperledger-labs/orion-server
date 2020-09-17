@@ -24,16 +24,22 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	path, err := ioutil.TempDir("/tmp", "queryProcessor")
 	require.NoError(t, err)
 
-	cleanup := func(t *testing.T) {
+	db, err := leveldb.Open(path)
+	if err != nil {
 		if err := os.RemoveAll(path); err != nil {
 			t.Errorf("failed to remove %s due to %v", path, err)
 		}
+
+		t.Fatalf("failed to create a new leveldb instance, %v", err)
 	}
 
-	db, err := leveldb.Open(path)
-	if err != nil {
-		cleanup(t)
-		t.Fatalf("failed to create a new leveldb instance, %v", err)
+	cleanup := func(t *testing.T) {
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close leveldb: %v", err)
+		}
+		if err := os.RemoveAll(path); err != nil {
+			t.Fatalf("failed to remove %s due to %v", path, err)
+		}
 	}
 
 	qProcConfig := &queryProcessorConfig{

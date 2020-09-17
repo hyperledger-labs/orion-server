@@ -12,7 +12,7 @@ import (
 type BlockCreator struct {
 	txBatchQueue    *queue.Queue
 	blockQueue      *queue.Queue
-	lastBlockNumber uint64
+	nextBlockNumber uint64
 }
 
 // Config holds the configuration information required to initialize the
@@ -20,7 +20,7 @@ type BlockCreator struct {
 type Config struct {
 	TxBatchQueue    *queue.Queue
 	BlockQueue      *queue.Queue
-	LastBlockNumber uint64
+	NextBlockNumber uint64
 }
 
 // New creates a new block assembler
@@ -28,25 +28,44 @@ func New(conf *Config) *BlockCreator {
 	return &BlockCreator{
 		txBatchQueue:    conf.TxBatchQueue,
 		blockQueue:      conf.BlockQueue,
-		lastBlockNumber: conf.LastBlockNumber,
+		nextBlockNumber: conf.NextBlockNumber,
 	}
 }
 
 // Run runs the block assembler in an infinte loop
 func (b *BlockCreator) Run() {
 	for {
-		log.Printf("waiting for the block")
-		txBatch := b.txBatchQueue.Dequeue().([]*types.TransactionEnvelope)
+		txBatch := b.txBatchQueue.Dequeue()
 
-		b.lastBlockNumber++
+		blkNum := b.nextBlockNumber
 		block := &types.Block{
 			Header: &types.BlockHeader{
-				Number: b.lastBlockNumber,
+				Number: blkNum,
 			},
-			TransactionEnvelopes: txBatch,
 		}
 
-		log.Printf("created block %d with %d transactions\n", b.lastBlockNumber, len(txBatch))
+		switch txBatch.(type) {
+		case *types.Block_DataTxEnvelopes:
+			block.Payload = txBatch.(*types.Block_DataTxEnvelopes)
+			log.Printf("created block %d with %d data transactions\n",
+				blkNum,
+				len(txBatch.(*types.Block_DataTxEnvelopes).DataTxEnvelopes.Envelopes),
+			)
+
+		case *types.Block_UserAdministrationTxEnvelope:
+			block.Payload = txBatch.(*types.Block_UserAdministrationTxEnvelope)
+			log.Printf("created block %d with an user administrative transaction", blkNum)
+
+		case *types.Block_ConfigTxEnvelope:
+			block.Payload = txBatch.(*types.Block_ConfigTxEnvelope)
+			log.Printf("created block %d with a cluster config administrative transaction", blkNum)
+
+		case *types.Block_DBAdministrationTxEnvelope:
+			block.Payload = txBatch.(*types.Block_DBAdministrationTxEnvelope)
+			log.Printf("created block %d with a DB administrative transaction", blkNum)
+		}
+
 		b.blockQueue.Enqueue(block)
+		b.nextBlockNumber++
 	}
 }

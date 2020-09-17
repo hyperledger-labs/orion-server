@@ -11,123 +11,155 @@ import (
 )
 
 func TestBatchCreator(t *testing.T) {
-	setup := func(lastCommittedBlockNumber uint64) *BlockCreator {
-		b := New(&Config{
-			TxBatchQueue:    queue.New(10),
-			BlockQueue:      queue.New(10),
-			LastBlockNumber: lastCommittedBlockNumber,
-		})
-		go b.Run()
+	b := New(&Config{
+		TxBatchQueue:    queue.New(10),
+		BlockQueue:      queue.New(10),
+		NextBlockNumber: 1,
+	})
+	go b.Run()
 
-		return b
+	dataTx1 := &types.DataTxEnvelope{
+		Payload: &types.DataTx{
+			UserID: "user1",
+			DBName: "db1",
+			DataDeletes: []*types.DataDelete{
+				{
+					Key: "key1",
+				},
+			},
+		},
 	}
 
-	t.Run("construct-different-sized-blocks", func(t *testing.T) {
-		blockCreatorWithLastBlockNumber0 := setup(0)
-		blockCreatorWithLastBlockNumber5 := setup(5)
+	dataTx2 := &types.DataTxEnvelope{
+		Payload: &types.DataTx{
+			UserID: "user2",
+			DBName: "db2",
+			DataDeletes: []*types.DataDelete{
+				{
+					Key: "key2",
+				},
+			},
+		},
+	}
 
-		testCases := []struct {
-			blockCreator   *BlockCreator
-			txBatches      [][]*types.TransactionEnvelope
-			expectedBlocks []*types.Block
-		}{
-			{
-				blockCreator: blockCreatorWithLastBlockNumber0,
-				txBatches: [][]*types.TransactionEnvelope{
-					{
-						{
-							Signature: []byte("sign-1"),
-						},
-					},
-					{
-						{
-							Signature: []byte("sign-2"),
-						},
-					},
+	userAdminTx := &types.UserAdministrationTxEnvelope{
+		Payload: &types.UserAdministrationTx{
+			UserID: "user1",
+			UserReads: []*types.UserRead{
+				{
+					UserID: "user1",
 				},
-				expectedBlocks: []*types.Block{
-					{
-						Header: &types.BlockHeader{
-							Number: 1,
-						},
-						TransactionEnvelopes: []*types.TransactionEnvelope{
-							{
-								Signature: []byte("sign-1"),
-							},
-						},
-					},
-					{
-						Header: &types.BlockHeader{
-							Number: 2,
-						},
-						TransactionEnvelopes: []*types.TransactionEnvelope{
-							{
-								Signature: []byte("sign-2"),
-							},
-						},
+			},
+			UserWrites: []*types.UserWrite{
+				{
+					User: &types.User{
+						ID:          "user2",
+						Certificate: []byte("certificate"),
 					},
 				},
 			},
-			{
-				blockCreator: blockCreatorWithLastBlockNumber0,
-				txBatches: [][]*types.TransactionEnvelope{
-					{
-						{
-							Signature: []byte("sign-1"),
-						},
-						{
-							Signature: []byte("sign-2"),
-						},
-						{
-							Signature: []byte("sign-3"),
-						},
-					},
-				},
-				expectedBlocks: []*types.Block{
-					{
-						Header: &types.BlockHeader{
-							Number: 3,
-						},
-						TransactionEnvelopes: []*types.TransactionEnvelope{
-							{
-								Signature: []byte("sign-1"),
-							},
-							{
-								Signature: []byte("sign-2"),
-							},
-							{
-								Signature: []byte("sign-3"),
-							},
-						},
-					},
-				},
-			},
-			{
-				blockCreator: blockCreatorWithLastBlockNumber5,
-				txBatches: [][]*types.TransactionEnvelope{
-					{
-						{
-							Signature: []byte("sign-1"),
-						},
-					},
-				},
-				expectedBlocks: []*types.Block{
-					{
-						Header: &types.BlockHeader{
-							Number: 6,
-						},
-						TransactionEnvelopes: []*types.TransactionEnvelope{
-							{
-								Signature: []byte("sign-1"),
-							},
-						},
-					},
-				},
-			},
-		}
+		},
+	}
 
-		for _, tt := range testCases {
-			b := tt.blockCreator
+	dbAdminTx := &types.DBAdministrationTxEnvelope{
+		Payload: &types.DBAdministrationTx{
+			UserID:    "user1",
+			CreateDBs: []string{"db1", "db2"},
+			DeleteDBs: []string{"db3", "db4"},
+		},
+	}
+
+	configTx := &types.ConfigTxEnvelope{
+		Payload: &types.ConfigTx{
+			UserID: "user1",
+			NewConfig: &types.ClusterConfig{
+				Nodes: []*types.NodeConfig{
+					{
+						ID: "node1",
+					},
+				},
+				Admins: []*types.Admin{
+					{
+						ID: "admin1",
+					},
+				},
+				RootCACertificate: []byte("root-ca"),
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		txBatches      []interface{}
+		expectedBlocks []*types.Block
+	}{
+		{
+			name: "enqueue all types of transactions",
+			txBatches: []interface{}{
+				&types.Block_UserAdministrationTxEnvelope{
+					UserAdministrationTxEnvelope: userAdminTx,
+				},
+				&types.Block_DBAdministrationTxEnvelope{
+					DBAdministrationTxEnvelope: dbAdminTx,
+				},
+				&types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: []*types.DataTxEnvelope{
+							dataTx1,
+							dataTx2,
+						},
+					},
+				},
+				&types.Block_ConfigTxEnvelope{
+					ConfigTxEnvelope: configTx,
+				},
+			},
+			expectedBlocks: []*types.Block{
+				{
+					Header: &types.BlockHeader{
+						Number: 1,
+					},
+					Payload: &types.Block_UserAdministrationTxEnvelope{
+						UserAdministrationTxEnvelope: userAdminTx,
+					},
+				},
+				{
+					Header: &types.BlockHeader{
+						Number: 2,
+					},
+					Payload: &types.Block_DBAdministrationTxEnvelope{
+						DBAdministrationTxEnvelope: dbAdminTx,
+					},
+				},
+				{
+					Header: &types.BlockHeader{
+						Number: 3,
+					},
+					Payload: &types.Block_DataTxEnvelopes{
+						DataTxEnvelopes: &types.DataTxEnvelopes{
+							Envelopes: []*types.DataTxEnvelope{
+								dataTx1,
+								dataTx2,
+							},
+						},
+					},
+				},
+				{
+					Header: &types.BlockHeader{
+						Number: 4,
+					},
+					Payload: &types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: configTx,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			for _, txBatch := range tt.txBatches {
 				b.txBatchQueue.Enqueue(txBatch)
 			}
@@ -144,6 +176,6 @@ func TestBatchCreator(t *testing.T) {
 				block := b.blockQueue.Dequeue().(*types.Block)
 				require.True(t, proto.Equal(expectedBlock, block))
 			}
-		}
-	})
+		})
+	}
 }

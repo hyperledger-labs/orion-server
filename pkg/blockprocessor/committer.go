@@ -1,8 +1,7 @@
 package blockprocessor
 
 import (
-	"encoding/json"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
@@ -11,7 +10,9 @@ import (
 )
 
 const (
-	configTxIndex = 0
+	userAdminTxIndex = 0
+	dbAdminTxIndex   = 0
+	configTxIndex    = 0
 )
 
 type committer struct {
@@ -43,59 +44,84 @@ func (c *committer) commitToBlockStore(block *types.Block) error {
 }
 
 func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
-	dbsUpdates := []*worldstate.DBUpdates{}
+	var dbsUpdates []*worldstate.DBUpdates
 
-	for txNum, txValidationInfo := range blockValidationInfo {
-		if txValidationInfo.Flag != types.Flag_VALID {
-			continue
+	switch block.Payload.(type) {
+	case *types.Block_DataTxEnvelopes:
+		txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
+
+		for txNum, txValidationInfo := range blockValidationInfo {
+			if txValidationInfo.Flag != types.Flag_VALID {
+				continue
+			}
+
+			version := &types.Version{
+				BlockNum: block.Header.Number,
+				TxNum:    uint64(txNum),
+			}
+
+			tx := txsEnvelopes[txNum].Payload
+			dbsUpdates = append(
+				dbsUpdates,
+				constructDBEntriesForDataTx(tx, version),
+			)
 		}
 
-		tx := block.TransactionEnvelopes[txNum].Payload
-		if len(tx.Writes) == 0 {
-			// maybe the http server can be made to throw
-			// error when there is no write in a given
-			// transaction. maybe it is good to record
-			// only reads but couldn't think of a good
-			// use-case and a trust model.
-			// TODO: discuss with the team and make a
-			// decision
-			continue
+	case *types.Block_UserAdministrationTxEnvelope:
+		if blockValidationInfo[userAdminTxIndex].Flag != types.Flag_VALID {
+			return nil
 		}
 
 		version := &types.Version{
-			BlockNum: block.Header.Number,
-			TxNum:    uint64(txNum),
+			BlockNum: block.GetHeader().GetNumber(),
+			TxNum:    userAdminTxIndex,
 		}
 
-		// TODO: move worldstate.UsersDBName and ConfigDBName to
-		// the repo library and pkg types as they are common to
-		// both server and sdk -- issue 97
-		switch tx.Type {
-		case types.Transaction_USER:
-			dbsUpdates = append(
-				dbsUpdates,
-				identity.ConstructDBEntriesForUsers(tx, version),
-			)
-		case types.Transaction_CONFIG:
-			committedConfig, _, err := c.db.Get(worldstate.ConfigDBName, "config")
-			if err != nil {
-				return errors.WithMessage(err, "error while fetching committing config")
-			}
-
-			updates, err := constructDBEntriesForConfig(tx, committedConfig, version)
-			if err != nil {
-				return err
-			}
-			dbsUpdates = append(
-				dbsUpdates,
-				updates...,
-			)
-		default:
-			dbsUpdates = append(
-				dbsUpdates,
-				constructDBEntries(tx, version),
-			)
+		tx := block.GetUserAdministrationTxEnvelope().Payload
+		entries, err := identity.ConstructDBEntriesForUserAdminTx(tx, version)
+		if err != nil {
+			return errors.WithMessage(err, "error while creating entries for the user admin transaction")
 		}
+
+		dbsUpdates = []*worldstate.DBUpdates{entries}
+
+	case *types.Block_DBAdministrationTxEnvelope:
+		if blockValidationInfo[dbAdminTxIndex].Flag != types.Flag_VALID {
+			return nil
+		}
+
+		version := &types.Version{
+			BlockNum: block.GetHeader().GetNumber(),
+			TxNum:    dbAdminTxIndex,
+		}
+
+		tx := block.GetDBAdministrationTxEnvelope().Payload
+		dbsUpdates = []*worldstate.DBUpdates{
+			constructDBEntriesForDBAdminTx(tx, version),
+		}
+
+	case *types.Block_ConfigTxEnvelope:
+		if blockValidationInfo[configTxIndex].Flag != types.Flag_VALID {
+			return nil
+		}
+
+		version := &types.Version{
+			BlockNum: block.GetHeader().GetNumber(),
+			TxNum:    configTxIndex,
+		}
+
+		committedConfig, _, err := c.db.Get(worldstate.ConfigDBName, "config")
+		if err != nil {
+			return errors.WithMessage(err, "error while fetching committed configuration")
+		}
+
+		tx := block.GetConfigTxEnvelope().Payload
+		entries, err := constructDBEntriesForConfigTx(tx, committedConfig, version)
+		if err != nil {
+			return errors.WithMessage(err, "error while constructing entries for the config transaction")
+		}
+
+		dbsUpdates = entries
 	}
 
 	if err := c.db.Commit(dbsUpdates); err != nil {
@@ -104,54 +130,11 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 	return nil
 }
 
-func constructDBEntriesForConfig(tx *types.Transaction, committedConfig []byte, version *types.Version) ([]*worldstate.DBUpdates, error) {
-	newConfig := &types.ClusterConfig{}
-	if err := json.Unmarshal(tx.Writes[configTxIndex].Value, newConfig); err != nil {
-		return nil, errors.WithMessage(err, "error while unmarshaling new config")
-	}
-
-	oldConfig := &types.ClusterConfig{}
-	if committedConfig != nil {
-		if err := json.Unmarshal(committedConfig, oldConfig); err != nil {
-			return nil, errors.WithMessage(err, "error while unmarshaling old config")
-		}
-	}
-
-	adminUpdates, err := identity.ConstructDBEntriesForClusterAdmins(oldConfig.Admins, newConfig.Admins, version)
-	if err != nil {
-		return nil, err
-	}
-
-	config := &worldstate.KVWithMetadata{
-		Key:   tx.Writes[configTxIndex].Key,
-		Value: tx.Writes[configTxIndex].Value,
-		Metadata: &types.Metadata{
-			Version: version,
-		},
-	}
-	configUpdates := &worldstate.DBUpdates{
-		DBName: tx.DBName,
-		Writes: []*worldstate.KVWithMetadata{config},
-	}
-
-	var updates []*worldstate.DBUpdates
-
-	if adminUpdates != nil {
-		updates = append(updates, adminUpdates)
-	}
-	return append(updates, configUpdates), nil
-}
-
-func constructDBEntries(tx *types.Transaction, version *types.Version) *worldstate.DBUpdates {
+func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) *worldstate.DBUpdates {
 	var kvWrites []*worldstate.KVWithMetadata
 	var kvDeletes []string
 
-	for _, write := range tx.Writes {
-		if write.IsDelete {
-			kvDeletes = append(kvDeletes, write.Key)
-			continue
-		}
-
+	for _, write := range tx.DataWrites {
 		kv := &worldstate.KVWithMetadata{
 			Key:   write.Key,
 			Value: write.Value,
@@ -162,9 +145,70 @@ func constructDBEntries(tx *types.Transaction, version *types.Version) *worldsta
 		kvWrites = append(kvWrites, kv)
 	}
 
+	for _, d := range tx.DataDeletes {
+		kvDeletes = append(kvDeletes, d.Key)
+	}
+
 	return &worldstate.DBUpdates{
 		DBName:  tx.DBName,
 		Writes:  kvWrites,
 		Deletes: kvDeletes,
 	}
+}
+
+func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types.Version) *worldstate.DBUpdates {
+	var toCreateDBs []*worldstate.KVWithMetadata
+
+	for _, dbName := range tx.CreateDBs {
+		db := &worldstate.KVWithMetadata{
+			Key: dbName,
+			Metadata: &types.Metadata{
+				Version: version,
+			},
+		}
+		toCreateDBs = append(toCreateDBs, db)
+	}
+
+	return &worldstate.DBUpdates{
+		DBName:  worldstate.DatabasesDBName,
+		Writes:  toCreateDBs,
+		Deletes: tx.DeleteDBs,
+	}
+}
+
+func constructDBEntriesForConfigTx(tx *types.ConfigTx, committedConfig []byte, version *types.Version) ([]*worldstate.DBUpdates, error) {
+	oldConfig := &types.ClusterConfig{}
+	if committedConfig != nil {
+		if err := proto.Unmarshal(committedConfig, oldConfig); err != nil {
+			return nil, errors.WithMessage(err, "error while unmarshaling old config")
+		}
+	}
+
+	adminUpdates, err := identity.ConstructDBEntriesForClusterAdmins(oldConfig.Admins, tx.NewConfig.Admins, version)
+	if err != nil {
+		return nil, err
+	}
+
+	newConfigSerialized, err := proto.Marshal(tx.NewConfig)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while marshaling new configuration")
+	}
+
+	configUpdates := &worldstate.DBUpdates{
+		DBName: worldstate.ConfigDBName,
+		Writes: []*worldstate.KVWithMetadata{
+			{
+				Key:   "config",
+				Value: newConfigSerialized,
+				Metadata: &types.Metadata{
+					Version: version,
+				},
+			},
+		},
+	}
+
+	return []*worldstate.DBUpdates{
+		adminUpdates,
+		configUpdates,
+	}, nil
 }

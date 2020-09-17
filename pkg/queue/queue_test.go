@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"fmt"
 	"testing"
 	"time"
 
@@ -10,14 +9,12 @@ import (
 )
 
 func TestTransactionQueue(t *testing.T) {
-	var txs []*types.TransactionEnvelope
+	var txs []*types.UserAdministrationTxEnvelope
 	for i := 0; i < 5; i++ {
-		txs = append(txs, &types.TransactionEnvelope{
-			Payload: &types.Transaction{
-				TxID:      []byte(fmt.Sprintf("tx-%d", i)),
-				DataModel: types.Transaction_KV,
-				Reads:     []*types.KVRead{},
-				Writes:    []*types.KVWrite{},
+		txs = append(txs, &types.UserAdministrationTxEnvelope{
+			Payload: &types.UserAdministrationTx{
+				UserReads:  []*types.UserRead{},
+				UserWrites: []*types.UserWrite{},
 			},
 			Signature: []byte("sign"),
 		})
@@ -37,7 +34,7 @@ func TestTransactionQueue(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		require.Equal(t, len(txs)-i, q.Size())
-		require.Equal(t, txs[i], q.Dequeue().(*types.TransactionEnvelope))
+		require.Equal(t, txs[i], q.Dequeue().(*types.UserAdministrationTxEnvelope))
 	}
 	require.Equal(t, 0, q.Size())
 	require.False(t, q.IsFull())
