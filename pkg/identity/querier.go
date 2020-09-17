@@ -28,17 +28,12 @@ func NewQuerier(db worldstate.DB) *Querier {
 // DoesUserExist returns true if the given user exist. Otherwise, it
 // return false
 func (q *Querier) DoesUserExist(userID string) (bool, error) {
-	// TODO: use Has() API from the levelDB
-	_, _, err := q.GetUser(userID)
+	exist, err := q.db.Has(worldstate.UsersDBName, string(UserNamespace)+userID)
 	if err != nil {
-		if _, ok := err.(*UserNotFoundErr); !ok {
-			return false, err
-		}
-
-		return false, nil
+		return false, errors.Wrapf(err, "error while checking the existance of the userID [%s]", userID)
 	}
 
-	return true, nil
+	return exist, nil
 }
 
 // GetUser returns the credentials associated with the given

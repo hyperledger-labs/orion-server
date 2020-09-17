@@ -15,11 +15,11 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -309,7 +309,6 @@ func (db *dbServer) handleConfigTransaction(w http.ResponseWriter, r *http.Reque
 
 	// TODO: verify signature
 	db.handleTransaction(w, tx)
-
 }
 
 func (db *dbServer) handleTransaction(w http.ResponseWriter, tx interface{}) {

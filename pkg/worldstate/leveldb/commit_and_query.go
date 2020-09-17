@@ -94,6 +94,14 @@ func (l *LevelDB) GetACL(dbName, key string) (*types.AccessControl, error) {
 	return metadata.GetAccessControl(), nil
 }
 
+func (l *LevelDB) Has(dbName, key string) (bool, error) {
+	l.dbsList.RLock()
+	db := l.dbs[dbName]
+	l.dbsList.RUnlock()
+
+	return db.file.Has([]byte(key), nil)
+}
+
 // Commit commits the updates to the database
 func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
 	for _, updates := range dbsUpdates {

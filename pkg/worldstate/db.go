@@ -32,6 +32,8 @@ type DB interface {
 	// GetACL returns the access control rule for the given
 	// key
 	GetACL(dbName, key string) (*types.AccessControl, error)
+	// Has returns true if the key exist in the database
+	Has(dbName, key string) (bool, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates []*DBUpdates) error
 	// Close closes the DB instance

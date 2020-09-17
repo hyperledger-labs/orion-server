@@ -181,7 +181,7 @@ func TestListDBsAndExist(t *testing.T) {
 	})
 }
 
-func TestCommitAndGet(t *testing.T) {
+func TestCommitAndQuery(t *testing.T) {
 	t.Parallel()
 
 	setupWithNoData := func(l *LevelDB) {
@@ -290,36 +290,35 @@ func TestCommitAndGet(t *testing.T) {
 		return db1KVs, db2KVs
 	}
 
-	t.Run("Get() and GetVersion() on empty databases", func(t *testing.T) {
+	t.Run("Get(), GetVersion(), and Has() on empty databases", func(t *testing.T) {
 		t.Parallel()
 		env := newTestEnv(t)
 		defer env.cleanup()
 		l := env.l
 		setupWithNoData(l)
 
-		val, metadata, err := l.Get("db1", "db1-key1")
-		require.NoError(t, err)
-		require.Nil(t, val)
-		require.Nil(t, metadata)
+		for _, db := range []string{"db1", "db2"} {
+			for _, key := range []string{"key1", "key2"} {
+				val, metadata, err := l.Get(db, db+"-"+key)
+				require.NoError(t, err)
+				require.Nil(t, val)
+				require.Nil(t, metadata)
 
-		val, metadata, err = l.Get("db2", "db2-key1")
-		require.NoError(t, err)
-		require.Nil(t, val)
-		require.Nil(t, metadata)
+				ver, err := l.GetVersion(db, db+"-"+key)
+				require.NoError(t, err)
+				require.Nil(t, ver)
 
-		ver, err := l.GetVersion("db1", "db1-key1")
-		require.NoError(t, err)
-		require.Nil(t, ver)
-
-		ver, err = l.GetVersion("db2", "db2-key1")
-		require.NoError(t, err)
-		require.Nil(t, ver)
+				exist, err := l.Has(db, db+"-"+key)
+				require.NoError(t, err)
+				require.False(t, exist)
+			}
+		}
 	})
 
 	// Scenario-2: For both databases (db1, db2), create
 	// two keys per database (db1-key1, db1-key2 for db1) and
 	// (db2-key1, db2-key2 for db2) and commit them.
-	t.Run("Get() and GetVersion() on non-empty databases", func(t *testing.T) {
+	t.Run("Get(), GetVersion(), and Has() on non-empty databases", func(t *testing.T) {
 		t.Parallel()
 		env := newTestEnv(t)
 		defer env.cleanup()
@@ -341,6 +340,10 @@ func TestCommitAndGet(t *testing.T) {
 			acl, err := l.GetACL("db1", key)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetAccessControl(), acl))
+
+			exist, err := l.Has("db1", key)
+			require.NoError(t, err)
+			require.True(t, exist)
 		}
 
 		for key, expectedValAndMetadata := range db2KVs {
@@ -358,6 +361,10 @@ func TestCommitAndGet(t *testing.T) {
 			acl, err := l.GetACL("db2", key)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetAccessControl(), acl))
+
+			exist, err := l.Has("db2", key)
+			require.NoError(t, err)
+			require.True(t, exist)
 		}
 	})
 
