@@ -8,12 +8,14 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
 type configTxValidator struct {
 	db              worldstate.DB
 	identityQuerier *identity.Querier
+	logger          *logger.SugarLogger
 }
 
 func (v *configTxValidator) validate(tx *types.ConfigTx) (*types.ValidationInfo, error) {

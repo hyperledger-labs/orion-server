@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -23,11 +24,25 @@ type validatorTestEnv struct {
 }
 
 func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
+	c := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	require.NoError(t, err)
+
 	dir, err := ioutil.TempDir("/tmp", "validator")
 	require.NoError(t, err)
 	path := filepath.Join(dir, "leveldb")
 
-	db, err := leveldb.Open(path)
+	db, err := leveldb.Open(
+		&leveldb.Config{
+			DBRootDir: path,
+			Logger:    logger,
+		},
+	)
 	if err != nil {
 		if err := os.RemoveAll(dir); err != nil {
 			t.Errorf("failed to remove directory %s, %v", dir, err)
@@ -49,7 +64,8 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 		path: path,
 		validator: newValidator(
 			&Config{
-				DB: db,
+				DB:     db,
+				Logger: logger,
 			},
 		),
 		cleanup: cleanup,

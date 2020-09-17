@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
 )
@@ -25,6 +26,15 @@ func TestOpenStore(t *testing.T) {
 		require.NoFileExists(t, filepath.Join(storeDir, "undercreation"))
 	}
 
+	lc := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(lc)
+	require.NoError(t, err)
+
 	t.Run("open a new store", func(t *testing.T) {
 		t.Parallel()
 
@@ -33,7 +43,11 @@ func TestOpenStore(t *testing.T) {
 		defer os.RemoveAll(testDir)
 
 		storeDir := filepath.Join(testDir, "new-store")
-		s, err := Open(storeDir)
+		c := &Config{
+			StoreDir: storeDir,
+			Logger:   logger,
+		}
+		s, err := Open(c)
 		require.NoError(t, err)
 
 		assertStore(storeDir, s)
@@ -51,7 +65,11 @@ func TestOpenStore(t *testing.T) {
 		storeDir := filepath.Join(testDir, "existing-store")
 		require.NoError(t, fileops.CreateDir(storeDir))
 
-		s, err := Open(storeDir)
+		c := &Config{
+			StoreDir: storeDir,
+			Logger:   logger,
+		}
+		s, err := Open(c)
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
@@ -76,7 +94,11 @@ func TestOpenStore(t *testing.T) {
 		require.NoError(t, fileops.CreateDir(filepath.Join(storeDir, "filechunks")))
 		require.NoError(t, fileops.CreateDir(filepath.Join(storeDir, "blockindex")))
 
-		s, err := Open(storeDir)
+		c := &Config{
+			StoreDir: storeDir,
+			Logger:   logger,
+		}
+		s, err := Open(c)
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
@@ -93,7 +115,11 @@ func TestOpenStore(t *testing.T) {
 		storeDir := filepath.Join(testDir, "reopen-empty-store")
 		require.NoError(t, fileops.CreateDir(storeDir))
 
-		s, err := Open(storeDir)
+		c := &Config{
+			StoreDir: storeDir,
+			Logger:   logger,
+		}
+		s, err := Open(c)
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
@@ -101,7 +127,7 @@ func TestOpenStore(t *testing.T) {
 
 		// close and reopen the store
 		require.NoError(t, s.Close())
-		s, err = Open(storeDir)
+		s, err = Open(c)
 		require.NoError(t, err)
 
 		assertStore(storeDir, s)
@@ -118,7 +144,11 @@ func TestOpenStore(t *testing.T) {
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, fileops.CreateDir(storeDir))
 
-		s, err := Open(storeDir)
+		c := &Config{
+			StoreDir: storeDir,
+			Logger:   logger,
+		}
+		s, err := Open(c)
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
@@ -156,7 +186,7 @@ func TestOpenStore(t *testing.T) {
 
 		// close and reopen the store
 		require.NoError(t, s.Close())
-		s, err = Open(storeDir)
+		s, err = Open(c)
 		require.NoError(t, err)
 
 		require.Equal(t, fileChunkNum, s.currentChunkNum)

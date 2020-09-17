@@ -13,6 +13,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
 )
 
@@ -49,33 +50,39 @@ type Store struct {
 	blockIndexDirPath     string
 	blockIndex            *leveldb.DB
 	reusableBuffer        []byte
+	logger                *logger.SugarLogger
 	mu                    sync.RWMutex
 }
 
+type Config struct {
+	StoreDir string
+	Logger   *logger.SugarLogger
+}
+
 // Open opens the store to maintains a chain of blocks
-func Open(storeDir string) (*Store, error) {
-	exist, err := fileops.Exists(storeDir)
+func Open(c *Config) (*Store, error) {
+	exist, err := fileops.Exists(c.StoreDir)
 	if err != nil {
 		return nil, err
 	}
 	if !exist {
-		return openNewStore(storeDir)
+		return openNewStore(c)
 	}
 
-	partialStoreExist, err := isExistingStoreCreatedPartially(storeDir)
+	partialStoreExist, err := isExistingStoreCreatedPartially(c.StoreDir)
 	if err != nil {
 		return nil, err
 	}
 
 	switch {
 	case partialStoreExist:
-		if err := fileops.RemoveAll(storeDir); err != nil {
+		if err := fileops.RemoveAll(c.StoreDir); err != nil {
 			return nil, errors.Wrap(err, "error while removing the existing partially created store")
 		}
 
-		return openNewStore(storeDir)
+		return openNewStore(c)
 	default:
-		return openExistingStore(storeDir)
+		return openExistingStore(c)
 	}
 }
 
@@ -88,18 +95,18 @@ func isExistingStoreCreatedPartially(storeDir string) (bool, error) {
 	return fileops.Exists(filepath.Join(storeDir, underCreationFlag))
 }
 
-func openNewStore(storeDir string) (*Store, error) {
-	if err := fileops.CreateDir(storeDir); err != nil {
-		return nil, errors.WithMessagef(err, "error while creating directory [%s]", storeDir)
+func openNewStore(c *Config) (*Store, error) {
+	if err := fileops.CreateDir(c.StoreDir); err != nil {
+		return nil, errors.WithMessagef(err, "error while creating directory [%s]", c.StoreDir)
 	}
 
-	underCreationFlagPath := filepath.Join(storeDir, underCreationFlag)
+	underCreationFlagPath := filepath.Join(c.StoreDir, underCreationFlag)
 	if err := fileops.CreateFile(underCreationFlagPath); err != nil {
 		return nil, err
 	}
 
-	fileChunksDirPath := filepath.Join(storeDir, fileChunksDirName)
-	blockIndexDirPath := filepath.Join(storeDir, blockIndexDirName)
+	fileChunksDirPath := filepath.Join(c.StoreDir, fileChunksDirName)
+	blockIndexDirPath := filepath.Join(c.StoreDir, blockIndexDirName)
 
 	for _, d := range []string{fileChunksDirPath, blockIndexDirPath} {
 		if err := fileops.CreateDir(d); err != nil {
@@ -130,12 +137,13 @@ func openNewStore(storeDir string) (*Store, error) {
 		blockIndexDirPath:     blockIndexDirPath,
 		blockIndex:            indexDB,
 		reusableBuffer:        make([]byte, binary.MaxVarintLen64),
+		logger:                c.Logger,
 	}, nil
 }
 
-func openExistingStore(storeDir string) (*Store, error) {
-	fileChunksDirPath := filepath.Join(storeDir, fileChunksDirName)
-	blockIndexDirPath := filepath.Join(storeDir, blockIndexDirName)
+func openExistingStore(c *Config) (*Store, error) {
+	fileChunksDirPath := filepath.Join(c.StoreDir, fileChunksDirName)
+	blockIndexDirPath := filepath.Join(c.StoreDir, blockIndexDirName)
 
 	currentFileChunk, currentChunkNum, err := findAndOpenLastFileChunk(fileChunksDirPath)
 	if err != nil {
@@ -160,6 +168,7 @@ func openExistingStore(storeDir string) (*Store, error) {
 		blockIndexDirPath: blockIndexDirPath,
 		blockIndex:        indexDB,
 		reusableBuffer:    make([]byte, binary.MaxVarintLen64),
+		logger:            c.Logger,
 	}
 	return s, s.recoverIfNeeded()
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -24,6 +25,7 @@ type queryProcessorConfig struct {
 	nodeID     []byte
 	db         worldstate.DB
 	blockStore *blockstore.Store
+	logger     *logger.SugarLogger
 }
 
 func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {

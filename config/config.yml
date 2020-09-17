@@ -30,6 +30,8 @@ node:
     # queueLength.block denotes the maximum queue length
     # of waiting blocks
     block: 100
+  # logLevel can be debug, info, warn, err, and panic
+  logLevel: info
 
 consensus:
   # consensus.algorithm denotes the employed consensus

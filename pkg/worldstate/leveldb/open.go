@@ -9,6 +9,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -25,6 +26,7 @@ var (
 type LevelDB struct {
 	dbRootDir string
 	dbs       map[string]*db
+	logger    *logger.SugarLogger
 	dbsList   sync.RWMutex
 }
 
@@ -46,30 +48,35 @@ var (
 	}
 )
 
+type Config struct {
+	DBRootDir string
+	Logger    *logger.SugarLogger
+}
+
 // Open opens a leveldb instance to maintain world state
-func Open(dbRootDir string) (*LevelDB, error) {
-	exist, err := fileops.Exists(dbRootDir)
+func Open(conf *Config) (*LevelDB, error) {
+	exist, err := fileops.Exists(conf.DBRootDir)
 	if err != nil {
 		return nil, err
 	}
 	if !exist {
-		return openNewLevelDBInstance(dbRootDir)
+		return openNewLevelDBInstance(conf)
 	}
 
-	partialInstanceExist, err := isExistingLevelDBInstanceCreatedPartially(dbRootDir)
+	partialInstanceExist, err := isExistingLevelDBInstanceCreatedPartially(conf.DBRootDir)
 	if err != nil {
 		return nil, err
 	}
 
 	switch {
 	case partialInstanceExist:
-		if err := fileops.RemoveAll(dbRootDir); err != nil {
+		if err := fileops.RemoveAll(conf.DBRootDir); err != nil {
 			return nil, errors.Wrap(err, "error while removing the existing partially created levelDB instance")
 		}
 
-		return openNewLevelDBInstance(dbRootDir)
+		return openNewLevelDBInstance(conf)
 	default:
-		return openExistingLevelDBInstance(dbRootDir)
+		return openExistingLevelDBInstance(conf)
 	}
 }
 
@@ -86,19 +93,20 @@ func isExistingLevelDBInstanceCreatedPartially(dbPath string) (bool, error) {
 	return fileops.Exists(filepath.Join(dbPath, underCreationFlag))
 }
 
-func openNewLevelDBInstance(dbPath string) (*LevelDB, error) {
-	if err := fileops.CreateDir(dbPath); err != nil {
-		return nil, errors.WithMessagef(err, "failed to create director %s", dbPath)
+func openNewLevelDBInstance(c *Config) (*LevelDB, error) {
+	if err := fileops.CreateDir(c.DBRootDir); err != nil {
+		return nil, errors.WithMessagef(err, "failed to create director %s", c.DBRootDir)
 	}
 
-	underCreationFlagPath := filepath.Join(dbPath, underCreationFlag)
+	underCreationFlagPath := filepath.Join(c.DBRootDir, underCreationFlag)
 	if err := fileops.CreateFile(underCreationFlagPath); err != nil {
 		return nil, err
 	}
 
 	l := &LevelDB{
-		dbRootDir: dbPath,
+		dbRootDir: c.DBRootDir,
 		dbs:       make(map[string]*db),
+		logger:    c.Logger,
 	}
 
 	for _, dbName := range systemDBs {
@@ -114,15 +122,16 @@ func openNewLevelDBInstance(dbPath string) (*LevelDB, error) {
 	return l, nil
 }
 
-func openExistingLevelDBInstance(dbPath string) (*LevelDB, error) {
+func openExistingLevelDBInstance(c *Config) (*LevelDB, error) {
 	l := &LevelDB{
-		dbRootDir: dbPath,
+		dbRootDir: c.DBRootDir,
 		dbs:       make(map[string]*db),
+		logger:    c.Logger,
 	}
 
-	dbNames, err := fileops.ListSubdirs(dbPath)
+	dbNames, err := fileops.ListSubdirs(c.DBRootDir)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "failed to retrieve existing level dbs from %s", dbPath)
+		return nil, errors.WithMessagef(err, "failed to retrieve existing level dbs from %s", c.DBRootDir)
 	}
 
 	for _, dbName := range dbNames {

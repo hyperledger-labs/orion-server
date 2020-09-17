@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 )
 
 // validator validates the each transaction read set present in a
@@ -14,6 +15,7 @@ type validator struct {
 	dbAdminTxValidator   *dbAdminTxValidator
 	userAdminTxValidator *userAdminTxValidator
 	dataTxValidator      *dataTxValidator
+	logger               *logger.SugarLogger
 }
 
 // newValidator creates a new validator
@@ -22,21 +24,27 @@ func newValidator(conf *Config) *validator {
 		configTxValidator: &configTxValidator{
 			db:              conf.DB,
 			identityQuerier: identity.NewQuerier(conf.DB),
+			logger:          conf.Logger,
 		},
 
 		dbAdminTxValidator: &dbAdminTxValidator{
 			db:              conf.DB,
 			identityQuerier: identity.NewQuerier(conf.DB),
+			logger:          conf.Logger,
 		},
 
 		userAdminTxValidator: &userAdminTxValidator{
 			identityQuerier: identity.NewQuerier(conf.DB),
+			logger:          conf.Logger,
 		},
 
 		dataTxValidator: &dataTxValidator{
 			db:              conf.DB,
 			identityQuerier: identity.NewQuerier(conf.DB),
+			logger:          conf.Logger,
 		},
+
+		logger: conf.Logger,
 	}
 }
 

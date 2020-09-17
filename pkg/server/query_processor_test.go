@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -24,7 +25,21 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	path, err := ioutil.TempDir("/tmp", "queryProcessor")
 	require.NoError(t, err)
 
-	db, err := leveldb.Open(path)
+	c := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	require.NoError(t, err)
+
+	db, err := leveldb.Open(
+		&leveldb.Config{
+			DBRootDir: path,
+			Logger:    logger,
+		},
+	)
 	if err != nil {
 		if err := os.RemoveAll(path); err != nil {
 			t.Errorf("failed to remove %s due to %v", path, err)
@@ -45,6 +60,7 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	qProcConfig := &queryProcessorConfig{
 		nodeID: []byte("test-node-id1"),
 		db:     db,
+		logger: logger,
 	}
 
 	return &queryProcessorTestEnv{

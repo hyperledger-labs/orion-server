@@ -5,16 +5,27 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
 func TestTxReorderer(t *testing.T) {
+	c := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	require.NoError(t, err)
+
 	b := New(&Config{
 		TxQueue:            queue.New(10),
 		TxBatchQueue:       queue.New(10),
 		MaxTxCountPerBatch: 1,
 		BatchTimeout:       50 * time.Millisecond,
+		Logger:             logger,
 	})
 	go b.Run()
 
@@ -197,7 +208,7 @@ func TestTxReorderer(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		b.MaxTxCountPerBatch = tt.maxTxCountPerBatch
+		b.maxTxCountPerBatch = tt.maxTxCountPerBatch
 		for _, tx := range tt.txs {
 			b.txQueue.Enqueue(tx)
 		}

@@ -699,6 +699,7 @@ func testConfiguration(t *testing.T) *config.Configurations {
 				ReorderedTransactionBatch: 100,
 				Block:                     100,
 			},
+			LogLevel: "debug",
 		},
 		Consensus: config.ConsensusConf{
 			Algorithm:                   "raft",

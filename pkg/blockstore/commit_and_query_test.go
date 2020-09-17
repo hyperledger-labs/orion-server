@@ -9,6 +9,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 )
 
 type testEnv struct {
@@ -21,7 +22,21 @@ func newTestEnv(t *testing.T) *testEnv {
 	storeDir, err := ioutil.TempDir("", "blockstore")
 	require.NoError(t, err)
 
-	store, err := Open(storeDir)
+	lc := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(lc)
+	require.NoError(t, err)
+
+	c := &Config{
+		StoreDir: storeDir,
+		Logger:   logger,
+	}
+
+	store, err := Open(c)
 	if err != nil {
 		if rmErr := os.RemoveAll(storeDir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", storeDir, rmErr)
@@ -48,10 +63,14 @@ func newTestEnv(t *testing.T) *testEnv {
 }
 
 func (e *testEnv) reopenStore(t *testing.T) {
+	logger := e.s.logger
 	require.NoError(t, e.s.Close())
 	e.s = nil
 
-	store, err := Open(e.storeDir)
+	store, err := Open(&Config{
+		StoreDir: e.storeDir,
+		Logger:   logger,
+	})
 	require.NoError(t, err)
 	e.s = store
 

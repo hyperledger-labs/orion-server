@@ -12,6 +12,7 @@ import (
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -27,11 +28,25 @@ type committerTestEnv struct {
 }
 
 func newCommitterTestEnv(t *testing.T) *committerTestEnv {
+	lc := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(lc)
+	require.NoError(t, err)
+
 	dir, err := ioutil.TempDir("/tmp", "committer")
 	require.NoError(t, err)
 
 	dbPath := filepath.Join(dir, "leveldb")
-	db, err := leveldb.Open(dbPath)
+	db, err := leveldb.Open(
+		&leveldb.Config{
+			DBRootDir: dbPath,
+			Logger:    logger,
+		},
+	)
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, rmErr)
@@ -40,7 +55,12 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	}
 
 	blockStorePath := filepath.Join(dir, "blockstore")
-	blockStore, err := blockstore.Open(blockStorePath)
+	blockStore, err := blockstore.Open(
+		&blockstore.Config{
+			StoreDir: blockStorePath,
+			Logger:   logger,
+		},
+	)
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, rmErr)
@@ -65,6 +85,7 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	c := &Config{
 		DB:         db,
 		BlockStore: blockStore,
+		Logger:     logger,
 	}
 	return &committerTestEnv{
 		db:              db,

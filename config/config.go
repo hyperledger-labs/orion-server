@@ -29,6 +29,7 @@ type NodeConf struct {
 	Network     NetworkConf
 	Database    DatabaseConf
 	QueueLength QueueLengthConf
+	LogLevel    string
 }
 
 // IdentityConf holds the ID, path to x509 certificate

@@ -19,6 +19,7 @@ import (
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -28,11 +29,23 @@ type DBAndHTTPServer struct {
 	handler http.Handler
 	listen  net.Listener
 	conf    *config.Configurations
+	logger  *logger.SugarLogger
 }
 
 // New creates a object of DBAndHTTPServer
 func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
-	dbServ, err := newDBServer(conf)
+	c := &logger.Config{
+		Level:         conf.Node.LogLevel,
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	if err != nil {
+		return nil, err
+	}
+
+	dbServ, err := newDBServer(conf, logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating the database object")
 	}
@@ -57,6 +70,7 @@ func New(conf *config.Configurations) (*DBAndHTTPServer, error) {
 		handler: router,
 		listen:  listen,
 		conf:    conf,
+		logger:  logger,
 	}, nil
 }
 
@@ -72,15 +86,15 @@ func (s *DBAndHTTPServer) Start() error {
 		}
 	}
 
-	log.Printf("Starting the server on %s", s.listen.Addr().String())
+	s.logger.Infof("Starting the server on %s", s.listen.Addr().String())
 
 	go func() {
 		if err := http.Serve(s.listen, s.handler); err != nil {
 			switch err.(type) {
 			case *net.OpError:
-				log.Println("network connection is closed")
+				s.logger.Warn("network connection is closed")
 			default:
-				log.Fatalf("server stopped unexpectedly, %v", err)
+				s.logger.Panicf("server stopped unexpectedly, %v", err)
 			}
 		}
 	}()
@@ -94,7 +108,7 @@ func (s *DBAndHTTPServer) Stop() error {
 		return nil
 	}
 
-	log.Printf("Stopping the server listening on %s\n", s.listen.Addr().String())
+	s.logger.Infof("Stopping the server listening on %s\n", s.listen.Addr().String())
 	if err := s.listen.Close(); err != nil {
 		return errors.Wrap(err, "error while closing the network listener")
 	}
@@ -105,29 +119,35 @@ func (s *DBAndHTTPServer) Stop() error {
 type dbServer struct {
 	*queryProcessor
 	*transactionProcessor
+	logger *logger.SugarLogger
 }
 
-func newDBServer(conf *config.Configurations) (*dbServer, error) {
+func newDBServer(conf *config.Configurations, logger *logger.SugarLogger) (*dbServer, error) {
+	if conf.Node.Database.Name != "leveldb" {
+		return nil, errors.New("only leveldb is supported as the state database")
+	}
+
 	ledgerDir := conf.Node.Database.LedgerDirectory
 	if err := createLedgerDir(ledgerDir); err != nil {
 		return nil, err
 	}
 
-	var levelDB *leveldb.LevelDB
-	var err error
-
-	switch conf.Node.Database.Name {
-	case "leveldb":
-		worldStatePath := constructWorldStatePath(ledgerDir)
-		if levelDB, err = leveldb.Open(worldStatePath); err != nil {
-			return nil, errors.WithMessage(err, "error while creating the world state database")
-		}
-	default:
-		return nil, errors.New("only leveldb is supported as the state database")
+	levelDB, err := leveldb.Open(
+		&leveldb.Config{
+			DBRootDir: constructWorldStatePath(ledgerDir),
+			Logger:    logger,
+		},
+	)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while creating the world state database")
 	}
 
-	blockStorePath := constructBlockStorePath(ledgerDir)
-	blockStore, err := blockstore.Open(blockStorePath)
+	blockStore, err := blockstore.Open(
+		&blockstore.Config{
+			StoreDir: constructBlockStorePath(ledgerDir),
+			Logger:   logger,
+		},
+	)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while creating the block store")
 	}
@@ -136,6 +156,7 @@ func newDBServer(conf *config.Configurations) (*dbServer, error) {
 		nodeID:     []byte(conf.Node.Identity.ID),
 		db:         levelDB,
 		blockStore: blockStore,
+		logger:     logger,
 	}
 
 	txProcConf := &txProcessorConfig{
@@ -146,11 +167,13 @@ func newDBServer(conf *config.Configurations) (*dbServer, error) {
 		blockQueueLength:   conf.Node.QueueLength.Block,
 		maxTxCountPerBatch: conf.Consensus.MaxTransactionCountPerBlock,
 		batchTimeout:       conf.Consensus.BlockTimeout,
+		logger:             logger,
 	}
 
 	return &dbServer{
 		newQueryProcessor(qProcConfig),
 		newTransactionProcessor(txProcConf),
+		logger,
 	}, nil
 }
 

@@ -3,6 +3,7 @@ package blockprocessor
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
@@ -18,6 +19,7 @@ const (
 type committer struct {
 	db         worldstate.DB
 	blockStore *blockstore.Store
+	logger     *logger.SugarLogger
 	// TODO
 	// 1. Provenance Store
 	// 2. Proof Store
@@ -27,6 +29,7 @@ func newCommitter(conf *Config) *committer {
 	return &committer{
 		db:         conf.DB,
 		blockStore: conf.BlockStore,
+		logger:     conf.Logger,
 	}
 }
 

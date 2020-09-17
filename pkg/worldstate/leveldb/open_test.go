@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -23,13 +24,26 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		}
 	}
 
+	c := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	require.NoError(t, err)
+
 	t.Run("open a new levelDB instance", func(t *testing.T) {
 		testDir, err := ioutil.TempDir(".", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
 		dbRootDir := filepath.Join(testDir, "new-leveldb")
-		l, err := Open(dbRootDir)
+		conf := &Config{
+			DBRootDir: dbRootDir,
+			Logger:    logger,
+		}
+		l, err := Open(conf)
 		defer func() {
 			require.NoError(t, l.Close())
 		}()
@@ -50,7 +64,11 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		dbRootDir := filepath.Join(testDir, "existing-leveldb")
 		require.NoError(t, fileops.CreateDir(dbRootDir))
 
-		l, err := Open(dbRootDir)
+		conf := &Config{
+			DBRootDir: dbRootDir,
+			Logger:    logger,
+		}
+		l, err := Open(conf)
 		defer func() {
 			require.NoError(t, l.Close())
 		}()
@@ -74,7 +92,11 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		underCreationFlagPath := filepath.Join(dbRootDir, underCreationFlag)
 		require.NoError(t, fileops.CreateFile(underCreationFlagPath))
 
-		l, err := Open(dbRootDir)
+		conf := &Config{
+			DBRootDir: dbRootDir,
+			Logger:    logger,
+		}
+		l, err := Open(conf)
 		defer func() {
 			require.NoError(t, l.Close())
 		}()
@@ -91,14 +113,18 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		defer os.RemoveAll(testDir)
 
 		dbRootDir := filepath.Join(testDir, "reopen-empty-store")
-		l, err := Open(dbRootDir)
+		conf := &Config{
+			DBRootDir: dbRootDir,
+			Logger:    logger,
+		}
+		l, err := Open(conf)
 		require.NoError(t, err)
 
 		assertDBInstance(dbRootDir, l)
 
 		// close and reopen the store
 		require.NoError(t, l.Close())
-		l, err = Open(dbRootDir)
+		l, err = Open(conf)
 		defer func() {
 			require.NoError(t, l.Close())
 		}()
@@ -115,7 +141,11 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		defer os.RemoveAll(testDir)
 
 		dbRootDir := filepath.Join(testDir, "reopen-non-empty-store")
-		l, err := Open(dbRootDir)
+		conf := &Config{
+			DBRootDir: dbRootDir,
+			Logger:    logger,
+		}
+		l, err := Open(conf)
 		defer func() {
 			require.NoError(t, l.Close())
 		}()
@@ -128,7 +158,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 
 		// close and reopen the store
 		require.NoError(t, l.Close())
-		l, err = Open(dbRootDir)
+		l, err = Open(conf)
 		defer func() {
 			require.NoError(t, l.Close())
 		}()

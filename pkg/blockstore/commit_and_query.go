@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"log"
 	"os"
 
 	"github.com/golang/protobuf/proto"
@@ -85,7 +84,7 @@ func (s *Store) appendBlock(number uint64, content []byte) error {
 
 	if n > 0 {
 		if err := fileops.Truncate(s.currentFileChunk, offsetBeforeWrite); err != nil {
-			log.Println(err.Error())
+			s.logger.Warn(err.Error())
 		}
 	}
 
@@ -163,7 +162,7 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 		}
 		defer func() {
 			if err := f.Close(); err != nil {
-				log.Printf("error while closing the file [%s]", f.Name())
+				s.logger.Warnf("error while closing the file [%s]", f.Name())
 			}
 		}()
 	}

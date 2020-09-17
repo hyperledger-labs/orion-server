@@ -1,8 +1,7 @@
 package blockcreator
 
 import (
-	"log"
-
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
@@ -13,6 +12,7 @@ type BlockCreator struct {
 	txBatchQueue    *queue.Queue
 	blockQueue      *queue.Queue
 	nextBlockNumber uint64
+	logger          *logger.SugarLogger
 }
 
 // Config holds the configuration information required to initialize the
@@ -21,6 +21,7 @@ type Config struct {
 	TxBatchQueue    *queue.Queue
 	BlockQueue      *queue.Queue
 	NextBlockNumber uint64
+	Logger          *logger.SugarLogger
 }
 
 // New creates a new block assembler
@@ -29,6 +30,7 @@ func New(conf *Config) *BlockCreator {
 		txBatchQueue:    conf.TxBatchQueue,
 		blockQueue:      conf.BlockQueue,
 		nextBlockNumber: conf.NextBlockNumber,
+		logger:          conf.Logger,
 	}
 }
 
@@ -47,22 +49,22 @@ func (b *BlockCreator) Run() {
 		switch txBatch.(type) {
 		case *types.Block_DataTxEnvelopes:
 			block.Payload = txBatch.(*types.Block_DataTxEnvelopes)
-			log.Printf("created block %d with %d data transactions\n",
+			b.logger.Debugf("created block %d with %d data transactions\n",
 				blkNum,
 				len(txBatch.(*types.Block_DataTxEnvelopes).DataTxEnvelopes.Envelopes),
 			)
 
 		case *types.Block_UserAdministrationTxEnvelope:
 			block.Payload = txBatch.(*types.Block_UserAdministrationTxEnvelope)
-			log.Printf("created block %d with an user administrative transaction", blkNum)
+			b.logger.Debugf("created block %d with an user administrative transaction", blkNum)
 
 		case *types.Block_ConfigTxEnvelope:
 			block.Payload = txBatch.(*types.Block_ConfigTxEnvelope)
-			log.Printf("created block %d with a cluster config administrative transaction", blkNum)
+			b.logger.Debugf("created block %d with a cluster config administrative transaction", blkNum)
 
 		case *types.Block_DBAdministrationTxEnvelope:
 			block.Payload = txBatch.(*types.Block_DBAdministrationTxEnvelope)
-			log.Printf("created block %d with a DB administrative transaction", blkNum)
+			b.logger.Debugf("created block %d with a DB administrative transaction", blkNum)
 		}
 
 		b.blockQueue.Enqueue(block)

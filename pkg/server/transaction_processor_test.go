@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
@@ -30,8 +31,22 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	dir, err := ioutil.TempDir("/tmp", "transactionProcessor")
 	require.NoError(t, err)
 
+	c := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	require.NoError(t, err)
+
 	dbPath := constructWorldStatePath(dir)
-	db, err := leveldb.Open(dbPath)
+	db, err := leveldb.Open(
+		&leveldb.Config{
+			DBRootDir: dbPath,
+			Logger:    logger,
+		},
+	)
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, rmErr)
@@ -40,7 +55,12 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	}
 
 	blockStorePath := constructBlockStorePath(dir)
-	blockStore, err := blockstore.Open(blockStorePath)
+	blockStore, err := blockstore.Open(
+		&blockstore.Config{
+			StoreDir: blockStorePath,
+			Logger:   logger,
+		},
+	)
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, rmErr)
@@ -71,6 +91,7 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		blockQueueLength:   100,
 		maxTxCountPerBatch: 1,
 		batchTimeout:       50 * time.Millisecond,
+		logger:             logger,
 	}
 	txProcessor := newTransactionProcessor(txProcConf)
 

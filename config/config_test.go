@@ -32,6 +32,7 @@ func TestConfig(t *testing.T) {
 					ReorderedTransactionBatch: 100,
 					Block:                     100,
 				},
+				LogLevel: "info",
 			},
 			Consensus: ConsensusConf{
 				Algorithm:                   "raft",

@@ -1,9 +1,9 @@
 package txreorderer
 
 import (
-	"log"
 	"time"
 
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
@@ -14,8 +14,9 @@ import (
 type TxReorderer struct {
 	txQueue            *queue.Queue
 	txBatchQueue       *queue.Queue
-	MaxTxCountPerBatch uint32
+	maxTxCountPerBatch uint32
 	batchTimeout       time.Duration
+	logger             *logger.SugarLogger
 	// TODO:
 	// tx merkle tree
 	// dependency graph
@@ -29,6 +30,7 @@ type Config struct {
 	TxBatchQueue       *queue.Queue
 	MaxTxCountPerBatch uint32
 	BatchTimeout       time.Duration
+	Logger             *logger.SugarLogger
 }
 
 // New creates a transaction reorderer
@@ -36,8 +38,9 @@ func New(conf *Config) *TxReorderer {
 	return &TxReorderer{
 		txQueue:            conf.TxQueue,
 		txBatchQueue:       conf.TxBatchQueue,
-		MaxTxCountPerBatch: conf.MaxTxCountPerBatch,
+		maxTxCountPerBatch: conf.MaxTxCountPerBatch,
 		batchTimeout:       conf.BatchTimeout,
+		logger:             conf.Logger,
 	}
 }
 
@@ -52,8 +55,8 @@ func (b *TxReorderer) Run() {
 		case *types.DataTxEnvelope:
 			txs.Envelopes = append(txs.Envelopes, tx.(*types.DataTxEnvelope))
 
-			if uint32(len(txs.Envelopes)) == b.MaxTxCountPerBatch {
-				log.Printf("enqueueing data transactions")
+			if uint32(len(txs.Envelopes)) == b.maxTxCountPerBatch {
+				b.logger.Debug("enqueueing data transactions")
 				b.enqueueDataTxBatch(txs)
 				txs = &types.DataTxEnvelopes{}
 			}
@@ -63,7 +66,7 @@ func (b *TxReorderer) Run() {
 				txs = &types.DataTxEnvelopes{}
 			}
 
-			log.Printf("enqueueing user administrative transaction")
+			b.logger.Debug("enqueueing user administrative transaction")
 			b.txBatchQueue.Enqueue(
 				&types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: tx.(*types.UserAdministrationTxEnvelope),
@@ -75,7 +78,7 @@ func (b *TxReorderer) Run() {
 				txs = &types.DataTxEnvelopes{}
 			}
 
-			log.Printf("enqueueing db administrative transaction")
+			b.logger.Debug("enqueueing db administrative transaction")
 			b.txBatchQueue.Enqueue(
 				&types.Block_DBAdministrationTxEnvelope{
 					DBAdministrationTxEnvelope: tx.(*types.DBAdministrationTxEnvelope),
@@ -87,7 +90,7 @@ func (b *TxReorderer) Run() {
 				txs = &types.DataTxEnvelopes{}
 			}
 
-			log.Printf("enqueueing cluster config transaction")
+			b.logger.Debug("enqueueing cluster config transaction")
 			b.txBatchQueue.Enqueue(
 				&types.Block_ConfigTxEnvelope{
 					ConfigTxEnvelope: tx.(*types.ConfigTxEnvelope),
@@ -98,7 +101,7 @@ func (b *TxReorderer) Run() {
 }
 
 func (b *TxReorderer) enqueueDataTxBatch(txBatch *types.DataTxEnvelopes) {
-	log.Printf("enqueueing [%d] data transactions", len(txBatch.Envelopes))
+	b.logger.Debugf("enqueueing [%d] data transactions", len(txBatch.Envelopes))
 	b.txBatchQueue.Enqueue(
 		&types.Block_DataTxEnvelopes{
 			DataTxEnvelopes: txBatch,

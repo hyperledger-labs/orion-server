@@ -6,15 +6,26 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 )
 
 func TestBatchCreator(t *testing.T) {
+	c := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	require.NoError(t, err)
+
 	b := New(&Config{
 		TxBatchQueue:    queue.New(10),
 		BlockQueue:      queue.New(10),
 		NextBlockNumber: 1,
+		Logger:          logger,
 	})
 	go b.Run()
 

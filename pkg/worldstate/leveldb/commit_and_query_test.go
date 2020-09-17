@@ -11,6 +11,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -25,7 +26,21 @@ func newTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	path := filepath.Join(dir, "leveldb")
-	l, err := Open(path)
+
+	c := &logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	require.NoError(t, err)
+
+	conf := &Config{
+		DBRootDir: path,
+		Logger:    logger,
+	}
+	l, err := Open(conf)
 	if err != nil {
 		if err := os.RemoveAll(dir); err != nil {
 			t.Errorf("failed to remove %s, %v", dir, err)

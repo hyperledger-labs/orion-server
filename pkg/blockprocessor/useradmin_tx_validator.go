@@ -7,10 +7,12 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 )
 
 type userAdminTxValidator struct {
 	identityQuerier *identity.Querier
+	logger          *logger.SugarLogger
 }
 
 func (v *userAdminTxValidator) validate(tx *types.UserAdministrationTx) (*types.ValidationInfo, error) {

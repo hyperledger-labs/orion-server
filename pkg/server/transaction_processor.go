@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/blockcreator"
 	"github.ibm.com/blockchaindb/server/pkg/blockprocessor"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
@@ -23,6 +23,7 @@ type transactionProcessor struct {
 	txReorderer    *txreorderer.TxReorderer
 	blockCreator   *blockcreator.BlockCreator
 	blockProcessor *blockprocessor.BlockProcessor
+	logger         *logger.SugarLogger
 	sync.Mutex
 }
 
@@ -35,11 +36,13 @@ type txProcessorConfig struct {
 	blockQueueLength   uint32
 	maxTxCountPerBatch uint32
 	batchTimeout       time.Duration
+	logger             *logger.SugarLogger
 }
 
 func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 	p := &transactionProcessor{}
 
+	p.logger = conf.logger
 	p.txQueue = queue.New(conf.txQueueLength)
 	p.txBatchQueue = queue.New(conf.txBatchQueueLength)
 	p.blockQueue = queue.New(conf.blockQueueLength)
@@ -50,6 +53,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 			TxBatchQueue:       p.txBatchQueue,
 			MaxTxCountPerBatch: conf.maxTxCountPerBatch,
 			BatchTimeout:       conf.batchTimeout,
+			Logger:             conf.logger,
 		},
 	)
 
@@ -58,6 +62,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 			TxBatchQueue:    p.txBatchQueue,
 			BlockQueue:      p.blockQueue,
 			NextBlockNumber: conf.blockHeight + 1,
+			Logger:          conf.logger,
 		},
 	)
 
@@ -66,6 +71,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 			BlockQueue: p.blockQueue,
 			BlockStore: conf.blockStore,
 			DB:         conf.db,
+			Logger:     conf.logger,
 		},
 	)
 
@@ -89,7 +95,7 @@ func (t *transactionProcessor) submitTransaction(_ context.Context, tx interface
 	if err != nil {
 		return fmt.Errorf("failed to marshal transaction: %v", err)
 	}
-	log.Printf("enqueing transaction %s\n", string(jsonBytes))
+	t.logger.Debugf("enqueing transaction %s\n", string(jsonBytes))
 
 	t.txQueue.Enqueue(tx)
 
