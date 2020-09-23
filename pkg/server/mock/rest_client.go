@@ -45,6 +45,8 @@ func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBSta
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	res := &types.GetDBStatusResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
@@ -60,6 +62,8 @@ func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseE
 		return nil, err
 	}
 
+	defer resp.Body.Close()
+
 	res := &types.GetDataResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
@@ -74,6 +78,8 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 	if err != nil {
 		return nil, err
 	}
+
+	defer resp.Body.Close()
 
 	res := &types.GetUserResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
