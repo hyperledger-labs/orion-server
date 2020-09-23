@@ -10,14 +10,14 @@ import (
 )
 
 type queryProcessor struct {
-	nodeID          []byte
+	nodeID          string
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier
 }
 
 type queryProcessorConfig struct {
-	nodeID     []byte
+	nodeID     string
 	db         worldstate.DB
 	blockStore *blockstore.Store
 	logger     *logger.SugarLogger

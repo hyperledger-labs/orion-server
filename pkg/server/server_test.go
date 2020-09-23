@@ -413,7 +413,7 @@ func TestHandleUserQuery(t *testing.T) {
 				expectedRespose: &types.GetUserResponseEnvelope{
 					Payload: &types.GetUserResponse{
 						Header: &types.ResponseHeader{
-							NodeID: []byte("bdb-node-1"),
+							NodeID: "bdb-node-1",
 						},
 						User:     nil,
 						Metadata: nil,
@@ -443,7 +443,7 @@ func TestHandleUserQuery(t *testing.T) {
 				expectedRespose: &types.GetUserResponseEnvelope{
 					Payload: &types.GetUserResponse{
 						Header: &types.ResponseHeader{
-							NodeID: []byte("bdb-node-1"),
+							NodeID: "bdb-node-1",
 						},
 						User:     targetUser,
 						Metadata: metadata,

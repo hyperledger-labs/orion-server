@@ -154,7 +154,7 @@ func newDBServer(conf *config.Configurations, logger *logger.SugarLogger) (*dbSe
 	}
 
 	qProcConfig := &queryProcessorConfig{
-		nodeID:     []byte(conf.Node.Identity.ID),
+		nodeID:     conf.Node.Identity.ID,
 		db:         levelDB,
 		blockStore: blockStore,
 		logger:     logger,

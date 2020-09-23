@@ -57,7 +57,7 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	}
 
 	qProcConfig := &queryProcessorConfig{
-		nodeID: []byte("test-node-id1"),
+		nodeID: "test-node-id1",
 		db:     db,
 		logger: logger,
 	}
@@ -371,7 +371,7 @@ func TestGetUser(t *testing.T) {
 				expectedRespose: &types.GetUserResponseEnvelope{
 					Payload: &types.GetUserResponse{
 						Header: &types.ResponseHeader{
-							NodeID: []byte("test-node-id1"),
+							NodeID: "test-node-id1",
 						},
 						User:     targetUser,
 						Metadata: targetUserMetadataReadPerm,
@@ -405,7 +405,7 @@ func TestGetUser(t *testing.T) {
 				expectedRespose: &types.GetUserResponseEnvelope{
 					Payload: &types.GetUserResponse{
 						Header: &types.ResponseHeader{
-							NodeID: []byte("test-node-id1"),
+							NodeID: "test-node-id1",
 						},
 						User:     targetUser,
 						Metadata: targetUserMetadataReadWritePerm,
@@ -439,7 +439,7 @@ func TestGetUser(t *testing.T) {
 				expectedRespose: &types.GetUserResponseEnvelope{
 					Payload: &types.GetUserResponse{
 						Header: &types.ResponseHeader{
-							NodeID: []byte("test-node-id1"),
+							NodeID: "test-node-id1",
 						},
 						User:     targetUser,
 						Metadata: targetUserMetadataNoACL,
@@ -468,7 +468,7 @@ func TestGetUser(t *testing.T) {
 				expectedRespose: &types.GetUserResponseEnvelope{
 					Payload: &types.GetUserResponse{
 						Header: &types.ResponseHeader{
-							NodeID: []byte("test-node-id1"),
+							NodeID: "test-node-id1",
 						},
 						User:     nil,
 						Metadata: nil,
