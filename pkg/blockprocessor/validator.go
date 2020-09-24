@@ -2,9 +2,9 @@ package blockprocessor
 
 import (
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 )
 
 // validator validates the each transaction read set present in a
@@ -74,23 +74,31 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 			}
 
 			valInfo[txNum] = valRes
-			if valRes.Flag == types.Flag_VALID {
-				for _, w := range tx.Payload.DataWrites {
-					pendingUpdates[w.Key] = true
-				}
+			if valRes.Flag != types.Flag_VALID {
+				v.logger.Debugf("data transaction [%v] is invalid due to [%s]", tx.Payload, valRes.ReasonIfInvalid)
+				continue
+			}
 
-				for _, d := range tx.Payload.DataDeletes {
-					pendingUpdates[d.Key] = true
-				}
+			for _, w := range tx.Payload.DataWrites {
+				pendingUpdates[w.Key] = true
+			}
+
+			for _, d := range tx.Payload.DataDeletes {
+				pendingUpdates[d.Key] = true
 			}
 		}
 
 		return valInfo, nil
 
 	case *types.Block_UserAdministrationTxEnvelope:
-		valRes, err := v.userAdminTxValidator.validate(block.GetUserAdministrationTxEnvelope().Payload)
+		userTx := block.GetUserAdministrationTxEnvelope().Payload
+		valRes, err := v.userAdminTxValidator.validate(userTx)
 		if err != nil {
 			return nil, errors.WithMessage(err, "error while validating user administrative transaction")
+		}
+
+		if valRes.Flag != types.Flag_VALID {
+			v.logger.Debugf("user administration transaction [%v] is invalid due to [%s]", userTx, valRes.ReasonIfInvalid)
 		}
 
 		return []*types.ValidationInfo{
@@ -98,9 +106,14 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 		}, nil
 
 	case *types.Block_DBAdministrationTxEnvelope:
-		valRes, err := v.dbAdminTxValidator.validate(block.GetDBAdministrationTxEnvelope().Payload)
+		dbTx := block.GetDBAdministrationTxEnvelope().Payload
+		valRes, err := v.dbAdminTxValidator.validate(dbTx)
 		if err != nil {
 			return nil, errors.WithMessage(err, "error while validating db administrative transaction")
+		}
+
+		if valRes.Flag != types.Flag_VALID {
+			v.logger.Debugf("database administration transaction [%v] is invalid due to [%s]", dbTx, valRes.ReasonIfInvalid)
 		}
 
 		return []*types.ValidationInfo{
@@ -108,9 +121,14 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 		}, nil
 
 	case *types.Block_ConfigTxEnvelope:
-		valRes, err := v.configTxValidator.validate(block.GetConfigTxEnvelope().Payload)
+		configTx := block.GetConfigTxEnvelope().Payload
+		valRes, err := v.configTxValidator.validate(configTx)
 		if err != nil {
 			return nil, errors.WithMessage(err, "error while validating config transaction")
+		}
+
+		if valRes.Flag != types.Flag_VALID {
+			v.logger.Debugf("cluster config transaction [%v] is invalid due to [%s]", configTx, valRes.ReasonIfInvalid)
 		}
 
 		return []*types.ValidationInfo{
