@@ -77,7 +77,7 @@ func TestStart(t *testing.T) {
 	t.Run("server-starts-successfully", func(t *testing.T) {
 		t.Parallel()
 		env := newServerTestEnv(t)
-		defer env.cleanup(t)
+		defer os.RemoveAll(env.conf.Node.Database.LedgerDirectory)
 
 		valEnv, err := env.client.GetData(
 			&types.GetDataQueryEnvelope{
@@ -120,6 +120,61 @@ func TestStart(t *testing.T) {
 		require.NoError(t, err)
 		configTx.Payload.TxID = configBlock.GetConfigTxEnvelope().Payload.GetTxID()
 		require.True(t, proto.Equal(configTx, configBlock.GetConfigTxEnvelope()))
+
+		dbAdminTx := &types.DBAdministrationTxEnvelope{
+			Payload: &types.DBAdministrationTx{
+				UserID:    "admin",
+				TxID:      "tx1",
+				CreateDBs: []string{"db1", "db2"},
+				DeleteDBs: []string{"db3", "db4"},
+			},
+		}
+
+		resp, err := env.client.SubmitTransaction(constants.PostDBTx, dbAdminTx)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
+		assertTxInBlockStore := func() bool {
+			block, err := env.server.dbServ.blockStore.Get(2)
+			if err != nil {
+				return false
+			}
+
+			return proto.Equal(dbAdminTx, block.GetDBAdministrationTxEnvelope())
+		}
+
+		require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
+
+		// restart the server
+		require.NoError(t, env.server.listen.Close())
+		require.NoError(t, env.server.Start())
+		defer env.server.Stop()
+
+		blkHeight, err := blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), blkHeight)
+
+		dbAdminTx = &types.DBAdministrationTxEnvelope{
+			Payload: &types.DBAdministrationTx{
+				UserID:    "admin",
+				TxID:      "tx1",
+				DeleteDBs: []string{"db3", "db4"},
+			},
+		}
+
+		resp, err = env.client.SubmitTransaction(constants.PostDBTx, dbAdminTx)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
+		assertTxInBlockStore = func() bool {
+			block, err := env.server.dbServ.blockStore.Get(3)
+			if err != nil {
+				return false
+			}
+
+			return proto.Equal(dbAdminTx, block.GetDBAdministrationTxEnvelope())
+		}
+		require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
 	})
 }
 

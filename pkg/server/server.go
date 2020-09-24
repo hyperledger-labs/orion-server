@@ -153,6 +153,11 @@ func newDBServer(conf *config.Configurations, logger *logger.SugarLogger) (*dbSe
 		return nil, errors.WithMessage(err, "error while creating the block store")
 	}
 
+	blkHeight, err := blockStore.Height()
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while fetching the block store height")
+	}
+
 	qProcConfig := &queryProcessorConfig{
 		nodeID:     conf.Node.Identity.ID,
 		db:         levelDB,
@@ -163,6 +168,7 @@ func newDBServer(conf *config.Configurations, logger *logger.SugarLogger) (*dbSe
 	txProcConf := &txProcessorConfig{
 		db:                 levelDB,
 		blockStore:         blockStore,
+		blockHeight:        blkHeight,
 		txQueueLength:      conf.Node.QueueLength.Transaction,
 		txBatchQueueLength: conf.Node.QueueLength.ReorderedTransactionBatch,
 		blockQueueLength:   conf.Node.QueueLength.Block,
