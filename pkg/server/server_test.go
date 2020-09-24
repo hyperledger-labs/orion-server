@@ -63,6 +63,19 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
+	assertTxInBlockStore := func() bool {
+		block, err := server.dbServ.blockStore.Get(1)
+		if err != nil {
+			return false
+		}
+
+		return block.GetConfigTxEnvelope() != nil
+	}
+
+	// once the genesis block is committed, we can be sure that the server is
+	// ready to accept transactions
+	require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
+
 	return &serverTestEnv{
 		server:  server,
 		client:  client,
