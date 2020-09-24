@@ -31,7 +31,7 @@ func main() {
 func bdbCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "bdb",
-		Short: "To start and interact with a blockchain database",
+		Short: "To start and interact with a blockchain database server.",
 	}
 	cmd.AddCommand(versionCmd())
 	cmd.AddCommand(startCmd())
@@ -39,20 +39,22 @@ func bdbCmd() *cobra.Command {
 }
 
 func versionCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print the version of blockchain database",
+		Short: "Print the version of the blockchain database server.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 0 {
 				return fmt.Errorf("Trailing arguments detected")
 			}
 
 			cmd.SilenceUsage = true
-			log.Println("bdb 0.1")
+			cmd.Println("bdb 0.1")
 
 			return nil
 		},
 	}
+
+	return cmd
 }
 
 func startCmd() *cobra.Command {
