@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -474,27 +475,23 @@ type ResponseErr struct {
 	Error string `json:"error,omitempty"`
 }
 
+type certsInGenesisConfig struct {
+	nodeCert   []byte
+	adminCert  []byte
+	rootCACert []byte
+}
+
 func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {
-	nodeCert, err := ioutil.ReadFile(conf.Node.Identity.CertificatePath)
+	certs, err := readCerts(conf)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error while reading node certificate %s", conf.Node.Identity.CertificatePath)
-	}
-
-	adminCert, err := ioutil.ReadFile(conf.Admin.CertificatePath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error while reading admin certificate %s", conf.Admin.CertificatePath)
-	}
-
-	rootCACert, err := ioutil.ReadFile(conf.RootCA.CertificatePath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error while reading rootCA certificate %s", conf.RootCA.CertificatePath)
+		return nil, err
 	}
 
 	clusterConfig := &types.ClusterConfig{
 		Nodes: []*types.NodeConfig{
 			{
 				ID:          conf.Node.Identity.ID,
-				Certificate: nodeCert,
+				Certificate: certs.nodeCert,
 				Address:     conf.Node.Network.Address,
 				Port:        conf.Node.Network.Port,
 			},
@@ -502,10 +499,10 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 		Admins: []*types.Admin{
 			{
 				ID:          conf.Admin.ID,
-				Certificate: adminCert,
+				Certificate: certs.adminCert,
 			},
 		},
-		RootCACertificate: rootCACert,
+		RootCACertificate: certs.rootCACert,
 	}
 
 	return &types.ConfigTxEnvelope{
@@ -514,6 +511,32 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 			NewConfig: clusterConfig,
 		},
 		// TODO: we can make the node itself sign the transaction
+	}, nil
+}
+
+func readCerts(conf *config.Configurations) (*certsInGenesisConfig, error) {
+	nodeCert, err := ioutil.ReadFile(conf.Node.Identity.CertificatePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while reading node certificate %s", conf.Node.Identity.CertificatePath)
+	}
+	nodePemCert, _ := pem.Decode(nodeCert)
+
+	adminCert, err := ioutil.ReadFile(conf.Admin.CertificatePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while reading admin certificate %s", conf.Admin.CertificatePath)
+	}
+	adminPemCert, _ := pem.Decode(adminCert)
+
+	rootCACert, err := ioutil.ReadFile(conf.RootCA.CertificatePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while reading rootCA certificate %s", conf.RootCA.CertificatePath)
+	}
+	rootCAPemCert, _ := pem.Decode(rootCACert)
+
+	return &certsInGenesisConfig{
+		nodeCert:   nodePemCert.Bytes,
+		adminCert:  adminPemCert.Bytes,
+		rootCACert: rootCAPemCert.Bytes,
 	}, nil
 }
 

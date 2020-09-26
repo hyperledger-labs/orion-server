@@ -9,9 +9,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -75,23 +75,136 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 func TestValidateGenesisBlock(t *testing.T) {
 	t.Parallel()
 
-	genesisBlock := &types.Block{
-		Header: &types.BlockHeader{
-			Number: 1,
-		},
-	}
-	expectedResults := []*types.ValidationInfo{
-		{
-			Flag: types.Flag_VALID,
-		},
-	}
-
-	env := newValidatorTestEnv(t)
-	defer env.cleanup()
-
-	result, err := env.validator.validateBlock(genesisBlock)
+	cert, err := ioutil.ReadFile("./testdata/sample.cert")
 	require.NoError(t, err)
-	require.Equal(t, expectedResults, result)
+	dcCert, _ := pem.Decode(cert)
+
+	t.Run("genesis block with invalid config tx", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name          string
+			genesisBlock  *types.Block
+			expectedError string
+		}{
+			{
+				name: "node certificate is invalid",
+				genesisBlock: &types.Block{
+					Header: &types.BlockHeader{
+						Number: 1,
+					},
+					Payload: &types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: &types.ConfigTxEnvelope{
+							Payload: &types.ConfigTx{
+								NewConfig: &types.ClusterConfig{
+									Nodes: []*types.NodeConfig{
+										{
+											ID:          "node1",
+											Address:     "127.0.0.1",
+											Certificate: []byte("random"),
+										},
+									},
+									Admins: []*types.Admin{
+										{
+											ID:          "admin1",
+											Certificate: dcCert.Bytes,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				expectedError: "genesis block cannot be invalid: reason for invalidation [the node [node1] has an invalid certificate",
+			},
+			{
+				name: "admin certificate is invalid",
+				genesisBlock: &types.Block{
+					Header: &types.BlockHeader{
+						Number: 1,
+					},
+					Payload: &types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: &types.ConfigTxEnvelope{
+							Payload: &types.ConfigTx{
+								NewConfig: &types.ClusterConfig{
+									Nodes: []*types.NodeConfig{
+										{
+											ID:          "node1",
+											Address:     "127.0.0.1",
+											Certificate: dcCert.Bytes,
+										},
+									},
+									Admins: []*types.Admin{
+										{
+											ID:          "admin1",
+											Certificate: []byte("random"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				expectedError: "genesis block cannot be invalid: reason for invalidation [the admin [admin1] has an invalid certificate",
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				env := newValidatorTestEnv(t)
+				defer env.cleanup()
+
+				results, err := env.validator.validateBlock(tt.genesisBlock)
+				require.Contains(t, err.Error(), tt.expectedError)
+				require.Nil(t, results)
+			})
+		}
+	})
+
+	t.Run("genesis block with valid config tx", func(t *testing.T) {
+		t.Parallel()
+
+		genesisBlock := &types.Block{
+			Header: &types.BlockHeader{
+				Number: 1,
+			},
+			Payload: &types.Block_ConfigTxEnvelope{
+				ConfigTxEnvelope: &types.ConfigTxEnvelope{
+					Payload: &types.ConfigTx{
+						NewConfig: &types.ClusterConfig{
+							Nodes: []*types.NodeConfig{
+								{
+									ID:          "node1",
+									Address:     "127.0.0.1",
+									Certificate: dcCert.Bytes,
+								},
+							},
+							Admins: []*types.Admin{
+								{
+									ID:          "admin1",
+									Certificate: dcCert.Bytes,
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		expectedResults := []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+
+		env := newValidatorTestEnv(t)
+		defer env.cleanup()
+
+		results, err := env.validator.validateBlock(genesisBlock)
+		require.NoError(t, err)
+		require.Equal(t, expectedResults, results)
+	})
 }
 
 func TestValidateDataBlock(t *testing.T) {

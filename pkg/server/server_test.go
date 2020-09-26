@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/pem"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -1024,18 +1025,21 @@ func TestPrepareConfigTransaction(t *testing.T) {
 		t.Parallel()
 		nodeCert, err := ioutil.ReadFile("./testdata/node.cert")
 		require.NoError(t, err)
+		nodePemCert, _ := pem.Decode(nodeCert)
 
 		adminCert, err := ioutil.ReadFile("./testdata/admin.cert")
 		require.NoError(t, err)
+		adminPemCert, _ := pem.Decode(adminCert)
 
 		rootCACert, err := ioutil.ReadFile("./testdata/rootca.cert")
 		require.NoError(t, err)
+		rootCAPemCert, _ := pem.Decode(rootCACert)
 
 		expectedClusterConfig := &types.ClusterConfig{
 			Nodes: []*types.NodeConfig{
 				{
 					ID:          "bdb-node-1",
-					Certificate: nodeCert,
+					Certificate: nodePemCert.Bytes,
 					Address:     "127.0.0.1",
 					Port:        0,
 				},
@@ -1043,10 +1047,10 @@ func TestPrepareConfigTransaction(t *testing.T) {
 			Admins: []*types.Admin{
 				{
 					ID:          "admin",
-					Certificate: adminCert,
+					Certificate: adminPemCert.Bytes,
 				},
 			},
-			RootCACertificate: rootCACert,
+			RootCACertificate: rootCAPemCert.Bytes,
 		}
 
 		expectedConfigTx := &types.ConfigTxEnvelope{

@@ -53,7 +53,17 @@ func newValidator(conf *Config) *validator {
 func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
 	if block.Header.Number == 1 {
 		// for the genesis block, which is created by the node itself, we cannot
-		// do a regular validation
+		// do a regular validation but we still needs to validate the entries
+		configTx := block.GetConfigTxEnvelope().Payload
+
+		if r := validateNodeConfig(configTx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
+			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
+		}
+
+		if r := validateAdminConfig(configTx.NewConfig.Admins); r.Flag != types.Flag_VALID {
+			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
+		}
+
 		return []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
