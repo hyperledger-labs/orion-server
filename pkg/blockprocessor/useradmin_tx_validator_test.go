@@ -1203,16 +1203,6 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 	}
 }
 
-func createSimpleUserForTest(t *testing.T, userID string) []byte {
-	user := &types.User{
-		ID: userID,
-	}
-	userSerialized, err := proto.Marshal(user)
-	require.NoError(t, err)
-
-	return userSerialized
-}
-
 func constructUserForTest(
 	t *testing.T,
 	userID string,
