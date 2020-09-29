@@ -142,7 +142,8 @@ func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) *worl
 			Key:   write.Key,
 			Value: write.Value,
 			Metadata: &types.Metadata{
-				Version: version,
+				Version:       version,
+				AccessControl: write.ACL,
 			},
 		}
 		kvWrites = append(kvWrites, kv)

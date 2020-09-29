@@ -310,6 +310,14 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 							{
 								Key:   "key2",
 								Value: []byte("new-value2"),
+								ACL: &types.AccessControl{
+									ReadUsers: map[string]bool{
+										"user1": true,
+									},
+									ReadWriteUsers: map[string]bool{
+										"user2": true,
+									},
+								},
 							},
 						},
 					},
@@ -379,6 +387,14 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 					Version: &types.Version{
 						BlockNum: 2,
 						TxNum:    0,
+					},
+					AccessControl: &types.AccessControl{
+						ReadUsers: map[string]bool{
+							"user1": true,
+						},
+						ReadWriteUsers: map[string]bool{
+							"user2": true,
+						},
 					},
 				}),
 				constructDataEntryForTest("key3", []byte("new-value3"), &types.Metadata{
