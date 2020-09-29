@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
+	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -206,7 +206,7 @@ func TestQuerier(t *testing.T) {
 
 			t.Run("Read and Write Access Check on DBs", func(t *testing.T) {
 				for _, dbName := range tt.expectedReadPermissionOnDBs {
-					canRead, err := env.q.HasReadAccess(tt.userID, dbName)
+					canRead, err := env.q.HasReadAccessOnDataDB(tt.userID, dbName)
 					require.NoError(t, err)
 					require.True(t, canRead)
 				}
@@ -218,7 +218,7 @@ func TestQuerier(t *testing.T) {
 				}
 
 				for _, dbName := range tt.expectedNoPermissionOnDBs {
-					canRead, err := env.q.HasReadAccess(tt.userID, dbName)
+					canRead, err := env.q.HasReadAccessOnDataDB(tt.userID, dbName)
 					require.NoError(t, err)
 
 					require.False(t, canRead)
@@ -235,25 +235,13 @@ func TestQuerier(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedDBAdministrativePrivilege, perm)
 
-				canRead, err := env.q.HasReadAccess(tt.userID, worldstate.DatabasesDBName)
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedDBAdministrativePrivilege, canRead)
-
 				perm, err = env.q.HasClusterAdministrationPrivilege(tt.userID)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedClusterAdministrativePrivilege, perm)
 
-				canRead, err = env.q.HasReadAccess(tt.userID, worldstate.ConfigDBName)
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedDBAdministrativePrivilege, canRead)
-
 				perm, err = env.q.HasUserAdministrationPrivilege(tt.userID)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedUserAdministrativePrivilege, perm)
-
-				canRead, err = env.q.HasReadAccess(tt.userID, worldstate.UsersDBName)
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedDBAdministrativePrivilege, canRead)
 			})
 
 			t.Run("GetAccessControl()", func(t *testing.T) {
@@ -321,7 +309,7 @@ func TestQuerierNonExistingUser(t *testing.T) {
 	})
 
 	t.Run("HasReadAccess returns UserNotFoundErr", func(t *testing.T) {
-		perm, err := env.q.HasReadAccess("nouser", "db1")
+		perm, err := env.q.HasReadAccessOnDataDB("nouser", "db1")
 		require.EqualError(t, err, "the user [nouser] does not exist")
 		require.False(t, perm)
 	})

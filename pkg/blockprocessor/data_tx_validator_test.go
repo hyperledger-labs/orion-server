@@ -65,6 +65,23 @@ func TestValidateDataTx(t *testing.T) {
 			},
 		},
 		{
+			name:  "invalid: system database name cannot be used in a transaction",
+			setup: func(db worldstate.DB) {},
+			tx: &types.DataTx{
+				UserID: "operatingUser",
+				DBName: worldstate.ConfigDBName,
+				DataWrites: []*types.DataWrite{
+					{
+						Key: "key1",
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the database [" + worldstate.ConfigDBName + "] is a system database and no user can write to a system database via data transaction. Use appropriate transaction type to modify the system database",
+			},
+		},
+		{
 			name: "invalid: user does not have rw permission on the db1",
 			setup: func(db worldstate.DB) {
 				user := []*worldstate.DBUpdates{

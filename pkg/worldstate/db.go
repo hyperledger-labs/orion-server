@@ -60,10 +60,15 @@ type DBUpdates struct {
 	Deletes []string
 }
 
-// IsSystemDB returns true of the given db is a system database
+// IsSystemDB returns true if the given db is a system database
 func IsSystemDB(dbName string) bool {
 	return dbName == UsersDBName ||
 		dbName == DatabasesDBName ||
-		dbName == ConfigDBName ||
-		dbName == DefaultDBName
+		dbName == ConfigDBName
+}
+
+// IsDefaultWorldStateDB returns true if the given db is the default
+// data DB
+func IsDefaultWorldStateDB(dbName string) bool {
+	return dbName == DefaultDBName
 }

@@ -55,7 +55,14 @@ func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseE
 
 // getState return the state associated with a given key
 func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
-	hasPerm, err := q.identityQuerier.HasReadAccess(querierUserID, dbName)
+	if worldstate.IsSystemDB(dbName) {
+		return nil, &permissionErr{
+			errMsg: "no user can directly read from a system database [" + dbName + "]. " +
+				"To read from a system database, use /config, /user, /db rest endpoints instead of /data",
+		}
+	}
+
+	hasPerm, err := q.identityQuerier.HasReadAccessOnDataDB(querierUserID, dbName)
 	if err != nil {
 		return nil, err
 	}

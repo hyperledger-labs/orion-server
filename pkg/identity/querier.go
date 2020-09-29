@@ -76,30 +76,21 @@ func (q *Querier) GetVersion(userID string) (*types.Version, error) {
 	return metadata.Version, nil
 }
 
-// HasReadAccess returns true if the given userID has read access on the given
+// HasReadAccessOnDataDB returns true if the given userID has read access on the given
 // dbName. Otherwise, it returns false
-func (q *Querier) HasReadAccess(userID, dbName string) (bool, error) {
-	switch dbName {
-	case worldstate.ConfigDBName:
-		return q.HasClusterAdministrationPrivilege(userID)
-	case worldstate.DatabasesDBName:
-		return q.HasDBAdministrationPrivilege(userID)
-	case worldstate.UsersDBName:
-		return q.HasUserAdministrationPrivilege(userID)
-	default:
-		user, _, err := q.GetUser(userID)
-		if err != nil {
-			return false, err
-		}
-
-		dbPermission := user.GetPrivilege().GetDBPermission()
-		if dbPermission == nil {
-			return false, err
-		}
-
-		_, ok := dbPermission[dbName]
-		return ok, nil
+func (q *Querier) HasReadAccessOnDataDB(userID, dbName string) (bool, error) {
+	user, _, err := q.GetUser(userID)
+	if err != nil {
+		return false, err
 	}
+
+	dbPermission := user.GetPrivilege().GetDBPermission()
+	if dbPermission == nil {
+		return false, err
+	}
+
+	_, ok := dbPermission[dbName]
+	return ok, nil
 }
 
 // HasReadWriteAccess returns true if the given userID has read-write access on the given

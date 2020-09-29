@@ -183,6 +183,14 @@ func TestValidateCreateDBEntries(t *testing.T) {
 			},
 		},
 		{
+			name:        "invalid: default worldstate database cannot be created",
+			toCreateDBs: []string{worldstate.DefaultDBName},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database [" + worldstate.DefaultDBName + "] is the system created default database for storing states and it cannot be created as it exist by default",
+			},
+		},
+		{
 			name:        "invalid: existing database cannot be created",
 			toCreateDBs: []string{"db1"},
 			setup: func(db worldstate.DB) {
@@ -260,6 +268,14 @@ func TestValidateDeleteDBEntries(t *testing.T) {
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the database [" + worldstate.ConfigDBName + "] is a system database which cannot be deleted",
+			},
+		},
+		{
+			name:        "invalid: default worldstate database cannot be deleted",
+			toDeleteDBs: []string{worldstate.DefaultDBName},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database [" + worldstate.DefaultDBName + "] is the system created default database to store states and it cannot be deleted",
 			},
 		},
 		{

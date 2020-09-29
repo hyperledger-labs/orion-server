@@ -3,9 +3,9 @@ package blockprocessor
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -16,22 +16,31 @@ type dataTxValidator struct {
 }
 
 func (v *dataTxValidator) validate(tx *types.DataTx, pendingUpdates map[string]bool) (*types.ValidationInfo, error) {
-	if !v.db.Exist(tx.DBName) {
+	switch {
+	case !v.db.Exist(tx.DBName):
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 			ReasonIfInvalid: "the database [" + tx.DBName + "] does not exist in the cluster",
 		}, nil
-	}
 
-	hasPerm, err := v.identityQuerier.HasReadWriteAccess(tx.UserID, tx.DBName)
-	if err != nil {
-		return nil, err
-	}
-	if !hasPerm {
+	case worldstate.IsSystemDB(tx.DBName):
 		return &types.ValidationInfo{
-			Flag:            types.Flag_INVALID_NO_PERMISSION,
-			ReasonIfInvalid: "the user [" + tx.UserID + "] has no read-write permission on the database [" + tx.DBName + "]",
+			Flag: types.Flag_INVALID_NO_PERMISSION,
+			ReasonIfInvalid: "the database [" + tx.DBName + "] is a system database and no user can write to a " +
+				"system database via data transaction. Use appropriate transaction type to modify the system database",
 		}, nil
+
+	default:
+		hasPerm, err := v.identityQuerier.HasReadWriteAccess(tx.UserID, tx.DBName)
+		if err != nil {
+			return nil, err
+		}
+		if !hasPerm {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the user [" + tx.UserID + "] has no read-write permission on the database [" + tx.DBName + "]",
+			}, nil
+		}
 	}
 
 	r, err := v.validateFieldsInDataWrites(tx.DataWrites)

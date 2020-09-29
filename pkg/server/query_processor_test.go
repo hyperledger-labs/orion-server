@@ -241,7 +241,7 @@ func TestGetData(t *testing.T) {
 		}
 	})
 
-	t.Run("getData returns permission error", func(t *testing.T) {
+	t.Run("getData returns permission error due to ACL", func(t *testing.T) {
 		t.Parallel()
 		env := newQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
@@ -281,6 +281,50 @@ func TestGetData(t *testing.T) {
 		actualVal, err := env.q.getData("test-db", "testUser", "key1")
 		require.EqualError(t, err, "the user [testUser] has no permission to read key [key1] from database [test-db]")
 		require.Nil(t, actualVal)
+	})
+
+	t.Run("getData returns permission error due to directly accessing system database", func(t *testing.T) {
+		t.Parallel()
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		setup(env.db, "testUser", "test-db")
+
+		tests := []struct {
+			name   string
+			dbName string
+			user   string
+			key    string
+		}{
+			{
+				name:   "accessing config db",
+				dbName: worldstate.ConfigDBName,
+				user:   "testUser",
+				key:    worldstate.ConfigDBName,
+			},
+			{
+				name:   "accessing users db",
+				dbName: worldstate.UsersDBName,
+				user:   "testUser",
+				key:    "testUser",
+			},
+			{
+				name:   "accessing databases db",
+				dbName: worldstate.DatabasesDBName,
+				user:   "testUser",
+				key:    "bdb",
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				actualVal, err := env.q.getData(tt.dbName, tt.user, tt.key)
+				require.EqualError(t, err, "no user can directly read from a system database ["+tt.dbName+"]. "+
+					"To read from a system database, use /config, /user, /db rest endpoints instead of /data")
+				require.Nil(t, actualVal)
+			})
+		}
 	})
 }
 

@@ -2,9 +2,9 @@ package blockprocessor
 
 import (
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -50,6 +50,12 @@ func (v *dbAdminTxValidator) validateCreateDBEntries(toCreateDBs []string) *type
 				ReasonIfInvalid: "the database [" + dbName + "] is a system database which cannot be created as it exist by default",
 			}
 
+		case worldstate.IsDefaultWorldStateDB(dbName):
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database [" + dbName + "] is the system created default database for storing states and it cannot be created as it exist by default",
+			}
+
 		default:
 			if v.db.Exist(dbName) {
 				return &types.ValidationInfo{
@@ -89,6 +95,12 @@ func (v *dbAdminTxValidator) validateDeleteDBEntries(toDeleteDBs []string) *type
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the database [" + dbName + "] is a system database which cannot be deleted",
+			}
+
+		case worldstate.IsDefaultWorldStateDB(dbName):
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database [" + dbName + "] is the system created default database to store states and it cannot be deleted",
 			}
 
 		default:

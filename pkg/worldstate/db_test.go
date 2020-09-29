@@ -28,11 +28,6 @@ func TestIsSystemDBs(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "DefaultDB",
-			dbName:   DefaultDBName,
-			expected: true,
-		},
-		{
 			name:     "non-system DB",
 			dbName:   "random",
 			expected: false,
@@ -44,6 +39,34 @@ func TestIsSystemDBs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			require.Equal(t, tt.expected, IsSystemDB(tt.dbName))
+		})
+	}
+}
+
+func TestIsDefaultWorldStateDB(t *testing.T) {
+	tests := []struct {
+		name     string
+		dbName   string
+		expected bool
+	}{
+		{
+			name:     "defaultDB",
+			dbName:   DefaultDBName,
+			expected: true,
+		},
+		{
+			name:     "non-default worldstate db",
+			dbName:   "db1",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.expected, IsDefaultWorldStateDB(tt.dbName))
 		})
 	}
 }

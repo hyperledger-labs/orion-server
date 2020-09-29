@@ -106,24 +106,19 @@ func TestStart(t *testing.T) {
 		require.Nil(t, valEnv)
 		require.Contains(t, err.Error(), "the user [admin] has no permission to read from database [db1]")
 
-		configSerialized, err := env.client.GetData(
-			&types.GetDataQueryEnvelope{
-				Payload: &types.GetDataQuery{
+		configResp, err := env.client.GetConfig(
+			&types.GetConfigQueryEnvelope{
+				Payload: &types.GetConfigQuery{
 					UserID: "admin",
-					DBName: worldstate.ConfigDBName,
-					Key:    worldstate.ConfigKey,
 				},
-				Signature: []byte("hello"),
+				Signature: []byte("signature"),
 			},
 		)
 		require.NoError(t, err)
 
-		config := &types.ClusterConfig{}
-		proto.Unmarshal(configSerialized.Payload.Value, config)
-
 		configTx, err := prepareConfigTx(env.conf)
 		require.NoError(t, err)
-		require.Equal(t, configTx.Payload.NewConfig, config)
+		require.Equal(t, configTx.Payload.NewConfig, configResp.Payload.Config)
 
 		blockStore := env.server.dbServ.blockStore
 		height, err := blockStore.Height()
@@ -134,6 +129,8 @@ func TestStart(t *testing.T) {
 		require.NoError(t, err)
 		configTx.Payload.TxID = configBlock.GetConfigTxEnvelope().Payload.GetTxID()
 		require.True(t, proto.Equal(configTx, configBlock.GetConfigTxEnvelope()))
+
+		require.NoError(t, err)
 
 		dbAdminTx := &types.DBAdministrationTxEnvelope{
 			Payload: &types.DBAdministrationTx{
