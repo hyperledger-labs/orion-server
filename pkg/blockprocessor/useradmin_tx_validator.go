@@ -5,12 +5,14 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
 type userAdminTxValidator struct {
+	db              worldstate.DB
 	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
 }
@@ -27,7 +29,7 @@ func (v *userAdminTxValidator) validate(tx *types.UserAdministrationTx) (*types.
 		}, nil
 	}
 
-	if r := validateFieldsInUserWrites(tx.UserWrites); r.Flag != types.Flag_VALID {
+	if r := v.validateFieldsInUserWrites(tx.UserWrites); r.Flag != types.Flag_VALID {
 		return r, nil
 	}
 
@@ -66,7 +68,7 @@ func (v *userAdminTxValidator) validate(tx *types.UserAdministrationTx) (*types.
 	return v.mvccValidation(tx.UserReads)
 }
 
-func validateFieldsInUserWrites(userWrites []*types.UserWrite) *types.ValidationInfo {
+func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.UserWrite) *types.ValidationInfo {
 	for _, w := range userWrites {
 		switch {
 		case w == nil:
@@ -88,6 +90,19 @@ func validateFieldsInUserWrites(userWrites []*types.UserWrite) *types.Validation
 			}
 
 		default:
+			if w.User.Privilege != nil {
+				dbPerm := w.User.Privilege.DBPermission
+				for dbName := range dbPerm {
+					if v.db.Exist(dbName) {
+						continue
+					}
+					return &types.ValidationInfo{
+						Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
+						ReasonIfInvalid: "the database [" + dbName + "] present in the db permission list does not exist in the cluster",
+					}
+				}
+			}
+
 			if _, err := x509.ParseCertificate(w.User.Certificate); err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,

@@ -410,6 +410,25 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: db present in the premission list does not exist",
+			userWrites: []*types.UserWrite{
+				{
+					User: &types.User{
+						ID: "user1",
+						Privilege: &types.Privilege{
+							DBPermission: map[string]types.Privilege_Access{
+								"db1": types.Privilege_Read,
+							},
+						},
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
+				ReasonIfInvalid: "the database [db1] present in the db permission list does not exist in the cluster",
+			},
+		},
+		{
 			name: "invalid: certificate is not valid",
 			userWrites: []*types.UserWrite{
 				{
@@ -439,6 +458,25 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			},
 		},
 		{
+			name: "valid: entries are correct and db exist too",
+			userWrites: []*types.UserWrite{
+				{
+					User: &types.User{
+						ID: "user1",
+						Privilege: &types.Privilege{
+							DBPermission: map[string]types.Privilege_Access{
+								"bdb": types.Privilege_Read,
+							},
+						},
+						Certificate: dcCert.Bytes,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
 			name:       "valid: no writes",
 			userWrites: nil,
 			expectedResult: &types.ValidationInfo{
@@ -453,7 +491,10 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := validateFieldsInUserWrites(tt.userWrites)
+			env := newValidatorTestEnv(t)
+			defer env.cleanup()
+
+			result := env.validator.userAdminTxValidator.validateFieldsInUserWrites(tt.userWrites)
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}

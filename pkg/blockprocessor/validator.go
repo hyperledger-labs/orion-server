@@ -34,6 +34,7 @@ func newValidator(conf *Config) *validator {
 		},
 
 		userAdminTxValidator: &userAdminTxValidator{
+			db:              conf.DB,
 			identityQuerier: identity.NewQuerier(conf.DB),
 			logger:          conf.Logger,
 		},
