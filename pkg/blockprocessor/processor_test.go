@@ -103,8 +103,6 @@ func newTestEnv(t *testing.T) *testEnv {
 }
 
 func TestValidatorAndCommitter(t *testing.T) {
-	t.Parallel()
-
 	setup := func(db worldstate.DB) {
 		user := &types.User{
 			ID: "testUser",

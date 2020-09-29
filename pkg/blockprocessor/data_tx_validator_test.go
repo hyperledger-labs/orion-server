@@ -717,8 +717,6 @@ func TestValidateUniquenessInDataWritesAndDeletes(t *testing.T) {
 }
 
 func TestValidateAClOnDataReads(t *testing.T) {
-	t.Parallel()
-
 	sampleVersion := &types.Version{
 		BlockNum: 1,
 		TxNum:    1,
