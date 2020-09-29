@@ -3,7 +3,6 @@ package blockstore
 import (
 	"bufio"
 	"encoding/binary"
-	"fmt"
 	"io"
 	"os"
 
@@ -27,7 +26,7 @@ func (s *Store) Commit(block *types.Block) error {
 
 	blockNumber := block.GetHeader().GetNumber()
 	if blockNumber != s.lastCommittedBlockNum+1 {
-		return fmt.Errorf(
+		return errors.Errorf(
 			"expected block number [%d] but received [%d]",
 			s.lastCommittedBlockNum+1,
 			blockNumber,
@@ -133,7 +132,7 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 		case s.lastCommittedBlockNum == 0:
 			return nil, errors.New("block store is empty")
 		default:
-			return nil, fmt.Errorf(
+			return nil, errors.Errorf(
 				"requested block number [%d] cannot be greater than the last committed block number [%d]",
 				blockNumber,
 				s.lastCommittedBlockNum,

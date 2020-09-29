@@ -1,15 +1,14 @@
 package leveldb
 
 import (
-	"fmt"
 	"path/filepath"
 	"sync"
 
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.ibm.com/blockchaindb/server/pkg/fileops"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/fileops"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 
@@ -164,7 +163,7 @@ func (l *LevelDB) Close() error {
 		defer db.mu.Unlock()
 
 		if err := db.file.Close(); err != nil {
-			return fmt.Errorf("error while closing database %s, %v", name, err)
+			return errors.Errorf("error while closing database %s, %v", name, err)
 		}
 
 		delete(l.dbs, db.name)
