@@ -6,7 +6,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 
@@ -179,9 +178,9 @@ func newDBServer(conf *config.Configurations, logger *logger.SugarLogger) (*dbSe
 	}
 
 	return &dbServer{
-		newQueryProcessor(qProcConfig),
-		newTransactionProcessor(txProcConf),
-		logger,
+		queryProcessor:       newQueryProcessor(qProcConfig),
+		transactionProcessor: newTransactionProcessor(txProcConf),
+		logger:               logger,
 	}, nil
 }
 
@@ -202,7 +201,7 @@ func (db *dbServer) handleDBStatusQuery(w http.ResponseWriter, r *http.Request) 
 	params := mux.Vars(r)
 	dbName, ok := params["dbname"]
 	if !ok {
-		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing database name")
+		SendHTTPResponse(w, http.StatusBadRequest, "query error - bad or missing database name")
 		return
 	}
 
@@ -210,15 +209,17 @@ func (db *dbServer) handleDBStatusQuery(w http.ResponseWriter, r *http.Request) 
 
 	dbStatus, err := db.getDBStatus(dbName)
 	if err != nil {
-		composeResponseErr(
+		SendHTTPResponse(
 			w,
 			http.StatusInternalServerError,
-			"error while processing ["+r.URL.String()+"] because "+err.Error(),
+			&ResponseErr{
+				Error: "error while processing [" + r.URL.String() + "] because " + err.Error(),
+			},
 		)
 		return
 	}
 
-	composeResponse(w, http.StatusOK, dbStatus)
+	SendHTTPResponse(w, http.StatusOK, dbStatus)
 }
 
 func (db *dbServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
@@ -230,12 +231,20 @@ func (db *dbServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	dbName, ok := params["dbname"]
 	if !ok {
-		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing database name")
+		SendHTTPResponse(w,
+			http.StatusBadRequest,
+			&ResponseErr{
+				Error: "query error - bad or missing database name",
+			})
 		return
 	}
 	key, ok := params["key"]
 	if !ok {
-		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing key")
+		SendHTTPResponse(w,
+			http.StatusBadRequest,
+			&ResponseErr{
+				Error: "query error - bad or missing key",
+			})
 		return
 	}
 
@@ -252,15 +261,16 @@ func (db *dbServer) handleDataQuery(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusInternalServerError
 		}
 
-		composeResponseErr(
+		SendHTTPResponse(
 			w,
 			status,
-			"error while processing ["+r.URL.String()+"] because "+err.Error(),
-		)
+			&ResponseErr{
+				Error: "error while processing [" + r.URL.String() + "] because " + err.Error(),
+			})
 		return
 	}
 
-	composeResponse(w, http.StatusOK, data)
+	SendHTTPResponse(w, http.StatusOK, data)
 }
 
 func (db *dbServer) handleUserQuery(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +282,7 @@ func (db *dbServer) handleUserQuery(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	targetUserID, ok := params["userid"]
 	if !ok {
-		composeResponseErr(w, http.StatusBadRequest, "query error - bad or missing userid")
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{"query error - bad or missing userid"})
 		return
 	}
 
@@ -289,15 +299,15 @@ func (db *dbServer) handleUserQuery(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusInternalServerError
 		}
 
-		composeResponseErr(
+		SendHTTPResponse(
 			w,
 			status,
-			"error while processing ["+r.URL.String()+"] because "+err.Error(),
+			&ResponseErr{"error while processing [" + r.URL.String() + "] because " + err.Error()},
 		)
 		return
 	}
 
-	composeResponse(w, http.StatusOK, user)
+	SendHTTPResponse(w, http.StatusOK, user)
 }
 
 func (db *dbServer) handleConfigQuery(w http.ResponseWriter, r *http.Request) {
@@ -308,15 +318,15 @@ func (db *dbServer) handleConfigQuery(w http.ResponseWriter, r *http.Request) {
 
 	config, err := db.getConfig()
 	if err != nil {
-		composeResponseErr(
+		SendHTTPResponse(
 			w,
 			http.StatusInternalServerError,
-			"error while processing ["+r.URL.String()+"] because "+err.Error(),
+			&ResponseErr{"error while processing [" + r.URL.String() + "] because " + err.Error()},
 		)
 		return
 	}
 
-	composeResponse(w, http.StatusOK, config)
+	SendHTTPResponse(w, http.StatusOK, config)
 }
 
 func (db *dbServer) preProcessQuery(w http.ResponseWriter, r *http.Request) (string, []byte, bool) {
@@ -324,20 +334,22 @@ func (db *dbServer) preProcessQuery(w http.ResponseWriter, r *http.Request) (str
 
 	querierUserID, signature, err := validateAndParseHeader(&r.Header)
 	if err != nil {
-		composeResponseErr(w, http.StatusBadRequest, err.Error())
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return "", nil, composedErr
 	}
 
 	exist, err := db.identityQuerier.DoesUserExist(querierUserID)
 	if err != nil {
-		composeResponseErr(w, http.StatusInternalServerError, err.Error())
+		SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{err.Error()})
 		return "", nil, composedErr
 	}
 	if !exist {
-		composeResponseErr(
+		SendHTTPResponse(
 			w,
 			http.StatusForbidden,
-			r.URL.String()+" query is rejected as the submitting user ["+querierUserID+"] does not exist in the cluster",
+			&ResponseErr{
+				Error: r.URL.String() + " query is rejected as the submitting user [" + querierUserID + "] does not exist in the cluster",
+			},
 		)
 		return "", nil, composedErr
 	}
@@ -351,7 +363,7 @@ func (db *dbServer) handleDataTransaction(w http.ResponseWriter, r *http.Request
 
 	tx := &types.DataTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponseErr(w, http.StatusBadRequest, err.Error())
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return
 	}
 
@@ -365,7 +377,7 @@ func (db *dbServer) handleUserAdminTransaction(w http.ResponseWriter, r *http.Re
 
 	tx := &types.UserAdministrationTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponseErr(w, http.StatusBadRequest, err.Error())
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return
 	}
 
@@ -379,7 +391,7 @@ func (db *dbServer) handleDBAdminTransaction(w http.ResponseWriter, r *http.Requ
 
 	tx := &types.DBAdministrationTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponseErr(w, http.StatusBadRequest, err.Error())
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return
 	}
 
@@ -393,7 +405,7 @@ func (db *dbServer) handleConfigTransaction(w http.ResponseWriter, r *http.Reque
 
 	tx := &types.ConfigTxEnvelope{}
 	if err := d.Decode(tx); err != nil {
-		composeResponseErr(w, http.StatusBadRequest, err.Error())
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return
 	}
 
@@ -404,24 +416,26 @@ func (db *dbServer) handleConfigTransaction(w http.ResponseWriter, r *http.Reque
 func (db *dbServer) handleTransaction(w http.ResponseWriter, userID string, tx interface{}) {
 	exist, err := db.identityQuerier.DoesUserExist(userID)
 	if err != nil {
-		composeResponseErr(w, http.StatusInternalServerError, err.Error())
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return
 	}
 	if !exist {
-		composeResponseErr(
+		SendHTTPResponse(
 			w,
 			http.StatusForbidden,
-			"transaction is rejected as the submitting user ["+userID+"] does not exist in the cluster",
+			&ResponseErr{
+				Error: "transaction is rejected as the submitting user [" + userID + "] does not exist in the cluster",
+			},
 		)
 		return
 	}
 
 	if err := db.submitTransaction(tx); err != nil {
-		composeResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
+		SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
 		return
 	}
 
-	composeResponse(w, http.StatusOK, empty.Empty{})
+	SendHTTPResponse(w, http.StatusOK, empty.Empty{})
 }
 
 func (db *dbServer) prepareAndCommitConfigTx(conf *config.Configurations) error {
@@ -452,27 +466,6 @@ func validateAndParseHeader(h *http.Header) (string, []byte, error) {
 	}
 
 	return userID, signatureBytes, nil
-}
-
-func composeResponseErr(w http.ResponseWriter, code int, errMsg string) {
-	err := &ResponseErr{
-		Error: errMsg,
-	}
-	composeResponse(w, code, err)
-}
-
-func composeResponse(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	if _, err := w.Write(response); err != nil {
-		log.Printf("Warning: failed to write response [%v] to the response writer\n", w)
-	}
-}
-
-// ResponseErr holds the error response
-type ResponseErr struct {
-	Error string `json:"error,omitempty"`
 }
 
 type certsInGenesisConfig struct {
