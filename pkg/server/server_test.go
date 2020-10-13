@@ -64,18 +64,33 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	require.NoError(t, err)
 	require.NotNil(t, client)
 
-	assertTxInBlockStore := func() bool {
-		block, err := server.dbServ.blockStore.Get(1)
-		if err != nil {
-			return false
+	assertSystemDBCreation := func() bool {
+		for _, dbName := range []string{
+			worldstate.ConfigDBName,
+			worldstate.DatabasesDBName,
+			worldstate.UsersDBName,
+			worldstate.DefaultDBName,
+		} {
+			if !server.dbServ.db.Exist(dbName) {
+				return false
+			}
 		}
 
-		return block.GetConfigTxEnvelope() != nil
+		return true
+	}
+	require.Eventually(t, assertSystemDBCreation, 2*time.Second, 200*time.Millisecond)
+
+	assertBootstrapConfig := func() bool {
+		conf, err := server.dbServ.queryProcessor.getConfig()
+		if err == nil && conf != nil {
+			return true
+		}
+		return false
 	}
 
 	// once the genesis block is committed, we can be sure that the server is
 	// ready to accept transactions
-	require.Eventually(t, assertTxInBlockStore, 2*time.Second, 200*time.Millisecond)
+	require.Eventually(t, assertBootstrapConfig, 2*time.Second, 200*time.Millisecond)
 
 	return &serverTestEnv{
 		server:  server,
