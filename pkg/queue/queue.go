@@ -38,3 +38,8 @@ func (q *Queue) IsFull() bool {
 func (q *Queue) IsEmpty() bool {
 	return q.Size() == 0
 }
+
+// Capacity returns the max size of the queue
+func (q *Queue) Capacity() int {
+	return cap(q.entries)
+}

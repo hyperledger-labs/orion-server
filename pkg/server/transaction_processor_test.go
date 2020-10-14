@@ -198,11 +198,15 @@ func TestTransactionProcessor(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(2), height)
 
+		genesisHash, err := env.blockStore.GetHash(1)
+		require.NoError(t, err)
+		require.NotNil(t, genesisHash)
+
 		expectedBlock := &types.Block{
 			Header: &types.BlockHeader{
-				Number:                  2,
-				PreviousBlockHeaderHash: nil,
-				TransactionsHash:        nil,
+				Number:           2,
+				SkipchainHashes:  [][]byte{genesisHash},
+				TransactionsHash: nil,
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{

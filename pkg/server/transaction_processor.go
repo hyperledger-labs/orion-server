@@ -62,6 +62,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 			BlockQueue:      p.blockQueue,
 			NextBlockNumber: conf.blockHeight + 1,
 			Logger:          conf.logger,
+			BlockStore:      conf.blockStore,
 		},
 	)
 

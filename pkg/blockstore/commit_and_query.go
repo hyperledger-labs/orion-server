@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
 )
@@ -48,6 +49,9 @@ func (s *Store) Commit(block *types.Block) error {
 		}
 	}
 
+	if err = s.addBlockHeaderIndexes(blockNumber, block.GetHeader()); err != nil {
+		return err
+	}
 	return s.appendBlock(blockNumber, content)
 }
 
@@ -114,6 +118,49 @@ func (s *Store) addIndexForBlock(number uint64, offset int64) error {
 	)
 }
 
+func (s *Store) addBlockHeaderIndexes(number uint64, header *types.BlockHeader) error {
+	blockHeaderBytes, err := proto.Marshal(header)
+	if err != nil {
+		return errors.Wrapf(err, "can't marshal block header {%d, %v}", number, header)
+	}
+
+	blockHash, err := crypto.ComputeSHA256Hash(blockHeaderBytes)
+	if err != nil {
+		return errors.Wrapf(err, "can't calculate block hash {%d, %v}", number, header)
+	}
+
+	if err = s.blockHeaderStorage.Put(
+		createHeaderHashKey(number),
+		blockHash,
+		&opt.WriteOptions{
+			Sync: true,
+		},
+	); err != nil {
+		return errors.Wrapf(err, "can't create block hash index {%d, %v}", number, header)
+	}
+
+	if err = s.blockHeaderStorage.Put(
+		createHeaderBytesKey(number),
+		blockHeaderBytes,
+		&opt.WriteOptions{
+			Sync: true,
+		},
+	); err != nil {
+		return errors.Wrapf(err, "can't create block hash index {%d, %v}", number, header)
+	}
+
+	if err = s.blockHeaderStorage.Put(
+		createHeaderHashIndexKey(blockHash),
+		encodeOrderPreservingVarUint64(number),
+		&opt.WriteOptions{
+			Sync: true,
+		},
+	); err != nil {
+		return errors.Wrapf(err, "can't create block header by hash index {%d, %v}", number, header)
+	}
+	return nil
+}
+
 // Height returns the height of the block store, i.e., the last committed block number
 func (s *Store) Height() (uint64, error) {
 	s.mu.RLock()
@@ -122,7 +169,7 @@ func (s *Store) Height() (uint64, error) {
 	return s.lastCommittedBlockNum, nil
 }
 
-// Get retuns the requested block
+// Get returns the requested block
 func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -169,6 +216,73 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 	return readBlockFromFile(f, location)
 }
 
+// GetHeader returns block header by block number, operation should be faster that regular Get,
+// because it requires only one db access, without file reads
+func (s *Store) GetHeader(blockNumber uint64) (*types.BlockHeader, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	val, err := s.blockHeaderStorage.Get(createHeaderBytesKey(blockNumber), nil)
+	if err == leveldb.ErrNotFound {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't access block's %d hash", blockNumber)
+	}
+
+	blockHeader := &types.BlockHeader{}
+
+	if err := proto.Unmarshal(val, blockHeader); err != nil {
+		return nil, errors.Wrap(err, "error while unmarshalling block header")
+	}
+	return blockHeader, nil
+}
+
+// GetHash returns block hash by block number
+func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	val, err := s.blockHeaderStorage.Get(createHeaderHashKey(blockNumber), nil)
+	if err == leveldb.ErrNotFound {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't access block's %d hash", blockNumber)
+	}
+	return val, nil
+}
+
+// GetHeaderByHash returns block header by block hash, used for travel in Merkle list or Merkle skip list
+func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	blockNumBytes, err := s.blockHeaderStorage.Get(createHeaderHashIndexKey(blockHash), nil)
+	if err == leveldb.ErrNotFound {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "can't access block's number by hash")
+	}
+
+	headerVal, err := s.blockHeaderStorage.Get(append(headerBytesNs, blockNumBytes...), nil)
+	if err == leveldb.ErrNotFound {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "can't access block's header by number")
+	}
+	blockHeader := &types.BlockHeader{}
+
+	if err := proto.Unmarshal(headerVal, blockHeader); err != nil {
+		return nil, errors.Wrap(err, "error while unmarshalling block header")
+	}
+
+	return blockHeader, nil
+}
+
 func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 	val, err := s.blockIndex.Get(encodeOrderPreservingVarUint64(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
@@ -177,7 +291,7 @@ func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 
 	blockLocation := &BlockLocation{}
 	if err := proto.Unmarshal(val, blockLocation); err != nil {
-		return nil, errors.Wrap(err, "error while unmarshaling block location")
+		return nil, errors.Wrap(err, "error while unmarshalling block location")
 	}
 
 	return blockLocation, nil
@@ -206,8 +320,30 @@ func readBlockFromFile(f *os.File, location *BlockLocation) (*types.Block, error
 
 	block := &types.Block{}
 	if err := proto.Unmarshal(marshaledBlock, block); err != nil {
-		return nil, errors.Wrap(err, "error while unmarshaling the block")
+		return nil, errors.Wrap(err, "error while unmarshalling the block")
 	}
 
 	return block, nil
+}
+
+// ComputeBlockHash returns block hash. Currently block header hash is considered block hash, because it contains
+// all crypto related information, like Merkle tree root(s) and Merkle list and skip list hashes.
+func ComputeBlockHash(block *types.Block) ([]byte, error) {
+	headerBytes, err := proto.Marshal(block.GetHeader())
+	if err != nil {
+		return nil, err
+	}
+	return crypto.ComputeSHA256Hash(headerBytes)
+}
+
+func createHeaderHashIndexKey(blockHash []byte) []byte {
+	return append(headerHashToBlockNumNs, blockHash...)
+}
+
+func createHeaderBytesKey(blockNum uint64) []byte {
+	return append(headerBytesNs, encodeOrderPreservingVarUint64(blockNum)...)
+}
+
+func createHeaderHashKey(blockNum uint64) []byte {
+	return append(headerHashNs, encodeOrderPreservingVarUint64(blockNum)...)
 }

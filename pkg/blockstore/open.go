@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	proto "github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -28,8 +28,9 @@ var (
 	// block file chunks are stored inside fileChunksDir
 	// while the index to the block file's offset to fetch
 	// a given block number is stored inside blockIndexDir
-	fileChunksDirName = "filechunks"
-	blockIndexDirName = "blockindex"
+	fileChunksDirName  = "filechunks"
+	blockIndexDirName  = "blockindex"
+	blockHeaderDirName = "blockheader"
 
 	// underCreationFlag is used to mark that the store
 	// is being created. If a failure happens during the
@@ -37,6 +38,14 @@ var (
 	// detect the partially created store and do cleanup
 	// before creating a new store
 	underCreationFlag = "undercreation"
+
+	// Namespaces for block header and block hash storage:
+	// number -> header bytes
+	headerBytesNs = []byte{0}
+	// number -> header (block) hash
+	headerHashNs = []byte{1}
+	// hash -> block number
+	headerHashToBlockNumNs = []byte{2}
 )
 
 // Store maintains a chain of blocks in an append-only
@@ -49,6 +58,7 @@ type Store struct {
 	lastCommittedBlockNum uint64
 	blockIndexDirPath     string
 	blockIndex            *leveldb.DB
+	blockHeaderStorage    *leveldb.DB
 	reusableBuffer        []byte
 	logger                *logger.SugarLogger
 	mu                    sync.RWMutex
@@ -107,8 +117,9 @@ func openNewStore(c *Config) (*Store, error) {
 
 	fileChunksDirPath := filepath.Join(c.StoreDir, fileChunksDirName)
 	blockIndexDirPath := filepath.Join(c.StoreDir, blockIndexDirName)
+	blockHeaderDirPath := filepath.Join(c.StoreDir, blockHeaderDirName)
 
-	for _, d := range []string{fileChunksDirPath, blockIndexDirPath} {
+	for _, d := range []string{fileChunksDirPath, blockIndexDirPath, blockHeaderDirPath} {
 		if err := fileops.CreateDir(d); err != nil {
 			return nil, errors.WithMessagef(err, "error while creating directory [%s]", d)
 		}
@@ -124,6 +135,11 @@ func openNewStore(c *Config) (*Store, error) {
 		return nil, errors.WithMessage(err, "error while creating an index database")
 	}
 
+	headersDB, err := leveldb.OpenFile(blockHeaderDirPath, &opt.Options{})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while creating an block headers database")
+	}
+
 	if err := fileops.Remove(underCreationFlagPath); err != nil {
 		return nil, errors.WithMessagef(err, "error while removing the under creation flag [%s]", underCreationFlagPath)
 	}
@@ -136,6 +152,7 @@ func openNewStore(c *Config) (*Store, error) {
 		lastCommittedBlockNum: 0,
 		blockIndexDirPath:     blockIndexDirPath,
 		blockIndex:            indexDB,
+		blockHeaderStorage:    headersDB,
 		reusableBuffer:        make([]byte, binary.MaxVarintLen64),
 		logger:                c.Logger,
 	}, nil
@@ -144,6 +161,7 @@ func openNewStore(c *Config) (*Store, error) {
 func openExistingStore(c *Config) (*Store, error) {
 	fileChunksDirPath := filepath.Join(c.StoreDir, fileChunksDirName)
 	blockIndexDirPath := filepath.Join(c.StoreDir, blockIndexDirName)
+	blockHeaderDirPath := filepath.Join(c.StoreDir, blockHeaderDirName)
 
 	currentFileChunk, currentChunkNum, err := findAndOpenLastFileChunk(fileChunksDirPath)
 	if err != nil {
@@ -157,18 +175,24 @@ func openExistingStore(c *Config) (*Store, error) {
 
 	indexDB, err := leveldb.OpenFile(blockIndexDirPath, &opt.Options{})
 	if err != nil {
-		return nil, errors.WithMessagef(err, "error while opening leveldb file for index")
+		return nil, errors.WithMessage(err, "error while opening leveldb file for index")
+	}
+
+	headersDB, err := leveldb.OpenFile(blockHeaderDirPath, &opt.Options{})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while creating a block headers database")
 	}
 
 	s := &Store{
-		fileChunksDirPath: fileChunksDirPath,
-		currentFileChunk:  currentFileChunk,
-		currentOffset:     chunkFileInfo.Size(),
-		currentChunkNum:   currentChunkNum,
-		blockIndexDirPath: blockIndexDirPath,
-		blockIndex:        indexDB,
-		reusableBuffer:    make([]byte, binary.MaxVarintLen64),
-		logger:            c.Logger,
+		fileChunksDirPath:  fileChunksDirPath,
+		currentFileChunk:   currentFileChunk,
+		currentOffset:      chunkFileInfo.Size(),
+		currentChunkNum:    currentChunkNum,
+		blockIndexDirPath:  blockIndexDirPath,
+		blockIndex:         indexDB,
+		blockHeaderStorage: headersDB,
+		reusableBuffer:     make([]byte, binary.MaxVarintLen64),
+		logger:             c.Logger,
 	}
 	return s, s.recoverIfNeeded()
 }
@@ -226,6 +250,10 @@ func (s *Store) Close() error {
 
 	if err := s.blockIndex.Close(); err != nil {
 		return errors.WithMessage(err, "error while closing the block index database")
+	}
+
+	if err := s.blockHeaderStorage.Close(); err != nil {
+		return errors.WithMessage(err, "error while closing the block headers database")
 	}
 
 	return nil

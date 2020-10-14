@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
+	"github.ibm.com/blockchaindb/protos/types"
 )
 
 type testEnv struct {
@@ -97,9 +97,10 @@ func TestCommitAndQuery(t *testing.T) {
 		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
 			b := &types.Block{
 				Header: &types.BlockHeader{
-					Number:                  blockNumber,
-					PreviousBlockHeaderHash: []byte(fmt.Sprintf("hash-%d", blockNumber-1)),
-					TransactionsHash:        []byte(fmt.Sprintf("hash-%d", blockNumber)),
+					Number: blockNumber,
+
+					SkipchainHashes:  [][]byte{[]byte(fmt.Sprintf("hash-%d", blockNumber-1))},
+					TransactionsHash: []byte(fmt.Sprintf("hash-%d", blockNumber)),
 				},
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -127,9 +128,9 @@ func TestCommitAndQuery(t *testing.T) {
 			for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
 				expectedBlock := &types.Block{
 					Header: &types.BlockHeader{
-						Number:                  blockNumber,
-						PreviousBlockHeaderHash: []byte(fmt.Sprintf("hash-%d", blockNumber-1)),
-						TransactionsHash:        []byte(fmt.Sprintf("hash-%d", blockNumber)),
+						Number:           blockNumber,
+						SkipchainHashes:  [][]byte{[]byte(fmt.Sprintf("hash-%d", blockNumber-1))},
+						TransactionsHash: []byte(fmt.Sprintf("hash-%d", blockNumber)),
 					},
 					Payload: &types.Block_UserAdministrationTxEnvelope{
 						UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -149,6 +150,17 @@ func TestCommitAndQuery(t *testing.T) {
 				block, err := env.s.Get(blockNumber)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(expectedBlock, block))
+				blockHeader, err := env.s.GetHeader(blockNumber)
+				require.NoError(t, err)
+				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
+				blockHash, err := env.s.GetHash(blockNumber)
+				require.NoError(t, err)
+				expectedHash, err := ComputeBlockHash(expectedBlock)
+				require.NoError(t, err)
+				require.Equal(t, expectedHash, blockHash)
+				blockHeader, err = env.s.GetHeaderByHash(expectedHash)
+				require.NoError(t, err)
+				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
 			}
 		}
 
@@ -192,5 +204,17 @@ func TestCommitAndQuery(t *testing.T) {
 		block, err = env.s.Get(10)
 		require.EqualError(t, err, "requested block number [10] cannot be greater than the last committed block number [1]")
 		require.Nil(t, block)
+
+		blockHeader, err := env.s.GetHeader(10)
+		require.NoError(t, err)
+		require.Nil(t, blockHeader)
+
+		blockHash, err := env.s.GetHash(10)
+		require.NoError(t, err)
+		require.Nil(t, blockHash)
+
+		blockHeader, err = env.s.GetHeaderByHash([]byte{0})
+		require.NoError(t, err)
+		require.Nil(t, blockHeader)
 	})
 }
