@@ -102,7 +102,6 @@ func newTestEnv(t *testing.T) *testEnv {
 }
 
 func TestBatchCreator(t *testing.T) {
-
 	dataTx1 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user1",
@@ -251,36 +250,63 @@ func TestBatchCreator(t *testing.T) {
 		}
 	}
 
-	for _, tt := range testCases {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	enqueueTxBatchesAndAssertBlocks := func(t *testing.T, testEnv *testEnv, txBatches []interface{}, expectedBlocks []*types.Block) {
+		for _, txBatch := range txBatches {
+			testEnv.creator.txBatchQueue.Enqueue(txBatch)
+		}
 
-			testEnv := newTestEnv(t)
-			defer testEnv.cleanup()
-
-			// Commit expected blocks to store, their hashes will be used to create new blocks
-			for _, expectedBlock := range tt.expectedBlocks {
-				require.NoError(t, testEnv.blockStore.Commit(expectedBlock))
+		hasBlockCountMatched := func() bool {
+			if len(expectedBlocks) == testEnv.creator.blockQueue.Size() {
+				return true
 			}
+			return false
+		}
+		require.Eventually(t, hasBlockCountMatched, 2*time.Second, 1000*time.Millisecond)
 
-			for _, txBatch := range tt.txBatches {
-				testEnv.creator.txBatchQueue.Enqueue(txBatch)
-			}
-
-			hasBlockCountMatched := func() bool {
-				if len(tt.expectedBlocks) == testEnv.creator.blockQueue.Size() {
-					return true
-				}
-				return false
-			}
-			require.Eventually(t, hasBlockCountMatched, 2*time.Second, 1000*time.Millisecond)
-
-			for _, expectedBlock := range tt.expectedBlocks {
-				block := testEnv.creator.blockQueue.Dequeue().(*types.Block)
-				require.True(t, proto.Equal(expectedBlock, block))
-			}
-		})
+		for _, expectedBlock := range expectedBlocks {
+			block := testEnv.creator.blockQueue.Dequeue().(*types.Block)
+			require.True(t, proto.Equal(expectedBlock, block))
+		}
 	}
+
+	t.Run("access hash from the blockstore", func(t *testing.T) {
+		for _, tt := range testCases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				testEnv := newTestEnv(t)
+				defer testEnv.cleanup()
+
+				// storing the block in block store so that the hash would be fetched from the store itself
+				for _, expectedBlock := range tt.expectedBlocks {
+					require.NoError(t, testEnv.blockStore.Commit(expectedBlock))
+				}
+
+				enqueueTxBatchesAndAssertBlocks(t, testEnv, tt.txBatches, tt.expectedBlocks)
+			})
+		}
+	})
+
+	t.Run("access hash from the cache", func(t *testing.T) {
+		for _, tt := range testCases {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				testEnv := newTestEnv(t)
+				defer testEnv.cleanup()
+
+				// storing the block hash in the cache so that the hash would be fetched from the cache rather than
+				// from the block store
+				for _, expectedBlock := range tt.expectedBlocks {
+					h, err := blockstore.ComputeBlockHash(expectedBlock)
+					require.NoError(t, err)
+					testEnv.creator.blockHashCache.Put(expectedBlock.Header.Number, h)
+				}
+
+				enqueueTxBatchesAndAssertBlocks(t, testEnv, tt.txBatches, tt.expectedBlocks)
+			})
+		}
+	})
 }
 
 func TestCache(t *testing.T) {

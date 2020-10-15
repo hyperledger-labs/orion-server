@@ -123,7 +123,7 @@ func (b *BlockCreator) createHeader(blockNum uint64) (*types.BlockHeader, error)
 			return nil, err
 		}
 		if hash == nil {
-			if hash = b.blockHashCache.Get(blockNum); hash == nil {
+			if hash = b.blockHashCache.Get(linkedBlockNum); hash == nil {
 				return nil, errors.Errorf("can't get hash for block {%d}, not from ledger, nor from cache", blockNum)
 			}
 		}
