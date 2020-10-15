@@ -6,18 +6,13 @@ import (
 	"net/http"
 )
 
-//go:generate mockery --dir . --name ResponseWriter --case underscore --output mocks/
-type ResponseWriter interface {
-	http.ResponseWriter
-}
-
 // ResponseErr holds the error response
 type ResponseErr struct {
 	Error string `json:"error,omitempty"`
 }
 
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
-func SendHTTPResponse(w ResponseWriter, code int, payload interface{}) {
+func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
