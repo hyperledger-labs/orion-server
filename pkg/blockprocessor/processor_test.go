@@ -103,40 +103,6 @@ func newTestEnv(t *testing.T) *testEnv {
 }
 
 func TestValidatorAndCommitter(t *testing.T) {
-	setup := func(db worldstate.DB) {
-		user := &types.User{
-			ID: "testUser",
-			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
-					worldstate.DefaultDBName: types.Privilege_ReadWrite,
-				},
-			},
-		}
-
-		u, err := proto.Marshal(user)
-		require.NoError(t, err)
-
-		createUser := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
-				Writes: []*worldstate.KVWithMetadata{
-					{
-						Key:   string(identity.UserNamespace) + "testUser",
-						Value: u,
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    1,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		require.NoError(t, db.Commit(createUser))
-	}
-
 	cert, err := ioutil.ReadFile("./testdata/sample.cert")
 	require.NoError(t, err)
 	dcCert, _ := pem.Decode(cert)
@@ -168,6 +134,50 @@ func TestValidatorAndCommitter(t *testing.T) {
 				},
 			},
 		},
+	}
+
+	setup := func(env *testEnv) {
+		env.v.blockQueue.Enqueue(configBlock)
+		assertConfigHasCommitted := func() bool {
+			exist, err := env.v.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
+			if err != nil || !exist {
+				return false
+			}
+			return true
+		}
+		require.Eventually(t, assertConfigHasCommitted, 2*time.Second, 100*time.Millisecond)
+
+		user := &types.User{
+			ID: "testUser",
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					worldstate.DefaultDBName: types.Privilege_ReadWrite,
+				},
+			},
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + "testUser",
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		require.NoError(t, env.db.Commit(createUser))
 	}
 
 	block2 := &types.Block{
@@ -224,13 +234,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		env := newTestEnv(t)
 		defer env.cleanup()
 
-		setup(env.db)
-
-		env.v.blockQueue.Enqueue(configBlock)
-		require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
-		exist, err := env.v.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
-		require.NoError(t, err)
-		require.True(t, exist)
+		setup(env)
 
 		testCases := []struct {
 			block               *types.Block
@@ -270,10 +274,16 @@ func TestValidatorAndCommitter(t *testing.T) {
 			env.v.blockQueue.Enqueue(tt.block)
 			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
-			val, metadata, err := env.db.Get(worldstate.DefaultDBName, tt.key)
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedValue, val)
-			require.True(t, proto.Equal(tt.expectedMetadata, metadata))
+			assertCommittedValue := func() bool {
+				val, metadata, err := env.db.Get(worldstate.DefaultDBName, tt.key)
+				if err != nil ||
+					!bytes.Equal(tt.expectedValue, val) ||
+					!proto.Equal(tt.expectedMetadata, metadata) {
+					return false
+				}
+				return true
+			}
+			require.Eventually(t, assertCommittedValue, 2*time.Second, 100*time.Millisecond)
 
 			height, err := env.blockStore.Height()
 			require.NoError(t, err)
@@ -291,13 +301,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		env := newTestEnv(t)
 		defer env.cleanup()
 
-		setup(env.db)
-
-		env.v.blockQueue.Enqueue(configBlock)
-		require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
-		exist, err := env.v.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
-		require.NoError(t, err)
-		require.True(t, exist)
+		setup(env)
 
 		testCases := []struct {
 			blocks              []*types.Block
@@ -331,30 +335,18 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 			assertCommittedValue := func() bool {
 				val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
-				if err != nil {
+				if err != nil ||
+					!bytes.Equal(tt.expectedValue, val) ||
+					!proto.Equal(tt.expectedMetadata, metadata) {
 					return false
 				}
-
-				if !bytes.Equal(tt.expectedValue, val) {
-					return false
-				}
-
-				if !proto.Equal(tt.expectedMetadata, metadata) {
-					return false
-				}
-
-				height, err := env.blockStore.Height()
-				if err != nil {
-					return false
-				}
-				if !(tt.expectedBlockHeight == height) {
-					return false
-				}
-
 				return true
 			}
-
 			require.Eventually(t, assertCommittedValue, 2*time.Second, 100*time.Millisecond)
+
+			height, err := env.blockStore.Height()
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedBlockHeight, height)
 
 			for _, expectedBlock := range tt.blocks {
 				block, err := env.blockStore.Get(expectedBlock.Header.Number)
