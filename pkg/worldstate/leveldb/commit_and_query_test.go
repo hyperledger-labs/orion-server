@@ -59,9 +59,9 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 
 	require.Equal(t, path, l.dbRootDir)
-	require.Len(t, l.dbs, len(systemDBs))
+	require.Len(t, l.dbs, len(preCreateDBs))
 
-	for _, dbName := range systemDBs {
+	for _, dbName := range preCreateDBs {
 		require.NotNil(t, l.dbs[dbName])
 	}
 
@@ -171,7 +171,7 @@ func TestListDBsAndExist(t *testing.T) {
 		env := newTestEnv(t)
 		defer env.cleanup()
 
-		for _, dbName := range systemDBs {
+		for _, dbName := range preCreateDBs {
 			require.True(t, env.l.Exist(dbName))
 		}
 
@@ -277,7 +277,7 @@ func TestCommitAndQuery(t *testing.T) {
 
 		require.NoError(t, l.create("db1"))
 		require.NoError(t, l.create("db2"))
-		require.NoError(t, l.Commit(dbsUpdates))
+		require.NoError(t, l.Commit(dbsUpdates, 1))
 
 		db1KVs := map[string]*ValueAndMetadata{
 			"db1-key1": db1valAndMetadata1,
@@ -431,7 +431,7 @@ func TestCommitAndQuery(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, l.Commit(dbsUpdates))
+		require.NoError(t, l.Commit(dbsUpdates, 2))
 
 		db1KVs["db1-key1"] = db1valAndMetadata1New
 		db1KVs["db1-key2"] = nil
@@ -558,6 +558,7 @@ func TestCommitWithDBManagement(t *testing.T) {
 					[]*worldstate.DBUpdates{
 						tt.updates,
 					},
+					1,
 				),
 			)
 
@@ -613,7 +614,7 @@ func TestGetConfig(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.l.Commit(dbUpdates))
+		require.NoError(t, env.l.Commit(dbUpdates, 1))
 
 		actualConfig, actualMetadata, err := env.l.GetConfig()
 		require.NoError(t, err)
@@ -643,11 +644,65 @@ func TestGetConfig(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.l.Commit(dbUpdates))
+		require.NoError(t, env.l.Commit(dbUpdates, 1))
 
 		actualConfig, actualMetadata, err := env.l.GetConfig()
 		require.Contains(t, err.Error(), "error while unmarshaling committed cluster configuration")
 		require.Nil(t, actualConfig)
 		require.Nil(t, actualMetadata)
 	})
+}
+
+func TestHeight(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		blockNumber    uint64
+		dbsUpdates     []*worldstate.DBUpdates
+		expectedHeight uint64
+	}{
+		{
+			name:           "block 1 with empty updates",
+			blockNumber:    1,
+			dbsUpdates:     nil,
+			expectedHeight: 1,
+		},
+		{
+			name:        "block 10 with non-empty updates",
+			blockNumber: 10,
+			dbsUpdates: []*worldstate.DBUpdates{
+				{
+					DBName:  worldstate.DefaultDBName,
+					Deletes: []string{"key1"},
+				},
+			},
+			expectedHeight: 10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newTestEnv(t)
+			defer env.cleanup()
+
+			height, err := env.l.Height()
+			require.NoError(t, err)
+			require.Equal(t, uint64(0), height)
+
+			require.NoError(t, env.l.Commit(tt.dbsUpdates, tt.blockNumber))
+
+			height, err = env.l.Height()
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedHeight, height)
+
+			require.NoError(t, env.l.Commit(nil, tt.blockNumber+1))
+
+			height, err = env.l.Height()
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedHeight+1, height)
+		})
+	}
 }

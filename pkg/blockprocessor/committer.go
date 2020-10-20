@@ -127,8 +127,9 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 		dbsUpdates = entries
 	}
 
-	if err := c.db.Commit(dbsUpdates); err != nil {
-		return errors.WithMessagef(err, "failed to commit block %d to state database", block.GetHeader().GetBaseHeader().GetNumber())
+	blockNum := block.Header.BaseHeader.Number
+	if err := c.db.Commit(dbsUpdates, blockNum); err != nil {
+		return errors.WithMessagef(err, "failed to commit block %d to state database", blockNum)
 	}
 	return nil
 }

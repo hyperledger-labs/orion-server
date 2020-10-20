@@ -1,6 +1,7 @@
 package blockprocessor
 
 import (
+	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
@@ -38,29 +39,84 @@ func New(conf *Config) *BlockProcessor {
 }
 
 // Run runs validator and committer
-func (b *BlockProcessor) Run() {
-	for {
-		block := b.blockQueue.Dequeue().(*types.Block)
-
-		b.logger.Debugf("validating and commit block %d", block.GetHeader().GetBaseHeader().GetNumber())
-		validationInfo, err := b.validator.validateBlock(block)
-		if err != nil {
-			panic(err)
-		}
-
-		block.TxValidationInfo = validationInfo
-
-		// TODO: validationInfo needs not be passed along with the block as it is
-		// already embedded into the block. In issue 186, the additional passage of
-		// validationInfo will be removed.
-
-		if err := b.blockStore.UpdateBlock(block); err != nil {
-			panic(err)
-		}
-
-		if err = b.committer.commitBlock(block, validationInfo); err != nil {
-			panic(err)
-		}
-		b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
+func (b *BlockProcessor) Run(stopBlockProcessing chan struct{}) {
+	b.logger.Debug("starting block processor")
+	if err := b.recoverWorldStateDBIfNeeded(); err != nil {
+		panic(errors.WithMessage(err, "error while recovering node"))
 	}
+
+	for {
+		select {
+		default:
+			block := b.blockQueue.Dequeue().(*types.Block)
+
+			b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
+			validationInfo, err := b.validator.validateBlock(block)
+			if err != nil {
+				panic(err)
+			}
+
+			block.Header.ValidationInfo = validationInfo
+
+			if err := b.blockStore.UpdateBlock(block); err != nil {
+				panic(err)
+			}
+
+			// TODO: validationInfo needs not be passed along with the block as it is
+			// already embedded into the block. In issue 186, the additional passage of
+			// validationInfo will be removed.
+			if err = b.committer.commitBlock(block, validationInfo); err != nil {
+				panic(err)
+			}
+			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
+
+		case <-stopBlockProcessing:
+			b.logger.Info("stopping block processing")
+			return
+		}
+	}
+}
+
+func (b *BlockProcessor) recoverWorldStateDBIfNeeded() error {
+	blockStoreHeight, err := b.blockStore.Height()
+	if err != nil {
+		return err
+	}
+
+	stateDBHeight, err := b.committer.db.Height()
+	if err != nil {
+		return err
+	}
+
+	switch {
+	case stateDBHeight == blockStoreHeight:
+		return nil
+	case stateDBHeight > blockStoreHeight:
+		return errors.Errorf(
+			"the height of state database [%d] is higher than the height of block store [%d]. The node cannot be recovered",
+			stateDBHeight,
+			blockStoreHeight,
+		)
+	case blockStoreHeight-stateDBHeight > 1:
+		// Note: when we support rollback, the different in height can be more than 1.
+		// For now, a failure can occur before committing the block to the block store or after.
+		// As a result, the height of block store would be at most 1 higher than the state database
+		// height.
+		return errors.Errorf(
+			"the difference between the height of the block store [%d] and the state database [%d] cannot be greater than 1 block. The node cannot be recovered",
+			blockStoreHeight,
+			stateDBHeight,
+		)
+	case blockStoreHeight-stateDBHeight == 1:
+		block, err := b.blockStore.Get(blockStoreHeight)
+		if err != nil {
+			return err
+		}
+
+		if err := b.committer.commitToStateDB(block, block.Header.ValidationInfo); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

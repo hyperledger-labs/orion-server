@@ -171,6 +171,11 @@ func TestOpenStore(t *testing.T) {
 						Number:                 blockNumber,
 						PreviousBaseHeaderHash: []byte(fmt.Sprintf("hash-%d", blockNumber-1)),
 					},
+					ValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
+					},
 				},
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -183,11 +188,6 @@ func TestOpenStore(t *testing.T) {
 							},
 						},
 						Signature: []byte("sign"),
-					},
-				},
-				TxValidationInfo: []*types.ValidationInfo{
-					{
-						Flag: types.Flag_VALID,
 					},
 				},
 			}

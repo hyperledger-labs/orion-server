@@ -240,7 +240,7 @@ func TestValidateDataBlock(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Commit(userAdd))
+		require.NoError(t, db.Commit(userAdd, 1))
 	}
 
 	tests := []struct {
@@ -290,7 +290,7 @@ func TestValidateDataBlock(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			block: &types.Block{
 				Header: &types.BlockHeader{
@@ -437,7 +437,7 @@ func TestValidateUserBlock(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			block: &types.Block{
 				Header: &types.BlockHeader{
@@ -484,7 +484,7 @@ func TestValidateUserBlock(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			block: &types.Block{
 				Header: &types.BlockHeader{
@@ -563,7 +563,7 @@ func TestValidateDBBlock(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, db.Commit(privilegedUser))
+		require.NoError(t, db.Commit(privilegedUser, 1))
 
 		dbs := []*worldstate.DBUpdates{
 			{
@@ -578,7 +578,7 @@ func TestValidateDBBlock(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, db.Commit(dbs))
+		require.NoError(t, db.Commit(dbs, 1))
 	}
 
 	tests := []struct {
@@ -682,7 +682,7 @@ func TestValidateConfigBlock(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Commit(newUsers))
+		require.NoError(t, db.Commit(newUsers, 1))
 	}
 
 	tests := []struct {

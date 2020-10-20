@@ -146,13 +146,12 @@ func TestTransactionProcessor(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(createUser))
+		require.NoError(t, env.db.Commit(createUser, 2))
 		genesisCommitted := func() bool {
 			height, _ := env.blockStore.Height()
 			return height > uint64(0)
 		}
 		require.Eventually(t, genesisCommitted, time.Second+5, time.Millisecond*100)
-
 	}
 
 	t.Run("commit a data transaction", func(t *testing.T) {
@@ -222,17 +221,17 @@ func TestTransactionProcessor(t *testing.T) {
 					LastCommittedBlockNum:  1,
 				},
 				SkipchainHashes: [][]byte{genesisHash},
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
+					},
+				},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{
 					Envelopes: []*types.DataTxEnvelope{
 						tx,
 					},
-				},
-			},
-			TxValidationInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
 				},
 			},
 		}

@@ -110,7 +110,7 @@ func TestQuerier(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Commit(dbUpdates))
+		require.NoError(t, db.Commit(dbUpdates, 1))
 	}
 
 	tests := []struct {

@@ -60,7 +60,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "nonAdminUser",
@@ -85,7 +85,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -117,7 +117,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -147,7 +147,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -185,7 +185,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -220,7 +220,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -258,7 +258,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -293,7 +293,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -327,7 +327,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			tx: &types.UserAdministrationTx{
 				UserID: "adminUser",
@@ -705,7 +705,7 @@ func TestValidateACLOnUserReads(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userReads: []*types.UserRead{
 				{
@@ -747,7 +747,7 @@ func TestValidateACLOnUserReads(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userReads: []*types.UserRead{
 				{
@@ -836,7 +836,7 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userWrites: []*types.UserWrite{
 				{
@@ -882,7 +882,7 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userWrites: []*types.UserWrite{
 				{
@@ -979,7 +979,7 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userDeletes: []*types.UserDelete{
 				{
@@ -1013,7 +1013,7 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userDeletes: []*types.UserDelete{
 				{
@@ -1054,7 +1054,7 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userDeletes: []*types.UserDelete{
 				{
@@ -1131,7 +1131,7 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userReads: []*types.UserRead{
 				{
@@ -1160,7 +1160,7 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userReads: []*types.UserRead{
 				{
@@ -1189,7 +1189,7 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			userReads: []*types.UserRead{
 				{

@@ -37,7 +37,7 @@ func TestValidateDataTx(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Commit(userAdd))
+		require.NoError(t, db.Commit(userAdd, 1))
 	}
 
 	tests := []struct {
@@ -93,7 +93,7 @@ func TestValidateDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(user))
+				require.NoError(t, db.Commit(user, 1))
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -137,7 +137,6 @@ func TestValidateDataTx(t *testing.T) {
 			name: "invalid: incorrect fields in the data delete",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
-
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -180,7 +179,7 @@ func TestValidateDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -224,7 +223,7 @@ func TestValidateDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -263,7 +262,7 @@ func TestValidateDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -302,7 +301,7 @@ func TestValidateDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -322,7 +321,6 @@ func TestValidateDataTx(t *testing.T) {
 			name: "invalid: mvccValidation fails",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
-
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -382,7 +380,7 @@ func TestValidateDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			tx: &types.DataTx{
 				UserID: "operatingUser",
@@ -513,7 +511,7 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(newUsers))
+				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			dataWrites: []*types.DataWrite{
 				{
@@ -615,7 +613,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataDeletes: []*types.DataDelete{
 				{
@@ -768,7 +766,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataReads: []*types.DataRead{
 				{
@@ -803,7 +801,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataReads: []*types.DataRead{
 				{
@@ -837,7 +835,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataReads: []*types.DataRead{
 				{
@@ -866,7 +864,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataReads: []*types.DataRead{
 				{
@@ -943,7 +941,7 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataWrites: []*types.DataWrite{
 				{
@@ -978,7 +976,7 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataWrites: []*types.DataWrite{
 				{
@@ -1007,7 +1005,7 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataWrites: []*types.DataWrite{
 				{
@@ -1084,7 +1082,7 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataDeletes: []*types.DataDelete{
 				{
@@ -1119,7 +1117,7 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataDeletes: []*types.DataDelete{
 				{
@@ -1148,7 +1146,7 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataDeletes: []*types.DataDelete{
 				{
@@ -1267,7 +1265,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataReads: []*types.DataRead{
 				{
@@ -1307,7 +1305,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(data))
+				require.NoError(t, db.Commit(data, 1))
 			},
 			dataReads: []*types.DataRead{
 				{

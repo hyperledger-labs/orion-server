@@ -24,12 +24,13 @@ import (
 )
 
 type testEnv struct {
-	v              *BlockProcessor
-	db             worldstate.DB
-	dbPath         string
-	blockStore     *blockstore.Store
-	blockStorePath string
-	cleanup        func()
+	blockProcessor      *BlockProcessor
+	stopBlockProcessing chan struct{}
+	db                  worldstate.DB
+	dbPath              string
+	blockStore          *blockstore.Store
+	blockStorePath      string
+	cleanup             func()
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -87,167 +88,123 @@ func newTestEnv(t *testing.T) *testEnv {
 		}
 	}
 
-	v := New(&Config{
+	b := New(&Config{
 		BlockQueue: queue.New(10),
 		BlockStore: blockStore,
 		DB:         db,
 		Logger:     logger,
 	})
-	go v.Run()
+	stopBlockProcessing := make(chan struct{})
+	go b.Run(stopBlockProcessing)
 
 	return &testEnv{
-		v:              v,
-		db:             db,
-		dbPath:         dir,
-		blockStore:     blockStore,
-		blockStorePath: blockStorePath,
-		cleanup:        cleanup,
+		blockProcessor:      b,
+		stopBlockProcessing: stopBlockProcessing,
+		db:                  db,
+		dbPath:              dir,
+		blockStore:          blockStore,
+		blockStorePath:      blockStorePath,
+		cleanup:             cleanup,
 	}
 }
 
-func TestValidatorAndCommitter(t *testing.T) {
+func setup(t *testing.T, env *testEnv) {
 	cert, err := ioutil.ReadFile("./testdata/sample.cert")
 	require.NoError(t, err)
 	dcCert, _ := pem.Decode(cert)
 
-	setup := func(env *testEnv) {
-		configBlock := &types.Block{
-			Header: &types.BlockHeader{
-				BaseHeader: &types.BlockHeaderBase{
-					Number: 1,
-				},
+	configBlock := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number: 1,
 			},
-			Payload: &types.Block_ConfigTxEnvelope{
-				ConfigTxEnvelope: &types.ConfigTxEnvelope{
-					Payload: &types.ConfigTx{
-						UserID:               "adminUser",
-						ReadOldConfigVersion: nil,
-						NewConfig: &types.ClusterConfig{
-							Nodes: []*types.NodeConfig{
-								{
-									ID:          "node1",
-									Address:     "127.0.0.1",
-									Certificate: dcCert.Bytes,
-								},
+		},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					UserID:               "adminUser",
+					ReadOldConfigVersion: nil,
+					NewConfig: &types.ClusterConfig{
+						Nodes: []*types.NodeConfig{
+							{
+								ID:          "node1",
+								Address:     "127.0.0.1",
+								Certificate: dcCert.Bytes,
 							},
-							Admins: []*types.Admin{
-								{
-									ID:          "admin1",
-									Certificate: dcCert.Bytes,
-								},
+						},
+						Admins: []*types.Admin{
+							{
+								ID:          "admin1",
+								Certificate: dcCert.Bytes,
 							},
 						},
 					},
 				},
 			},
-		}
-
-		env.v.blockQueue.Enqueue(configBlock)
-		assertConfigHasCommitted := func() bool {
-			exist, err := env.v.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
-			if err != nil || !exist {
-				return false
-			}
-			return true
-		}
-		require.Eventually(t, assertConfigHasCommitted, 2*time.Second, 100*time.Millisecond)
-
-		user := &types.User{
-			ID: "testUser",
-			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
-					worldstate.DefaultDBName: types.Privilege_ReadWrite,
-				},
-			},
-		}
-
-		u, err := proto.Marshal(user)
-		require.NoError(t, err)
-
-		createUser := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
-				Writes: []*worldstate.KVWithMetadata{
-					{
-						Key:   string(identity.UserNamespace) + "testUser",
-						Value: u,
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    1,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		require.NoError(t, env.db.Commit(createUser))
+		},
 	}
 
-	createBlock2 := func() *types.Block {
-		return &types.Block{
-			Header: &types.BlockHeader{
-				BaseHeader: &types.BlockHeaderBase{
-					Number: 2,
-				},
+	env.blockProcessor.blockQueue.Enqueue(configBlock)
+	assertConfigHasCommitted := func() bool {
+		exist, err := env.blockProcessor.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
+		if err != nil || !exist {
+			return false
+		}
+		return true
+	}
+	require.Eventually(t, assertConfigHasCommitted, 2*time.Second, 100*time.Millisecond)
+
+	user := &types.User{
+		ID: "testUser",
+		Privilege: &types.Privilege{
+			DBPermission: map[string]types.Privilege_Access{
+				worldstate.DefaultDBName: types.Privilege_ReadWrite,
 			},
-			Payload: &types.Block_DataTxEnvelopes{
-				DataTxEnvelopes: &types.DataTxEnvelopes{
-					Envelopes: []*types.DataTxEnvelope{
-						{
-							Payload: &types.DataTx{
-								UserID: "testUser",
-								DBName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key1",
-										Value: []byte("value-1"),
-									},
-								},
-							},
+		},
+	}
+
+	u, err := proto.Marshal(user)
+	require.NoError(t, err)
+
+	createUser := []*worldstate.DBUpdates{
+		{
+			DBName: worldstate.UsersDBName,
+			Writes: []*worldstate.KVWithMetadata{
+				{
+					Key:   string(identity.UserNamespace) + "testUser",
+					Value: u,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    1,
 						},
 					},
 				},
 			},
-		}
+		},
 	}
 
-	createBlock3 := func() *types.Block {
-		return &types.Block{
-			Header: &types.BlockHeader{
-				BaseHeader: &types.BlockHeaderBase{
-					Number: 3,
-				},
-			},
-			Payload: &types.Block_DataTxEnvelopes{
-				DataTxEnvelopes: &types.DataTxEnvelopes{
-					Envelopes: []*types.DataTxEnvelope{
-						{
-							Payload: &types.DataTx{
-								UserID: "testUser",
-								DBName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key1",
-										Value: []byte("new-value-1"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-	}
+	require.NoError(t, env.db.Commit(createUser, 1))
 
+	assertUserCreation := func() bool {
+		exist, err := env.blockProcessor.validator.configTxValidator.identityQuerier.DoesUserExist("testUser")
+		if err != nil || !exist {
+			return false
+		}
+		return true
+	}
+	require.Eventually(t, assertUserCreation, 2*time.Second, 100*time.Millisecond)
+}
+
+func TestValidatorAndCommitter(t *testing.T) {
 	t.Run("enqueue-one-block", func(t *testing.T) {
 		t.Parallel()
 
 		env := newTestEnv(t)
 		defer env.cleanup()
+		defer close(env.stopBlockProcessing)
 
-		setup(env)
+		setup(t, env)
 
 		testCases := []struct {
 			block               *types.Block
@@ -258,7 +215,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			expectedBlockHeight uint64
 		}{
 			{
-				block:         createBlock2(),
+				block:         createSampleBlock(2, "key1", []byte("value-1")),
 				key:           "key1",
 				expectedValue: []byte("value-1"),
 				expectedMetadata: &types.Metadata{
@@ -270,9 +227,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 				expectedBlockHeight: 2,
 			},
 			{
-				block:         createBlock3(),
+				block:         createSampleBlock(3, "key1", []byte("value-2")),
 				key:           "key1",
-				expectedValue: []byte("new-value-1"),
+				expectedValue: []byte("value-2"),
 				expectedMetadata: &types.Metadata{
 					Version: &types.Version{
 						BlockNum: 3,
@@ -284,8 +241,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}
 
 		for _, tt := range testCases {
-			env.v.blockQueue.Enqueue(tt.block)
-			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
+			env.blockProcessor.blockQueue.Enqueue(tt.block)
+			require.Eventually(t, env.blockProcessor.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
 			assertCommittedValue := func() bool {
 				val, metadata, err := env.db.Get(worldstate.DefaultDBName, tt.key)
@@ -313,8 +270,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 		env := newTestEnv(t)
 		defer env.cleanup()
+		defer close(env.stopBlockProcessing)
 
-		setup(env)
+		setup(t, env)
 
 		genesisHash, err := env.blockStore.GetHash(uint64(1))
 		require.NoError(t, err)
@@ -329,11 +287,11 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}{
 			{
 				blocks: []*types.Block{
-					createBlock2(),
-					createBlock3(),
+					createSampleBlock(2, "key1", []byte("value-1")),
+					createSampleBlock(3, "key1", []byte("value-2")),
 				},
 				key:           "key1",
-				expectedValue: []byte("new-value-1"),
+				expectedValue: []byte("value-2"),
 				expectedMetadata: &types.Metadata{
 					Version: &types.Version{
 						BlockNum: 3,
@@ -342,8 +300,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 				},
 				expectedBlockHeight: 3,
 				expectedBlocks: []*types.Block{
-					createBlock2(),
-					createBlock3(),
+					createSampleBlock(2, "key1", []byte("value-1")),
+					createSampleBlock(3, "key1", []byte("value-2")),
 				},
 			},
 		}
@@ -356,9 +314,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 		for _, tt := range testCases {
 			for _, block := range tt.blocks {
-				env.v.blockQueue.Enqueue(block)
+				env.blockProcessor.blockQueue.Enqueue(block)
 			}
-			require.Eventually(t, env.v.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
+			require.Eventually(t, env.blockProcessor.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
 			assertCommittedValue := func() bool {
 				val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
@@ -378,20 +336,169 @@ func TestValidatorAndCommitter(t *testing.T) {
 			for index, expectedBlock := range tt.blocks {
 				precalculatedSkipListBlock := tt.expectedBlocks[index]
 				block, err := env.blockStore.Get(expectedBlock.GetHeader().GetBaseHeader().GetNumber())
-				expectedBlockJson, _ := json.Marshal(expectedBlock)
-				blockJson, _ := json.Marshal(block)
+				expectedBlockJSON, _ := json.Marshal(expectedBlock)
+				blockJSON, _ := json.Marshal(block)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(expectedBlock, block), "Expected\t %s\nBlock\t\t %s\n", expectedBlockJson, blockJson)
+				require.True(t, proto.Equal(expectedBlock, block), "Expected\t %s\nBlock\t\t %s\n", expectedBlockJSON, blockJSON)
 				require.Equal(t, precalculatedSkipListBlock.Header.SkipchainHashes, block.Header.SkipchainHashes)
 			}
 		}
 	})
 }
 
+func TestFailureAndRecovery(t *testing.T) {
+	t.Run("blockstore is ahead of stateDB by 1 block -- will recover successfully", func(t *testing.T) {
+		env := newTestEnv(t)
+		defer env.cleanup()
+
+		setup(t, env)
+
+		block2 := createSampleBlock(2, "key1", []byte("value-1"))
+		block2.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+		require.NoError(t, env.blockProcessor.committer.blockStore.Commit(block2))
+
+		blockStoreHeight, err := env.blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), blockStoreHeight)
+
+		stateDBHeight, err := env.db.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), stateDBHeight)
+
+		// before committing the block to the stateDB, mimic node crash
+		// by stopping the block processor goroutine
+		close(env.stopBlockProcessing)
+
+		// mimic node restart by starting the block processor goroutine
+		env.stopBlockProcessing = make(chan struct{})
+		defer close(env.stopBlockProcessing)
+		go env.blockProcessor.Run(env.stopBlockProcessing)
+
+		assertStateDBHeight := func() bool {
+			stateDBHeight, err = env.db.Height()
+			if err != nil || stateDBHeight != uint64(2) {
+				return false
+			}
+
+			return true
+		}
+		require.Eventually(t, assertStateDBHeight, 2*time.Second, 100*time.Millisecond)
+	})
+
+	t.Run("blockstore is behind stateDB by 1 block -- will result in panic", func(t *testing.T) {
+		env := newTestEnv(t)
+		defer env.cleanup()
+
+		setup(t, env)
+
+		block2 := createSampleBlock(2, "key1", []byte("value-1"))
+		block2.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+		require.NoError(t, env.blockProcessor.committer.commitToStateDB(block2, block2.Header.ValidationInfo))
+
+		blockStoreHeight, err := env.blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), blockStoreHeight)
+
+		stateDBHeight, err := env.db.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), stateDBHeight)
+
+		close(env.stopBlockProcessing)
+
+		env.stopBlockProcessing = make(chan struct{})
+		defer close(env.stopBlockProcessing)
+		assertPanic := func() {
+			env.blockProcessor.Run(env.stopBlockProcessing)
+		}
+		require.PanicsWithError(t, "error while recovering node: the height of state database [2] is higher than the height of block store [1]. The node cannot be recovered", assertPanic)
+	})
+
+	t.Run("blockstore is ahead of stateDB by 2 blocks -- will result in panic", func(t *testing.T) {
+		env := newTestEnv(t)
+		defer env.cleanup()
+
+		setup(t, env)
+
+		block2 := createSampleBlock(2, "key1", []byte("value-1"))
+		block2.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+		require.NoError(t, env.blockProcessor.committer.commitToBlockStore(block2))
+
+		block3 := createSampleBlock(3, "key1", []byte("value-2"))
+		block3.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+		require.NoError(t, env.blockProcessor.committer.commitToBlockStore(block3))
+
+		blockStoreHeight, err := env.blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(3), blockStoreHeight)
+
+		stateDBHeight, err := env.db.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), stateDBHeight)
+
+		close(env.stopBlockProcessing)
+
+		env.stopBlockProcessing = make(chan struct{})
+		defer close(env.stopBlockProcessing)
+		assertPanic := func() {
+			env.blockProcessor.Run(env.stopBlockProcessing)
+		}
+		require.PanicsWithError(t, "error while recovering node: the difference between the height of the block store [3] and the state database [1] cannot be greater than 1 block. The node cannot be recovered", assertPanic)
+	})
+}
+
+func createSampleBlock(blockNumber uint64, key string, value []byte) *types.Block {
+	return &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number: blockNumber,
+			},
+			ValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							UserID: "testUser",
+							DBName: worldstate.DefaultDBName,
+							DataWrites: []*types.DataWrite{
+								{
+									Key:   key,
+									Value: value,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func calculateBlockHashes(t *testing.T, genesisHash []byte, blocks []*types.Block, blockNum uint64) [][]byte {
 	res := make([][]byte, 0)
 	distance := uint64(1)
-	blockNum -= 1
+	blockNum--
 
 	for (blockNum%distance) == 0 && distance <= blockNum {
 		index := blockNum - distance

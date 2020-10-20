@@ -117,12 +117,17 @@ func TestCommitter(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(createDB))
+		require.NoError(t, env.db.Commit(createDB, 1))
 
 		block1 := &types.Block{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{
 					Number: 1,
+				},
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
+					},
 				},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
@@ -140,11 +145,6 @@ func TestCommitter(t *testing.T) {
 							},
 						},
 					},
-				},
-			},
-			TxValidationInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
 				},
 			},
 		}
@@ -190,6 +190,14 @@ func TestBlockStoreCommitter(t *testing.T) {
 				BaseHeader: &types.BlockHeaderBase{
 					Number: number,
 				},
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
+					},
+					{
+						Flag: types.Flag_VALID,
+					},
+				},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -217,14 +225,6 @@ func TestBlockStoreCommitter(t *testing.T) {
 							},
 						},
 					},
-				},
-			},
-			TxValidationInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
-				},
-				{
-					Flag: types.Flag_VALID,
 				},
 			},
 		}
@@ -292,7 +292,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Commit(data))
+		require.NoError(t, db.Commit(data, 1))
 	}
 
 	expectedDataBefore := []*worldstate.KVWithMetadata{
@@ -501,7 +501,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(users))
+				require.NoError(t, db.Commit(users, 1))
 			},
 			expectedUsersBefore: []string{"user1", "user2", "user3", "user4"},
 			tx: &types.UserAdministrationTx{
@@ -552,7 +552,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(users))
+				require.NoError(t, db.Commit(users, 1))
 			},
 			expectedUsersBefore: []string{"user1"},
 			tx: &types.UserAdministrationTx{
@@ -646,7 +646,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(createDBs))
+				require.NoError(t, db.Commit(createDBs, 1))
 			},
 			expectedDBsBefore: []string{"db1", "db2"},
 			dbAdminTx: &types.DBAdministrationTx{
@@ -677,7 +677,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(createDBs))
+				require.NoError(t, db.Commit(createDBs, 1))
 			},
 			expectedDBsBefore: []string{"db1", "db2"},
 			dbAdminTx: &types.DBAdministrationTx{

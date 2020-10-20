@@ -205,14 +205,14 @@ func TestBatchCreator(t *testing.T) {
 							Number:                1,
 							LastCommittedBlockNum: 0,
 						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_VALID,
+							},
+						},
 					},
 					Payload: &types.Block_UserAdministrationTxEnvelope{
 						UserAdministrationTxEnvelope: userAdminTx,
-					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_VALID,
-						},
 					},
 				},
 				{
@@ -220,20 +220,28 @@ func TestBatchCreator(t *testing.T) {
 						BaseHeader: &types.BlockHeaderBase{
 							Number: 2,
 						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_VALID,
+							},
+						},
 					},
 					Payload: &types.Block_DBAdministrationTxEnvelope{
 						DBAdministrationTxEnvelope: dbAdminTx,
-					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_VALID,
-						},
 					},
 				},
 				{
 					Header: &types.BlockHeader{
 						BaseHeader: &types.BlockHeaderBase{
 							Number: 3,
+						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_VALID,
+							},
+							{
+								Flag: types.Flag_VALID,
+							},
 						},
 					},
 					Payload: &types.Block_DataTxEnvelopes{
@@ -244,28 +252,20 @@ func TestBatchCreator(t *testing.T) {
 							},
 						},
 					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_VALID,
-						},
-						{
-							Flag: types.Flag_VALID,
-						},
-					},
 				},
 				{
 					Header: &types.BlockHeader{
 						BaseHeader: &types.BlockHeaderBase{
 							Number: 4,
 						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_VALID,
+							},
+						},
 					},
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: configTx,
-					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_VALID,
-						},
 					},
 				},
 			},
@@ -307,7 +307,7 @@ func TestBatchCreator(t *testing.T) {
 
 		for _, expectedBlock := range expectedBlocks {
 			block := testEnv.creator.blockQueue.Dequeue().(*types.Block)
-			block.TxValidationInfo = expectedBlock.TxValidationInfo
+			block.Header.ValidationInfo = expectedBlock.Header.ValidationInfo
 			require.True(t, proto.Equal(expectedBlock, block), "Expected block  %v, received block %v", expectedBlock, block)
 		}
 	}

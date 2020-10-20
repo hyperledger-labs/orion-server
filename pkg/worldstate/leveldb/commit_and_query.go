@@ -1,6 +1,8 @@
 package leveldb
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +13,10 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
+)
+
+var (
+	lastCommittedBlockNumberKey = []byte("lastCommittedBlockNumber")
 )
 
 // Exist returns true if the given database exist. Otherwise, it returns false.
@@ -28,7 +34,7 @@ func (l *LevelDB) ListDBs() []string {
 	defer l.dbsList.RUnlock()
 
 	dbsToExclude := make(map[string]struct{})
-	for _, name := range systemDBs {
+	for _, name := range preCreateDBs {
 		dbsToExclude[name] = struct{}{}
 	}
 
@@ -41,6 +47,37 @@ func (l *LevelDB) ListDBs() []string {
 	}
 
 	return dbNames
+}
+
+// Height returns the block height of the state database. In other words, it
+// returns the last committed block number
+func (l *LevelDB) Height() (uint64, error) {
+	l.dbsList.RLock()
+	defer l.dbsList.RUnlock()
+
+	db, ok := l.dbs[worldstate.MetadataDBName]
+	if !ok {
+		return 0, errors.Errorf("unable to retrieve the state database height due to missing metadataDB")
+	}
+
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	blockNumberEnc, err := db.file.Get(lastCommittedBlockNumberKey, &opt.ReadOptions{})
+	if err != nil && err != leveldb.ErrNotFound {
+		return 0, errors.Wrap(err, "error while retrieving the state database height")
+	}
+
+	if err == leveldb.ErrNotFound {
+		return 0, nil
+	}
+
+	blockNumberDec, err := binary.ReadUvarint(bytes.NewBuffer(blockNumberEnc))
+	if err != nil {
+		return 0, errors.Wrap(err, "error while decoding the stored height")
+	}
+
+	return blockNumberDec, nil
 }
 
 // Get returns the value of the key present in the database.
@@ -119,7 +156,7 @@ func (l *LevelDB) GetConfig() (*types.ClusterConfig, *types.Metadata, error) {
 }
 
 // Commit commits the updates to the database
-func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
+func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates, blockNumber uint64) error {
 	for _, updates := range dbsUpdates {
 		l.dbsList.RLock()
 		db := l.dbs[updates.DBName]
@@ -132,6 +169,16 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates) error {
 		if err := l.commitToDB(db, updates); err != nil {
 			return err
 		}
+	}
+
+	db, _ := l.dbs[worldstate.MetadataDBName]
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	b := make([]byte, binary.MaxVarintLen64)
+	binary.PutUvarint(b, blockNumber)
+	if err := db.file.Put(lastCommittedBlockNumberKey, b, &opt.WriteOptions{}); err != nil {
+		return errors.Wrapf(err, "error while storing the last committed block number [%d] to the metadataDB", blockNumber)
 	}
 
 	return nil

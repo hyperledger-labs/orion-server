@@ -51,7 +51,7 @@ func TestValidateConfigTx(t *testing.T) {
 			},
 		}
 
-		require.NoError(t, db.Commit(newUsers))
+		require.NoError(t, db.Commit(newUsers, 1))
 	}
 
 	tests := []struct {
@@ -445,7 +445,7 @@ func TestMVCCOnConfigTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(config))
+				require.NoError(t, db.Commit(config, 5))
 			},
 			readVersion: &types.Version{
 				BlockNum: 1,
@@ -476,7 +476,7 @@ func TestMVCCOnConfigTx(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit(config))
+				require.NoError(t, db.Commit(config, 5))
 			},
 			readVersion: &types.Version{
 				BlockNum: 5,

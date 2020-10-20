@@ -39,12 +39,10 @@ type db struct {
 }
 
 var (
-	systemDBs = []string{
-		worldstate.UsersDBName,
-		worldstate.DatabasesDBName,
-		worldstate.ConfigDBName,
+	preCreateDBs = append(
+		worldstate.SystemDBs(),
 		worldstate.DefaultDBName,
-	}
+	)
 )
 
 type Config struct {
@@ -108,7 +106,7 @@ func openNewLevelDBInstance(c *Config) (*LevelDB, error) {
 		logger:    c.Logger,
 	}
 
-	for _, dbName := range systemDBs {
+	for _, dbName := range preCreateDBs {
 		if err := l.create(dbName); err != nil {
 			return nil, err
 		}

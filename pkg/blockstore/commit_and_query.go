@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	SkipListBase = uint64(2)
+	SkipListBase   = uint64(2)
 	nonDataTxIndex = 0
 )
 
@@ -174,7 +174,7 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 
 		for txNum, tx := range dataTxs {
 			key := []byte(tx.Payload.TxID)
-			value, err := proto.Marshal(block.TxValidationInfo[txNum])
+			value, err := proto.Marshal(block.Header.ValidationInfo[txNum])
 			if err != nil {
 				return errors.Wrapf(err, "error while marshaling validation info of transaction %d in block %d", txNum, blockNum)
 			}
@@ -198,14 +198,13 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 	}
 
 	key := []byte(txID)
-	value, err := proto.Marshal(block.TxValidationInfo[nonDataTxIndex])
+	value, err := proto.Marshal(block.Header.ValidationInfo[nonDataTxIndex])
 	if err != nil {
 		return errors.Wrapf(err, "error while marshaling validation info of non-data transaction in block %d", blockNum)
 	}
 
 	return s.txValidationInfoDB.Put(key, value, &opt.WriteOptions{Sync: true})
 }
-
 
 func (s *Store) storeBlockHeaders(number uint64, header *types.BlockHeader) error {
 	blockHeaderBaseBytes, err := proto.Marshal(header.GetBaseHeader())

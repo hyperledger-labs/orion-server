@@ -10,6 +10,9 @@ const (
 	// ConfigDBName holds the name of the database that holds
 	// the configuration details
 	ConfigDBName = "_config"
+	// MetadataDBName holds the name of the database that holds
+	// the metadata about the worldstate database
+	MetadataDBName = "_metadata"
 	// DefaultDBName is the default database created during
 	// node bootstrap
 	DefaultDBName = "bdb"
@@ -40,7 +43,10 @@ type DB interface {
 	// GetConfig returns the cluster configuration
 	GetConfig() (*types.ClusterConfig, *types.Metadata, error)
 	// Commit commits the updates to each database
-	Commit(dbsUpdates []*DBUpdates) error
+	Commit(dbsUpdates []*DBUpdates, blockNumber uint64) error
+	// Height returns the state database block height. In other
+	// words, it returns the last committed block number
+	Height() (uint64, error)
 	// Close closes the DB instance
 	Close() error
 }
@@ -64,11 +70,22 @@ type DBUpdates struct {
 func IsSystemDB(dbName string) bool {
 	return dbName == UsersDBName ||
 		dbName == DatabasesDBName ||
-		dbName == ConfigDBName
+		dbName == ConfigDBName ||
+		dbName == MetadataDBName
 }
 
 // IsDefaultWorldStateDB returns true if the given db is the default
 // data DB
 func IsDefaultWorldStateDB(dbName string) bool {
 	return dbName == DefaultDBName
+}
+
+// SystemDBs returns the name of all system databases
+func SystemDBs() []string {
+	return []string{
+		UsersDBName,
+		DatabasesDBName,
+		ConfigDBName,
+		MetadataDBName,
+	}
 }

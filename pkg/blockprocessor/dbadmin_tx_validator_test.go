@@ -70,7 +70,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 		{
 			name: "invalid: user does not have db admin privilege",
 			setup: func(db worldstate.DB) {
-				require.NoError(t, db.Commit(underPrivilegedUser))
+				require.NoError(t, db.Commit(underPrivilegedUser, 1))
 			},
 			tx: &types.DBAdministrationTx{
 				UserID:    "userWithLessPrivilege",
@@ -84,7 +84,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 		{
 			name: "invalid: createDBs list is invalid",
 			setup: func(db worldstate.DB) {
-				require.NoError(t, db.Commit(privilegedUser))
+				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
 			tx: &types.DBAdministrationTx{
 				UserID:    "userWithMorePrivilege",
@@ -98,7 +98,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 		{
 			name: "invalid: deleteDBs list is invalid",
 			setup: func(db worldstate.DB) {
-				require.NoError(t, db.Commit(privilegedUser))
+				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
 			tx: &types.DBAdministrationTx{
 				UserID:    "userWithMorePrivilege",
@@ -112,7 +112,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 		{
 			name: "valid transaction",
 			setup: func(db worldstate.DB) {
-				require.NoError(t, db.Commit(privilegedUser))
+				require.NoError(t, db.Commit(privilegedUser, 1))
 
 				createDB := []*worldstate.DBUpdates{
 					{
@@ -127,7 +127,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(createDB))
+				require.NoError(t, db.Commit(createDB, 1))
 			},
 			tx: &types.DBAdministrationTx{
 				UserID:    "userWithMorePrivilege",
@@ -204,7 +204,7 @@ func TestValidateCreateDBEntries(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(createDB))
+				require.NoError(t, db.Commit(createDB, 1))
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -299,7 +299,7 @@ func TestValidateDeleteDBEntries(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(createDB))
+				require.NoError(t, db.Commit(createDB, 1))
 			},
 			toDeleteDBs: []string{"db1", "db1"},
 			expectedResult: &types.ValidationInfo{
@@ -323,7 +323,7 @@ func TestValidateDeleteDBEntries(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(createDB))
+				require.NoError(t, db.Commit(createDB, 1))
 			},
 			toDeleteDBs: []string{"db1", "db2"},
 			expectedResult: &types.ValidationInfo{

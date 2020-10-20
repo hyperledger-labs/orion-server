@@ -101,7 +101,11 @@ func TestCommitAndQuery(t *testing.T) {
 					LastCommittedBlockNum:  blockNumber - 1,
 				},
 				StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
-				ValidationInfo:          nil,
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
+					},
+				},
 			},
 			Payload: &types.Block_UserAdministrationTxEnvelope{
 				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -115,11 +119,6 @@ func TestCommitAndQuery(t *testing.T) {
 						},
 					},
 					Signature: []byte("sign"),
-				},
-			},
-			TxValidationInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
 				},
 			},
 		}
@@ -230,6 +229,11 @@ func TestCommitAndQuery(t *testing.T) {
 				BaseHeader: &types.BlockHeaderBase{
 					Number: 1,
 				},
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
+					},
+				},
 			},
 			Payload: &types.Block_UserAdministrationTxEnvelope{
 				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -242,11 +246,6 @@ func TestCommitAndQuery(t *testing.T) {
 						},
 					},
 					Signature: []byte("sign"),
-				},
-			},
-			TxValidationInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
 				},
 			},
 		}
@@ -288,6 +287,17 @@ func TestTxValidationInfo(t *testing.T) {
 						BaseHeader: &types.BlockHeaderBase{
 							Number: 1,
 						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_VALID,
+							},
+							{
+								Flag: types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
+							},
+							{
+								Flag: types.Flag_VALID,
+							},
+						},
 					},
 					Payload: &types.Block_DataTxEnvelopes{
 						DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -310,17 +320,6 @@ func TestTxValidationInfo(t *testing.T) {
 							},
 						},
 					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_VALID,
-						},
-						{
-							Flag: types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
-						},
-						{
-							Flag: types.Flag_VALID,
-						},
-					},
 				},
 				txIDs: []string{"data-tx1", "data-tx2", "data-tx3"},
 			},
@@ -331,17 +330,17 @@ func TestTxValidationInfo(t *testing.T) {
 						BaseHeader: &types.BlockHeaderBase{
 							Number: 1,
 						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_VALID,
+							},
+						},
 					},
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: &types.ConfigTxEnvelope{
 							Payload: &types.ConfigTx{
 								TxID: "config-tx1",
 							},
-						},
-					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_VALID,
 						},
 					},
 				},
@@ -354,17 +353,17 @@ func TestTxValidationInfo(t *testing.T) {
 						BaseHeader: &types.BlockHeaderBase{
 							Number: 1,
 						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+							},
+						},
 					},
 					Payload: &types.Block_DBAdministrationTxEnvelope{
 						DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
 							Payload: &types.DBAdministrationTx{
 								TxID: "db-tx1",
 							},
-						},
-					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
 						},
 					},
 				},
@@ -377,17 +376,17 @@ func TestTxValidationInfo(t *testing.T) {
 						BaseHeader: &types.BlockHeaderBase{
 							Number: 1,
 						},
+						ValidationInfo: []*types.ValidationInfo{
+							{
+								Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+							},
+						},
 					},
 					Payload: &types.Block_UserAdministrationTxEnvelope{
 						UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 							Payload: &types.UserAdministrationTx{
 								TxID: "user-tx1",
 							},
-						},
-					},
-					TxValidationInfo: []*types.ValidationInfo{
-						{
-							Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
 						},
 					},
 				},
@@ -411,7 +410,7 @@ func TestTxValidationInfo(t *testing.T) {
 					require.True(t, exist)
 
 					valInfo, err := env.s.GetValidationInfo(txID)
-					require.True(t, proto.Equal(tt.block.TxValidationInfo[index], valInfo))
+					require.True(t, proto.Equal(tt.block.Header.ValidationInfo[index], valInfo))
 				}
 			})
 		}

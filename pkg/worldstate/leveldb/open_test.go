@@ -17,9 +17,9 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	assertDBInstance := func(dbRootDir string, l *LevelDB) {
 		require.NoFileExists(t, filepath.Join(dbRootDir, "undercreation"))
 		require.Equal(t, dbRootDir, l.dbRootDir)
-		require.Len(t, l.dbs, len(systemDBs))
+		require.Len(t, l.dbs, len(preCreateDBs))
 
-		for _, dbName := range systemDBs {
+		for _, dbName := range preCreateDBs {
 			require.NotNil(t, l.dbs[dbName])
 		}
 	}

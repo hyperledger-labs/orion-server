@@ -87,7 +87,7 @@ func TestGetDBStatus(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(createDB))
+		require.NoError(t, env.db.Commit(createDB, 1))
 
 		testCases := []struct {
 			dbName  string
@@ -147,7 +147,7 @@ func TestGetData(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, db.Commit(createUser))
+		require.NoError(t, db.Commit(createUser, 2))
 
 		createDB := []*worldstate.DBUpdates{
 			{
@@ -159,7 +159,7 @@ func TestGetData(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, db.Commit(createDB))
+		require.NoError(t, db.Commit(createDB, 2))
 	}
 
 	t.Run("getData returns data", func(t *testing.T) {
@@ -206,7 +206,7 @@ func TestGetData(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(dbsUpdates))
+		require.NoError(t, env.db.Commit(dbsUpdates, 2))
 
 		testCases := []struct {
 			key              string
@@ -276,7 +276,7 @@ func TestGetData(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(dbsUpdates))
+		require.NoError(t, env.db.Commit(dbsUpdates, 2))
 
 		actualVal, err := env.q.getData("test-db", "testUser", "key1")
 		require.EqualError(t, err, "the user [testUser] has no permission to read key [key1] from database [test-db]")
@@ -408,7 +408,7 @@ func TestGetUser(t *testing.T) {
 						},
 					}
 
-					require.NoError(t, db.Commit(addUser))
+					require.NoError(t, db.Commit(addUser, 1))
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
@@ -442,7 +442,7 @@ func TestGetUser(t *testing.T) {
 						},
 					}
 
-					require.NoError(t, db.Commit(addUser))
+					require.NoError(t, db.Commit(addUser, 1))
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
@@ -476,7 +476,7 @@ func TestGetUser(t *testing.T) {
 						},
 					}
 
-					require.NoError(t, db.Commit(addUser))
+					require.NoError(t, db.Commit(addUser, 1))
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
@@ -505,7 +505,7 @@ func TestGetUser(t *testing.T) {
 						},
 					}
 
-					require.NoError(t, db.Commit(addUser))
+					require.NoError(t, db.Commit(addUser, 1))
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
@@ -596,7 +596,7 @@ func TestGetUser(t *testing.T) {
 						},
 					}
 
-					require.NoError(t, db.Commit(addUser))
+					require.NoError(t, db.Commit(addUser, 1))
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
@@ -669,7 +669,7 @@ func TestGetConfig(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(dbUpdates))
+		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
 		configEnvelope, err := env.q.getConfig()
 		require.NoError(t, err)
@@ -710,7 +710,7 @@ func TestGetConfig(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.db.Commit(dbUpdates))
+		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
 		configEnvelope, err := env.q.getConfig()
 		require.Contains(t, err.Error(), "error while unmarshaling committed cluster configuration")
