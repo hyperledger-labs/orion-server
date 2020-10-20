@@ -13,6 +13,11 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
 )
 
+func TestMain(t *testing.M) {
+	chunkSizeLimit = 4096
+	os.Exit(t.Run())
+}
+
 func TestOpenStore(t *testing.T) {
 	t.Parallel()
 
@@ -154,7 +159,6 @@ func TestOpenStore(t *testing.T) {
 
 		assertStore(storeDir, s)
 
-		chunkSizeLimit = 4096
 		totalBlocks := uint64(1000)
 		for blockNumber := uint64(1); blockNumber <= totalBlocks; blockNumber++ {
 			b := &types.Block{

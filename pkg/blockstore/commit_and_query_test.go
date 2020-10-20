@@ -92,7 +92,6 @@ func TestCommitAndQuery(t *testing.T) {
 		env := newTestEnv(t)
 		defer env.cleanup(false)
 
-		chunkSizeLimit = 4096
 		totalBlocks := uint64(1000)
 		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
 			b := &types.Block{
