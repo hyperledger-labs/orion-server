@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"crypto/x509"
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
@@ -65,6 +66,23 @@ func (q *Querier) GetAccessControl(userID string) (*types.AccessControl, error) 
 	}
 
 	return metadata.GetAccessControl(), nil
+}
+
+//TODO keep a cache of user and parsed certificates to avoid going to the DB and parsing the certificate
+// on every TX. Provide a mechanism to invalidate the cache when the user database changes.
+
+func (q *Querier) GetCertificate(userID string) (*x509.Certificate, error) {
+	user, _, err := q.GetUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	cert, err := x509.ParseCertificate(user.Certificate)
+	if err != nil {
+		return nil, err
+	}
+
+	return cert, nil
 }
 
 func (q *Querier) GetVersion(userID string) (*types.Version, error) {

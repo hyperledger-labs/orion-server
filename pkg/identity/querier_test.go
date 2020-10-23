@@ -1,8 +1,11 @@
 package identity
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
@@ -82,6 +85,14 @@ func TestQuerier(t *testing.T) {
 		},
 	}
 
+	b, err := ioutil.ReadFile(path.Join("..", "cryptoservice", "testdata", "alice.pem"))
+	require.NoError(t, err)
+	bl, _ := pem.Decode(b)
+	require.NotNil(t, bl)
+	certRaw := bl.Bytes
+	certParsed, err := x509.ParseCertificate(certRaw)
+	require.NoError(t, err)
+
 	setup := func(db worldstate.DB, u *types.User) {
 		user, err := proto.Marshal(u)
 		require.NoError(t, err)
@@ -117,7 +128,7 @@ func TestQuerier(t *testing.T) {
 			name: "less privilege",
 			user: &types.User{
 				ID:          "userWithLessPrivilege",
-				Certificate: []byte("certificate-1"),
+				Certificate: certRaw,
 				Privilege: &types.Privilege{
 					DBPermission: map[string]types.Privilege_Access{
 						"db1": types.Privilege_Read,
@@ -142,7 +153,7 @@ func TestQuerier(t *testing.T) {
 			name: "more privilege",
 			user: &types.User{
 				ID:          "userWithMorePrivilege",
-				Certificate: []byte("certificate-2"),
+				Certificate: certRaw,
 				Privilege: &types.Privilege{
 					DBPermission: map[string]types.Privilege_Access{
 						"db1": types.Privilege_ReadWrite,
@@ -168,7 +179,7 @@ func TestQuerier(t *testing.T) {
 			name: "no privilege",
 			user: &types.User{
 				ID:          "no Privilege",
-				Certificate: []byte("certificate-3"),
+				Certificate: certRaw,
 				Privilege:   nil,
 			},
 			userID:                                 "no Privilege",
@@ -273,8 +284,37 @@ func TestQuerier(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, canRead)
 			})
+
+			t.Run("GetCertificate()", func(t *testing.T) {
+				cert, err := env.q.GetCertificate(tt.userID)
+				require.NoError(t, err)
+				require.True(t, cert.Equal(certParsed))
+			})
 		})
 	}
+
+	t.Run("bad certificate", func(t *testing.T) {
+		env := newTestEnv(t)
+		defer env.cleanup()
+
+		user := &types.User{
+			ID:          "userWithBadCertificate",
+			Certificate: []byte("A bad certificate"),
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					"db1": types.Privilege_Read,
+				},
+				DBAdministration:      false,
+				ClusterAdministration: false,
+				UserAdministration:    false,
+			},
+		}
+		setup(env.db, user)
+
+		cert, err := env.q.GetCertificate(user.ID)
+		require.Contains(t, err.Error(), "asn1: structure error: tags don't match")
+		require.Nil(t, cert)
+	})
 }
 
 func TestQuerierNonExistingUser(t *testing.T) {
@@ -300,6 +340,12 @@ func TestQuerierNonExistingUser(t *testing.T) {
 		acl, err := env.q.GetAccessControl("nouser")
 		require.EqualError(t, err, "the user [nouser] does not exist")
 		require.Nil(t, acl)
+	})
+
+	t.Run("GetCertificate returns UserNotFoundErr", func(t *testing.T) {
+		cert, err := env.q.GetCertificate("nouser")
+		require.EqualError(t, err, "the user [nouser] does not exist")
+		require.Nil(t, cert)
 	})
 
 	t.Run("GetVersion returns UserNotFoundErr", func(t *testing.T) {
