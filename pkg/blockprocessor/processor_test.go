@@ -107,36 +107,36 @@ func TestValidatorAndCommitter(t *testing.T) {
 	require.NoError(t, err)
 	dcCert, _ := pem.Decode(cert)
 
-	configBlock := &types.Block{
-		Header: &types.BlockHeader{
-			Number: 1,
-		},
-		Payload: &types.Block_ConfigTxEnvelope{
-			ConfigTxEnvelope: &types.ConfigTxEnvelope{
-				Payload: &types.ConfigTx{
-					UserID:               "adminUser",
-					ReadOldConfigVersion: nil,
-					NewConfig: &types.ClusterConfig{
-						Nodes: []*types.NodeConfig{
-							{
-								ID:          "node1",
-								Address:     "127.0.0.1",
-								Certificate: dcCert.Bytes,
+	setup := func(env *testEnv) {
+		configBlock := &types.Block{
+			Header: &types.BlockHeader{
+				Number: 1,
+			},
+			Payload: &types.Block_ConfigTxEnvelope{
+				ConfigTxEnvelope: &types.ConfigTxEnvelope{
+					Payload: &types.ConfigTx{
+						UserID:               "adminUser",
+						ReadOldConfigVersion: nil,
+						NewConfig: &types.ClusterConfig{
+							Nodes: []*types.NodeConfig{
+								{
+									ID:          "node1",
+									Address:     "127.0.0.1",
+									Certificate: dcCert.Bytes,
+								},
 							},
-						},
-						Admins: []*types.Admin{
-							{
-								ID:          "admin1",
-								Certificate: dcCert.Bytes,
+							Admins: []*types.Admin{
+								{
+									ID:          "admin1",
+									Certificate: dcCert.Bytes,
+								},
 							},
 						},
 					},
 				},
 			},
-		},
-	}
+		}
 
-	setup := func(env *testEnv) {
 		env.v.blockQueue.Enqueue(configBlock)
 		assertConfigHasCommitted := func() bool {
 			exist, err := env.v.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
@@ -180,52 +180,56 @@ func TestValidatorAndCommitter(t *testing.T) {
 		require.NoError(t, env.db.Commit(createUser))
 	}
 
-	block2 := &types.Block{
-		Header: &types.BlockHeader{
-			Number: 2,
-		},
-		Payload: &types.Block_DataTxEnvelopes{
-			DataTxEnvelopes: &types.DataTxEnvelopes{
-				Envelopes: []*types.DataTxEnvelope{
-					{
-						Payload: &types.DataTx{
-							UserID: "testUser",
-							DBName: worldstate.DefaultDBName,
-							DataWrites: []*types.DataWrite{
-								{
-									Key:   "key1",
-									Value: []byte("value-1"),
+	createBlock2 := func() *types.Block {
+		return &types.Block{
+			Header: &types.BlockHeader{
+				Number: 2,
+			},
+			Payload: &types.Block_DataTxEnvelopes{
+				DataTxEnvelopes: &types.DataTxEnvelopes{
+					Envelopes: []*types.DataTxEnvelope{
+						{
+							Payload: &types.DataTx{
+								UserID: "testUser",
+								DBName: worldstate.DefaultDBName,
+								DataWrites: []*types.DataWrite{
+									{
+										Key:   "key1",
+										Value: []byte("value-1"),
+									},
 								},
 							},
 						},
 					},
 				},
 			},
-		},
+		}
 	}
 
-	block3 := &types.Block{
-		Header: &types.BlockHeader{
-			Number: 3,
-		},
-		Payload: &types.Block_DataTxEnvelopes{
-			DataTxEnvelopes: &types.DataTxEnvelopes{
-				Envelopes: []*types.DataTxEnvelope{
-					{
-						Payload: &types.DataTx{
-							UserID: "testUser",
-							DBName: worldstate.DefaultDBName,
-							DataWrites: []*types.DataWrite{
-								{
-									Key:   "key1",
-									Value: []byte("new-value-1"),
+	createBlock3 := func() *types.Block {
+		return &types.Block{
+			Header: &types.BlockHeader{
+				Number: 3,
+			},
+			Payload: &types.Block_DataTxEnvelopes{
+				DataTxEnvelopes: &types.DataTxEnvelopes{
+					Envelopes: []*types.DataTxEnvelope{
+						{
+							Payload: &types.DataTx{
+								UserID: "testUser",
+								DBName: worldstate.DefaultDBName,
+								DataWrites: []*types.DataWrite{
+									{
+										Key:   "key1",
+										Value: []byte("new-value-1"),
+									},
 								},
 							},
 						},
 					},
 				},
 			},
-		},
+		}
 	}
 
 	t.Run("enqueue-one-block", func(t *testing.T) {
@@ -245,7 +249,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			expectedBlockHeight uint64
 		}{
 			{
-				block:         block2,
+				block:         createBlock2(),
 				key:           "key1",
 				expectedValue: []byte("value-1"),
 				expectedMetadata: &types.Metadata{
@@ -257,7 +261,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 				expectedBlockHeight: 2,
 			},
 			{
-				block:         block3,
+				block:         createBlock3(),
 				key:           "key1",
 				expectedValue: []byte("new-value-1"),
 				expectedMetadata: &types.Metadata{
@@ -312,8 +316,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}{
 			{
 				blocks: []*types.Block{
-					block2,
-					block3,
+					createBlock2(),
+					createBlock3(),
 				},
 				key:           "key1",
 				expectedValue: []byte("new-value-1"),
