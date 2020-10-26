@@ -88,34 +88,46 @@ func (e *testEnv) reopenStore(t *testing.T) {
 }
 
 func TestCommitAndQuery(t *testing.T) {
+	createSampleUserTxBlock := func(blockNumber uint64) *types.Block {
+		return &types.Block{
+			Header: &types.BlockHeader{
+				Number: blockNumber,
+
+				SkipchainHashes:  [][]byte{[]byte(fmt.Sprintf("hash-%d", blockNumber-1))},
+				TransactionsHash: []byte(fmt.Sprintf("hash-%d", blockNumber)),
+			},
+			Payload: &types.Block_UserAdministrationTxEnvelope{
+				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+					Payload: &types.UserAdministrationTx{
+						UserID: "user1",
+						TxID:   fmt.Sprintf("txid-%d", blockNumber),
+						UserDeletes: []*types.UserDelete{
+							{
+								UserID: "user1",
+							},
+						},
+					},
+					Signature: []byte("sign"),
+				},
+			},
+			TxValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		}
+	}
+
 	t.Run("commit blocks and query", func(t *testing.T) {
+		t.Parallel()
+
 		env := newTestEnv(t)
 		defer env.cleanup(false)
 
 		totalBlocks := uint64(1000)
+
 		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-			b := &types.Block{
-				Header: &types.BlockHeader{
-					Number: blockNumber,
-
-					SkipchainHashes:  [][]byte{[]byte(fmt.Sprintf("hash-%d", blockNumber-1))},
-					TransactionsHash: []byte(fmt.Sprintf("hash-%d", blockNumber)),
-				},
-				Payload: &types.Block_UserAdministrationTxEnvelope{
-					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
-						Payload: &types.UserAdministrationTx{
-							UserID: "user1",
-							UserDeletes: []*types.UserDelete{
-								{
-									UserID: "user1",
-								},
-							},
-						},
-						Signature: []byte("sign"),
-					},
-				},
-			}
-
+			b := createSampleUserTxBlock(blockNumber)
 			require.NoError(t, env.s.Commit(b))
 
 			height, err := env.s.Height()
@@ -125,38 +137,23 @@ func TestCommitAndQuery(t *testing.T) {
 
 		assertBlocks := func() {
 			for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-				expectedBlock := &types.Block{
-					Header: &types.BlockHeader{
-						Number:           blockNumber,
-						SkipchainHashes:  [][]byte{[]byte(fmt.Sprintf("hash-%d", blockNumber-1))},
-						TransactionsHash: []byte(fmt.Sprintf("hash-%d", blockNumber)),
-					},
-					Payload: &types.Block_UserAdministrationTxEnvelope{
-						UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
-							Payload: &types.UserAdministrationTx{
-								UserID: "user1",
-								UserDeletes: []*types.UserDelete{
-									{
-										UserID: "user1",
-									},
-								},
-							},
-							Signature: []byte("sign"),
-						},
-					},
-				}
+				expectedBlock := createSampleUserTxBlock(blockNumber)
 
 				block, err := env.s.Get(blockNumber)
 				require.NoError(t, err)
+				require.Equal(t, expectedBlock, block)
 				require.True(t, proto.Equal(expectedBlock, block))
+
 				blockHeader, err := env.s.GetHeader(blockNumber)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
+
 				blockHash, err := env.s.GetHash(blockNumber)
 				require.NoError(t, err)
 				expectedHash, err := ComputeBlockHash(expectedBlock)
 				require.NoError(t, err)
 				require.Equal(t, expectedHash, blockHash)
+
 				blockHeader, err = env.s.GetHeaderByHash(expectedHash)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
@@ -172,6 +169,8 @@ func TestCommitAndQuery(t *testing.T) {
 	})
 
 	t.Run("expected block is not received during commit", func(t *testing.T) {
+		t.Parallel()
+
 		env := newTestEnv(t)
 		defer env.cleanup(true)
 
@@ -186,6 +185,8 @@ func TestCommitAndQuery(t *testing.T) {
 	})
 
 	t.Run("requested block is out of range", func(t *testing.T) {
+		t.Parallel()
+
 		env := newTestEnv(t)
 		defer env.cleanup(true)
 
@@ -196,6 +197,24 @@ func TestCommitAndQuery(t *testing.T) {
 		b := &types.Block{
 			Header: &types.BlockHeader{
 				Number: 1,
+			},
+			Payload: &types.Block_UserAdministrationTxEnvelope{
+				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+					Payload: &types.UserAdministrationTx{
+						UserID: "user1",
+						UserDeletes: []*types.UserDelete{
+							{
+								UserID: "user1",
+							},
+						},
+					},
+					Signature: []byte("sign"),
+				},
+			},
+			TxValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
 			},
 		}
 		require.NoError(t, env.s.Commit(b))
@@ -215,5 +234,160 @@ func TestCommitAndQuery(t *testing.T) {
 		blockHeader, err = env.s.GetHeaderByHash([]byte{0})
 		require.NoError(t, err)
 		require.Nil(t, blockHeader)
+	})
+}
+
+func TestTxValidationInfo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("txID exist", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			name  string
+			block *types.Block
+			txIDs []string
+		}{
+			{
+				name: "data tx",
+				block: &types.Block{
+					Header: &types.BlockHeader{
+						Number: 1,
+					},
+					Payload: &types.Block_DataTxEnvelopes{
+						DataTxEnvelopes: &types.DataTxEnvelopes{
+							Envelopes: []*types.DataTxEnvelope{
+								{
+									Payload: &types.DataTx{
+										TxID: "data-tx1",
+									},
+								},
+								{
+									Payload: &types.DataTx{
+										TxID: "data-tx2",
+									},
+								},
+								{
+									Payload: &types.DataTx{
+										TxID: "data-tx3",
+									},
+								},
+							},
+						},
+					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
+						{
+							Flag: types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
+						},
+						{
+							Flag: types.Flag_VALID,
+						},
+					},
+				},
+				txIDs: []string{"data-tx1", "data-tx2", "data-tx3"},
+			},
+			{
+				name: "config tx",
+				block: &types.Block{
+					Header: &types.BlockHeader{
+						Number: 1,
+					},
+					Payload: &types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: &types.ConfigTxEnvelope{
+							Payload: &types.ConfigTx{
+								TxID: "config-tx1",
+							},
+						},
+					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
+					},
+				},
+				txIDs: []string{"config-tx1"},
+			},
+			{
+				name: "db admin tx",
+				block: &types.Block{
+					Header: &types.BlockHeader{
+						Number: 1,
+					},
+					Payload: &types.Block_DBAdministrationTxEnvelope{
+						DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
+							Payload: &types.DBAdministrationTx{
+								TxID: "db-tx1",
+							},
+						},
+					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+						},
+					},
+				},
+				txIDs: []string{"db-tx1"},
+			},
+			{
+				name: "user admin tx",
+				block: &types.Block{
+					Header: &types.BlockHeader{
+						Number: 1,
+					},
+					Payload: &types.Block_UserAdministrationTxEnvelope{
+						UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+							Payload: &types.UserAdministrationTx{
+								TxID: "user-tx1",
+							},
+						},
+					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+						},
+					},
+				},
+				txIDs: []string{"user-tx1"},
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+
+				env := newTestEnv(t)
+				defer env.cleanup(true)
+
+				require.NoError(t, env.s.Commit(tt.block))
+
+				for index, txID := range tt.txIDs {
+					exist, err := env.s.DoesTxIDExist(txID)
+					require.NoError(t, err)
+					require.True(t, exist)
+
+					valInfo, err := env.s.GetValidationInfo(txID)
+					require.True(t, proto.Equal(tt.block.TxValidationInfo[index], valInfo))
+				}
+			})
+		}
+	})
+
+	t.Run("txID does not exist", func(t *testing.T) {
+		t.Parallel()
+
+		env := newTestEnv(t)
+		defer env.cleanup(true)
+
+		exist, err := env.s.DoesTxIDExist("tx1")
+		require.NoError(t, err)
+		require.False(t, exist)
+
+		valInfo, err := env.s.GetValidationInfo("tx1")
+		require.NoError(t, err)
+		require.Nil(t, valInfo)
 	})
 }

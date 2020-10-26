@@ -140,6 +140,11 @@ func TestCommitter(t *testing.T) {
 					},
 				},
 			},
+			TxValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
 		}
 
 		err := env.committer.commitBlock(
@@ -208,6 +213,14 @@ func TestBlockStoreCommitter(t *testing.T) {
 							},
 						},
 					},
+				},
+			},
+			TxValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_VALID,
 				},
 			},
 		}

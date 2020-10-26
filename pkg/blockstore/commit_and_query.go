@@ -16,6 +16,10 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
 )
 
+const (
+	nonDataTxIndex = 0
+)
+
 // Commit commits the block to the block store
 func (s *Store) Commit(block *types.Block) error {
 	s.mu.Lock()
@@ -49,10 +53,15 @@ func (s *Store) Commit(block *types.Block) error {
 		}
 	}
 
-	if err = s.addBlockHeaderIndexes(blockNumber, block.GetHeader()); err != nil {
+	if err := s.appendBlock(blockNumber, content); err != nil {
 		return err
 	}
-	return s.appendBlock(blockNumber, content)
+
+	if err = s.storeBlockValidationInfo(block); err != nil {
+		return err
+	}
+
+	return s.storeBlockHeaders(blockNumber, block.Header)
 }
 
 func (s *Store) canCurrentFileChunkHold(toBeAddedBytesLength int) bool {
@@ -109,7 +118,7 @@ func (s *Store) addIndexForBlock(number uint64, offset int64) error {
 		return errors.Wrap(err, "error while marshaling BlockLocation")
 	}
 
-	return s.blockIndex.Put(
+	return s.blockIndexDB.Put(
 		encodeOrderPreservingVarUint64(number),
 		value,
 		&opt.WriteOptions{
@@ -118,7 +127,50 @@ func (s *Store) addIndexForBlock(number uint64, offset int64) error {
 	)
 }
 
-func (s *Store) addBlockHeaderIndexes(number uint64, header *types.BlockHeader) error {
+func (s *Store) storeBlockValidationInfo(block *types.Block) error {
+	blockNum := block.Header.Number
+	var txID string
+
+	switch block.Payload.(type) {
+	case *types.Block_DataTxEnvelopes:
+		dataTxs := block.GetDataTxEnvelopes().Envelopes
+		updateBatch := &leveldb.Batch{}
+
+		for txNum, tx := range dataTxs {
+			key := []byte(tx.Payload.TxID)
+			value, err := proto.Marshal(block.TxValidationInfo[txNum])
+			if err != nil {
+				return errors.Wrapf(err, "error while marshaling validation info of transaction %d in block %d", txNum, blockNum)
+			}
+
+			updateBatch.Put(key, value)
+		}
+
+		return s.txValidationInfoDB.Write(updateBatch, &opt.WriteOptions{Sync: true})
+
+	case *types.Block_ConfigTxEnvelope:
+		txID = block.GetConfigTxEnvelope().Payload.TxID
+
+	case *types.Block_DBAdministrationTxEnvelope:
+		txID = block.GetDBAdministrationTxEnvelope().Payload.TxID
+
+	case *types.Block_UserAdministrationTxEnvelope:
+		txID = block.GetUserAdministrationTxEnvelope().Payload.TxID
+
+	default:
+		return errors.Errorf("unknown block payload")
+	}
+
+	key := []byte(txID)
+	value, err := proto.Marshal(block.TxValidationInfo[nonDataTxIndex])
+	if err != nil {
+		return errors.Wrapf(err, "error while marshaling validation info of non-data transaction in block %d", blockNum)
+	}
+
+	return s.txValidationInfoDB.Put(key, value, &opt.WriteOptions{Sync: true})
+}
+
+func (s *Store) storeBlockHeaders(number uint64, header *types.BlockHeader) error {
 	blockHeaderBytes, err := proto.Marshal(header)
 	if err != nil {
 		return errors.Wrapf(err, "can't marshal block header {%d, %v}", number, header)
@@ -129,8 +181,8 @@ func (s *Store) addBlockHeaderIndexes(number uint64, header *types.BlockHeader) 
 		return errors.Wrapf(err, "can't calculate block hash {%d, %v}", number, header)
 	}
 
-	if err = s.blockHeaderStorage.Put(
-		createHeaderHashKey(number),
+	if err = s.blockHeaderDB.Put(
+		constructHeaderHashKey(number),
 		blockHash,
 		&opt.WriteOptions{
 			Sync: true,
@@ -139,8 +191,8 @@ func (s *Store) addBlockHeaderIndexes(number uint64, header *types.BlockHeader) 
 		return errors.Wrapf(err, "can't create block hash index {%d, %v}", number, header)
 	}
 
-	if err = s.blockHeaderStorage.Put(
-		createHeaderBytesKey(number),
+	if err = s.blockHeaderDB.Put(
+		constructHeaderBytesKey(number),
 		blockHeaderBytes,
 		&opt.WriteOptions{
 			Sync: true,
@@ -149,8 +201,8 @@ func (s *Store) addBlockHeaderIndexes(number uint64, header *types.BlockHeader) 
 		return errors.Wrapf(err, "can't create block hash index {%d, %v}", number, header)
 	}
 
-	if err = s.blockHeaderStorage.Put(
-		createHeaderHashIndexKey(blockHash),
+	if err = s.blockHeaderDB.Put(
+		constructHeaderHashIndexKey(blockHash),
 		encodeOrderPreservingVarUint64(number),
 		&opt.WriteOptions{
 			Sync: true,
@@ -221,7 +273,7 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 func (s *Store) GetHeader(blockNumber uint64) (*types.BlockHeader, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	val, err := s.blockHeaderStorage.Get(createHeaderBytesKey(blockNumber), nil)
+	val, err := s.blockHeaderDB.Get(constructHeaderBytesKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
 	}
@@ -242,7 +294,7 @@ func (s *Store) GetHeader(blockNumber uint64) (*types.BlockHeader, error) {
 func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	val, err := s.blockHeaderStorage.Get(createHeaderHashKey(blockNumber), nil)
+	val, err := s.blockHeaderDB.Get(constructHeaderHashKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
 	}
@@ -257,7 +309,7 @@ func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
 func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	blockNumBytes, err := s.blockHeaderStorage.Get(createHeaderHashIndexKey(blockHash), nil)
+	blockNumBytes, err := s.blockHeaderDB.Get(constructHeaderHashIndexKey(blockHash), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
 	}
@@ -266,7 +318,7 @@ func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 		return nil, errors.Wrap(err, "can't access block's number by hash")
 	}
 
-	headerVal, err := s.blockHeaderStorage.Get(append(headerBytesNs, blockNumBytes...), nil)
+	headerVal, err := s.blockHeaderDB.Get(append(headerBytesNs, blockNumBytes...), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
 	}
@@ -283,8 +335,39 @@ func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 	return blockHeader, nil
 }
 
+// DoesTxIDExist returns true if any of the committed block has a transaction with
+// the given txID. Otherwise, it returns false
+func (s *Store) DoesTxIDExist(txID string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.txValidationInfoDB.Has([]byte(txID), &opt.ReadOptions{})
+}
+
+// GetValidationInfo returns the validation info associated with a given txID
+func (s *Store) GetValidationInfo(txID string) (*types.ValidationInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	valInfoSerialized, err := s.txValidationInfoDB.Get([]byte(txID), &opt.ReadOptions{})
+	if err != nil && err != leveldb.ErrNotFound {
+		return nil, errors.Wrapf(err, "error while fetching validation info of txID [%s ]from the block store", txID)
+	}
+
+	if err == leveldb.ErrNotFound {
+		return nil, nil
+	}
+
+	valInfo := &types.ValidationInfo{}
+	if err := proto.Unmarshal(valInfoSerialized, valInfo); err != nil {
+		return nil, errors.Wrapf(err, "error while unmarshalling stored validation info of txID [%s]", txID)
+	}
+
+	return valInfo, nil
+}
+
 func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
-	val, err := s.blockIndex.Get(encodeOrderPreservingVarUint64(blockNumber), nil)
+	val, err := s.blockIndexDB.Get(encodeOrderPreservingVarUint64(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
 	}
@@ -336,14 +419,14 @@ func ComputeBlockHash(block *types.Block) ([]byte, error) {
 	return crypto.ComputeSHA256Hash(headerBytes)
 }
 
-func createHeaderHashIndexKey(blockHash []byte) []byte {
+func constructHeaderHashIndexKey(blockHash []byte) []byte {
 	return append(headerHashToBlockNumNs, blockHash...)
 }
 
-func createHeaderBytesKey(blockNum uint64) []byte {
+func constructHeaderBytesKey(blockNum uint64) []byte {
 	return append(headerBytesNs, encodeOrderPreservingVarUint64(blockNum)...)
 }
 
-func createHeaderHashKey(blockNum uint64) []byte {
+func constructHeaderHashKey(blockNum uint64) []byte {
 	return append(headerHashNs, encodeOrderPreservingVarUint64(blockNum)...)
 }

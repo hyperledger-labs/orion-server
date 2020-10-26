@@ -28,9 +28,10 @@ var (
 	// block file chunks are stored inside fileChunksDir
 	// while the index to the block file's offset to fetch
 	// a given block number is stored inside blockIndexDir
-	fileChunksDirName  = "filechunks"
-	blockIndexDirName  = "blockindex"
-	blockHeaderDirName = "blockheader"
+	fileChunksDirName      = "filechunks"
+	blockIndexDBName       = "blockindex"
+	blockHeaderDBName      = "blockheader"
+	txValidationInfoDBName = "txvalidationinfo"
 
 	// underCreationFlag is used to mark that the store
 	// is being created. If a failure happens during the
@@ -56,14 +57,15 @@ type Store struct {
 	currentOffset         int64
 	currentChunkNum       uint64
 	lastCommittedBlockNum uint64
-	blockIndexDirPath     string
-	blockIndex            *leveldb.DB
-	blockHeaderStorage    *leveldb.DB
+	blockIndexDB          *leveldb.DB
+	blockHeaderDB         *leveldb.DB
+	txValidationInfoDB    *leveldb.DB
 	reusableBuffer        []byte
 	logger                *logger.SugarLogger
 	mu                    sync.RWMutex
 }
 
+// Config holds the configuration of a block store
 type Config struct {
 	StoreDir string
 	Logger   *logger.SugarLogger
@@ -116,28 +118,32 @@ func openNewStore(c *Config) (*Store, error) {
 	}
 
 	fileChunksDirPath := filepath.Join(c.StoreDir, fileChunksDirName)
-	blockIndexDirPath := filepath.Join(c.StoreDir, blockIndexDirName)
-	blockHeaderDirPath := filepath.Join(c.StoreDir, blockHeaderDirName)
-
-	for _, d := range []string{fileChunksDirPath, blockIndexDirPath, blockHeaderDirPath} {
-		if err := fileops.CreateDir(d); err != nil {
-			return nil, errors.WithMessagef(err, "error while creating directory [%s]", d)
-		}
+	if err := fileops.CreateDir(fileChunksDirPath); err != nil {
+		return nil, errors.WithMessagef(err, "error while creating directory [%s] for block file chunks", fileChunksDirPath)
 	}
+
+	blockIndexDBPath := filepath.Join(c.StoreDir, blockIndexDBName)
+	blockHeaderDBPath := filepath.Join(c.StoreDir, blockHeaderDBName)
+	txValidationInfoDBPath := filepath.Join(c.StoreDir, txValidationInfoDBName)
 
 	file, err := openFileChunk(fileChunksDirPath, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	indexDB, err := leveldb.OpenFile(blockIndexDirPath, &opt.Options{})
+	indexDB, err := leveldb.OpenFile(blockIndexDBPath, &opt.Options{ErrorIfExist: true})
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while creating an index database")
 	}
 
-	headersDB, err := leveldb.OpenFile(blockHeaderDirPath, &opt.Options{})
+	headersDB, err := leveldb.OpenFile(blockHeaderDBPath, &opt.Options{ErrorIfExist: true})
 	if err != nil {
-		return nil, errors.WithMessage(err, "error while creating an block headers database")
+		return nil, errors.WithMessage(err, "error while creating a leveldb database to store the block headers")
+	}
+
+	txValidationInfoDB, err := leveldb.OpenFile(txValidationInfoDBPath, &opt.Options{ErrorIfExist: true})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while creating a leveldb database to store the transaction validation info")
 	}
 
 	if err := fileops.Remove(underCreationFlagPath); err != nil {
@@ -150,9 +156,9 @@ func openNewStore(c *Config) (*Store, error) {
 		currentOffset:         0,
 		currentChunkNum:       0,
 		lastCommittedBlockNum: 0,
-		blockIndexDirPath:     blockIndexDirPath,
-		blockIndex:            indexDB,
-		blockHeaderStorage:    headersDB,
+		blockIndexDB:          indexDB,
+		blockHeaderDB:         headersDB,
+		txValidationInfoDB:    txValidationInfoDB,
 		reusableBuffer:        make([]byte, binary.MaxVarintLen64),
 		logger:                c.Logger,
 	}, nil
@@ -160,8 +166,9 @@ func openNewStore(c *Config) (*Store, error) {
 
 func openExistingStore(c *Config) (*Store, error) {
 	fileChunksDirPath := filepath.Join(c.StoreDir, fileChunksDirName)
-	blockIndexDirPath := filepath.Join(c.StoreDir, blockIndexDirName)
-	blockHeaderDirPath := filepath.Join(c.StoreDir, blockHeaderDirName)
+	blockIndexDBPath := filepath.Join(c.StoreDir, blockIndexDBName)
+	blockHeaderDBPath := filepath.Join(c.StoreDir, blockHeaderDBName)
+	txValidationInfoDBPath := filepath.Join(c.StoreDir, txValidationInfoDBName)
 
 	currentFileChunk, currentChunkNum, err := findAndOpenLastFileChunk(fileChunksDirPath)
 	if err != nil {
@@ -173,14 +180,19 @@ func openExistingStore(c *Config) (*Store, error) {
 		return nil, errors.Wrapf(err, "error while getting the metadata of file [%s]", currentFileChunk.Name())
 	}
 
-	indexDB, err := leveldb.OpenFile(blockIndexDirPath, &opt.Options{})
+	indexDB, err := leveldb.OpenFile(blockIndexDBPath, &opt.Options{ErrorIfMissing: true})
 	if err != nil {
-		return nil, errors.WithMessage(err, "error while opening leveldb file for index")
+		return nil, errors.WithMessage(err, "error while opening the existing leveldb file for the block index")
 	}
 
-	headersDB, err := leveldb.OpenFile(blockHeaderDirPath, &opt.Options{})
+	headersDB, err := leveldb.OpenFile(blockHeaderDBPath, &opt.Options{ErrorIfMissing: true})
 	if err != nil {
-		return nil, errors.WithMessage(err, "error while creating a block headers database")
+		return nil, errors.WithMessage(err, "error while opening the existing leveldb file for the block headers")
+	}
+
+	txValidationInfoDB, err := leveldb.OpenFile(txValidationInfoDBPath, &opt.Options{ErrorIfMissing: true})
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while opening the existing leveldb file for the transaction validation info")
 	}
 
 	s := &Store{
@@ -188,9 +200,9 @@ func openExistingStore(c *Config) (*Store, error) {
 		currentFileChunk:   currentFileChunk,
 		currentOffset:      chunkFileInfo.Size(),
 		currentChunkNum:    currentChunkNum,
-		blockIndexDirPath:  blockIndexDirPath,
-		blockIndex:         indexDB,
-		blockHeaderStorage: headersDB,
+		blockIndexDB:       indexDB,
+		blockHeaderDB:      headersDB,
+		txValidationInfoDB: txValidationInfoDB,
 		reusableBuffer:     make([]byte, binary.MaxVarintLen64),
 		logger:             c.Logger,
 	}
@@ -215,7 +227,7 @@ func (s *Store) recoverIfNeeded() error {
 }
 
 func (s *Store) getLastBlockLocationInIndex() (uint64, *BlockLocation, error) {
-	itr := s.blockIndex.NewIterator(&util.Range{}, &opt.ReadOptions{})
+	itr := s.blockIndexDB.NewIterator(&util.Range{}, &opt.ReadOptions{})
 	if err := itr.Error(); err != nil {
 		return 0, nil, errors.Wrap(err, "error while finding the last committed block number in the index")
 	}
@@ -248,12 +260,16 @@ func (s *Store) Close() error {
 		return errors.WithMessage(err, "error while closing the store")
 	}
 
-	if err := s.blockIndex.Close(); err != nil {
+	if err := s.blockIndexDB.Close(); err != nil {
 		return errors.WithMessage(err, "error while closing the block index database")
 	}
 
-	if err := s.blockHeaderStorage.Close(); err != nil {
+	if err := s.blockHeaderDB.Close(); err != nil {
 		return errors.WithMessage(err, "error while closing the block headers database")
+	}
+
+	if err := s.txValidationInfoDB.Close(); err != nil {
+		return errors.WithMessage(err, "error while closing the tx validation info database")
 	}
 
 	return nil

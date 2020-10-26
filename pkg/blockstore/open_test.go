@@ -21,14 +21,18 @@ func TestMain(t *testing.M) {
 func TestOpenStore(t *testing.T) {
 	t.Parallel()
 
-	assertStore := func(storeDir string, s *Store) {
+	assertStore := func(t *testing.T, storeDir string, s *Store) {
 		require.Equal(t, filepath.Join(storeDir, "filechunks"), s.fileChunksDirPath)
-		require.Equal(t, filepath.Join(storeDir, "blockindex"), s.blockIndexDirPath)
 		require.FileExists(t, filepath.Join(storeDir, "filechunks/chunk_0"))
 		require.Equal(t, int64(0), s.currentOffset)
 		require.Equal(t, uint64(0), s.currentChunkNum)
 		require.Equal(t, uint64(0), s.lastCommittedBlockNum)
 		require.NoFileExists(t, filepath.Join(storeDir, "undercreation"))
+
+		for _, dbName := range []string{blockIndexDBName, blockHeaderDBName, txValidationInfoDBName} {
+			dbPath := filepath.Join(storeDir, dbName)
+			require.DirExists(t, dbPath)
+		}
 	}
 
 	lc := &logger.Config{
@@ -55,7 +59,7 @@ func TestOpenStore(t *testing.T) {
 		s, err := Open(c)
 		require.NoError(t, err)
 
-		assertStore(storeDir, s)
+		assertStore(t, storeDir, s)
 	})
 
 	t.Run("open while partial store exist with an empty dir", func(t *testing.T) {
@@ -78,7 +82,7 @@ func TestOpenStore(t *testing.T) {
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
-		assertStore(storeDir, s)
+		assertStore(t, storeDir, s)
 	})
 
 	t.Run("open while partial store exist with a creation flag", func(t *testing.T) {
@@ -107,7 +111,7 @@ func TestOpenStore(t *testing.T) {
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
-		assertStore(storeDir, s)
+		assertStore(t, storeDir, s)
 	})
 
 	t.Run("reopen an empty store", func(t *testing.T) {
@@ -128,14 +132,14 @@ func TestOpenStore(t *testing.T) {
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
-		assertStore(storeDir, s)
+		assertStore(t, storeDir, s)
 
 		// close and reopen the store
 		require.NoError(t, s.Close())
 		s, err = Open(c)
 		require.NoError(t, err)
 
-		assertStore(storeDir, s)
+		assertStore(t, storeDir, s)
 	})
 
 	t.Run("reopen non-empty store", func(t *testing.T) {
@@ -157,7 +161,7 @@ func TestOpenStore(t *testing.T) {
 		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
-		assertStore(storeDir, s)
+		assertStore(t, storeDir, s)
 
 		totalBlocks := uint64(1000)
 		for blockNumber := uint64(1); blockNumber <= totalBlocks; blockNumber++ {
@@ -178,6 +182,11 @@ func TestOpenStore(t *testing.T) {
 							},
 						},
 						Signature: []byte("sign"),
+					},
+				},
+				TxValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
 					},
 				},
 			}

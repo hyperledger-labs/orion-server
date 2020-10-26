@@ -215,6 +215,11 @@ func TestTransactionProcessor(t *testing.T) {
 					},
 				},
 			},
+			TxValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
 		}
 
 		block, err := env.blockStore.Get(2)

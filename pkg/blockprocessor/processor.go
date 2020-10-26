@@ -48,6 +48,11 @@ func (b *BlockProcessor) Run() {
 			panic(err)
 		}
 
+		block.TxValidationInfo = validationInfo
+
+		// TODO: validationInfo needs not be passed along with the block as it is
+		// already embedded into the block. In issue 186, the additional passage of
+		// validationInfo will be removed.
 		if err = b.committer.commitBlock(block, validationInfo); err != nil {
 			panic(err)
 		}

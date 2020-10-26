@@ -207,6 +207,11 @@ func TestBatchCreator(t *testing.T) {
 					Payload: &types.Block_UserAdministrationTxEnvelope{
 						UserAdministrationTxEnvelope: userAdminTx,
 					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
+					},
 				},
 				{
 					Header: &types.BlockHeader{
@@ -214,6 +219,11 @@ func TestBatchCreator(t *testing.T) {
 					},
 					Payload: &types.Block_DBAdministrationTxEnvelope{
 						DBAdministrationTxEnvelope: dbAdminTx,
+					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
 					},
 				},
 				{
@@ -228,6 +238,14 @@ func TestBatchCreator(t *testing.T) {
 							},
 						},
 					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
+						{
+							Flag: types.Flag_VALID,
+						},
+					},
 				},
 				{
 					Header: &types.BlockHeader{
@@ -235,6 +253,11 @@ func TestBatchCreator(t *testing.T) {
 					},
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: configTx,
+					},
+					TxValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
 					},
 				},
 			},
@@ -265,6 +288,7 @@ func TestBatchCreator(t *testing.T) {
 
 		for _, expectedBlock := range expectedBlocks {
 			block := testEnv.creator.blockQueue.Dequeue().(*types.Block)
+			block.TxValidationInfo = expectedBlock.TxValidationInfo
 			require.True(t, proto.Equal(expectedBlock, block))
 		}
 	}
