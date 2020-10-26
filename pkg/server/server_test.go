@@ -697,7 +697,7 @@ func TestHandleConfigQuery(t *testing.T) {
 		}
 
 		confResp, err := env.client.GetConfig(e)
-		require.EqualError(t, err, "/config query is rejected as the submitting user [querierUser] does not exist in the cluster")
+		require.EqualError(t, err, constants.URLForGetConfig()+" query is rejected as the submitting user [querierUser] does not exist in the cluster")
 		require.Nil(t, confResp)
 	})
 }
