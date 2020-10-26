@@ -4,7 +4,7 @@ import (
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
@@ -47,7 +47,7 @@ func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseE
 	}
 
 	var err error
-	if status.Signature, err = crypto.Sign(status.Payload); err != nil {
+	if status.Signature, err = cryptoservice.Sign(status.Payload); err != nil {
 		return nil, err
 	}
 	return status, nil
@@ -97,7 +97,7 @@ func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetD
 		Signature: nil,
 	}
 
-	if state.Signature, err = crypto.Sign(state.Payload); err != nil {
+	if state.Signature, err = cryptoservice.Sign(state.Payload); err != nil {
 		return nil, err
 	}
 
@@ -132,7 +132,7 @@ func (q *queryProcessor) getUser(querierUserID, targetUserID string) (*types.Get
 		Signature: nil,
 	}
 
-	if u.Signature, err = crypto.Sign(u.Payload); err != nil {
+	if u.Signature, err = cryptoservice.Sign(u.Payload); err != nil {
 		return nil, err
 	}
 
@@ -158,7 +158,7 @@ func (q *queryProcessor) getConfig() (*types.GetConfigResponseEnvelope, error) {
 		Signature: nil,
 	}
 
-	if c.Signature, err = crypto.Sign(c.Payload); err != nil {
+	if c.Signature, err = cryptoservice.Sign(c.Payload); err != nil {
 		return nil, err
 	}
 
