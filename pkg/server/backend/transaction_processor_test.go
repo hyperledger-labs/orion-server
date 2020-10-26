@@ -1,4 +1,4 @@
-package server
+package backend
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
@@ -226,4 +227,46 @@ func TestTransactionProcessor(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, proto.Equal(expectedBlock, block))
 	})
+}
+
+func testConfiguration(t *testing.T) *config.Configurations {
+	ledgerDir, err := ioutil.TempDir("/tmp", "server")
+	require.NoError(t, err)
+
+	return &config.Configurations{
+		Node: config.NodeConf{
+			Identity: config.IdentityConf{
+				ID:              "bdb-node-1",
+				CertificatePath: "./testdata/node.cert",
+				KeyPath:         "./testdata/node.key",
+			},
+			Network: config.NetworkConf{
+				Address: "127.0.0.1",
+				Port:    0,
+			},
+			Database: config.DatabaseConf{
+				Name:            "leveldb",
+				LedgerDirectory: ledgerDir,
+			},
+			QueueLength: config.QueueLengthConf{
+				Transaction:               1000,
+				ReorderedTransactionBatch: 100,
+				Block:                     100,
+			},
+			LogLevel: "debug",
+		},
+		Consensus: config.ConsensusConf{
+			Algorithm:                   "raft",
+			MaxBlockSize:                2,
+			MaxTransactionCountPerBlock: 1,
+			BlockTimeout:                50 * time.Millisecond,
+		},
+		Admin: config.AdminConf{
+			ID:              "admin",
+			CertificatePath: "./testdata/admin.cert",
+		},
+		RootCA: config.RootCAConf{
+			CertificatePath: "./testdata/rootca.cert",
+		},
+	}
 }

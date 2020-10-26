@@ -1,4 +1,4 @@
-package server
+package backend
 
 import (
 	"github.ibm.com/blockchaindb/library/pkg/logger"
@@ -56,8 +56,8 @@ func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseE
 // getState return the state associated with a given key
 func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
 	if worldstate.IsSystemDB(dbName) {
-		return nil, &permissionErr{
-			errMsg: "no user can directly read from a system database [" + dbName + "]. " +
+		return nil, &PermissionErr{
+			ErrMsg: "no user can directly read from a system database [" + dbName + "]. " +
 				"To read from a system database, use /config, /user, /db rest endpoints instead of /data",
 		}
 	}
@@ -67,8 +67,8 @@ func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetD
 		return nil, err
 	}
 	if !hasPerm {
-		return nil, &permissionErr{
-			errMsg: "the user [" + querierUserID + "] has no permission to read from database [" + dbName + "]",
+		return nil, &PermissionErr{
+			ErrMsg: "the user [" + querierUserID + "] has no permission to read from database [" + dbName + "]",
 		}
 	}
 
@@ -80,8 +80,8 @@ func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetD
 	acl := metadata.GetAccessControl()
 	if acl != nil {
 		if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
-			return nil, &permissionErr{
-				errMsg: "the user [" + querierUserID + "] has no permission to read key [" + key + "] from database [" + dbName + "]",
+			return nil, &PermissionErr{
+				ErrMsg: "the user [" + querierUserID + "] has no permission to read key [" + key + "] from database [" + dbName + "]",
 			}
 		}
 	}
@@ -115,8 +115,8 @@ func (q *queryProcessor) getUser(querierUserID, targetUserID string) (*types.Get
 	acl := metadata.GetAccessControl()
 	if acl != nil {
 		if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
-			return nil, &permissionErr{
-				errMsg: "the user [" + querierUserID + "] has no permission to read info of user [" + targetUserID + "]",
+			return nil, &PermissionErr{
+				ErrMsg: "the user [" + querierUserID + "] has no permission to read info of user [" + targetUserID + "]",
 			}
 		}
 	}
@@ -173,10 +173,10 @@ func (q *queryProcessor) close() error {
 	return q.blockStore.Close()
 }
 
-type permissionErr struct {
-	errMsg string
+type PermissionErr struct {
+	ErrMsg string
 }
 
-func (e *permissionErr) Error() string {
-	return e.errMsg
+func (e *PermissionErr) Error() string {
+	return e.ErrMsg
 }

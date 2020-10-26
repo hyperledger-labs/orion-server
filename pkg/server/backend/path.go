@@ -1,4 +1,4 @@
-package server
+package backend
 
 import "path/filepath"
 
