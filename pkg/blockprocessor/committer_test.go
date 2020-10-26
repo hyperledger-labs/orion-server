@@ -221,13 +221,13 @@ func TestBlockStoreCommitter(t *testing.T) {
 
 		var expectedBlocks []*types.Block
 
-		for blockNumber := uint64(1); blockNumber <= 1000; blockNumber++ {
+		for blockNumber := uint64(1); blockNumber <= 100; blockNumber++ {
 			block := getSampleBlock(blockNumber)
 			require.NoError(t, env.committer.commitToBlockStore(block))
 			expectedBlocks = append(expectedBlocks, block)
 		}
 
-		for blockNumber := uint64(1); blockNumber <= 1000; blockNumber++ {
+		for blockNumber := uint64(1); blockNumber <= 100; blockNumber++ {
 			block, err := env.blockStore.Get(blockNumber)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedBlocks[blockNumber-1], block))
@@ -235,7 +235,7 @@ func TestBlockStoreCommitter(t *testing.T) {
 
 		height, err := env.blockStore.Height()
 		require.NoError(t, err)
-		require.Equal(t, uint64(1000), height)
+		require.Equal(t, uint64(100), height)
 	})
 
 	t.Run("commit unexpected block to the block store", func(t *testing.T) {
