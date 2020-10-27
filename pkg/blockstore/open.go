@@ -208,22 +208,133 @@ func openExistingStore(c *Config) (*Store, error) {
 		reusableBuffer:     make([]byte, binary.MaxVarintLen64),
 		logger:             c.Logger,
 	}
-	return s, s.recoverIfNeeded()
+	return s, s.recover()
 }
 
-func (s *Store) recoverIfNeeded() error {
-	// TODO:
-	// if there was a failure during the last block commit, the index may not be
-	// upto date. Even the last block commit may be written partially to the file.
-	// We need to add the logic to recover the store here.
-
+func (s *Store) recover() error {
 	lastBlockNumberInIndex, lastBlockLocation, err := s.getLastBlockLocationInIndex()
 	if err != nil {
 		return err
 	}
 
-	s.lastCommittedBlockNum = lastBlockNumberInIndex
-	_ = lastBlockLocation
+	var startBlockLocation *BlockLocation
+	switch lastBlockLocation {
+	case nil:
+		startBlockLocation = &BlockLocation{
+			FileChunkNum: s.currentChunkNum,
+			Offset:       0,
+		}
+	default:
+		startBlockLocation = &BlockLocation{
+			FileChunkNum: lastBlockLocation.FileChunkNum,
+			Offset:       lastBlockLocation.Offset + lastBlockLocation.Length,
+		}
+	}
+
+	chunkFileStream, err := newBlockfileStream(s.logger, s.fileChunksDirPath, startBlockLocation)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := chunkFileStream.close(); err != nil {
+			s.logger.Warn(err.Error())
+		}
+	}()
+
+	nextBlockAndLocation, err := chunkFileStream.nextBlockWithLocation()
+	switch {
+	// Scenario 1: no partial block write to file chunk and the block index
+	// DB is sync with the file-based block store. To keep the recovery logic simple,
+	// we reply the last block onto the index DB, block header DB and validationInfo
+	// DB though it might be already in sync with the file-based block store.
+	case nextBlockAndLocation == nil && err == nil:
+		if lastBlockNumberInIndex == 0 {
+			return nil
+		}
+
+		s.lastCommittedBlockNum = lastBlockNumberInIndex
+		if s.currentChunkNum-1 == lastBlockLocation.FileChunkNum {
+			// if a node has failed just after creating a new file chunk, currentChunk
+			// would point to the empty file only during the restart. We need move to
+			// the previous file chunk and delete the empty file
+			newChunkFilePath := constructBlockFileChunkPath(s.fileChunksDirPath, s.currentChunkNum)
+
+			if err := s.moveToChunk(lastBlockLocation.FileChunkNum); err != nil {
+				return err
+			}
+			return fileops.RemoveAll(newChunkFilePath)
+		}
+		s.currentOffset = lastBlockLocation.Offset + lastBlockLocation.Length
+
+		block, err := s.Get(lastBlockNumberInIndex)
+		if err != nil {
+			return err
+		}
+
+		if err = s.storeMetadataInDB(block, lastBlockLocation); err != nil {
+			return err
+		}
+
+		return nil
+
+	// Scenario 2: no partial block write to file chunk but the block index
+	// DB is NOT in sync with the file-based block store. Here, we need to
+	// reply the last block onto the block index DB, block header DB, and
+	// validationInfo DB.
+	case nextBlockAndLocation != nil && err == nil:
+		secondNextBlockAndLocation, err := chunkFileStream.nextBlockWithLocation()
+		if err != nil {
+			return err
+		}
+		if secondNextBlockAndLocation != nil {
+			return errors.Errorf("the block store can have exactly one fully committed block " +
+				"which is not indexed or exaclty one partially written block. Any other case is " +
+				"an unexpected behavior")
+		}
+
+		location := &BlockLocation{
+			FileChunkNum: nextBlockAndLocation.fileChunkNum,
+			Offset:       nextBlockAndLocation.blockStartOffset,
+			Length:       nextBlockAndLocation.blockEndOffset - nextBlockAndLocation.blockStartOffset,
+		}
+
+		if err = s.storeMetadataInDB(nextBlockAndLocation.block, location); err != nil {
+			return err
+		}
+
+		s.lastCommittedBlockNum = nextBlockAndLocation.block.Header.BaseHeader.Number
+		s.currentOffset = nextBlockAndLocation.blockEndOffset
+		return nil
+
+	// Scenario 3: partial block write to file chunk. This can occur when the node
+	// failure happened during the block append operation to the file chunk. We just
+	// need to discard the partial write by setting current offset appropriately and
+	// then truncating the file. No need to reply the block onto other DBs as they
+	// all would be in sync with the last complete block
+	case nextBlockAndLocation == nil && err == ErrUnexpectedEndOfBlockfile:
+		s.lastCommittedBlockNum = lastBlockNumberInIndex
+		s.currentOffset = lastBlockLocation.Offset + lastBlockLocation.Length
+
+		if s.currentChunkNum-1 == lastBlockLocation.FileChunkNum {
+			// if a node has failed just after creating a new file chunk and appending
+			// a block partially to it, currentChunk would point to the new file only
+			// after the restart. We need move to the previous chunk and delete the new
+			// file that has the partially appended block
+			newChunkFilePath := constructBlockFileChunkPath(s.fileChunksDirPath, s.currentChunkNum)
+
+			if err := s.moveToChunk(lastBlockLocation.FileChunkNum); err != nil {
+				return err
+			}
+			return fileops.RemoveAll(newChunkFilePath)
+		}
+
+		// for partial appends to the existing chunk file, we can simply truncate
+		return fileops.Truncate(s.currentFileChunk, s.currentOffset)
+
+	// internal error will result in a panic at the caller
+	case nextBlockAndLocation == nil && err != nil:
+		return errors.WithMessage(err, "error while recovering block store")
+	}
 
 	return nil
 }
@@ -273,6 +384,22 @@ func (s *Store) Close() error {
 	if err := s.txValidationInfoDB.Close(); err != nil {
 		return errors.WithMessage(err, "error while closing the tx validation info database")
 	}
+
+	return nil
+}
+
+func (s *Store) moveToChunk(chunkNum uint64) error {
+	if err := s.currentFileChunk.Close(); err != nil {
+		return err
+	}
+
+	s.currentChunkNum = chunkNum
+	var err error
+	s.currentFileChunk, err = openFileChunk(s.fileChunksDirPath, s.currentChunkNum)
+	if err != nil {
+		return err
+	}
+	s.currentOffset = 0
 
 	return nil
 }

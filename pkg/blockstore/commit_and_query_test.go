@@ -63,7 +63,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 }
 
-func (e *testEnv) reopenStore(t *testing.T) {
+func (e *testEnv) closeAndReOpenStore(t *testing.T) {
 	logger := e.s.logger
 	require.NoError(t, e.s.Close())
 	e.s = nil
@@ -89,40 +89,6 @@ func (e *testEnv) reopenStore(t *testing.T) {
 }
 
 func TestCommitAndQuery(t *testing.T) {
-	createSampleUserTxBlock := func(blockNumber uint64, blockBaseHashes [][]byte, blockHashes [][]byte) *types.Block {
-		return &types.Block{
-			Header: &types.BlockHeader{
-				BaseHeader: &types.BlockHeaderBase{
-					Number:                 blockNumber,
-					PreviousBaseHeaderHash: blockBaseHashes[blockNumber-1],
-					TxMerkelTreeRootHash:   []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
-					LastCommittedBlockHash: blockHashes[blockNumber-1],
-					LastCommittedBlockNum:  blockNumber - 1,
-				},
-				StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
-				ValidationInfo: []*types.ValidationInfo{
-					{
-						Flag: types.Flag_VALID,
-					},
-				},
-			},
-			Payload: &types.Block_UserAdministrationTxEnvelope{
-				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
-					Payload: &types.UserAdministrationTx{
-						UserID: "user1",
-						TxID:   fmt.Sprintf("txid-%d", blockNumber),
-						UserDeletes: []*types.UserDelete{
-							{
-								UserID: "user1",
-							},
-						},
-					},
-					Signature: []byte("sign"),
-				},
-			},
-		}
-	}
-
 	t.Run("commit blocks and query", func(t *testing.T) {
 		t.Parallel()
 
@@ -130,11 +96,11 @@ func TestCommitAndQuery(t *testing.T) {
 		defer env.cleanup(false)
 
 		totalBlocks := uint64(1000)
-		blockBaseHashes := [][]byte{nil}
+		var preBlockBaseHash, preBlockHash []byte
 		blockHashes := [][]byte{nil}
 
 		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-			b := createSampleUserTxBlock(blockNumber, blockBaseHashes, blockHashes)
+			b := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
 
 			require.NoError(t, env.s.UpdateBlock(b))
 			require.NoError(t, env.s.Commit(b))
@@ -145,21 +111,22 @@ func TestCommitAndQuery(t *testing.T) {
 
 			blockHeaderBaseBytes, err := proto.Marshal(b.GetHeader().GetBaseHeader())
 			require.NoError(t, err)
-			blockHeaderBaseHash, err := crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
+			preBlockBaseHash, err = crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
 			require.NoError(t, err)
 
 			blockHeaderBytes, err := proto.Marshal(b.GetHeader())
 			require.NoError(t, err)
-			blockHeaderHash, err := crypto.ComputeSHA256Hash(blockHeaderBytes)
+			preBlockHash, err = crypto.ComputeSHA256Hash(blockHeaderBytes)
 			require.NoError(t, err)
-			blockBaseHashes = append(blockBaseHashes, blockHeaderBaseHash)
-			blockHashes = append(blockHashes, blockHeaderHash)
 
+			blockHashes = append(blockHashes, preBlockHash)
 		}
 
 		assertBlocks := func() {
+			var preBlockBaseHash, preBlockHash []byte
+
 			for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-				expectedBlock := createSampleUserTxBlock(blockNumber, blockBaseHashes, blockHashes)
+				expectedBlock := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
 				expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, blockHashes, blockNumber)
 
 				block, err := env.s.Get(blockNumber)
@@ -191,13 +158,16 @@ func TestCommitAndQuery(t *testing.T) {
 				baseHash, err := env.s.GetBaseHeaderHash(blockNumber)
 				require.NoError(t, err)
 				require.Equal(t, expectedBaseHash, baseHash)
+
+				preBlockBaseHash = baseHash
+				preBlockHash = blockHash
 			}
 		}
 
 		assertBlocks()
 
 		// close and reopen store
-		env.reopenStore(t)
+		env.closeAndReOpenStore(t)
 		assertBlocks()
 		env.s.Close()
 	})
@@ -439,7 +409,7 @@ func TestTxValidationInfo(t *testing.T) {
 }
 
 func calculateBlockHashes(t *testing.T, blockHashes [][]byte, blockNum uint64) [][]byte {
-	res := make([][]byte, 0)
+	var res [][]byte
 	distance := uint64(1)
 
 	for ((blockNum-1)%distance) == 0 && distance < blockNum {
@@ -449,4 +419,38 @@ func calculateBlockHashes(t *testing.T, blockHashes [][]byte, blockNum uint64) [
 		distance *= SkipListBase
 	}
 	return res
+}
+
+func createSampleUserTxBlock(blockNumber uint64, preBlockBaseHash []byte, preBlockHash []byte) *types.Block {
+	return &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                 blockNumber,
+				PreviousBaseHeaderHash: preBlockBaseHash,
+				TxMerkelTreeRootHash:   []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
+				LastCommittedBlockHash: preBlockHash,
+				LastCommittedBlockNum:  blockNumber - 1,
+			},
+			StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
+			ValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		},
+		Payload: &types.Block_UserAdministrationTxEnvelope{
+			UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+				Payload: &types.UserAdministrationTx{
+					UserID: "user1",
+					TxID:   fmt.Sprintf("txid-%d", blockNumber),
+					UserDeletes: []*types.UserDelete{
+						{
+							UserID: "user1",
+						},
+					},
+				},
+				Signature: []byte("sign"),
+			},
+		},
+	}
 }

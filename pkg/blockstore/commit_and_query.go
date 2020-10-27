@@ -54,15 +54,12 @@ func (s *Store) Commit(block *types.Block) error {
 		}
 	}
 
-	if err := s.appendBlock(blockNumber, content); err != nil {
+	blockLocation, err := s.appendBlock(blockNumber, content)
+	if err != nil {
 		return err
 	}
 
-	if err = s.storeBlockValidationInfo(block); err != nil {
-		return err
-	}
-
-	return s.storeBlockHeaders(blockNumber, block.Header)
+	return s.storeMetadataInDB(block, blockLocation)
 }
 
 func (s *Store) canCurrentFileChunkHold(toBeAddedBytesLength int) bool {
@@ -85,14 +82,18 @@ func (s *Store) moveToNextFileChunk() error {
 	return nil
 }
 
-func (s *Store) appendBlock(number uint64, content []byte) error {
+func (s *Store) appendBlock(number uint64, content []byte) (*BlockLocation, error) {
 	offsetBeforeWrite := s.currentOffset
 
 	n, err := s.currentFileChunk.Write(content)
 	if err == nil {
 		s.currentOffset += int64(len(content))
 		s.lastCommittedBlockNum = number
-		return s.addIndexForBlock(number, offsetBeforeWrite)
+		return &BlockLocation{
+			FileChunkNum: s.currentChunkNum,
+			Offset:       offsetBeforeWrite,
+			Length:       int64(len(content)),
+		}, nil
 	}
 
 	if n > 0 {
@@ -101,20 +102,27 @@ func (s *Store) appendBlock(number uint64, content []byte) error {
 		}
 	}
 
-	return errors.Wrapf(
+	return nil, errors.Wrapf(
 		err,
 		"error while writing the block to currentFileChunk [%s]",
 		s.currentFileChunk.Name(),
 	)
 }
 
-func (s *Store) addIndexForBlock(number uint64, offset int64) error {
-	value, err := proto.Marshal(
-		&BlockLocation{
-			FileChunkNum: s.currentChunkNum,
-			Offset:       offset,
-		},
-	)
+func (s *Store) storeMetadataInDB(block *types.Block, location *BlockLocation) error {
+	if err := s.storeIndexForBlock(block.Header.BaseHeader.Number, location); err != nil {
+		return err
+	}
+
+	if err := s.storeBlockValidationInfo(block); err != nil {
+		return err
+	}
+
+	return s.storeBlockHeaders(block.Header)
+}
+
+func (s *Store) storeIndexForBlock(number uint64, location *BlockLocation) error {
+	value, err := proto.Marshal(location)
 	if err != nil {
 		return errors.Wrap(err, "error while marshaling BlockLocation")
 	}
@@ -132,7 +140,6 @@ func (s *Store) UpdateBlock(block *types.Block) error {
 	skipListHashes := make([][]byte, 0)
 
 	for _, linkedBlockNum := range CalculateSkipListLinks(block.Header.GetBaseHeader().GetNumber()) {
-
 		hash, err := s.GetHash(linkedBlockNum)
 		if err != nil {
 			return err
@@ -206,7 +213,8 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 	return s.txValidationInfoDB.Put(key, value, &opt.WriteOptions{Sync: true})
 }
 
-func (s *Store) storeBlockHeaders(number uint64, header *types.BlockHeader) error {
+func (s *Store) storeBlockHeaders(header *types.BlockHeader) error {
+	number := header.BaseHeader.Number
 	blockHeaderBaseBytes, err := proto.Marshal(header.GetBaseHeader())
 	if err != nil {
 		return errors.Wrapf(err, "can't marshal block base header {%d, %v}", number, header)
@@ -321,7 +329,7 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 		}()
 	}
 
-	return readBlockFromFile(f, location)
+	return readBlockFromFile(f, location.Offset)
 }
 
 // GetHeader returns block header by block number, operation should be faster that regular Get,
@@ -451,8 +459,8 @@ func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 	return blockLocation, nil
 }
 
-func readBlockFromFile(f *os.File, location *BlockLocation) (*types.Block, error) {
-	if _, err := f.Seek(location.Offset, 0); err != nil {
+func readBlockFromFile(f *os.File, offset int64) (*types.Block, error) {
+	if _, err := f.Seek(offset, 0); err != nil {
 		return nil, errors.Wrap(err, "error while seeking")
 	}
 
