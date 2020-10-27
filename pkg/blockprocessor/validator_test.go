@@ -91,7 +91,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 				name: "node certificate is invalid",
 				genesisBlock: &types.Block{
 					Header: &types.BlockHeader{
-						Number: 1,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
 					},
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: &types.ConfigTxEnvelope{
@@ -121,7 +123,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 				name: "admin certificate is invalid",
 				genesisBlock: &types.Block{
 					Header: &types.BlockHeader{
-						Number: 1,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
 					},
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: &types.ConfigTxEnvelope{
@@ -168,7 +172,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 
 		genesisBlock := &types.Block{
 			Header: &types.BlockHeader{
-				Number: 1,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 1,
+				},
 			},
 			Payload: &types.Block_ConfigTxEnvelope{
 				ConfigTxEnvelope: &types.ConfigTxEnvelope{
@@ -288,7 +294,9 @@ func TestValidateDataBlock(t *testing.T) {
 			},
 			block: &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_DataTxEnvelopes{
 					DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -433,7 +441,9 @@ func TestValidateUserBlock(t *testing.T) {
 			},
 			block: &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -478,7 +488,9 @@ func TestValidateUserBlock(t *testing.T) {
 			},
 			block: &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -578,7 +590,9 @@ func TestValidateDBBlock(t *testing.T) {
 			name: "db block with an invalid transaction",
 			block: &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_DBAdministrationTxEnvelope{
 					DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
@@ -600,7 +614,9 @@ func TestValidateDBBlock(t *testing.T) {
 			name: "db block with a valid transaction",
 			block: &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_DBAdministrationTxEnvelope{
 					DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
@@ -678,7 +694,9 @@ func TestValidateConfigBlock(t *testing.T) {
 			name: "config block with an invalid transaction",
 			block: &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_ConfigTxEnvelope{
 					ConfigTxEnvelope: &types.ConfigTxEnvelope{
@@ -718,7 +736,9 @@ func TestValidateConfigBlock(t *testing.T) {
 			name: "config block with a valid transaction",
 			block: &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_ConfigTxEnvelope{
 					ConfigTxEnvelope: &types.ConfigTxEnvelope{

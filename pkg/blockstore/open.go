@@ -47,6 +47,8 @@ var (
 	headerHashNs = []byte{1}
 	// hash -> block number
 	headerHashToBlockNumNs = []byte{2}
+	// number -> base header (without validation info) hash
+	headerBaseHashNs = []byte{3}
 )
 
 // Store maintains a chain of blocks in an append-only

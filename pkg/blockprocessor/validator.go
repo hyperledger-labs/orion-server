@@ -52,7 +52,7 @@ func newValidator(conf *Config) *validator {
 // validateBlock validates each transaction present in the block to ensure
 // the request isolation level
 func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
-	if block.Header.Number == 1 {
+	if block.Header.BaseHeader.Number == 1 {
 		// for the genesis block, which is created by the node itself, we cannot
 		// do a regular validation but we still needs to validate the entries
 		configTx := block.GetConfigTxEnvelope().Payload

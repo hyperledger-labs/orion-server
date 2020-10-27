@@ -107,9 +107,14 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 		logger:             logger,
 	}
 
+	txProcessor, err := newTransactionProcessor(txProcConf)
+	if err != nil {
+		return nil, errors.WithMessage(err, "can't initiate tx processor")
+	}
+
 	return &db{
 		queryProcessor:       newQueryProcessor(qProcConfig),
-		transactionProcessor: newTransactionProcessor(txProcConf),
+		transactionProcessor: txProcessor,
 		logger:               logger,
 	}, nil
 }

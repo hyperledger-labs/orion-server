@@ -17,19 +17,20 @@ import (
 )
 
 const (
+	SkipListBase = uint64(2)
 	nonDataTxIndex = 0
 )
 
 // Commit commits the block to the block store
 func (s *Store) Commit(block *types.Block) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if block == nil {
 		return errors.New("block cannot be nil")
 	}
 
-	blockNumber := block.GetHeader().GetNumber()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	blockNumber := block.GetHeader().GetBaseHeader().GetNumber()
 	if blockNumber != s.lastCommittedBlockNum+1 {
 		return errors.Errorf(
 			"expected block number [%d] but received [%d]",
@@ -127,8 +128,43 @@ func (s *Store) addIndexForBlock(number uint64, offset int64) error {
 	)
 }
 
+func (s *Store) UpdateBlock(block *types.Block) error {
+	skipListHashes := make([][]byte, 0)
+
+	for _, linkedBlockNum := range skipListLinks(block.Header.GetBaseHeader().GetNumber()) {
+
+		hash, err := s.GetHash(linkedBlockNum)
+		if err != nil {
+			return err
+		}
+		skipListHashes = append(skipListHashes, hash)
+	}
+	block.Header.SkipchainHashes = skipListHashes
+	return nil
+}
+
+func skipListHeight(blockNum uint64) uint64 {
+	if blockNum%SkipListBase != 0 {
+		return 1
+	}
+	return 1 + skipListHeight(blockNum/SkipListBase)
+}
+
+func skipListLinks(blockNum uint64) []uint64 {
+	links := make([]uint64, 0)
+	if blockNum > 1 {
+		distance := uint64(1)
+		for i := uint64(0); i < skipListHeight(blockNum-1); i++ {
+			index := blockNum - distance
+			links = append(links, index)
+			distance *= SkipListBase
+		}
+	}
+	return links
+}
+
 func (s *Store) storeBlockValidationInfo(block *types.Block) error {
-	blockNum := block.Header.Number
+	blockNum := block.Header.BaseHeader.Number
 	var txID string
 
 	switch block.Payload.(type) {
@@ -170,7 +206,18 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 	return s.txValidationInfoDB.Put(key, value, &opt.WriteOptions{Sync: true})
 }
 
+
 func (s *Store) storeBlockHeaders(number uint64, header *types.BlockHeader) error {
+	blockHeaderBaseBytes, err := proto.Marshal(header.GetBaseHeader())
+	if err != nil {
+		return errors.Wrapf(err, "can't marshal block base header {%d, %v}", number, header)
+	}
+
+	blockHeaderBaseHash, err := crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
+	if err != nil {
+		return errors.Wrapf(err, "can't calculate block base header hash {%d, %v}", number, header.GetBaseHeader())
+	}
+
 	blockHeaderBytes, err := proto.Marshal(header)
 	if err != nil {
 		return errors.Wrapf(err, "can't marshal block header {%d, %v}", number, header)
@@ -179,6 +226,16 @@ func (s *Store) storeBlockHeaders(number uint64, header *types.BlockHeader) erro
 	blockHash, err := crypto.ComputeSHA256Hash(blockHeaderBytes)
 	if err != nil {
 		return errors.Wrapf(err, "can't calculate block hash {%d, %v}", number, header)
+	}
+
+	if err = s.blockHeaderDB.Put(
+		constructHeaderBaseHashKey(number),
+		blockHeaderBaseHash,
+		&opt.WriteOptions{
+			Sync: true,
+		},
+	); err != nil {
+		return errors.Wrapf(err, "can't create block base header hash index {%d, %v}", number, header)
 	}
 
 	if err = s.blockHeaderDB.Put(
@@ -305,6 +362,21 @@ func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
 	return val, nil
 }
 
+// GetBaseHeaderHash returns block header base hash by block number
+func (s *Store) GetBaseHeaderHash(blockNumber uint64) ([]byte, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	val, err := s.blockHeaderDB.Get(constructHeaderBaseHashKey(blockNumber), nil)
+	if err == leveldb.ErrNotFound {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't access block's %d header base hash", blockNumber)
+	}
+	return val, nil
+}
+
 // GetHeaderByHash returns block header by block hash, used for travel in Merkle list or Merkle skip list
 func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 	s.mu.RLock()
@@ -417,6 +489,21 @@ func ComputeBlockHash(block *types.Block) ([]byte, error) {
 		return nil, err
 	}
 	return crypto.ComputeSHA256Hash(headerBytes)
+}
+
+// ComputeBlockBaseHash returns block hash before all validation and state data was updated. Currently block header base hash
+// is considered block hash, because it contains  all crypto related information, like Tx Merkle tree root
+// and hash of previous block before validation as well
+func ComputeBlockBaseHash(block *types.Block) ([]byte, error) {
+	headerBytes, err := proto.Marshal(block.GetHeader().GetBaseHeader())
+	if err != nil {
+		return nil, err
+	}
+	return crypto.ComputeSHA256Hash(headerBytes)
+}
+
+func constructHeaderBaseHashKey(blockNum uint64) []byte {
+	return append(headerBaseHashNs, encodeOrderPreservingVarUint64(blockNum)...)
 }
 
 func constructHeaderHashIndexKey(blockHash []byte) []byte {

@@ -121,7 +121,9 @@ func TestCommitter(t *testing.T) {
 
 		block1 := &types.Block{
 			Header: &types.BlockHeader{
-				Number: 1,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 1,
+				},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -185,7 +187,9 @@ func TestBlockStoreCommitter(t *testing.T) {
 	getSampleBlock := func(number uint64) *types.Block {
 		return &types.Block{
 			Header: &types.BlockHeader{
-				Number: number,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: number,
+				},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -445,7 +449,9 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 
 			block := &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_DataTxEnvelopes{
 					DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -591,7 +597,9 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 
 			block := &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -700,7 +708,9 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 
 			block := &types.Block{
 				Header: &types.BlockHeader{
-					Number: 2,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
 				},
 				Payload: &types.Block_DBAdministrationTxEnvelope{
 					DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
@@ -744,7 +754,9 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 
 		configBlock := &types.Block{
 			Header: &types.BlockHeader{
-				Number: number,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: number,
+				},
 			},
 			Payload: &types.Block_ConfigTxEnvelope{
 				ConfigTxEnvelope: &types.ConfigTxEnvelope{

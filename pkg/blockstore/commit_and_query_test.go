@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
@@ -88,13 +90,18 @@ func (e *testEnv) reopenStore(t *testing.T) {
 }
 
 func TestCommitAndQuery(t *testing.T) {
-	createSampleUserTxBlock := func(blockNumber uint64) *types.Block {
+	createSampleUserTxBlock := func(blockNumber uint64, blockBaseHashes [][]byte, blockHashes [][]byte) *types.Block {
 		return &types.Block{
 			Header: &types.BlockHeader{
-				Number: blockNumber,
-
-				SkipchainHashes:  [][]byte{[]byte(fmt.Sprintf("hash-%d", blockNumber-1))},
-				TransactionsHash: []byte(fmt.Sprintf("hash-%d", blockNumber)),
+				BaseHeader: &types.BlockHeaderBase{
+					Number:                 blockNumber,
+					PreviousBaseHeaderHash: blockBaseHashes[blockNumber-1],
+					TxMerkelTreeRootHash:   []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
+					LastCommittedBlockHash: blockHashes[blockNumber-1],
+					LastCommittedBlockNum:  blockNumber - 1,
+				},
+				StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
+				ValidationInfo:          nil,
 			},
 			Payload: &types.Block_UserAdministrationTxEnvelope{
 				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -125,25 +132,41 @@ func TestCommitAndQuery(t *testing.T) {
 		defer env.cleanup(false)
 
 		totalBlocks := uint64(1000)
+		blockBaseHashes := [][]byte{nil}
+		blockHashes := [][]byte{nil}
 
 		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-			b := createSampleUserTxBlock(blockNumber)
+			b := createSampleUserTxBlock(blockNumber, blockBaseHashes, blockHashes)
+
+			require.NoError(t, env.s.UpdateBlock(b))
 			require.NoError(t, env.s.Commit(b))
 
 			height, err := env.s.Height()
 			require.NoError(t, err)
 			require.Equal(t, blockNumber, height)
+
+			blockHeaderBaseBytes, err := proto.Marshal(b.GetHeader().GetBaseHeader())
+			require.NoError(t, err)
+			blockHeaderBaseHash, err := crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
+			require.NoError(t, err)
+
+			blockHeaderBytes, err := proto.Marshal(b.GetHeader())
+			require.NoError(t, err)
+			blockHeaderHash, err := crypto.ComputeSHA256Hash(blockHeaderBytes)
+			require.NoError(t, err)
+			blockBaseHashes = append(blockBaseHashes, blockHeaderBaseHash)
+			blockHashes = append(blockHashes, blockHeaderHash)
+
 		}
 
 		assertBlocks := func() {
 			for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-				expectedBlock := createSampleUserTxBlock(blockNumber)
+				expectedBlock := createSampleUserTxBlock(blockNumber, blockBaseHashes, blockHashes)
+				expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, blockHashes, blockNumber)
 
 				block, err := env.s.Get(blockNumber)
 				require.NoError(t, err)
-				require.Equal(t, expectedBlock, block)
 				require.True(t, proto.Equal(expectedBlock, block))
-
 				blockHeader, err := env.s.GetHeader(blockNumber)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
@@ -157,6 +180,12 @@ func TestCommitAndQuery(t *testing.T) {
 				blockHeader, err = env.s.GetHeaderByHash(expectedHash)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
+				expectedBaseHash, err := ComputeBlockBaseHash(expectedBlock)
+				require.NoError(t, err)
+				baseHash, err := env.s.GetBaseHeaderHash(blockNumber)
+				require.NoError(t, err)
+				require.Equal(t, expectedBaseHash, baseHash)
+
 			}
 		}
 
@@ -178,7 +207,9 @@ func TestCommitAndQuery(t *testing.T) {
 
 		b := &types.Block{
 			Header: &types.BlockHeader{
-				Number: 10,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 10,
+				},
 			},
 		}
 		require.EqualError(t, env.s.Commit(b), "expected block number [1] but received [10]")
@@ -196,7 +227,9 @@ func TestCommitAndQuery(t *testing.T) {
 
 		b := &types.Block{
 			Header: &types.BlockHeader{
-				Number: 1,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 1,
+				},
 			},
 			Payload: &types.Block_UserAdministrationTxEnvelope{
 				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -252,7 +285,9 @@ func TestTxValidationInfo(t *testing.T) {
 				name: "data tx",
 				block: &types.Block{
 					Header: &types.BlockHeader{
-						Number: 1,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
 					},
 					Payload: &types.Block_DataTxEnvelopes{
 						DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -293,7 +328,9 @@ func TestTxValidationInfo(t *testing.T) {
 				name: "config tx",
 				block: &types.Block{
 					Header: &types.BlockHeader{
-						Number: 1,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
 					},
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: &types.ConfigTxEnvelope{
@@ -314,7 +351,9 @@ func TestTxValidationInfo(t *testing.T) {
 				name: "db admin tx",
 				block: &types.Block{
 					Header: &types.BlockHeader{
-						Number: 1,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
 					},
 					Payload: &types.Block_DBAdministrationTxEnvelope{
 						DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
@@ -335,7 +374,9 @@ func TestTxValidationInfo(t *testing.T) {
 				name: "user admin tx",
 				block: &types.Block{
 					Header: &types.BlockHeader{
-						Number: 1,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
 					},
 					Payload: &types.Block_UserAdministrationTxEnvelope{
 						UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -390,4 +431,17 @@ func TestTxValidationInfo(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, valInfo)
 	})
+}
+
+func calculateBlockHashes(t *testing.T, blockHashes [][]byte, blockNum uint64) [][]byte {
+	res := make([][]byte, 0)
+	distance := uint64(1)
+
+	for ((blockNum-1)%distance) == 0 && distance < blockNum {
+		index := blockNum - distance
+
+		res = append(res, blockHashes[index])
+		distance *= SkipListBase
+	}
+	return res
 }

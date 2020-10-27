@@ -2,12 +2,15 @@ package blockprocessor
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -110,7 +113,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 	setup := func(env *testEnv) {
 		configBlock := &types.Block{
 			Header: &types.BlockHeader{
-				Number: 1,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 1,
+				},
 			},
 			Payload: &types.Block_ConfigTxEnvelope{
 				ConfigTxEnvelope: &types.ConfigTxEnvelope{
@@ -183,7 +188,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 	createBlock2 := func() *types.Block {
 		return &types.Block{
 			Header: &types.BlockHeader{
-				Number: 2,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 2,
+				},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -209,7 +216,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 	createBlock3 := func() *types.Block {
 		return &types.Block{
 			Header: &types.BlockHeader{
-				Number: 3,
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 3,
+				},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -293,7 +302,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedBlockHeight, height)
 
-			block, err := env.blockStore.Get(tt.block.Header.Number)
+			block, err := env.blockStore.Get(tt.block.GetHeader().GetBaseHeader().GetNumber())
 			require.NoError(t, err)
 			require.True(t, proto.Equal(tt.block, block))
 		}
@@ -307,12 +316,16 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 		setup(env)
 
+		genesisHash, err := env.blockStore.GetHash(uint64(1))
+		require.NoError(t, err)
+
 		testCases := []struct {
 			blocks              []*types.Block
 			key                 string
 			expectedValue       []byte
 			expectedMetadata    *types.Metadata
 			expectedBlockHeight uint64
+			expectedBlocks      []*types.Block
 		}{
 			{
 				blocks: []*types.Block{
@@ -328,7 +341,17 @@ func TestValidatorAndCommitter(t *testing.T) {
 					},
 				},
 				expectedBlockHeight: 3,
+				expectedBlocks: []*types.Block{
+					createBlock2(),
+					createBlock3(),
+				},
 			},
+		}
+
+		for _, tt := range testCases {
+			for _, block := range tt.expectedBlocks {
+				block.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, tt.expectedBlocks, block.Header.BaseHeader.Number)
+			}
 		}
 
 		for _, tt := range testCases {
@@ -352,11 +375,37 @@ func TestValidatorAndCommitter(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedBlockHeight, height)
 
-			for _, expectedBlock := range tt.blocks {
-				block, err := env.blockStore.Get(expectedBlock.Header.Number)
+			for index, expectedBlock := range tt.blocks {
+				precalculatedSkipListBlock := tt.expectedBlocks[index]
+				block, err := env.blockStore.Get(expectedBlock.GetHeader().GetBaseHeader().GetNumber())
+				expectedBlockJson, _ := json.Marshal(expectedBlock)
+				blockJson, _ := json.Marshal(block)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(expectedBlock, block))
+				require.True(t, proto.Equal(expectedBlock, block), "Expected\t %s\nBlock\t\t %s\n", expectedBlockJson, blockJson)
+				require.Equal(t, precalculatedSkipListBlock.Header.SkipchainHashes, block.Header.SkipchainHashes)
 			}
 		}
 	})
+}
+
+func calculateBlockHashes(t *testing.T, genesisHash []byte, blocks []*types.Block, blockNum uint64) [][]byte {
+	res := make([][]byte, 0)
+	distance := uint64(1)
+	blockNum -= 1
+
+	for (blockNum%distance) == 0 && distance <= blockNum {
+		index := blockNum - distance
+		if index == 0 {
+			res = append(res, genesisHash)
+		} else {
+			headerBytes, err := proto.Marshal(blocks[index-1].Header)
+			require.NoError(t, err)
+			blockHash, err := crypto.ComputeSHA256Hash(headerBytes)
+			require.NoError(t, err)
+
+			res = append(res, blockHash)
+		}
+		distance *= blockstore.SkipListBase
+	}
+	return res
 }

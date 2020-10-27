@@ -35,7 +35,7 @@ func newCommitter(conf *Config) *committer {
 
 func (c *committer) commitBlock(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
 	if err := c.commitToBlockStore(block); err != nil {
-		return errors.WithMessagef(err, "error while committing block %d to the block store", block.Header.Number)
+		return errors.WithMessagef(err, "error while committing block %d to the block store", block.Header.BaseHeader.Number)
 	}
 
 	return c.commitToStateDB(block, blockValidationInfo)
@@ -59,7 +59,7 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 			}
 
 			version := &types.Version{
-				BlockNum: block.Header.Number,
+				BlockNum: block.GetHeader().GetBaseHeader().GetNumber(),
 				TxNum:    uint64(txNum),
 			}
 
@@ -76,7 +76,7 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 		}
 
 		version := &types.Version{
-			BlockNum: block.GetHeader().GetNumber(),
+			BlockNum: block.GetHeader().GetBaseHeader().GetNumber(),
 			TxNum:    userAdminTxIndex,
 		}
 
@@ -94,7 +94,7 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 		}
 
 		version := &types.Version{
-			BlockNum: block.GetHeader().GetNumber(),
+			BlockNum: block.GetHeader().GetBaseHeader().GetNumber(),
 			TxNum:    dbAdminTxIndex,
 		}
 
@@ -109,7 +109,7 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 		}
 
 		version := &types.Version{
-			BlockNum: block.GetHeader().GetNumber(),
+			BlockNum: block.GetHeader().GetBaseHeader().GetNumber(),
 			TxNum:    configTxIndex,
 		}
 
@@ -128,7 +128,7 @@ func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*t
 	}
 
 	if err := c.db.Commit(dbsUpdates); err != nil {
-		return errors.WithMessagef(err, "failed to commit block %d to state database", block.Header.Number)
+		return errors.WithMessagef(err, "failed to commit block %d to state database", block.GetHeader().GetBaseHeader().GetNumber())
 	}
 	return nil
 }

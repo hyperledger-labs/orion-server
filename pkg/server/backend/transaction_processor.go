@@ -38,7 +38,7 @@ type txProcessorConfig struct {
 	logger             *logger.SugarLogger
 }
 
-func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
+func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, error) {
 	p := &transactionProcessor{}
 
 	p.logger = conf.logger
@@ -56,7 +56,8 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 		},
 	)
 
-	p.blockCreator = blockcreator.New(
+	var err error
+	if p.blockCreator, err = blockcreator.New(
 		&blockcreator.Config{
 			TxBatchQueue:    p.txBatchQueue,
 			BlockQueue:      p.blockQueue,
@@ -64,7 +65,9 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 			Logger:          conf.logger,
 			BlockStore:      conf.blockStore,
 		},
-	)
+	); err != nil {
+		return nil, err
+	}
 
 	p.blockProcessor = blockprocessor.New(
 		&blockprocessor.Config{
@@ -79,7 +82,7 @@ func newTransactionProcessor(conf *txProcessorConfig) *transactionProcessor {
 	go p.blockCreator.Run()
 	go p.blockProcessor.Run()
 
-	return p
+	return p, nil
 }
 
 // submitTransaction enqueue the transaction to the transaction queue

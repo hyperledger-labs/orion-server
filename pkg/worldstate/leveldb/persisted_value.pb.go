@@ -5,9 +5,10 @@ package leveldb
 
 import (
 	fmt "fmt"
+	math "math"
+
 	proto "github.com/golang/protobuf/proto"
 	types "github.ibm.com/blockchaindb/protos/types"
-	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

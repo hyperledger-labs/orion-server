@@ -42,7 +42,7 @@ func (b *BlockProcessor) Run() {
 	for {
 		block := b.blockQueue.Dequeue().(*types.Block)
 
-		b.logger.Debugf("validating and commit block %d", block.GetHeader().GetNumber())
+		b.logger.Debugf("validating and commit block %d", block.GetHeader().GetBaseHeader().GetNumber())
 		validationInfo, err := b.validator.validateBlock(block)
 		if err != nil {
 			panic(err)
@@ -53,9 +53,14 @@ func (b *BlockProcessor) Run() {
 		// TODO: validationInfo needs not be passed along with the block as it is
 		// already embedded into the block. In issue 186, the additional passage of
 		// validationInfo will be removed.
+
+		if err := b.blockStore.UpdateBlock(block); err != nil {
+			panic(err)
+		}
+
 		if err = b.committer.commitBlock(block, validationInfo); err != nil {
 			panic(err)
 		}
-		b.logger.Debugf("validated and committed block %d\n", block.Header.Number)
+		b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
 	}
 }

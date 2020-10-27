@@ -9,7 +9,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
@@ -82,13 +81,14 @@ func newTestEnv(t *testing.T) *testEnv {
 		}
 	}
 
-	b := New(&Config{
+	b, err := New(&Config{
 		TxBatchQueue:    queue.New(10),
 		BlockQueue:      queue.New(10),
 		NextBlockNumber: 1,
 		Logger:          logger,
 		BlockStore:      blockStore,
 	})
+	require.NoError(t, err)
 	go b.Run()
 
 	return &testEnv{
@@ -173,10 +173,9 @@ func TestBatchCreator(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                   string
-		txBatches              []interface{}
-		expectedBlocks         []*types.Block
-		expectedSkipListHeight []int
+		name           string
+		txBatches      []interface{}
+		expectedBlocks []*types.Block
 	}{
 		{
 			name: "enqueue all types of transactions",
@@ -202,7 +201,10 @@ func TestBatchCreator(t *testing.T) {
 			expectedBlocks: []*types.Block{
 				{
 					Header: &types.BlockHeader{
-						Number: 1,
+						BaseHeader: &types.BlockHeaderBase{
+							Number:                1,
+							LastCommittedBlockNum: 0,
+						},
 					},
 					Payload: &types.Block_UserAdministrationTxEnvelope{
 						UserAdministrationTxEnvelope: userAdminTx,
@@ -215,7 +217,9 @@ func TestBatchCreator(t *testing.T) {
 				},
 				{
 					Header: &types.BlockHeader{
-						Number: 2,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 2,
+						},
 					},
 					Payload: &types.Block_DBAdministrationTxEnvelope{
 						DBAdministrationTxEnvelope: dbAdminTx,
@@ -228,7 +232,9 @@ func TestBatchCreator(t *testing.T) {
 				},
 				{
 					Header: &types.BlockHeader{
-						Number: 3,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 3,
+						},
 					},
 					Payload: &types.Block_DataTxEnvelopes{
 						DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -249,7 +255,9 @@ func TestBatchCreator(t *testing.T) {
 				},
 				{
 					Header: &types.BlockHeader{
-						Number: 4,
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 4,
+						},
 					},
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: configTx,
@@ -261,15 +269,26 @@ func TestBatchCreator(t *testing.T) {
 					},
 				},
 			},
-			expectedSkipListHeight: []int{
-				0, 1, 2, 1,
-			},
 		},
 	}
 	for _, tt := range testCases {
-		// Update test case blocks skip list hashes
+		// updating test case blocks PrevCommitted block. We make it block 0, to keep thing simple
+		genesisBlockHash, err := blockstore.ComputeBlockHash(tt.expectedBlocks[0])
+		require.NoError(t, err)
+		for _, expectedBlock := range tt.expectedBlocks[1:] {
+			expectedBlock.Header.BaseHeader.LastCommittedBlockNum = 1
+			expectedBlock.Header.BaseHeader.LastCommittedBlockHash = genesisBlockHash
+		}
+		// Update test case blocks prev hashes
 		for index, expectedBlock := range tt.expectedBlocks {
-			expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, tt.expectedBlocks, expectedBlock.Header.Number, tt.expectedSkipListHeight[index])
+			var prevBlockHash []byte
+			prevBlockHash = nil
+			if index > 0 {
+				var err error
+				prevBlockHash, err = blockstore.ComputeBlockBaseHash(tt.expectedBlocks[index-1])
+				require.NoError(t, err)
+			}
+			expectedBlock.Header.BaseHeader.PreviousBaseHeaderHash = prevBlockHash
 		}
 	}
 
@@ -289,85 +308,21 @@ func TestBatchCreator(t *testing.T) {
 		for _, expectedBlock := range expectedBlocks {
 			block := testEnv.creator.blockQueue.Dequeue().(*types.Block)
 			block.TxValidationInfo = expectedBlock.TxValidationInfo
-			require.True(t, proto.Equal(expectedBlock, block))
+			require.True(t, proto.Equal(expectedBlock, block), "Expected block  %v, received block %v", expectedBlock, block)
 		}
 	}
 
-	t.Run("access hash from the blockstore", func(t *testing.T) {
-		for _, tt := range testCases {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-				testEnv := newTestEnv(t)
-				defer testEnv.cleanup()
+			testEnv := newTestEnv(t)
+			defer testEnv.cleanup()
 
-				// storing the block in block store so that the hash would be fetched from the store itself
-				for _, expectedBlock := range tt.expectedBlocks {
-					require.NoError(t, testEnv.blockStore.Commit(expectedBlock))
-				}
+			// storing only first block in block store, to simulate last committed block
+			require.NoError(t, testEnv.blockStore.Commit(tt.expectedBlocks[0]))
 
-				enqueueTxBatchesAndAssertBlocks(t, testEnv, tt.txBatches, tt.expectedBlocks)
-			})
-		}
-	})
-
-	t.Run("access hash from the cache", func(t *testing.T) {
-		for _, tt := range testCases {
-			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
-
-				testEnv := newTestEnv(t)
-				defer testEnv.cleanup()
-
-				// storing the block hash in the cache so that the hash would be fetched from the cache rather than
-				// from the block store
-				for _, expectedBlock := range tt.expectedBlocks {
-					h, err := blockstore.ComputeBlockHash(expectedBlock)
-					require.NoError(t, err)
-					testEnv.creator.blockHashCache.Put(expectedBlock.Header.Number, h)
-				}
-
-				enqueueTxBatchesAndAssertBlocks(t, testEnv, tt.txBatches, tt.expectedBlocks)
-			})
-		}
-	})
-}
-
-func TestCache(t *testing.T) {
-	t.Run("testing block hashes cache", func(t *testing.T) {
-		t.Parallel()
-		cache := newCache(2)
-
-		cache.Put(uint64(0), []byte{0})
-		cache.Put(uint64(1), []byte{1})
-
-		require.Equal(t, []byte{0}, cache.Get(uint64(0)))
-		require.Equal(t, []byte{1}, cache.Get(uint64(1)))
-		require.Nil(t, cache.Get(uint64(2)))
-
-		cache.Put(uint64(2), []byte{2})
-		require.Equal(t, []byte{2}, cache.Get(uint64(2)))
-		require.Equal(t, []byte{1}, cache.Get(uint64(1)))
-		require.Nil(t, cache.Get(uint64(0)))
-	})
-
-}
-
-func calculateBlockHashes(t *testing.T, blocks []*types.Block, blockNum uint64, expectedHeight int) [][]byte {
-	res := make([][]byte, 0)
-	distance := uint64(1)
-	blockNum -= 1
-
-	for (blockNum%distance) == 0 && distance <= blockNum {
-		index := blockNum - distance
-		headerBytes, err := proto.Marshal(blocks[index].Header)
-		require.NoError(t, err)
-		blockHash, err := crypto.ComputeSHA256Hash(headerBytes)
-		require.NoError(t, err)
-
-		res = append(res, blockHash)
-		distance *= skipListBase
+			enqueueTxBatchesAndAssertBlocks(t, testEnv, tt.txBatches, tt.expectedBlocks)
+		})
 	}
-	require.Equal(t, expectedHeight, len(res))
-	return res
 }

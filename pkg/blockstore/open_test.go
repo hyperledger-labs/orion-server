@@ -167,9 +167,10 @@ func TestOpenStore(t *testing.T) {
 		for blockNumber := uint64(1); blockNumber <= totalBlocks; blockNumber++ {
 			b := &types.Block{
 				Header: &types.BlockHeader{
-					Number:           blockNumber,
-					SkipchainHashes:  [][]byte{[]byte(fmt.Sprintf("hash-%d", blockNumber-1))},
-					TransactionsHash: []byte(fmt.Sprintf("hash-%d", blockNumber)),
+					BaseHeader: &types.BlockHeaderBase{
+						Number:                 blockNumber,
+						PreviousBaseHeaderHash: []byte(fmt.Sprintf("hash-%d", blockNumber-1)),
+					},
 				},
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{

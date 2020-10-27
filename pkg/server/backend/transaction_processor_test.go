@@ -93,7 +93,8 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		batchTimeout:       50 * time.Millisecond,
 		logger:             logger,
 	}
-	txProcessor := newTransactionProcessor(txProcConf)
+	txProcessor, err := newTransactionProcessor(txProcConf)
+	require.NoError(t, err)
 
 	return &txProcessorTestEnv{
 		dbPath:         dbPath,
@@ -146,6 +147,12 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		}
 		require.NoError(t, env.db.Commit(createUser))
+		genesisCommitted := func() bool {
+			height, _ := env.blockStore.Height()
+			return height > uint64(0)
+		}
+		require.Eventually(t, genesisCommitted, time.Second+5, time.Millisecond*100)
+
 	}
 
 	t.Run("commit a data transaction", func(t *testing.T) {
@@ -202,12 +209,19 @@ func TestTransactionProcessor(t *testing.T) {
 		genesisHash, err := env.blockStore.GetHash(1)
 		require.NoError(t, err)
 		require.NotNil(t, genesisHash)
+		genesisHashBase, err := env.blockStore.GetBaseHeaderHash(1)
+		require.NoError(t, err)
+		require.NotNil(t, genesisHashBase)
 
 		expectedBlock := &types.Block{
 			Header: &types.BlockHeader{
-				Number:           2,
-				SkipchainHashes:  [][]byte{genesisHash},
-				TransactionsHash: nil,
+				BaseHeader: &types.BlockHeaderBase{
+					Number:                 2,
+					PreviousBaseHeaderHash: genesisHashBase,
+					LastCommittedBlockHash: genesisHash,
+					LastCommittedBlockNum:  1,
+				},
+				SkipchainHashes: [][]byte{genesisHash},
 			},
 			Payload: &types.Block_DataTxEnvelopes{
 				DataTxEnvelopes: &types.DataTxEnvelopes{
