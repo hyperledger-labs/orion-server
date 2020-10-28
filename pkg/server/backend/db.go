@@ -11,6 +11,7 @@ import (
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
+	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -43,14 +44,18 @@ type DB interface {
 	// creating required system tables to include database meta data
 	BootstrapDB(conf *config.Configurations) error
 
+	// IsReady returns true once instance of the DB is properly initiated, meaning
+	// all system tables was created successfully
+	IsReady() (bool, error)
+
 	// Close frees and closes resources allocated by database instance
 	Close() error
 }
 
 type db struct {
-	*queryProcessor
-	*transactionProcessor
-	logger *logger.SugarLogger
+	queryProcessor *queryProcessor
+	txProcessor    *transactionProcessor
+	logger         *logger.SugarLogger
 }
 
 func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error) {
@@ -113,45 +118,45 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 	}
 
 	return &db{
-		queryProcessor:       newQueryProcessor(qProcConfig),
-		transactionProcessor: txProcessor,
-		logger:               logger,
+		queryProcessor: newQueryProcessor(qProcConfig),
+		txProcessor:    txProcessor,
+		logger:         logger,
 	}, nil
 }
 
 // LedgerHeight returns ledger height
 func (d *db) LedgerHeight() (uint64, error) {
-	return d.blockStore.Height()
+	return d.queryProcessor.blockStore.Height()
 }
 
 // DoesUserExist checks whenever userID exists
 func (d *db) DoesUserExist(userID string) (bool, error) {
-	return d.identityQuerier.DoesUserExist(userID)
+	return d.queryProcessor.identityQuerier.DoesUserExist(userID)
 }
 
 // GetUser returns user's record
 func (d *db) GetUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error) {
-	return d.getUser(querierUserID, targetUserID)
+	return d.queryProcessor.getUser(querierUserID, targetUserID)
 }
 
 // GetConfig returns database configuration
 func (d *db) GetConfig() (*types.GetConfigResponseEnvelope, error) {
-	return d.getConfig()
+	return d.queryProcessor.getConfig()
 }
 
 // GetDBStatus returns database status
 func (d *db) GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
-	return d.GetDBStatus(dbName)
+	return d.queryProcessor.getDBStatus(dbName)
 }
 
 // SubmitTransaction submits transaction
 func (d *db) SubmitTransaction(tx interface{}) error {
-	return d.submitTransaction(tx)
+	return d.txProcessor.submitTransaction(tx)
 }
 
 // GetData returns value for provided key
 func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
-	return d.getData(dbName, querierUserID, key)
+	return d.queryProcessor.getData(dbName, querierUserID, key)
 }
 
 // Close closes and release resources used by db
@@ -160,7 +165,7 @@ func (d *db) Close() error {
 		return err
 	}
 
-	return d.transactionProcessor.close()
+	return d.txProcessor.close()
 }
 
 // BootstrapDB bootstraps DB with system tables
@@ -170,10 +175,28 @@ func (d *db) BootstrapDB(conf *config.Configurations) error {
 		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
 	}
 
-	if err := d.submitTransaction(configTx); err != nil {
+	if err := d.txProcessor.submitTransaction(configTx); err != nil {
 		return errors.Wrap(err, "error while committing configuration transaction")
 	}
 	return nil
+}
+
+// IsReady returns true once instance of the DB is properly initiated, meaning
+// all system tables was created successfully
+func (d *db) IsReady() (bool, error) {
+	for _, dbName := range worldstate.SystemDBs() {
+		status, err := d.queryProcessor.getDBStatus(dbName)
+		if err != nil {
+			return false, err
+		}
+
+		if status.GetPayload().GetExist() {
+			continue
+		}
+		return false, nil
+	}
+
+	return true, nil
 }
 
 type certsInGenesisConfig struct {

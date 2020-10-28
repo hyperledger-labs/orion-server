@@ -155,6 +155,27 @@ func (_m *DB) GetUser(querierUserID string, targetUserID string) (*types.GetUser
 	return r0, r1
 }
 
+// IsReady provides a mock function with given fields:
+func (_m *DB) IsReady() (bool, error) {
+	ret := _m.Called()
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func() bool); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // LedgerHeight provides a mock function with given fields:
 func (_m *DB) LedgerHeight() (uint64, error) {
 	ret := _m.Called()
