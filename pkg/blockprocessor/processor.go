@@ -62,10 +62,7 @@ func (b *BlockProcessor) Run(stopBlockProcessing chan struct{}) {
 				panic(err)
 			}
 
-			// TODO: validationInfo needs not be passed along with the block as it is
-			// already embedded into the block. In issue 186, the additional passage of
-			// validationInfo will be removed.
-			if err = b.committer.commitBlock(block, validationInfo); err != nil {
+			if err = b.committer.commitBlock(block); err != nil {
 				panic(err)
 			}
 			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
@@ -113,7 +110,7 @@ func (b *BlockProcessor) recoverWorldStateDBIfNeeded() error {
 			return err
 		}
 
-		if err := b.committer.commitToStateDB(block, block.Header.ValidationInfo); err != nil {
+		if err := b.committer.commitToStateDB(block); err != nil {
 			return err
 		}
 	}

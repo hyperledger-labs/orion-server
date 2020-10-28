@@ -33,12 +33,12 @@ func newCommitter(conf *Config) *committer {
 	}
 }
 
-func (c *committer) commitBlock(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
+func (c *committer) commitBlock(block *types.Block) error {
 	if err := c.commitToBlockStore(block); err != nil {
 		return errors.WithMessagef(err, "error while committing block %d to the block store", block.Header.BaseHeader.Number)
 	}
 
-	return c.commitToStateDB(block, blockValidationInfo)
+	return c.commitToStateDB(block)
 	//TODO: add code to commit to provenance store
 }
 
@@ -46,8 +46,9 @@ func (c *committer) commitToBlockStore(block *types.Block) error {
 	return c.blockStore.Commit(block)
 }
 
-func (c *committer) commitToStateDB(block *types.Block, blockValidationInfo []*types.ValidationInfo) error {
+func (c *committer) commitToStateDB(block *types.Block) error {
 	var dbsUpdates []*worldstate.DBUpdates
+	blockValidationInfo := block.Header.ValidationInfo
 
 	switch block.Payload.(type) {
 	case *types.Block_DataTxEnvelopes:

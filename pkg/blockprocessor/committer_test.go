@@ -149,14 +149,7 @@ func TestCommitter(t *testing.T) {
 			},
 		}
 
-		err := env.committer.commitBlock(
-			block1,
-			[]*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
-				},
-			},
-		)
+		err := env.committer.commitBlock(block1)
 		require.NoError(t, err)
 
 		height, err := env.blockStore.Height()
@@ -452,6 +445,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 					BaseHeader: &types.BlockHeaderBase{
 						Number: 2,
 					},
+					ValidationInfo: tt.valInfo,
 				},
 				Payload: &types.Block_DataTxEnvelopes{
 					DataTxEnvelopes: &types.DataTxEnvelopes{
@@ -459,7 +453,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 					},
 				},
 			}
-			require.NoError(t, env.committer.commitToStateDB(block, tt.valInfo))
+			require.NoError(t, env.committer.commitToStateDB(block))
 
 			for _, kv := range tt.expectedDataAfter {
 				val, meta, err := env.db.Get(worldstate.DefaultDBName, kv.Key)
@@ -600,6 +594,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 					BaseHeader: &types.BlockHeaderBase{
 						Number: 2,
 					},
+					ValidationInfo: tt.valInfo,
 				},
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
@@ -607,7 +602,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 					},
 				},
 			}
-			require.NoError(t, env.committer.commitToStateDB(block, tt.valInfo))
+			require.NoError(t, env.committer.commitToStateDB(block))
 
 			for _, user := range tt.expectedUsersAfter {
 				exist, err := env.identityQuerier.DoesUserExist(user)
@@ -711,6 +706,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 					BaseHeader: &types.BlockHeaderBase{
 						Number: 2,
 					},
+					ValidationInfo: tt.valInfo,
 				},
 				Payload: &types.Block_DBAdministrationTxEnvelope{
 					DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
@@ -718,7 +714,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 					},
 				},
 			}
-			require.NoError(t, env.committer.commitToStateDB(block, tt.valInfo))
+			require.NoError(t, env.committer.commitToStateDB(block))
 
 			for _, dbName := range tt.expectedDBsAfter {
 				require.True(t, env.db.Exist(dbName))
@@ -730,7 +726,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 func TestStateDBCommitterForConfigBlock(t *testing.T) {
 	t.Parallel()
 
-	generateSampleConfigBlock := func(number uint64, adminsID []string) *types.Block {
+	generateSampleConfigBlock := func(number uint64, adminsID []string, valInfo []*types.ValidationInfo) *types.Block {
 		var admins []*types.Admin
 		for _, id := range adminsID {
 			admins = append(admins, &types.Admin{
@@ -757,6 +753,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 				BaseHeader: &types.BlockHeaderBase{
 					Number: number,
 				},
+				ValidationInfo: valInfo,
 			},
 			Payload: &types.Block_ConfigTxEnvelope{
 				ConfigTxEnvelope: &types.ConfigTxEnvelope{
@@ -851,20 +848,20 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			defer env.cleanup()
 
 			var blockNumber uint64
-			valInfo := []*types.ValidationInfo{
+
+			validationInfo := []*types.ValidationInfo{
 				{
 					Flag: types.Flag_VALID,
 				},
 			}
-
 			blockNumber = 1
-			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx)
-			env.committer.commitToStateDB(configBlock, valInfo)
+			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx, validationInfo)
+			env.committer.commitToStateDB(configBlock)
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsBefore)
 
 			blockNumber++
-			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx)
-			env.committer.commitToStateDB(configBlock, tt.valInfo)
+			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx, tt.valInfo)
+			env.committer.commitToStateDB(configBlock)
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsAfter)
 		})
 	}

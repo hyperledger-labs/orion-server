@@ -401,7 +401,7 @@ func TestFailureAndRecovery(t *testing.T) {
 				Flag: types.Flag_VALID,
 			},
 		}
-		require.NoError(t, env.blockProcessor.committer.commitToStateDB(block2, block2.Header.ValidationInfo))
+		require.NoError(t, env.blockProcessor.committer.commitToStateDB(block2))
 
 		blockStoreHeight, err := env.blockStore.Height()
 		require.NoError(t, err)
