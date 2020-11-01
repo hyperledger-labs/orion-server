@@ -30,7 +30,6 @@ type transactionProcessor struct {
 type txProcessorConfig struct {
 	db                 worldstate.DB
 	blockStore         *blockstore.Store
-	blockHeight        uint64
 	txQueueLength      uint32
 	txBatchQueueLength uint32
 	blockQueueLength   uint32
@@ -60,11 +59,10 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	var err error
 	if p.blockCreator, err = blockcreator.New(
 		&blockcreator.Config{
-			TxBatchQueue:    p.txBatchQueue,
-			BlockQueue:      p.blockQueue,
-			NextBlockNumber: conf.blockHeight + 1,
-			Logger:          conf.logger,
-			BlockStore:      conf.blockStore,
+			TxBatchQueue: p.txBatchQueue,
+			BlockQueue:   p.blockQueue,
+			Logger:       conf.logger,
+			BlockStore:   conf.blockStore,
 		},
 	); err != nil {
 		return nil, err

@@ -22,23 +22,27 @@ type BlockCreator struct {
 // Config holds the configuration information required to initialize the
 // block creator
 type Config struct {
-	TxBatchQueue    *queue.Queue
-	BlockQueue      *queue.Queue
-	NextBlockNumber uint64
-	BlockStore      *blockstore.Store
-	Logger          *logger.SugarLogger
+	TxBatchQueue *queue.Queue
+	BlockQueue   *queue.Queue
+	BlockStore   *blockstore.Store
+	Logger       *logger.SugarLogger
 }
 
 // New creates a new block assembler
 func New(conf *Config) (*BlockCreator, error) {
-	lastBlockBaseHash, err := conf.BlockStore.GetBaseHeaderHash(conf.NextBlockNumber - 1)
+	height, err := conf.BlockStore.Height()
+	if err != nil {
+		return nil, err
+	}
+
+	lastBlockBaseHash, err := conf.BlockStore.GetBaseHeaderHash(height)
 	if err != nil {
 		return nil, err
 	}
 	return &BlockCreator{
 		txBatchQueue:                conf.TxBatchQueue,
 		blockQueue:                  conf.BlockQueue,
-		nextBlockNumber:             conf.NextBlockNumber,
+		nextBlockNumber:             height + 1,
 		logger:                      conf.Logger,
 		blockStore:                  conf.BlockStore,
 		previousBlockHeaderBaseHash: lastBlockBaseHash,
@@ -95,10 +99,10 @@ func (b *BlockCreator) Run() {
 
 func (b *BlockCreator) createBaseHeader(blockNum uint64) (*types.BlockHeaderBase, error) {
 	baseHeader := &types.BlockHeaderBase{
-			Number:                 blockNum,
-			PreviousBaseHeaderHash: b.previousBlockHeaderBaseHash,
-			TxMerkelTreeRootHash:   nil,
-		}
+		Number:                 blockNum,
+		PreviousBaseHeaderHash: b.previousBlockHeaderBaseHash,
+		TxMerkelTreeRootHash:   nil,
+	}
 
 	if blockNum > 1 {
 		lastCommittedBlockNum, err := b.blockStore.Height()

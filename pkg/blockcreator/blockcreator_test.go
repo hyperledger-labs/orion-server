@@ -82,11 +82,10 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 
 	b, err := New(&Config{
-		TxBatchQueue:    queue.New(10),
-		BlockQueue:      queue.New(10),
-		NextBlockNumber: 1,
-		Logger:          logger,
-		BlockStore:      blockStore,
+		TxBatchQueue: queue.New(10),
+		BlockQueue:   queue.New(10),
+		Logger:       logger,
+		BlockStore:   blockStore,
 	})
 	require.NoError(t, err)
 	go b.Run()

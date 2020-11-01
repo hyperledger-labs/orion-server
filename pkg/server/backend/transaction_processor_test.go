@@ -85,7 +85,6 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	txProcConf := &txProcessorConfig{
 		db:                 db,
 		blockStore:         blockStore,
-		blockHeight:        0,
 		txQueueLength:      100,
 		txBatchQueueLength: 100,
 		blockQueueLength:   100,
