@@ -249,6 +249,7 @@ func (l *LevelDB) create(dbName string) error {
 	defer l.dbsList.Unlock()
 
 	if _, ok := l.dbs[dbName]; ok {
+		l.logger.Debugf("Skipping %s cause database already exists", dbName)
 		return nil
 	}
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )
@@ -14,6 +15,7 @@ type usersRequestHandler struct {
 	db        backend.DB
 	router    *mux.Router
 	txHandler *txHandler
+	logger    *logger.SugarLogger
 }
 
 func (u *usersRequestHandler) ServeHTTP(responseWriter http.ResponseWriter, request *http.Request) {
@@ -50,6 +52,7 @@ func (u *usersRequestHandler) getUser(response http.ResponseWriter, request *htt
 			status,
 			&ResponseErr{"error while processing [" + request.URL.String() + "] because " + err.Error()},
 		)
+		u.logger.Errorf("failed to process request, due to %s", err.Error())
 		return
 	}
 
@@ -71,13 +74,14 @@ func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, requ
 }
 
 // NewUsersRequestHandler creates users request handler
-func NewUsersRequestHandler(db backend.DB) *usersRequestHandler {
+func NewUsersRequestHandler(db backend.DB, logger *logger.SugarLogger) *usersRequestHandler {
 	handler := &usersRequestHandler{
 		db:     db,
 		router: mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,
 		},
+		logger: logger,
 	}
 
 	// HTTP GET "/user/{userid}" get user record with given userID

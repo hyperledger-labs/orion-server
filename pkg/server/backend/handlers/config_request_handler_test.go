@@ -13,10 +13,22 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
 )
+
+func createLogger(logLevel string) (*logger.SugarLogger, error) {
+	c := &logger.Config{
+		Level:         logLevel,
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	}
+	logger, err := logger.New(c)
+	return logger, err
+}
 
 func TestConfigRequestHandler_GetConfig(t *testing.T) {
 	submittingUserName := "admin"
@@ -145,6 +157,10 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 		},
 	}
 
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
 	for _, tt := range testCases {
 		t.Run(fmt.Sprintf("GetConfig %s", tt.name), func(t *testing.T) {
 			t.Parallel()
@@ -154,7 +170,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			db := tt.dbMockFactory(tt.expectedResponse)
 
 			rr := httptest.NewRecorder()
-			handler := NewConfigRequestHandler(db)
+			handler := NewConfigRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -299,6 +315,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 		},
 	}
 
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -315,7 +335,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			rr := httptest.NewRecorder()
 			require.NotNil(t, rr)
 
-			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, tt.configTx))
+			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, tt.configTx), logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)

@@ -160,6 +160,10 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 		},
 	}
 
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			req, err := tt.requestFactory()
@@ -167,7 +171,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 			require.NotNil(t, req)
 
 			db := tt.dbMockFactory(tt.expectedResponse)
-			handler := NewDBRequestHandler(db)
+			handler := NewDBRequestHandler(db, logger)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
@@ -263,6 +267,10 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 		},
 	}
 
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -280,7 +288,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 			rr := httptest.NewRecorder()
 
 			db := tt.createMockAndInstrument(t, tt.dataTx)
-			handler := NewDBRequestHandler(db)
+			handler := NewDBRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)

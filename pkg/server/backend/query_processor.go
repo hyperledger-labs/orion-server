@@ -14,6 +14,7 @@ type queryProcessor struct {
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier
+	logger          *logger.SugarLogger
 }
 
 type queryProcessorConfig struct {
@@ -29,6 +30,7 @@ func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 		db:              conf.db,
 		blockStore:      conf.blockStore,
 		identityQuerier: identity.NewQuerier(conf.db),
+		logger:          conf.logger,
 	}
 }
 

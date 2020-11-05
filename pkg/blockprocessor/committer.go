@@ -81,7 +81,7 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 			TxNum:    userAdminTxIndex,
 		}
 
-		tx := block.GetUserAdministrationTxEnvelope().Payload
+		tx := block.GetUserAdministrationTxEnvelope().GetPayload()
 		entries, err := identity.ConstructDBEntriesForUserAdminTx(tx, version)
 		if err != nil {
 			return errors.WithMessage(err, "error while creating entries for the user admin transaction")

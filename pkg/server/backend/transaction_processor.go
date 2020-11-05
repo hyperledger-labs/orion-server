@@ -99,9 +99,10 @@ func (t *transactionProcessor) submitTransaction(tx interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal transaction: %v", err)
 	}
-	t.logger.Debugf("enqueing transaction %s\n", string(jsonBytes))
+	t.logger.Debugf("enqueuing transaction %s\n", string(jsonBytes))
 
 	t.txQueue.Enqueue(tx)
+	t.logger.Debug("transaction is enqueued for re-ordering")
 
 	return nil
 }

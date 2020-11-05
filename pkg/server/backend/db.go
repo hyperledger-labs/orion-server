@@ -11,7 +11,6 @@ import (
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/fileops"
-	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
 
@@ -178,19 +177,11 @@ func (d *db) BootstrapDB(conf *config.Configurations) error {
 // IsReady returns true once instance of the DB is properly initiated, meaning
 // all system tables was created successfully
 func (d *db) IsReady() (bool, error) {
-	for _, dbName := range worldstate.SystemDBs() {
-		status, err := d.queryProcessor.getDBStatus(dbName)
-		if err != nil {
-			return false, err
-		}
-
-		if status.GetPayload().GetExist() {
-			continue
-		}
-		return false, nil
+	height, err := d.LedgerHeight()
+	if err != nil {
+		return false, err
 	}
-
-	return true, nil
+	return height > 0, nil
 }
 
 type certsInGenesisConfig struct {

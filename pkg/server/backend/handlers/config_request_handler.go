@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )
@@ -14,6 +15,7 @@ type configRequestHandler struct {
 	db        backend.DB
 	router    *mux.Router
 	txHandler *txHandler
+	logger    *logger.SugarLogger
 }
 
 func (c *configRequestHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -54,13 +56,14 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 }
 
 // NewConfigRequestHandler return config transactions request handler
-func NewConfigRequestHandler(db backend.DB) *configRequestHandler {
+func NewConfigRequestHandler(db backend.DB, logger *logger.SugarLogger) *configRequestHandler {
 	handler := &configRequestHandler{
 		db:     db,
 		router: mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,
 		},
+		logger: logger,
 	}
 
 	handler.router.HandleFunc(constants.GetConfig, handler.configQuery).Methods(http.MethodGet)

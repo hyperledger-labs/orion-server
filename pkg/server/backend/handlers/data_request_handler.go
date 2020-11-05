@@ -6,6 +6,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )
@@ -14,6 +15,7 @@ type dataRequestHandler struct {
 	db        backend.DB
 	router    *mux.Router
 	txHandler *txHandler
+	logger    *logger.SugarLogger
 }
 
 func (d *dataRequestHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -36,6 +38,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 			})
 		return
 	}
+
 	key, ok := params["key"]
 	if !ok {
 		SendHTTPResponse(response,
@@ -85,13 +88,14 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 }
 
 // NewDataRequestHandler returns handler capable to serve incoming data requests
-func NewDataRequestHandler(db backend.DB) *dataRequestHandler {
+func NewDataRequestHandler(db backend.DB, logger *logger.SugarLogger) *dataRequestHandler {
 	handler := &dataRequestHandler{
 		db:     db,
 		router: mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,
 		},
+		logger: logger,
 	}
 
 	handler.router.HandleFunc(constants.GetData, handler.dataQuery).Methods(http.MethodGet)

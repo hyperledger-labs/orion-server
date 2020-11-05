@@ -118,7 +118,7 @@ func (q *Querier) HasReadWriteAccess(userID, dbName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
+	
 	dbPermission := user.GetPrivilege().GetDBPermission()
 	if dbPermission == nil {
 		return false, err

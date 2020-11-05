@@ -165,6 +165,10 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 		},
 	}
 
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -173,7 +177,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 			require.NotNil(t, req)
 
 			db := tt.dbMockFactory(tt.expectedResponse)
-			handler := NewUsersRequestHandler(db)
+			handler := NewUsersRequestHandler(db, logger)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
@@ -322,6 +326,10 @@ func TestUsersRequestHandler_AddUser(t *testing.T) {
 		},
 	}
 
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -339,7 +347,7 @@ func TestUsersRequestHandler_AddUser(t *testing.T) {
 			rr := httptest.NewRecorder()
 
 			db := tt.createMockAndInstrument(t, tt.userTx)
-			handler := NewUsersRequestHandler(db)
+			handler := NewUsersRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)

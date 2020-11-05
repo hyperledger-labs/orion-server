@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
@@ -41,10 +43,10 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(constants.UserEndpoint, handlers.NewUsersRequestHandler(db))
-	mux.Handle(constants.DataEndpoint, handlers.NewDataRequestHandler(db))
-	mux.Handle(constants.DBEndpoint, handlers.NewDBRequestHandler(db))
-	mux.Handle(constants.ConfigEndpoint, handlers.NewConfigRequestHandler(db))
+	mux.Handle(constants.UserEndpoint, handlers.NewUsersRequestHandler(db, logger))
+	mux.Handle(constants.DataEndpoint, handlers.NewDataRequestHandler(db, logger))
+	mux.Handle(constants.DBEndpoint, handlers.NewDBRequestHandler(db, logger))
+	mux.Handle(constants.ConfigEndpoint, handlers.NewConfigRequestHandler(db, logger))
 
 	netConf := conf.Node.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
@@ -69,9 +71,32 @@ func (s *BCDBHTTPServer) Start() error {
 		return err
 	}
 	if blockHeight == 0 {
+		s.logger.Infof("Bootstrapping DB for the first time")
 		if err := s.db.BootstrapDB(s.conf); err != nil {
 			return errors.Wrap(err, "error while preparing and committing config transaction")
 		}
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		// Need to make sure bootstrap is complete before moving forward and allow anyone
+		// to start server
+		// TODO: (bartem) Properly design transaction submission mechanism that will allow to block
+		// until transaction is committed to the ledger, rather than doing polling as it is
+		// done below:
+		go func() {
+			defer wg.Done()
+			for {
+				if ready, err := s.db.IsReady(); err != nil {
+					// Failing to have DB ready, there is nothing to continue
+					// better to panic and user to resolve the issue
+					s.logger.Panicf("Server cannot start because, %s", err)
+				} else if ready {
+					s.logger.Debugf("Server is ready to serve requests")
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}() // TODO: (bartem) this go routine has to be externalized into proper re-try abstraction
+		wg.Wait()
 	}
 
 	s.logger.Infof("Starting the server on %s", s.listen.Addr().String())
@@ -102,4 +127,10 @@ func (s *BCDBHTTPServer) Stop() error {
 	}
 
 	return s.db.Close()
+}
+
+// Port returns port number server allocated to run on
+func (s *BCDBHTTPServer) Port() (port string, err error) {
+	_, port, err = net.SplitHostPort(s.listen.Addr().String())
+	return
 }
