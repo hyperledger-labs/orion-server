@@ -57,9 +57,10 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	}
 
 	qProcConfig := &queryProcessorConfig{
-		nodeID: "test-node-id1",
-		db:     db,
-		logger: logger,
+		nodeID:          "test-node-id1",
+		db:              db,
+		identityQuerier: identity.NewQuerier(db),
+		logger:          logger,
 	}
 
 	return &queryProcessorTestEnv{

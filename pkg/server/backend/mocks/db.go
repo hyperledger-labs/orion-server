@@ -63,6 +63,29 @@ func (_m *DB) DoesUserExist(userID string) (bool, error) {
 	return r0, r1
 }
 
+// GetBlockHeader provides a mock function with given fields: userId, blockNum
+func (_m *DB) GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
+	ret := _m.Called(userId, blockNum)
+
+	var r0 *types.GetBlockResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string, uint64) *types.GetBlockResponseEnvelope); ok {
+		r0 = rf(userId, blockNum)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetBlockResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, uint64) error); ok {
+		r1 = rf(userId, blockNum)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetConfig provides a mock function with given fields:
 func (_m *DB) GetConfig() (*types.GetConfigResponseEnvelope, error) {
 	ret := _m.Called()
@@ -125,6 +148,29 @@ func (_m *DB) GetData(dbName string, querierUserID string, key string) (*types.G
 	var r1 error
 	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
 		r1 = rf(dbName, querierUserID, key)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetLedgerPath provides a mock function with given fields: userId, start, end
+func (_m *DB) GetLedgerPath(userId string, start uint64, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
+	ret := _m.Called(userId, start, end)
+
+	var r0 *types.GetLedgerPathResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string, uint64, uint64) *types.GetLedgerPathResponseEnvelope); ok {
+		r0 = rf(userId, start, end)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetLedgerPathResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, uint64, uint64) error); ok {
+		r1 = rf(userId, start, end)
 	} else {
 		r1 = ret.Error(1)
 	}

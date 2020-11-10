@@ -4,6 +4,8 @@ import (
 	"encoding/pem"
 	"io/ioutil"
 
+	"github.ibm.com/blockchaindb/server/pkg/identity"
+
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
@@ -36,6 +38,12 @@ type DB interface {
 	// GetData retrieves values for given key
 	GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error)
 
+	// GetBlockHeader returns ledger block header
+	GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
+
+	// GetLedgerPath returns list of blocks that forms shortest path in skip list chain in ledger
+	GetLedgerPath(userId string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
+
 	// SubmitTransaction submits transaction to the database
 	SubmitTransaction(tx interface{}) error
 
@@ -52,9 +60,10 @@ type DB interface {
 }
 
 type db struct {
-	queryProcessor *queryProcessor
-	txProcessor    *transactionProcessor
-	logger         *logger.SugarLogger
+	queryProcessor       *queryProcessor
+	txProcessor          *transactionProcessor
+	ledgerQueryProcessor *ledgerQueryProcessor
+	logger               *logger.SugarLogger
 }
 
 func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error) {
@@ -87,11 +96,14 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 		return nil, errors.WithMessage(err, "error while creating the block store")
 	}
 
+	querier := identity.NewQuerier(levelDB)
+
 	qProcConfig := &queryProcessorConfig{
-		nodeID:     conf.Node.Identity.ID,
-		db:         levelDB,
-		blockStore: blockStore,
-		logger:     logger,
+		nodeID:          conf.Node.Identity.ID,
+		db:              levelDB,
+		blockStore:      blockStore,
+		identityQuerier: querier,
+		logger:          logger,
 	}
 
 	txProcConf := &txProcessorConfig{
@@ -110,10 +122,20 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 		return nil, errors.WithMessage(err, "can't initiate tx processor")
 	}
 
+	ledgerQueryProcessorConfig := &ledgerQueryProcessorConfig{
+		nodeID:          conf.Node.Identity.ID,
+		db:              levelDB,
+		blockStore:      blockStore,
+		identityQuerier: querier,
+		logger:          logger,
+	}
+	ledgerQueryProcessor := newLedgerQueryProcessor(ledgerQueryProcessorConfig)
+
 	return &db{
-		queryProcessor: newQueryProcessor(qProcConfig),
-		txProcessor:    txProcessor,
-		logger:         logger,
+		queryProcessor:       newQueryProcessor(qProcConfig),
+		ledgerQueryProcessor: ledgerQueryProcessor,
+		txProcessor:          txProcessor,
+		logger:               logger,
 	}, nil
 }
 
@@ -188,6 +210,14 @@ type certsInGenesisConfig struct {
 	nodeCert   []byte
 	adminCert  []byte
 	rootCACert []byte
+}
+
+func (d *db) GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
+	return d.ledgerQueryProcessor.getBlockHeader(userId, blockNum)
+}
+
+func (d *db) GetLedgerPath(userId string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
+	return d.ledgerQueryProcessor.getPath(userId, start, end)
 }
 
 func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {

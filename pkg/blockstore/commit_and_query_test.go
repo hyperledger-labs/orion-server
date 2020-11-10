@@ -169,12 +169,20 @@ func TestCommitAndQuery(t *testing.T) {
 				blockHeader, err := env.s.GetHeader(blockNumber)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
+				for i, linkedBlockNum := range CalculateSkipListLinks(blockNumber) {
+					linkedBlockHash, err := env.s.GetHash(linkedBlockNum)
+					require.NoError(t, err)
+					require.Equal(t, linkedBlockHash, blockHeader.GetSkipchainHashes()[i])
+				}
 
 				blockHash, err := env.s.GetHash(blockNumber)
 				require.NoError(t, err)
 				expectedHash, err := ComputeBlockHash(expectedBlock)
 				require.NoError(t, err)
 				require.Equal(t, expectedHash, blockHash)
+				storedBlockHash, err := ComputeBlockHash(block)
+				require.NoError(t, err)
+				require.Equal(t, storedBlockHash, blockHash)
 
 				blockHeader, err = env.s.GetHeaderByHash(expectedHash)
 				require.NoError(t, err)
@@ -184,7 +192,6 @@ func TestCommitAndQuery(t *testing.T) {
 				baseHash, err := env.s.GetBaseHeaderHash(blockNumber)
 				require.NoError(t, err)
 				require.Equal(t, expectedBaseHash, baseHash)
-
 			}
 		}
 

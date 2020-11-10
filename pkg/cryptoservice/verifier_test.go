@@ -4,13 +4,14 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"io/ioutil"
+	"path"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice/mocks"
-	"io/ioutil"
-	"path"
-	"testing"
 )
 
 func TestNewVerifier(t *testing.T) {

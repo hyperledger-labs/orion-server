@@ -18,10 +18,11 @@ type queryProcessor struct {
 }
 
 type queryProcessorConfig struct {
-	nodeID     string
-	db         worldstate.DB
-	blockStore *blockstore.Store
-	logger     *logger.SugarLogger
+	nodeID          string
+	db              worldstate.DB
+	blockStore      *blockstore.Store
+	identityQuerier *identity.Querier
+	logger          *logger.SugarLogger
 }
 
 func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
@@ -29,7 +30,7 @@ func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 		nodeID:          conf.nodeID,
 		db:              conf.db,
 		blockStore:      conf.blockStore,
-		identityQuerier: identity.NewQuerier(conf.db),
+		identityQuerier: conf.identityQuerier,
 		logger:          conf.logger,
 	}
 }

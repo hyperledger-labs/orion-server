@@ -47,6 +47,7 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 	mux.Handle(constants.DataEndpoint, handlers.NewDataRequestHandler(db, logger))
 	mux.Handle(constants.DBEndpoint, handlers.NewDBRequestHandler(db, logger))
 	mux.Handle(constants.ConfigEndpoint, handlers.NewConfigRequestHandler(db, logger))
+	mux.Handle(constants.LedgerEndpoint, handlers.NewLedgerRequestHandler(db, logger))
 
 	netConf := conf.Node.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)

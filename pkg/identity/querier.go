@@ -187,6 +187,12 @@ func (q *Querier) HasReadWriteAccessOnTargetUser(srcUser, targetUser string) (bo
 		acl.ReadWriteUsers[srcUser], nil
 }
 
+// HasLedgerAccess check is user has access to ledger data
+// For now, all users has this access, so only user existence validated
+func (q *Querier) HasLedgerAccess(userID string) (bool, error) {
+	return q.DoesUserExist(userID)
+}
+
 type UserNotFoundErr struct {
 	userID string
 }

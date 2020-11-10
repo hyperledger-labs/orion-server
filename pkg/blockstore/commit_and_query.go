@@ -131,7 +131,7 @@ func (s *Store) addIndexForBlock(number uint64, offset int64) error {
 func (s *Store) UpdateBlock(block *types.Block) error {
 	skipListHashes := make([][]byte, 0)
 
-	for _, linkedBlockNum := range skipListLinks(block.Header.GetBaseHeader().GetNumber()) {
+	for _, linkedBlockNum := range CalculateSkipListLinks(block.Header.GetBaseHeader().GetNumber()) {
 
 		hash, err := s.GetHash(linkedBlockNum)
 		if err != nil {
@@ -150,7 +150,7 @@ func skipListHeight(blockNum uint64) uint64 {
 	return 1 + skipListHeight(blockNum/SkipListBase)
 }
 
-func skipListLinks(blockNum uint64) []uint64 {
+func CalculateSkipListLinks(blockNum uint64) []uint64 {
 	links := make([]uint64, 0)
 	if blockNum > 1 {
 		distance := uint64(1)

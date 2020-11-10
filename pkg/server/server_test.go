@@ -2,17 +2,10 @@ package server
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
-	"math/big"
-	"net"
 	"os"
 	"path"
 	"testing"
@@ -24,6 +17,7 @@ import (
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/server/mock"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 )
 
 func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
@@ -33,7 +27,7 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
 		os.RemoveAll(tempDir)
 	})
 
-	rootCAPemCert, caPrivKey, err := generateRootCA("BCDB RootCA", "127.0.0.1")
+	rootCAPemCert, caPrivKey, err := testutils.GenerateRootCA("BCDB RootCA", "127.0.0.1")
 	require.NoError(t, err)
 	require.NotNil(t, rootCAPemCert)
 	require.NotNil(t, caPrivKey)
@@ -47,7 +41,7 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
 	serverRootCACertFile.Write(rootCAPemCert)
 	serverRootCACertFile.Close()
 
-	pemCert, privKey, err := issueCertificate("BCDB Instance", "127.0.0.1", keyPair)
+	pemCert, privKey, err := testutils.IssueCertificate("BCDB Instance", "127.0.0.1", keyPair)
 	require.NoError(t, err)
 
 	pemCertFile, err := os.Create(path.Join(tempDir, "server.pem"))
@@ -60,7 +54,7 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
 	pemPrivKeyFile.Write(privKey)
 	pemPrivKeyFile.Close()
 
-	pemAdminCert, _, err := issueCertificate("BCDB Admin", "127.0.0.1", keyPair)
+	pemAdminCert, _, err := testutils.IssueCertificate("BCDB Admin", "127.0.0.1", keyPair)
 	pemAdminCertFile, err := os.Create(path.Join(tempDir, "admin.pem"))
 	require.NoError(t, err)
 	pemAdminCertFile.Write(pemAdminCert)
@@ -104,76 +98,6 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
 		},
 	})
 	return server, keyPair, err
-}
-
-func issueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certificate) ([]byte, []byte, error) {
-	ca, err := x509.ParseCertificate(rootCAKeyPair.Certificate[0])
-	if err != nil {
-		return nil, nil, err
-	}
-
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, nil, err
-	}
-	pubKey := privKey.Public()
-
-	ip := net.ParseIP(host)
-	template, err := certTemplate(subjectCN, []net.IP{ip})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	certBytes, err := x509.CreateCertificate(rand.Reader, template, ca, pubKey, rootCAKeyPair.PrivateKey)
-
-	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
-	keyBytes, err := x509.MarshalECPrivateKey(privKey)
-	caPvtPemByte := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
-
-	return certPem, caPvtPemByte, nil
-}
-
-func generateRootCA(subjectCN string, host string) ([]byte, []byte, error) {
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, nil, err
-	}
-	pubKey := privKey.Public()
-
-	ip := net.ParseIP(host)
-	template, err := certTemplate(subjectCN, []net.IP{ip})
-	if err != nil {
-		return nil, nil, err
-	}
-	template.KeyUsage |= x509.KeyUsageCertSign
-	template.IsCA = true
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, pubKey, privKey)
-
-	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	keyBytes, err := x509.MarshalECPrivateKey(privKey)
-	keyPem := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
-
-	return certPem, keyPem, nil
-}
-
-func certTemplate(subjectCN string, ips []net.IP) (*x509.Certificate, error) {
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	SN, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return nil, err
-	}
-
-	return &x509.Certificate{
-		Subject:               pkix.Name{CommonName: subjectCN},
-		SerialNumber:          SN,
-		NotBefore:             time.Now().Add(-5 * time.Minute),
-		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		BasicConstraintsValid: true,
-		IPAddresses:           ips,
-	}, nil
 }
 
 func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
@@ -301,7 +225,7 @@ func TestDataQueries_ProvisionNewUser(t *testing.T) {
 	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
 	require.NoError(t, err)
 
-	userCert, _, err := issueCertificate("BCDB User", "127.0.0.1", caKeys)
+	userCert, _, err := testutils.IssueCertificate("BCDB User", "127.0.0.1", caKeys)
 	require.NoError(t, err)
 	certBlock, _ := pem.Decode(userCert)
 

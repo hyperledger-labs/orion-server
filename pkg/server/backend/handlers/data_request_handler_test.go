@@ -271,8 +271,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 						{
 							Key:   "xxx",
 							Value: []byte("yyy"),
-							ACL: &types.AccessControl{
-							},
+							ACL:   &types.AccessControl{},
 						},
 					},
 				},
