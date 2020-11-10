@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"net/http"
 	"strconv"
 
@@ -11,17 +12,19 @@ import (
 )
 
 type ledgerRequestHandler struct {
-	db     backend.DB
-	router *mux.Router
-	logger *logger.SugarLogger
+	db          backend.DB
+	sigVerifier *cryptoservice.SignatureVerifier
+	router      *mux.Router
+	logger      *logger.SugarLogger
 }
 
 // NewLedgerRequestHandler creates users request handler
 func NewLedgerRequestHandler(db backend.DB, logger *logger.SugarLogger) *ledgerRequestHandler {
 	handler := &ledgerRequestHandler{
-		db:     db,
-		router: mux.NewRouter(),
-		logger: logger,
+		db:          db,
+		sigVerifier: cryptoservice.NewVerifier(db),
+		router:      mux.NewRouter(),
+		logger:      logger,
 	}
 
 	// HTTP GET "/ledger/block/{blockId}" gets block header
@@ -37,20 +40,18 @@ func (p *ledgerRequestHandler) ServeHTTP(responseWriter http.ResponseWriter, req
 }
 
 func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request *http.Request) {
-	userID, _, composedErr := ExtractCreds(p.db, response, request)
-	if composedErr {
+	queryEnv, respondedErr := extractBlockQueryEnvelope(request, response)
+	if respondedErr {
 		return
 	}
 
-	params := mux.Vars(request)
-	blockNum, respErr := getUintParam("blockId", params)
-	if respErr != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, respErr)
+	err, code := VerifyQuerySignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, code, err)
 		return
 	}
 
-	//TODO: verify signature
-	data, err := p.db.GetBlockHeader(userID, blockNum)
+	data, err := p.db.GetBlockHeader(queryEnv.Payload.UserID, queryEnv.Payload.BlockNumber)
 	if err != nil {
 		var status int
 
@@ -58,14 +59,14 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 		case *backend.PermissionErr:
 			status = http.StatusForbidden
 		default:
-			status = http.StatusInternalServerError
+			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
 		}
 
 		SendHTTPResponse(
 			response,
 			status,
 			&ResponseErr{
-				Error: "error while processing [" + request.URL.String() + "] because " + err.Error(),
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
 	}
@@ -74,26 +75,18 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 }
 
 func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *http.Request) {
-	userID, _, composedErr := ExtractCreds(p.db, response, request)
-	if composedErr {
+	queryEnv, respondedErr := extractLedgerPathQueryEnvelope(request, response)
+	if respondedErr {
 		return
 	}
 
-	params := mux.Vars(request)
-	startNum, respErr := getUintParam("startId", params)
-	if respErr != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, respErr)
+	err, code := VerifyQuerySignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, code, err)
 		return
 	}
 
-	endNum, respErr := getUintParam("endId", params)
-	if respErr != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, respErr)
-		return
-	}
-
-	//TODO: verify signature
-	data, err := p.db.GetLedgerPath(userID, startNum, endNum)
+	data, err := p.db.GetLedgerPath(queryEnv.Payload.UserID, queryEnv.Payload.StartBlockNumber, queryEnv.Payload.EndBlockNumber)
 	if err != nil {
 		var status int
 
@@ -108,7 +101,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 			response,
 			status,
 			&ResponseErr{
-				Error: "error while processing [" + request.URL.String() + "] because " + err.Error(),
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
 	}
@@ -120,13 +113,13 @@ func getUintParam(key string, params map[string]string) (uint64, *ResponseErr) {
 	valStr, ok := params[key]
 	if !ok {
 		return 0, &ResponseErr{
-			Error: "query error - bad or missing block number literal" + key,
+			ErrMsg: "query error - bad or missing block number literal" + key,
 		}
 	}
 	val, err := strconv.ParseUint(valStr, 10, 64)
 	if err != nil {
 		return 0, &ResponseErr{
-			Error: "query error - bad or missing block number literal " + key + " " + err.Error(),
+			ErrMsg: "query error - bad or missing block number literal " + key + " " + err.Error(),
 		}
 	}
 	return val, nil

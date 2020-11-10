@@ -3,8 +3,10 @@ package handlers
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -16,7 +18,11 @@ import (
 )
 
 func TestBlockQuery(t *testing.T) {
-	submittingUserName := "admin"
+	submittingUserName := "alice"
+	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
+	aliceSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
+	require.NoError(t, err)
 
 	testCases := []struct {
 		name               string
@@ -24,6 +30,7 @@ func TestBlockQuery(t *testing.T) {
 		dbMockFactory      func(response *types.GetBlockResponseEnvelope) backend.DB
 		expectedResponse   *types.GetBlockResponseEnvelope
 		expectedStatusCode int
+		expectedErr        string
 	}{
 		{
 			name: "valid get header request",
@@ -46,13 +53,13 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
 				return db
 			},
@@ -67,45 +74,38 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(false, nil)
-				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
 			},
-			expectedStatusCode: http.StatusForbidden,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
 			name: "no block exist",
-			expectedResponse: &types.GetBlockResponseEnvelope{
-				Signature: []byte{0, 0, 0},
-				Payload: &types.GetBlockResponse{
-					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
-					},
-				},
-			},
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
-				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(nil, errors.New("no such block"))
 				return db
 			},
-			expectedStatusCode: http.StatusOK,
+			expectedStatusCode: http.StatusInternalServerError, // TODO deal with 404 not found, it's not a 5xx
+			expectedErr:        "error while processing 'GET /ledger/block/1' because no such block",
 		},
 	}
 
@@ -115,7 +115,6 @@ func TestBlockQuery(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			req, err := tt.requestFactory()
 			require.NoError(t, err)
 			require.NotNil(t, req)
@@ -126,19 +125,30 @@ func TestBlockQuery(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 
 			if tt.expectedResponse != nil {
 				res := &types.GetBlockResponseEnvelope{}
 				err = json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResponse, res)
+				//TODO verify signature on response
 			}
 		})
 	}
 }
 
 func TestPathQuery(t *testing.T) {
-	submittingUserName := "admin"
+	submittingUserName := "alice"
+	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
+	aliceSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
+	require.NoError(t, err)
 
 	testCases := []struct {
 		name               string
@@ -146,6 +156,7 @@ func TestPathQuery(t *testing.T) {
 		dbMockFactory      func(response *types.GetLedgerPathResponseEnvelope) backend.DB
 		expectedResponse   *types.GetLedgerPathResponseEnvelope
 		expectedStatusCode int
+		expectedErr        string
 	}{
 		{
 			name: "valid get path request",
@@ -175,13 +186,17 @@ func TestPathQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+					UserID:           submittingUserName,
+					StartBlockNumber: 1,
+					EndBlockNumber:   2,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(2)).Return(response, nil)
 				return db
 			},
@@ -196,17 +211,22 @@ func TestPathQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+					UserID:           submittingUserName,
+					StartBlockNumber: 1,
+					EndBlockNumber:   2,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(false, nil)
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(2)).Return(response, nil)
 				return db
 			},
-			expectedStatusCode: http.StatusForbidden,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
 			name:             "no path exist",
@@ -217,17 +237,22 @@ func TestPathQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+					UserID:           submittingUserName,
+					StartBlockNumber: 1,
+					EndBlockNumber:   2,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(2)).Return(response, errors.Errorf("can't find path in blocks skip list between 2 1"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /ledger/path/1/2' because can't find path in blocks skip list between 2 1",
 		},
 	}
 
@@ -248,6 +273,12 @@ func TestPathQuery(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 
 			if tt.expectedResponse != nil {
 				res := &types.GetLedgerPathResponseEnvelope{}

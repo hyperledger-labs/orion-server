@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
 
@@ -25,6 +26,9 @@ type DB interface {
 
 	// DoesUserExist checks whenever user with given userID exists
 	DoesUserExist(userID string) (bool, error)
+
+	// GetCertificate returns the certificate associated with useID, if it exists.
+	GetCertificate(userID string) (*x509.Certificate, error)
 
 	// GetUser retrieves user' record
 	GetUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error)
@@ -147,6 +151,10 @@ func (d *db) LedgerHeight() (uint64, error) {
 // DoesUserExist checks whenever userID exists
 func (d *db) DoesUserExist(userID string) (bool, error) {
 	return d.queryProcessor.identityQuerier.DoesUserExist(userID)
+}
+
+func (d *db) GetCertificate(userID string) (*x509.Certificate, error) {
+	return d.queryProcessor.identityQuerier.GetCertificate(userID)
 }
 
 // GetUser returns user's record

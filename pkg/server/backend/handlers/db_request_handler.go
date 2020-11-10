@@ -8,14 +8,16 @@ import (
 	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )
 
 type dbRequestHandler struct {
-	db        backend.DB
-	router    *mux.Router
-	txHandler *txHandler
-	logger    *logger.SugarLogger
+	db          backend.DB
+	sigVerifier *cryptoservice.SignatureVerifier
+	router      *mux.Router
+	txHandler   *txHandler
+	logger      *logger.SugarLogger
 }
 
 func (d *dbRequestHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -23,27 +25,24 @@ func (d *dbRequestHandler) ServeHTTP(response http.ResponseWriter, request *http
 }
 
 func (d *dbRequestHandler) dbStatus(response http.ResponseWriter, request *http.Request) {
-	_, _, composedErr := ExtractCreds(d.db, response, request)
-	if composedErr {
+	queryEnv, respondedErr := extractDBStatusQueryEnvelope(request, response)
+	if respondedErr {
 		return
 	}
 
-	params := mux.Vars(request)
-	dbName, ok := params["dbname"]
-	if !ok {
-		SendHTTPResponse(response, http.StatusBadRequest, "query error - bad or missing database name")
+	err, status := VerifyQuerySignature(d.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, status, err)
 		return
 	}
 
-	//TODO: verify signature
-
-	dbStatus, err := d.db.GetDBStatus(dbName)
+	dbStatus, err := d.db.GetDBStatus(queryEnv.Payload.DBName)
 	if err != nil {
 		SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
 			&ResponseErr{
-				Error: "error while processing [" + request.URL.String() + "] because " + err.Error(),
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			},
 		)
 		return
@@ -69,8 +68,9 @@ func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *
 // NewDBRequestHandler returns DB requests handler
 func NewDBRequestHandler(db backend.DB, logger *logger.SugarLogger) *dbRequestHandler {
 	handler := &dbRequestHandler{
-		db:     db,
-		router: mux.NewRouter(),
+		db:          db,
+		sigVerifier: cryptoservice.NewVerifier(db),
+		router:      mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,
 		},

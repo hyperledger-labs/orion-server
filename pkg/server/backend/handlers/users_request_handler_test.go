@@ -7,19 +7,29 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
 )
 
 func TestUsersRequestHandler_GetUser(t *testing.T) {
-	submittingUserName := "admin"
-	testUserID := "testUserID"
+	submittingUserName := "alice"
+	targetUserID := "targetUserID"
+
+	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
+	aliceSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
+	require.NoError(t, err)
+	bobSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "bob.key")})
+	require.NoError(t, err)
 
 	testCases := []struct {
 		name               string
@@ -27,23 +37,25 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 		dbMockFactory      func(response *types.GetUserResponseEnvelope) backend.DB
 		expectedResponse   *types.GetUserResponseEnvelope
 		expectedStatusCode int
+		expectedErr        string
 	}{
 		{
 			name: "valid get user data request",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(testUserID), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(targetUserID), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetUserResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
-				db.On("GetUser", submittingUserName, testUserID).Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetUser", submittingUserName, targetUserID).Return(response, nil)
 				return db
 			},
 			expectedResponse: &types.GetUserResponseEnvelope{
@@ -65,27 +77,27 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 		{
 			name: "invalid get user request missing user header",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(testUserID), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(targetUserID), nil)
 				if err != nil {
 					return nil, err
 				}
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetUserResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
-				db.On("GetUser", submittingUserName, testUserID).Return(response, nil)
 				return db
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
 		},
 		{
 			name: "invalid get user request missing user's signature",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(testUserID), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(targetUserID), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -95,73 +107,78 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 			},
 			dbMockFactory: func(response *types.GetUserResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
-				db.On("GetUser", submittingUserName, testUserID).Return(response, nil)
 				return db
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
 		},
 		{
 			name: "invalid get user request, submitting user doesn't exists",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(testUserID), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(targetUserID), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetUserResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(false, nil)
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
 			},
 			expectedResponse:   nil,
-			expectedStatusCode: http.StatusForbidden,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
-			name: "invalid get user request, cannot retrieve submitting user record",
+			name: "invalid get user request, failed to verify submitting user signature",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(testUserID), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(targetUserID), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, bobSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetUserResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(false, errors.New("failed to get user's record"))
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
 			},
 			expectedResponse:   nil,
-			expectedStatusCode: http.StatusInternalServerError,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
 			name: "invalid get user request, failed to get user's data",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(testUserID), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetUser(targetUserID), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetUserResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
-				db.On("GetUser", submittingUserName, testUserID).Return(nil, errors.New("failed to retrieve user record"))
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetUser", submittingUserName, targetUserID).Return(nil, errors.New("failed to retrieve user record"))
 				return db
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /user/targetUserID' because failed to retrieve user record",
 		},
 	}
 
@@ -171,7 +188,6 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			req, err := tt.requestFactory()
 			require.NoError(t, err)
 			require.NotNil(t, req)
@@ -183,6 +199,12 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 
 			if tt.expectedResponse != nil {
 				res := &types.GetUserResponseEnvelope{}

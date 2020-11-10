@@ -8,13 +8,20 @@ import (
 	"net/http"
 
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )
 
 // ResponseErr holds the error response
 type ResponseErr struct {
-	Error string `json:"error,omitempty"`
+	ErrMsg string `json:"error,omitempty"`
+}
+
+func (e *ResponseErr) Error() string {
+	return e.ErrMsg
 }
 
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
@@ -35,7 +42,7 @@ type txHandler struct {
 func (t *txHandler) HandleTransaction(w http.ResponseWriter, userID string, tx interface{}) {
 	exist, err := t.db.DoesUserExist(userID)
 	if err != nil {
-		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
 		return
 	}
 	if !exist {
@@ -43,48 +50,204 @@ func (t *txHandler) HandleTransaction(w http.ResponseWriter, userID string, tx i
 			w,
 			http.StatusForbidden,
 			&ResponseErr{
-				Error: "transaction is rejected as the submitting user [" + userID + "] does not exist in the cluster",
+				ErrMsg: "transaction is rejected as the submitting user [" + userID + "] does not exist in the cluster",
 			},
 		)
 		return
 	}
 
 	if err := t.db.SubmitTransaction(tx); err != nil {
-		SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
+		SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	SendHTTPResponse(w, http.StatusOK, empty.Empty{})
 }
 
-// ExtractCreds extracts user credentials (userID and signature) from the HTTP request body and
-// checks whenever such user exists in the system
-func ExtractCreds(db backend.DB, w http.ResponseWriter, r *http.Request) (string, []byte, bool) {
-	composedErr := true
-
-	querierUserID, signature, err := validateAndParseHeader(&r.Header)
+func extractDataQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetDataQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
 	if err != nil {
-		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{Error: err.Error()})
-		return "", nil, composedErr
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
 	}
 
-	exist, err := db.DoesUserExist(querierUserID)
-	if err != nil {
-		SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{Error: err.Error()})
-		return "", nil, composedErr
-	}
-	if !exist {
-		SendHTTPResponse(
-			w,
-			http.StatusForbidden,
+	params := mux.Vars(request)
+	dbName, ok := params["dbname"]
+	if !ok {
+		SendHTTPResponse(responseWriter,
+			http.StatusBadRequest,
 			&ResponseErr{
-				Error: r.URL.String() + " query is rejected as the submitting user [" + querierUserID + "] does not exist in the cluster",
-			},
-		)
-		return "", nil, composedErr
+				ErrMsg: "query error - bad or missing database name",
+			})
+		return nil, true
+	}
+	key, ok := params["key"]
+	if !ok {
+		SendHTTPResponse(responseWriter,
+			http.StatusBadRequest,
+			&ResponseErr{
+				ErrMsg: "query error - bad or missing key",
+			})
+		return nil, true
 	}
 
-	return querierUserID, signature, !composedErr
+	env = &types.GetDataQueryEnvelope{
+		Payload: &types.GetDataQuery{
+			UserID: querierUserID,
+			DBName: dbName,
+			Key:    key,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
+func extractUserQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetUserQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	params := mux.Vars(request)
+	targetUserID, ok := params["userid"]
+	if !ok {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{"query error - bad or missing userid"})
+		return
+	}
+
+	env = &types.GetUserQueryEnvelope{
+		Payload: &types.GetUserQuery{
+			UserID:       querierUserID,
+			TargetUserID: targetUserID,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
+func extractDBStatusQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetDBStatusQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	params := mux.Vars(request)
+	dbName, ok := params["dbname"]
+	if !ok {
+		SendHTTPResponse(responseWriter,
+			http.StatusBadRequest,
+			&ResponseErr{
+				ErrMsg: "query error - bad or missing database name",
+			})
+		return nil, true
+	}
+
+	env = &types.GetDBStatusQueryEnvelope{
+		Payload: &types.GetDBStatusQuery{
+			UserID: querierUserID,
+			DBName: dbName,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
+func extractConfigQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetConfigQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	env = &types.GetConfigQueryEnvelope{
+		Payload: &types.GetConfigQuery{
+			UserID: querierUserID,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
+func extractLedgerPathQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetLedgerPathQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	params := mux.Vars(request)
+	startNum, respErr := getUintParam("startId", params)
+	if respErr != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
+		return
+	}
+
+	endNum, respErr := getUintParam("endId", params)
+	if respErr != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
+		return
+	}
+
+	env = &types.GetLedgerPathQueryEnvelope{
+		Payload: &types.GetLedgerPathQuery{
+			UserID:           querierUserID,
+			StartBlockNumber: startNum,
+			EndBlockNumber:   endNum,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
+func extractBlockQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetBlockQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	params := mux.Vars(request)
+	blockNum, respErr := getUintParam("blockId", params)
+	if respErr != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
+		return
+	}
+
+	env = &types.GetBlockQueryEnvelope{
+		Payload: &types.GetBlockQuery{
+			UserID:      querierUserID,
+			BlockNumber: blockNum,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
+func VerifyQuerySignature(
+	sigVerifier *cryptoservice.SignatureVerifier,
+	user string,
+	signature []byte,
+	queryPayload interface{},
+) (error, int) {
+	queryBytes, err := json.Marshal(queryPayload)
+	if err != nil {
+		return &ResponseErr{ErrMsg: "failure during json.Marshal: " + err.Error()}, http.StatusInternalServerError
+	}
+
+	err = sigVerifier.Verify(user, signature, queryBytes)
+	if err != nil {
+		return &ResponseErr{ErrMsg: "signature verification failed"}, http.StatusUnauthorized
+	}
+
+	return nil, http.StatusOK
 }
 
 func validateAndParseHeader(h *http.Header) (string, []byte, error) {

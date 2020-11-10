@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"io/ioutil"
 	"os"
 	"path"
@@ -20,7 +22,7 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 )
 
-func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
+func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, string, error) {
 	tempDir, err := ioutil.TempDir("/tmp", "serverTest")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -54,11 +56,16 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
 	pemPrivKeyFile.Write(privKey)
 	pemPrivKeyFile.Close()
 
-	pemAdminCert, _, err := testutils.IssueCertificate("BCDB Admin", "127.0.0.1", keyPair)
+	pemAdminCert, pemAdminKey, err := testutils.IssueCertificate("BCDB Admin", "127.0.0.1", keyPair)
 	pemAdminCertFile, err := os.Create(path.Join(tempDir, "admin.pem"))
 	require.NoError(t, err)
 	pemAdminCertFile.Write(pemAdminCert)
 	pemAdminCertFile.Close()
+
+	pemAdminKeyFile, err := os.Create(path.Join(tempDir, "admin.key"))
+	require.NoError(t, err)
+	pemAdminKeyFile.Write(pemAdminKey)
+	pemAdminKeyFile.Close()
 
 	server, err := New(&config.Configurations{
 		Node: config.NodeConf{
@@ -97,13 +104,13 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, error) {
 			MaxTransactionCountPerBlock: 1,
 		},
 	})
-	return server, keyPair, err
+	return server, keyPair, tempDir, err
 }
 
 func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 	// Scenario: we instantiate a server, trying to query for key,
 	// making sure key does not exist and then posting it into DB
-	server, _, err := setupTestServer(t)
+	server, _, tempDir, err := setupTestServer(t)
 	require.NoError(t, err)
 
 	err = server.Start()
@@ -115,12 +122,15 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
 	require.NoError(t, err)
 
+	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{path.Join(tempDir, "admin.key")})
+	require.NoError(t, err)
+	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "admin"}
+	sig, err := cryptoservice.SignQuery(adminSigner, query)
+	require.NoError(t, err)
+
 	adminUserRec, err := client.GetUser(&types.GetUserQueryEnvelope{
-		Payload: &types.GetUserQuery{
-			UserID:       "admin",
-			TargetUserID: "admin",
-		},
-		Signature: []byte{0},
+		Payload:   query,
+		Signature: sig,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, adminUserRec)
@@ -159,19 +169,22 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 				UserID:       "admin",
 				TargetUserID: "admin",
 			},
-			Signature: []byte{0},
+			Signature: sig,
 		})
 		acl, ok := rec.GetPayload().GetUser().GetPrivilege().GetDBPermission()["bdb"]
 		return err == nil && ok && acl == types.Privilege_ReadWrite
 	}, time.Minute, 100*time.Millisecond)
 
+	dataQuery := &types.GetDataQuery{
+		DBName: "bdb",
+		UserID: "admin",
+		Key:    "foo",
+	}
+	dataQuerySig, err := cryptoservice.SignQuery(adminSigner, dataQuery)
+	require.NoError(t, err)
 	data, err := client.GetData(&types.GetDataQueryEnvelope{
-		Payload: &types.GetDataQuery{
-			DBName: "bdb",
-			UserID: "admin",
-			Key:    "foo",
-		},
-		Signature: []byte{0}, // still no support for signature verification
+		Payload:   dataQuery,
+		Signature: dataQuerySig,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, data)
@@ -203,7 +216,7 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 				UserID: "admin",
 				Key:    "foo",
 			},
-			Signature: []byte{0},
+			Signature: dataQuerySig,
 		})
 
 		return err == nil &&
@@ -213,7 +226,10 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 }
 
 func TestDataQueries_ProvisionNewUser(t *testing.T) {
-	server, caKeys, err := setupTestServer(t)
+	server, caKeys, tempDir, err := setupTestServer(t)
+	require.NoError(t, err)
+
+	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{path.Join(tempDir, "admin.key")})
 	require.NoError(t, err)
 
 	err = server.Start()
@@ -252,13 +268,12 @@ func TestDataQueries_ProvisionNewUser(t *testing.T) {
 		})
 	require.NoError(t, err)
 
+	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "testUser"}
+	querySig, err := cryptoservice.SignQuery(adminSigner, query)
 	require.Eventually(t, func() bool {
 		user, err := client.GetUser(&types.GetUserQueryEnvelope{
-			Payload: &types.GetUserQuery{
-				UserID:       "admin",
-				TargetUserID: "testUser",
-			},
-			Signature: []byte{0},
+			Payload:   query,
+			Signature: querySig,
 		})
 		return err == nil &&
 			user.GetPayload().GetUser() != nil &&
@@ -267,7 +282,10 @@ func TestDataQueries_ProvisionNewUser(t *testing.T) {
 }
 
 func TestDataQueries_CreateNewDB(t *testing.T) {
-	server, _, err := setupTestServer(t)
+	server, _, tempDir, err := setupTestServer(t)
+	require.NoError(t, err)
+
+	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{path.Join(tempDir, "admin.key")})
 	require.NoError(t, err)
 
 	err = server.Start()
@@ -287,16 +305,17 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 				UserID:    "admin",
 				CreateDBs: []string{"testDB"},
 			},
-			Signature: []byte{0},
+			Signature: []byte{0}, // TODO
 		})
 	require.NoError(t, err)
 
+	queryUser := &types.GetUserQuery{UserID: "admin", TargetUserID: "admin"}
+	queryUserSig, err := cryptoservice.SignQuery(adminSigner, queryUser)
+	require.NoError(t, err)
+
 	adminUserRec, err := client.GetUser(&types.GetUserQueryEnvelope{
-		Payload: &types.GetUserQuery{
-			UserID:       "admin",
-			TargetUserID: "admin",
-		},
-		Signature: []byte{0},
+		Payload:   queryUser,
+		Signature: queryUserSig,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, adminUserRec)
@@ -331,23 +350,20 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		rec, err := client.GetUser(&types.GetUserQueryEnvelope{
-			Payload: &types.GetUserQuery{
-				UserID:       "admin",
-				TargetUserID: "admin",
-			},
-			Signature: []byte{0},
+			Payload:   queryUser,
+			Signature: queryUserSig,
 		})
 		acl, ok := rec.GetPayload().GetUser().GetPrivilege().GetDBPermission()["testDB"]
 		return err == nil && ok && acl == types.Privilege_ReadWrite
 	}, time.Minute, 100*time.Millisecond)
 
+	dbStatusQuery := &types.GetDBStatusQuery{UserID: "admin", DBName: "testDB"}
+	dbStatusQuerySig, err := cryptoservice.SignQuery(adminSigner, dbStatusQuery)
+	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		db, err := client.GetDBStatus(&types.GetDBStatusQueryEnvelope{
-			Payload: &types.GetDBStatusQuery{
-				UserID: "admin",
-				DBName: "testDB",
-			},
-			Signature: []byte{0},
+			Payload:   dbStatusQuery,
+			Signature: dbStatusQuerySig,
 		})
 		return err == nil && db.GetPayload().GetExist()
 	}, time.Minute, 100*time.Millisecond)
@@ -371,19 +387,17 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make sure key was created and we can query it
+	dataQuery := &types.GetDataQuery{DBName: "testDB", UserID: "admin", Key: "foo"}
+	dataQuerySig, err := cryptoservice.SignQuery(adminSigner, dataQuery)
+	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		data, err := client.GetData(&types.GetDataQueryEnvelope{
-			Payload: &types.GetDataQuery{
-				DBName: "testDB",
-				UserID: "admin",
-				Key:    "foo",
-			},
-			Signature: []byte{0},
+			Payload:   dataQuery,
+			Signature: dataQuerySig,
 		})
 
 		return err == nil &&
 			data.GetPayload().GetValue() != nil &&
 			bytes.Equal(data.GetPayload().GetValue(), []byte("bar"))
 	}, time.Minute, 100*time.Millisecond)
-
 }

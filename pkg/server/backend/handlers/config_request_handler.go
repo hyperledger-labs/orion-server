@@ -8,14 +8,16 @@ import (
 	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )
 
 type configRequestHandler struct {
-	db        backend.DB
-	router    *mux.Router
-	txHandler *txHandler
-	logger    *logger.SugarLogger
+	db          backend.DB
+	sigVerifier *cryptoservice.SignatureVerifier
+	router      *mux.Router
+	txHandler   *txHandler
+	logger      *logger.SugarLogger
 }
 
 func (c *configRequestHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -23,8 +25,14 @@ func (c *configRequestHandler) ServeHTTP(response http.ResponseWriter, request *
 }
 
 func (c *configRequestHandler) configQuery(response http.ResponseWriter, request *http.Request) {
-	_, _, composedErr := ExtractCreds(c.db, response, request)
-	if composedErr {
+	queryEnv, respondedErr := extractConfigQueryEnvelope(request, response)
+	if respondedErr {
+		return
+	}
+
+	err, code := VerifyQuerySignature(c.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, code, err)
 		return
 	}
 
@@ -33,7 +41,7 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 		SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
-			&ResponseErr{"error while processing [" + request.URL.String() + "] because " + err.Error()},
+			&ResponseErr{"error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
 		)
 		return
 	}
@@ -58,8 +66,9 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 // NewConfigRequestHandler return config transactions request handler
 func NewConfigRequestHandler(db backend.DB, logger *logger.SugarLogger) *configRequestHandler {
 	handler := &configRequestHandler{
-		db:     db,
-		router: mux.NewRouter(),
+		db:          db,
+		sigVerifier: cryptoservice.NewVerifier(db),
+		router:      mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,
 		},

@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
@@ -31,7 +33,15 @@ func createLogger(logLevel string) (*logger.SugarLogger, error) {
 }
 
 func TestConfigRequestHandler_GetConfig(t *testing.T) {
-	submittingUserName := "admin"
+	submittingUserName := "alice"
+
+	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
+	aliceSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
+	require.NoError(t, err)
+	bobSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "bob.key")})
+	require.NoError(t, err)
 
 	testCases := []struct {
 		name               string
@@ -39,18 +49,20 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 		dbMockFactory      func(response *types.GetConfigResponseEnvelope) backend.DB
 		expectedResponse   *types.GetConfigResponseEnvelope
 		expectedStatusCode int
+		expectedErr        string
 	}{
 		{
 			name: "successfully retrieve configuration",
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
 			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetConfig").Return(response, nil)
 				return db
 			},
@@ -79,6 +91,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				},
 			},
 			expectedStatusCode: http.StatusOK,
+			expectedErr:        "",
 		},
 		{
 			name: "missing user header",
@@ -92,9 +105,10 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
 		},
 		{
-			name: "fails to retrieve configuration",
+			name: "missing signature header",
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
@@ -105,55 +119,62 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
 		},
 		{
-			name: "fail to retrieve record of submitting user",
+			name: "fail to verify signature of submitting user",
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, bobSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
 			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(false, errors.New("fail to retrieve user's record"))
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
 			},
 			expectedResponse:   nil,
-			expectedStatusCode: http.StatusInternalServerError,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
 			name: "submitting user doesn't exists",
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
 			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(false, nil)
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
 			},
 			expectedResponse:   nil,
-			expectedStatusCode: http.StatusBadRequest,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
-			name: "failing to submit config transaction",
+			name: "failing to get config from DB",
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
 			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetConfig").Return(nil, errors.New("failed to get configuration"))
 				return db
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /config/tx' because failed to get configuration",
 		},
 	}
 
@@ -163,7 +184,6 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(fmt.Sprintf("GetConfig %s", tt.name), func(t *testing.T) {
-			t.Parallel()
 			req := tt.requestFactory()
 			require.NotNil(t, req)
 
@@ -174,13 +194,19 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 
 			if tt.expectedResponse != nil {
 				res := &types.GetConfigResponseEnvelope{}
 				err := json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
-
 				require.Equal(t, tt.expectedResponse, res)
+				// TODO verify signature on responses
 			}
 		})
 	}
@@ -321,7 +347,6 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			txBytes, err := json.Marshal(tt.configTx)
 			require.NoError(t, err)
 

@@ -7,19 +7,29 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
 )
 
 func TestDBRequestHandler_DBStatus(t *testing.T) {
-	submittingUserName := "admin"
+	submittingUserName := "alice"
 	dbName := "testDBName"
+
+	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
+	aliceSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
+	require.NoError(t, err)
+	bobSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "bob.key")})
+	require.NoError(t, err)
 
 	testCases := []struct {
 		name               string
@@ -27,6 +37,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 		dbMockFactory      func(response *types.GetDBStatusResponseEnvelope) backend.DB
 		expectedResponse   *types.GetDBStatusResponseEnvelope
 		expectedStatusCode int
+		expectedErr        string
 	}{
 		{
 			name: "valid dbStatus request",
@@ -36,13 +47,14 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetDBStatus", dbName).Return(response, nil)
 				return db
 			},
@@ -64,18 +76,18 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
-				db.On("GetDBStatus", dbName).Return(response, nil)
 				return db
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
 		},
 		{
 			name: "invalid dbStatus request missing user's signature",
@@ -90,12 +102,11 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 			},
 			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
-				db.On("GetDBStatus", dbName).Return(response, nil)
 				return db
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
 		},
 		{
 			name: "invalid dbStatus request, submitting user doesn't exists",
@@ -105,37 +116,41 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(false, nil)
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
 			},
 			expectedResponse:   nil,
-			expectedStatusCode: http.StatusForbidden,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
-			name: "invalid dbStatus request, cannot retrieve submitting user record",
+			name: "invalid dbStatus request, failed to verify signature",
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBStatus(dbName), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, bobSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(false, errors.New("failed to get user's record"))
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
 			},
 			expectedResponse:   nil,
-			expectedStatusCode: http.StatusInternalServerError,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
 			name: "invalid dbStatus request, failed to get db status",
@@ -145,18 +160,20 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetDBStatus", dbName).Return(nil, errors.New("failed to retrieve db status"))
 				return db
 			},
 			expectedResponse:   nil,
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /db/testDBName' because failed to retrieve db status",
 		},
 	}
 
@@ -177,6 +194,12 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 
 			if tt.expectedResponse != nil {
 				res := &types.GetDBStatusResponseEnvelope{}

@@ -8,14 +8,16 @@ import (
 	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )
 
 type dataRequestHandler struct {
-	db        backend.DB
-	router    *mux.Router
-	txHandler *txHandler
-	logger    *logger.SugarLogger
+	db          backend.DB
+	sigVerifier *cryptoservice.SignatureVerifier
+	router      *mux.Router
+	txHandler   *txHandler
+	logger      *logger.SugarLogger
 }
 
 func (d *dataRequestHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -23,34 +25,18 @@ func (d *dataRequestHandler) ServeHTTP(response http.ResponseWriter, request *ht
 }
 
 func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *http.Request) {
-	userID, _, composedErr := ExtractCreds(d.db, response, request)
-	if composedErr {
+	queryEnv, respondedErr := extractDataQueryEnvelope(request, response)
+	if respondedErr {
 		return
 	}
 
-	params := mux.Vars(request)
-	dbName, ok := params["dbname"]
-	if !ok {
-		SendHTTPResponse(response,
-			http.StatusBadRequest,
-			&ResponseErr{
-				Error: "query error - bad or missing database name",
-			})
+	err, status := VerifyQuerySignature(d.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, status, err)
 		return
 	}
 
-	key, ok := params["key"]
-	if !ok {
-		SendHTTPResponse(response,
-			http.StatusBadRequest,
-			&ResponseErr{
-				Error: "query error - bad or missing key",
-			})
-		return
-	}
-
-	//TODO: verify signature
-	data, err := d.db.GetData(dbName, userID, key)
+	data, err := d.db.GetData(queryEnv.Payload.DBName, queryEnv.Payload.UserID, queryEnv.Payload.Key)
 	if err != nil {
 		var status int
 
@@ -65,7 +51,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 			response,
 			status,
 			&ResponseErr{
-				Error: "error while processing [" + request.URL.String() + "] because " + err.Error(),
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
 	}
@@ -90,8 +76,9 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 // NewDataRequestHandler returns handler capable to serve incoming data requests
 func NewDataRequestHandler(db backend.DB, logger *logger.SugarLogger) *dataRequestHandler {
 	handler := &dataRequestHandler{
-		db:     db,
-		router: mux.NewRouter(),
+		db:          db,
+		sigVerifier: cryptoservice.NewVerifier(db),
+		router:      mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,
 		},

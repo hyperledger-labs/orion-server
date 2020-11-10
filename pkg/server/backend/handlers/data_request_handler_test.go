@@ -7,19 +7,35 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
 )
 
 func TestDataRequestHandler_DataQuery(t *testing.T) {
-	submittingUserName := "admin"
 	dbName := "test_database"
+
+	submittingUserName := "alice"
+	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
+	aliceSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
+	require.NoError(t, err)
+	bobSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "bob.key")})
+	require.NoError(t, err)
+
+	sigFoo := signatureFromQuery(t, aliceSigner, &types.GetDataQuery{
+		UserID: submittingUserName,
+		DBName: dbName,
+		Key:    "foo",
+	})
 
 	testCases := []struct {
 		name               string
@@ -27,6 +43,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 		dbMockFactory      func(response *types.GetDataResponseEnvelope) backend.DB
 		expectedResponse   *types.GetDataResponseEnvelope
 		expectedStatusCode int
+		expectedErr        string
 	}{
 		{
 			name: "valid get data request",
@@ -51,93 +68,61 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
-				db.On("GetData", dbName, submittingUserName, "foo").
-					Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetData", dbName, submittingUserName, "foo").Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
 		},
 		{
 			name: "submitting user is not eligible to update the key",
-			expectedResponse: &types.GetDataResponseEnvelope{
-				Signature: []byte{0, 0, 0},
-				Payload: &types.GetDataResponse{
-					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
-					},
-					Value: []byte("bar"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							TxNum:    1,
-							BlockNum: 1,
-						},
-					},
-				},
-			},
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "foo"), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetData", dbName, submittingUserName, "foo").
 					Return(nil, &backend.PermissionErr{ErrMsg: "access forbidden"})
 				return db
 			},
 			expectedStatusCode: http.StatusForbidden,
+			expectedErr:        "error while processing 'GET /data/test_database/foo' because access forbidden",
 		},
 		{
-			name: "failed to store data transaction update",
-			expectedResponse: &types.GetDataResponseEnvelope{
-				Signature: []byte{0, 0, 0},
-				Payload: &types.GetDataResponse{
-					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
-					},
-					Value: []byte("bar"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							TxNum:    1,
-							BlockNum: 1,
-						},
-					},
-				},
-			},
+			name: "failed to get data",
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "foo"), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetData", dbName, submittingUserName, "foo").
-					Return(nil, errors.New("failed to store transaction"))
+					Return(nil, errors.New("failed to get data"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /data/test_database/foo' because failed to get data",
 		},
 		{
-			name:             "querier user doesn't exist",
+			name:             "user doesn't exist",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "foo"), nil)
@@ -150,14 +135,14 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 			},
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(false, nil)
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
 			},
-			expectedStatusCode: http.StatusForbidden,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
-			name:             "fail to retrieve querier record",
+			name:             "fail to verify signature",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "foo"), nil)
@@ -165,16 +150,22 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				sigFooBob := signatureFromQuery(t, bobSigner, &types.GetDataQuery{
+					UserID: submittingUserName,
+					DBName: dbName,
+					Key:    "foo",
+				})
+
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooBob))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(false, errors.New("fail to read from database"))
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
 			},
-			expectedStatusCode: http.StatusInternalServerError,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
 		},
 		{
 			name:             "missing userID http header",
@@ -190,6 +181,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				return &mocks.DB{}
 			},
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
 		},
 		{
 			name:             "missing signature http header",
@@ -207,6 +199,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				return &mocks.DB{}
 			},
 			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
 		},
 	}
 
@@ -216,7 +209,6 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			req, err := tt.requestFactory()
 			require.NoError(t, err)
 			require.NotNil(t, req)
@@ -227,12 +219,19 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 
 			if tt.expectedResponse != nil {
 				res := &types.GetDataResponseEnvelope{}
 				err = json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResponse, res)
+				//TODO verify signature on response
 			}
 		})
 	}
