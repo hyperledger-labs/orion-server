@@ -8,17 +8,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
-	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 )
 
 func createLogger(logLevel string) (*logger.SugarLogger, error) {
@@ -34,14 +33,9 @@ func createLogger(logLevel string) (*logger.SugarLogger, error) {
 
 func TestConfigRequestHandler_GetConfig(t *testing.T) {
 	submittingUserName := "alice"
-
-	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
-	aliceSigner, err := crypto.NewSigner(
-		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
-	require.NoError(t, err)
-	bobSigner, err := crypto.NewSigner(
-		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "bob.key")})
-	require.NoError(t, err)
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string

@@ -1,11 +1,7 @@
 package handlers
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 )
 
 func TestSendHTTPResponse(t *testing.T) {
@@ -58,15 +55,4 @@ func signatureFromQuery(t *testing.T, querySigner *crypto.Signer, query interfac
 	sig, err := cryptoservice.SignQuery(querySigner, query)
 	require.NoError(t, err)
 	return sig
-}
-
-func getTestdataCert(t *testing.T, pathToCert string) *x509.Certificate {
-	b, err := ioutil.ReadFile(pathToCert)
-	require.NoError(t, err)
-	bl, _ := pem.Decode(b)
-	require.NotNil(t, bl)
-	certRaw := bl.Bytes
-	cert, err := x509.ParseCertificate(certRaw)
-	require.NoError(t, err)
-	return cert
 }

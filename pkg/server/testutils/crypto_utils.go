@@ -8,9 +8,16 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"io/ioutil"
 	"math/big"
 	"net"
+	"os"
+	"path"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
 )
 
 func IssueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certificate) ([]byte, []byte, error) {
@@ -81,4 +88,63 @@ func CertTemplate(subjectCN string, ips []net.IP) (*x509.Certificate, error) {
 		BasicConstraintsValid: true,
 		IPAddresses:           ips,
 	}, nil
+}
+
+func getTestdataCert(t *testing.T, pathToCert string) *x509.Certificate {
+	b, err := ioutil.ReadFile(pathToCert)
+	require.NoError(t, err)
+	bl, _ := pem.Decode(b)
+	require.NotNil(t, bl)
+	certRaw := bl.Bytes
+	cert, err := x509.ParseCertificate(certRaw)
+	require.NoError(t, err)
+	return cert
+}
+
+func GenerateTestClientCrypto(t *testing.T, names []string) string {
+	tempDir, err := ioutil.TempDir("/tmp", "handlersUnitTest")
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tempDir)
+	})
+
+	rootCAPemCert, caPrivKey, err := GenerateRootCA("Clients RootCA", "127.0.0.1")
+	require.NoError(t, err)
+	require.NotNil(t, rootCAPemCert)
+	require.NotNil(t, caPrivKey)
+
+	clientRootCACertFile, err := os.Create(path.Join(tempDir, "clientRootCACert.pem"))
+	require.NoError(t, err)
+	clientRootCACertFile.Write(rootCAPemCert)
+	clientRootCACertFile.Close()
+
+	for _, name := range names {
+		keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
+		require.NoError(t, err)
+		require.NotNil(t, keyPair)
+
+		pemCert, privKey, err := IssueCertificate("BCDB Client "+name, "127.0.0.1", keyPair)
+		require.NoError(t, err)
+
+		pemCertFile, err := os.Create(path.Join(tempDir, name+".pem"))
+		require.NoError(t, err)
+		pemCertFile.Write(pemCert)
+		pemCertFile.Close()
+
+		pemPrivKeyFile, err := os.Create(path.Join(tempDir, name+".key"))
+		require.NoError(t, err)
+		pemPrivKeyFile.Write(privKey)
+		pemPrivKeyFile.Close()
+	}
+
+	return tempDir
+}
+
+func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate, *crypto.Signer) {
+	cert := getTestdataCert(t, path.Join(tempDir, name+".pem"))
+	signer, err := crypto.NewSigner(
+		&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, name+".key")})
+	require.NoError(t, err)
+
+	return cert, signer
 }

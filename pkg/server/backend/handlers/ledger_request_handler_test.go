@@ -3,10 +3,8 @@ package handlers
 import (
 	"encoding/base64"
 	"encoding/json"
-	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"net/http"
 	"net/http/httptest"
-	"path"
 	"testing"
 
 	"github.com/pkg/errors"
@@ -15,14 +13,13 @@ import (
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 )
 
 func TestBlockQuery(t *testing.T) {
 	submittingUserName := "alice"
-	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
-	aliceSigner, err := crypto.NewSigner(
-		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
-	require.NoError(t, err)
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
 		name               string
@@ -145,10 +142,8 @@ func TestBlockQuery(t *testing.T) {
 
 func TestPathQuery(t *testing.T) {
 	submittingUserName := "alice"
-	aliceCert := getTestdataCert(t, path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.pem"))
-	aliceSigner, err := crypto.NewSigner(
-		&crypto.SignerOptions{KeyFilePath: path.Join("..", "..", "..", "cryptoservice", "testdata", "alice.key")})
-	require.NoError(t, err)
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
 		name               string
