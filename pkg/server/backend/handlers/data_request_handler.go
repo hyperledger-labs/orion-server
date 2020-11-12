@@ -30,13 +30,21 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 		return
 	}
 
-	err, status := VerifyQuerySignature(d.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	err, status := VerifyQuerySignature(d.sigVerifier, queryEnv.GetPayload().GetUserID(), queryEnv.GetSignature(), queryEnv.GetPayload())
 	if err != nil {
 		SendHTTPResponse(response, status, err)
 		return
 	}
 
-	data, err := d.db.GetData(queryEnv.Payload.DBName, queryEnv.Payload.UserID, queryEnv.Payload.Key)
+	dbName := queryEnv.GetPayload().GetDBName()
+	if !d.db.IsDBExists(dbName) {
+		SendHTTPResponse(response, http.StatusBadRequest, &ResponseErr{
+			ErrMsg: "error db '" + dbName + "' doesn't exist",
+		})
+		return
+	}
+
+	data, err := d.db.GetData(dbName, queryEnv.GetPayload().GetUserID(), queryEnv.GetPayload().GetKey())
 	if err != nil {
 		var status int
 

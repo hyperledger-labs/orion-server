@@ -5,13 +5,14 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
-	"github.ibm.com/blockchaindb/library/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 	"time"
+
+	"github.ibm.com/blockchaindb/library/pkg/crypto"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -122,7 +123,7 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
 	require.NoError(t, err)
 
-	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{path.Join(tempDir, "admin.key")})
+	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
 	require.NoError(t, err)
 	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "admin"}
 	sig, err := cryptoservice.SignQuery(adminSigner, query)
@@ -229,7 +230,7 @@ func TestDataQueries_ProvisionNewUser(t *testing.T) {
 	server, caKeys, tempDir, err := setupTestServer(t)
 	require.NoError(t, err)
 
-	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{path.Join(tempDir, "admin.key")})
+	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
 	require.NoError(t, err)
 
 	err = server.Start()
@@ -285,7 +286,7 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 	server, _, tempDir, err := setupTestServer(t)
 	require.NoError(t, err)
 
-	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{path.Join(tempDir, "admin.key")})
+	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
 	require.NoError(t, err)
 
 	err = server.Start()
@@ -400,4 +401,93 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 			data.GetPayload().GetValue() != nil &&
 			bytes.Equal(data.GetPayload().GetValue(), []byte("bar"))
 	}, time.Minute, 100*time.Millisecond)
+}
+
+func TestDataQueries_FailureScenarios(t *testing.T) {
+	testCases := []struct {
+		testName         string
+		envelopeProvider func(signer *crypto.Signer) *types.GetDataQueryEnvelope
+		expectedError    string
+		skip             bool
+	}{
+		{
+			testName: "do not have db access",
+			envelopeProvider: func(signer *crypto.Signer) *types.GetDataQueryEnvelope {
+				getKeyQuery := &types.GetDataQuery{
+					UserID: "admin",
+					DBName: "bdb",
+					Key:    "test",
+				}
+
+				sig, err := cryptoservice.SignQuery(signer, getKeyQuery)
+				require.NoError(t, err)
+
+				return &types.GetDataQueryEnvelope{
+					Payload:   getKeyQuery,
+					Signature: sig,
+				}
+			},
+			expectedError: "[admin] has no permission to read from database [bdb]",
+		},
+		{
+			testName: "missing signature",
+			envelopeProvider: func(_ *crypto.Signer) *types.GetDataQueryEnvelope {
+				getKeyQuery := &types.GetDataQuery{
+					UserID: "admin",
+					DBName: "bdb",
+					Key:    "test",
+				}
+
+				return &types.GetDataQueryEnvelope{
+					Payload:   getKeyQuery,
+					Signature: []byte{0},
+				}
+			},
+			expectedError: "signature verification failed",
+		},
+		{
+			testName: "missing database",
+			envelopeProvider: func(signer *crypto.Signer) *types.GetDataQueryEnvelope {
+				getKeyQuery := &types.GetDataQuery{
+					UserID: "admin",
+					DBName: "testDB",
+					Key:    "test",
+				}
+
+				sig, err := cryptoservice.SignQuery(signer, getKeyQuery)
+				require.NoError(t, err)
+
+				return &types.GetDataQueryEnvelope{
+					Payload:   getKeyQuery,
+					Signature: sig,
+				}
+			},
+			expectedError: "error db 'testDB' doesn't exist",
+		},
+	}
+
+	server, _, tempDir, err := setupTestServer(t)
+	require.NoError(t, err)
+
+	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
+	require.NoError(t, err)
+
+	err = server.Start()
+	require.NoError(t, err)
+	defer server.Stop()
+
+	port, err := server.Port()
+	require.NoError(t, err)
+
+	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
+	require.NoError(t, err)
+
+	for _, tt := range testCases {
+		t.Run(tt.testName, func(t *testing.T) {
+			envelope := tt.envelopeProvider(adminSigner)
+			_, err = client.GetData(envelope)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.expectedError)
+		})
+	}
 }

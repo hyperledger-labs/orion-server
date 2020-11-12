@@ -171,7 +171,12 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates, blockNumber uint64)
 		}
 	}
 
-	db, _ := l.dbs[worldstate.MetadataDBName]
+	l.dbsList.RLock()
+	db, exists := l.dbs[worldstate.MetadataDBName]
+	l.dbsList.RUnlock()
+	if !exists {
+		return errors.Errorf("metadata database does not exist")
+	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

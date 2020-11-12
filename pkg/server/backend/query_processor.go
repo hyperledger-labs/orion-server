@@ -35,6 +35,10 @@ func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 	}
 }
 
+func (q *queryProcessor) isDBExists(name string) bool {
+	return q.db.Exist(name)
+}
+
 // getDBStatus returns the status about a database, i.e., whether a database exist or not
 func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
 	// ACL is meaningless here as this call is to check whether a DB exist. Even with ACL,
@@ -44,7 +48,7 @@ func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseE
 			Header: &types.ResponseHeader{
 				NodeID: q.nodeID,
 			},
-			Exist: q.db.Exist(dbName),
+			Exist: q.isDBExists(dbName),
 		},
 		Signature: nil,
 	}

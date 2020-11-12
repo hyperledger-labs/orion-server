@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -58,6 +59,9 @@ type DB interface {
 	// IsReady returns true once instance of the DB is properly initiated, meaning
 	// all system tables was created successfully
 	IsReady() (bool, error)
+
+	// IsDBExists returns true if database with given name is exists otherwise false
+	IsDBExists(name string) bool
 
 	// Close frees and closes resources allocated by database instance
 	Close() error
@@ -211,7 +215,19 @@ func (d *db) IsReady() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return height > 0, nil
+	allReady := true
+	for _, sysDB := range worldstate.SystemDBs() {
+		if d.IsDBExists(sysDB) {
+			continue
+		}
+		allReady = false
+		break
+	}
+	return height > 0 && allReady, nil
+}
+
+func (d *db) IsDBExists(name string) bool {
+	return d.queryProcessor.isDBExists(name)
 }
 
 type certsInGenesisConfig struct {

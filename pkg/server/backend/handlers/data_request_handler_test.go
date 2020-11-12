@@ -70,6 +70,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetData", dbName, submittingUserName, "foo").Return(response, nil)
+				db.On("IsDBExists", dbName).Return(true)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -88,6 +89,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
 				db.On("GetData", dbName, submittingUserName, "foo").
 					Return(nil, &backend.PermissionErr{ErrMsg: "access forbidden"})
 				return db
@@ -109,6 +111,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
 				db.On("GetData", dbName, submittingUserName, "foo").
 					Return(nil, errors.New("failed to get data"))
 				return db
