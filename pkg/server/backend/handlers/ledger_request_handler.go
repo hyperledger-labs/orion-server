@@ -30,7 +30,9 @@ func NewLedgerRequestHandler(db backend.DB, logger *logger.SugarLogger) *ledgerR
 	// HTTP GET "/ledger/block/{blockId}" gets block header
 	handler.router.HandleFunc(constants.GetBlockHeader, handler.blockQuery).Methods(http.MethodGet)
 	// HTTP GET "/ledger/path/{startId}/{endId}" gets shortest path between blocks
-	handler.router.HandleFunc(constants.GetPath, handler.pathQuery).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetPath, handler.pathQuery).Methods(http.MethodGet).Queries("start", "{startId:[0-9]+}", "end", "{endId:[0-9]+}")
+	// HTTP GET "/ledger/path/{startId}/{endId}" gets shortest path between blocks
+	handler.router.HandleFunc(constants.GetPath, handler.invalidPathQuery).Methods(http.MethodGet)
 
 	return handler
 }
@@ -107,6 +109,13 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 	}
 
 	SendHTTPResponse(response, http.StatusOK, data)
+}
+
+func (p *ledgerRequestHandler) invalidPathQuery(response http.ResponseWriter, request *http.Request) {
+	err := &ResponseErr{
+		ErrMsg: "query error - bad or missing start/end block number",
+	}
+	SendHTTPResponse(response, http.StatusBadRequest, err)
 }
 
 func getUintParam(key string, params map[string]string) (uint64, *ResponseErr) {

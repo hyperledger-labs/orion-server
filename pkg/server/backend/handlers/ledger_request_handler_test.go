@@ -3,11 +3,13 @@ package handlers
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"github.com/pkg/errors"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"testing"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/protos/types"
@@ -103,6 +105,28 @@ func TestBlockQuery(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusInternalServerError, // TODO deal with 404 not found, it's not a 5xx
 			expectedErr:        "error while processing 'GET /ledger/block/1' because no such block",
+		},
+		{
+			name: "invalid block id",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint + path.Join("block", "block1"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("DoesUserExist", submittingUserName).
+					Return(true, nil)
+				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "query error - bad or missing block number literal blockId strconv.ParseUint: parsing \"block1\": invalid syntax",
 		},
 	}
 
@@ -247,7 +271,29 @@ func TestPathQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
-			expectedErr:        "error while processing 'GET /ledger/path/1/2' because can't find path in blocks skip list between 2 1",
+			expectedErr:        "error while processing 'GET /ledger/path?start=1&end=2' because can't find path in blocks skip list between 2 1",
+		},
+		{
+			name:             "wrong url, endId not exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint+fmt.Sprintf("path?start=%s", "1"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("DoesUserExist", submittingUserName).
+					Return(true, nil)
+				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(2)).Return(response, errors.Errorf("can't find path in blocks skip list between 2 1"))
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr: "query error - bad or missing start/end block number",
 		},
 	}
 
@@ -257,7 +303,6 @@ func TestPathQuery(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			req, err := tt.requestFactory()
 			require.NoError(t, err)
 			require.NotNil(t, req)

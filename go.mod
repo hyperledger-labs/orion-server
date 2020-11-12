@@ -12,7 +12,6 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.com/vektra/mockery v1.1.2 // indirect
 	github.ibm.com/blockchaindb/library v0.0.0
 	github.ibm.com/blockchaindb/protos v0.0.0
 )

@@ -185,13 +185,13 @@ func extractLedgerPathQueryEnvelope(request *http.Request, responseWriter http.R
 	startNum, respErr := getUintParam("startId", params)
 	if respErr != nil {
 		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return
+		return nil, true
 	}
 
 	endNum, respErr := getUintParam("endId", params)
 	if respErr != nil {
 		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return
+		return nil, true
 	}
 
 	env = &types.GetLedgerPathQueryEnvelope{
@@ -217,7 +217,7 @@ func extractBlockQueryEnvelope(request *http.Request, responseWriter http.Respon
 	blockNum, respErr := getUintParam("blockId", params)
 	if respErr != nil {
 		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return
+		return nil, true
 	}
 
 	env = &types.GetBlockQueryEnvelope{
