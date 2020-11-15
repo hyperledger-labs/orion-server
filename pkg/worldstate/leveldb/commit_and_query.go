@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -163,20 +164,25 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates, blockNumber uint64)
 		l.dbsList.RUnlock()
 
 		if db == nil {
+			l.logger.Errorf("database %s does not exist", updates.DBName)
 			return errors.Errorf("database %s does not exist", updates.DBName)
 		}
 
+		start := time.Now()
 		if err := l.commitToDB(db, updates); err != nil {
 			return err
 		}
+		l.logger.Debugf("changes committed to the database %s, took %d ms, available dbs are [%s]", updates.DBName, time.Since(start).Milliseconds(), l.dbs)
 	}
 
 	l.dbsList.RLock()
 	db, exists := l.dbs[worldstate.MetadataDBName]
 	l.dbsList.RUnlock()
 	if !exists {
+		l.logger.Errorf("metadata database does not exist, available dbs are [%+v]", l.dbs)
 		return errors.Errorf("metadata database does not exist")
 	}
+
 	db.mu.Lock()
 	defer db.mu.Unlock()
 

@@ -25,6 +25,9 @@ type DB interface {
 	// LedgerHeight returns current height of the ledger
 	LedgerHeight() (uint64, error)
 
+	// Height returns ledger height
+	Height() (uint64, error)
+
 	// DoesUserExist checks whenever user with given userID exists
 	DoesUserExist(userID string) (bool, error)
 
@@ -152,6 +155,11 @@ func (d *db) LedgerHeight() (uint64, error) {
 	return d.queryProcessor.blockStore.Height()
 }
 
+// Height returns ledger height
+func (d *db) Height() (uint64, error) {
+	return d.queryProcessor.db.Height()
+}
+
 // DoesUserExist checks whenever userID exists
 func (d *db) DoesUserExist(userID string) (bool, error) {
 	return d.queryProcessor.identityQuerier.DoesUserExist(userID)
@@ -215,15 +223,18 @@ func (d *db) IsReady() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	allReady := true
-	for _, sysDB := range worldstate.SystemDBs() {
-		if d.IsDBExists(sysDB) {
-			continue
-		}
-		allReady = false
-		break
+
+	dbHeight, err := d.Height()
+	if err != nil {
+		return false, err
 	}
-	return height > 0 && allReady, nil
+
+	for _, sysDB := range worldstate.SystemDBs() {
+		if !d.IsDBExists(sysDB) {
+			return false, nil
+		}
+	}
+	return height > 0 && dbHeight > 0, nil
 }
 
 func (d *db) IsDBExists(name string) bool {

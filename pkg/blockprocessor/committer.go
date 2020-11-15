@@ -50,6 +50,7 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 	var dbsUpdates []*worldstate.DBUpdates
 	blockValidationInfo := block.Header.ValidationInfo
 
+	c.logger.Debugf("committing to the state changes from the block number %d", block.GetHeader().GetBaseHeader().GetNumber())
 	switch block.Payload.(type) {
 	case *types.Block_DataTxEnvelopes:
 		txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
@@ -70,6 +71,9 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 				constructDBEntriesForDataTx(tx, version),
 			)
 		}
+		c.logger.Debugf("constructed %d, updates for data transactions, block number %d",
+			len(blockValidationInfo),
+			block.GetHeader().GetBaseHeader().GetNumber())
 
 	case *types.Block_UserAdministrationTxEnvelope:
 		if blockValidationInfo[userAdminTxIndex].Flag != types.Flag_VALID {
@@ -88,6 +92,8 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 		}
 
 		dbsUpdates = []*worldstate.DBUpdates{entries}
+		c.logger.Debugf("constructed user admin update, block number %d",
+			block.GetHeader().GetBaseHeader().GetNumber())
 
 	case *types.Block_DBAdministrationTxEnvelope:
 		if blockValidationInfo[dbAdminTxIndex].Flag != types.Flag_VALID {
@@ -99,10 +105,12 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 			TxNum:    dbAdminTxIndex,
 		}
 
-		tx := block.GetDBAdministrationTxEnvelope().Payload
+		tx := block.GetDBAdministrationTxEnvelope().GetPayload()
 		dbsUpdates = []*worldstate.DBUpdates{
 			constructDBEntriesForDBAdminTx(tx, version),
 		}
+		c.logger.Debugf("constructed db admin update, block number %d",
+			block.GetHeader().GetBaseHeader().GetNumber())
 
 	case *types.Block_ConfigTxEnvelope:
 		if blockValidationInfo[configTxIndex].Flag != types.Flag_VALID {
@@ -119,13 +127,15 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 			return errors.WithMessage(err, "error while fetching committed configuration")
 		}
 
-		tx := block.GetConfigTxEnvelope().Payload
+		tx := block.GetConfigTxEnvelope().GetPayload()
 		entries, err := constructDBEntriesForConfigTx(tx, committedConfig, version)
 		if err != nil {
 			return errors.WithMessage(err, "error while constructing entries for the config transaction")
 		}
 
 		dbsUpdates = entries
+		c.logger.Debugf("constructed configuration update, block number %d",
+			block.GetHeader().GetBaseHeader().GetNumber())
 	}
 
 	blockNum := block.Header.BaseHeader.Number

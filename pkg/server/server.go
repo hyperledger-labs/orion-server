@@ -31,6 +31,7 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
+		Name:          conf.Node.Identity.ID,
 	}
 	logger, err := logger.New(c)
 	if err != nil {

@@ -71,7 +71,7 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, string, er
 	server, err := New(&config.Configurations{
 		Node: config.NodeConf{
 			Identity: config.IdentityConf{
-				ID:              "testNode",
+				ID:              "testNode" + uuid.New().String(),
 				CertificatePath: path.Join(tempDir, "server.pem"),
 				KeyPath:         path.Join(tempDir, "server.key"),
 			},
@@ -111,6 +111,7 @@ func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, string, er
 func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 	// Scenario: we instantiate a server, trying to query for key,
 	// making sure key does not exist and then posting it into DB
+	t.Parallel()
 	server, _, tempDir, err := setupTestServer(t)
 	require.NoError(t, err)
 
@@ -227,6 +228,7 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 }
 
 func TestDataQueries_ProvisionNewUser(t *testing.T) {
+	t.Parallel()
 	server, caKeys, tempDir, err := setupTestServer(t)
 	require.NoError(t, err)
 
@@ -283,6 +285,7 @@ func TestDataQueries_ProvisionNewUser(t *testing.T) {
 }
 
 func TestDataQueries_CreateNewDB(t *testing.T) {
+	t.Parallel()
 	server, _, tempDir, err := setupTestServer(t)
 	require.NoError(t, err)
 
@@ -466,24 +469,29 @@ func TestDataQueries_FailureScenarios(t *testing.T) {
 		},
 	}
 
-	server, _, tempDir, err := setupTestServer(t)
-	require.NoError(t, err)
-
-	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
-	require.NoError(t, err)
-
-	err = server.Start()
-	require.NoError(t, err)
-	defer server.Stop()
-
-	port, err := server.Port()
-	require.NoError(t, err)
-
-	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
-	require.NoError(t, err)
-
 	for _, tt := range testCases {
 		t.Run(tt.testName, func(t *testing.T) {
+			t.Parallel()
+			fmt.Println("Starting Server")
+			server, _, tempDir, err := setupTestServer(t)
+			require.NoError(t, err)
+
+			fmt.Println("Create Signer")
+			adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
+			require.NoError(t, err)
+			require.NotNil(t, adminSigner)
+
+			err = server.Start()
+			require.NoError(t, err)
+			defer server.Stop()
+
+			port, err := server.Port()
+			require.NoError(t, err)
+			fmt.Println("Create Client")
+			client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
+			require.NoError(t, err)
+
+			fmt.Println("Send Request")
 			envelope := tt.envelopeProvider(adminSigner)
 			_, err = client.GetData(envelope)
 			require.Error(t, err)
