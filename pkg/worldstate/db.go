@@ -1,6 +1,6 @@
 package worldstate
 
-import "github.ibm.com/blockchaindb/protos/types"
+import "github.ibm.com/blockchaindb/server/pkg/types"
 
 const (
 	// UsersDBName holds all users information

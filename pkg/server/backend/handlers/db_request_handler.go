@@ -6,11 +6,11 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/common/constants"
 	"github.ibm.com/blockchaindb/server/pkg/common/logger"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type dbRequestHandler struct {

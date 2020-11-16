@@ -5,7 +5,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 

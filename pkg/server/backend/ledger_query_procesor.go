@@ -4,11 +4,11 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/common/logger"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 

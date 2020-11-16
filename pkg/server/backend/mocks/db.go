@@ -6,7 +6,7 @@ import (
 	mock "github.com/stretchr/testify/mock"
 	config "github.ibm.com/blockchaindb/server/config"
 
-	types "github.ibm.com/blockchaindb/protos/types"
+	types "github.ibm.com/blockchaindb/server/pkg/types"
 
 	x509 "crypto/x509"
 )

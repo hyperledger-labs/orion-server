@@ -10,13 +10,12 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
-
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/common/constants"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 func TestBlockQuery(t *testing.T) {

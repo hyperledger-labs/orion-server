@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+option go_package = "github.ibm.com/blockchaindb/protos/types";
+
+package types;
+
+import "query_and_response.proto";
+import "configuration.proto";
+
+// Block holds the chain information and transactions
+message Block {
+  BlockHeader header = 1;
+  oneof Payload {
+      DataTxEnvelopes data_tx_envelopes = 2;
+      ConfigTxEnvelope config_tx_envelope = 3;
+      DBAdministrationTxEnvelope DB_administration_tx_envelope = 4;
+      UserAdministrationTxEnvelope user_administration_tx_envelope = 5;
+  }
+    repeated ValidationInfo tx_validation_info = 6;
+}
+
+// BlockHeaderBase holds the block metadata and the chain information
+// that computed before transaction validation
+message BlockHeaderBase {
+  uint64 number = 1;
+  // Hash of (number - 1) BlockHeaderBase
+  bytes previous_base_header_hash = 2;
+  // Root of Merkle tree that contains all transactions, without validation data
+  bytes tx_merkel_tree_root_hash = 3;
+  // Hash of BlockHeader of last block already committed to ledger
+  bytes last_committed_block_hash = 4;
+  // Number of last block already committed to ledger
+  uint64 last_committed_block_num = 5;
+}
+
+// BlockHeader holds, in addition to base header, extra block metadata and the chain information
+// that computed after transactions validation
+message BlockHeader {
+  BlockHeaderBase base_header = 1;
+  // Skip chain hashed, based of BlockHeader hashed of blocks connected in blocks skip list
+  repeated bytes skipchain_hashes = 2;
+  // Root hash of system wide state merkle-particia tree
+  bytes state_merkel_tree_root_hash = 3;
+  // Validation info for transactions in block.
+  repeated ValidationInfo validation_info = 4;
+}
+
+message DataTxEnvelopes {
+    repeated DataTxEnvelope envelopes = 1;
+}
+
+message DataTxEnvelope {
+    DataTx payload = 1;
+    bytes signature = 2;
+}
+
+message ConfigTxEnvelope {
+    ConfigTx payload = 1;
+    bytes signature = 2;
+}
+
+message DBAdministrationTxEnvelope {
+    DBAdministrationTx payload = 1;
+    bytes signature = 2;
+}
+
+message UserAdministrationTxEnvelope {
+    UserAdministrationTx payload = 1;
+    bytes signature = 2;
+}
+
+
+message DataTx {
+    string userID = 1;
+    string txID = 2;
+    string DB_name = 3;
+    repeated DataRead data_reads = 4;
+    repeated DataWrite data_writes = 5;
+    repeated DataDelete data_deletes = 6;
+}
+
+
+// DataRead hold a read key and its version
+message DataRead {
+  string key = 1;
+  Version version = 2;
+}
+
+// DataWrite hold a write including a delete
+message DataWrite {
+  string key = 1;
+  bytes value = 2;
+  AccessControl ACL = 3;
+}
+
+message DataDelete {
+    string key = 1;
+}
+
+message ConfigTx {
+    string userID = 1;
+    string txID = 2;
+    Version read_old_config_version = 3;
+    ClusterConfig new_config = 4;
+}
+
+message DBAdministrationTx {
+    string userID = 1;
+    string txID = 2;
+    repeated string createDBs = 3;
+    repeated string deleteDBs = 4;
+}
+
+message UserAdministrationTx {
+    string userID = 1;
+    string txID = 2;
+    repeated UserRead user_reads = 3;
+    repeated UserWrite user_writes = 4;
+    repeated UserDelete user_deletes = 5;
+}
+
+message UserRead {
+    string userID = 1;
+    Version version = 2;
+}
+
+message UserWrite {
+    User user = 1;
+    AccessControl ACL = 2;
+}
+
+message UserDelete {
+    string userID = 1;
+}

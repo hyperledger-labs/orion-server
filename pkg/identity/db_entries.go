@@ -3,7 +3,7 @@ package identity
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 

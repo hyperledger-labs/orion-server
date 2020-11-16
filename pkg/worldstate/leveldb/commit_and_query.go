@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 )
 

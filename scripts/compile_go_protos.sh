@@ -1,19 +1,15 @@
 #!/bin/bash
 
-set -eu -o pipefail
+set -euo pipefail
 
-pushd .
-
-repo="."
-
-if [ ! -d "$repo" ]; then
-  mkdir "$repo"
-fi
+cd protos
+mkdir -p ../pkg/types
 
 for protos in $(find . -name '*.proto' -exec dirname {} \; | sort -u); do
-  protoc  -I ../protos -I . "--go_out=plugins=grpc,paths=source_relative:$repo" "$protos"/*.proto
+  protoc  \
+    --proto_path . \
+    --go_out=../pkg/types \
+    --go_opt=paths=source_relative \
+    $protos/*.proto
 done
 
-popd
-
-chown -R --reference=api api/*

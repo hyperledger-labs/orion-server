@@ -13,14 +13,14 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/pkg/common/constants"
 	"github.ibm.com/blockchaindb/server/pkg/common/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
-	)
+	"github.ibm.com/blockchaindb/server/pkg/types"
+)
 
 func setupTestServer(t *testing.T) (*BCDBHTTPServer, tls.Certificate, string, error) {
 	tempDir, err := ioutil.TempDir("/tmp", "serverTest")

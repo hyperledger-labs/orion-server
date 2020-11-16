@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+option go_package = "github.ibm.com/blockchaindb/protos/types";
+
+package types;
+
+// ClusterConfig holds the configuration of a
+// blockchain database cluster which includes
+// a set of nodes, admins, and a root certificate
+// authority
+message ClusterConfig {
+  repeated NodeConfig nodes = 1;
+  repeated Admin admins = 2;
+  bytes rootCA_certificate = 3;
+}
+
+// NodeConfig holds the information about a
+// database node in the cluster. TODO: change
+// the name NodeConfig to Node once the existing
+// message Node is renamed to something else.
+message NodeConfig {
+  string ID = 1;
+  string address = 2;
+  uint32 port = 3;
+  bytes certificate = 4;
+}
+
+// Admin holds the id and certificate of the
+// cluster administrator
+message Admin {
+  string ID = 1;
+  bytes certificate = 2;
+}
+
+// Database configuration. Stores default read/write ACLs
+// Stored as value in _dbs system database under key 'name'
+message DatabaseConfig {
+  string name = 1;
+  repeated string read_access_users = 2;
+  repeated string write_access_users = 3;
+}
+
+// User holds userID, certificate, privilege the user has,
+// and groups the user belong to.
+message User {
+  string ID = 1;
+  bytes certificate = 2;
+  Privilege privilege = 3;
+}
+
+// Privilege holds user/group privilege information such as
+// a list of databases to which the read is allowed, a list of
+// databases to which the write is allowed, bools to indicate
+// where the db manipulation such as DB creation/deletion and
+// user manipulation such as add/update/delete are allowed.
+message Privilege {
+  enum Access {
+      Read = 0;
+      ReadWrite = 1;
+  }
+  map<string, Access> DB_permission = 1;
+  bool DB_administration = 2;
+  bool cluster_administration = 4;
+  bool user_administration = 3;
+}

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+option go_package = "github.ibm.com/blockchaindb/protos/types";
+
+package types;
+
+import "block_and_transaction.proto";
+import "query_and_response.proto";
+
+message TxProof {
+  BlockHeader header = 1;
+  repeated bytes path = 2;
+}
+
+message BlockProof {
+  uint64 block_number = 1;
+  repeated BlockHeader path = 2;
+}
+
+message GetBlockQuery {
+  string userID = 1;
+  uint64 block_number = 2;
+}
+
+message GetBlockQueryEnvelope {
+  GetBlockQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetBlockResponse {
+  ResponseHeader header = 1;
+  BlockHeader blockHeader = 2;
+}
+
+message GetBlockResponseEnvelope {
+  GetBlockResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetLedgerPathQuery {
+  string userID = 1;
+  uint64 start_block_number = 2;
+  uint64 end_block_number = 3;
+}
+
+message GetLedgerPathQueryEnvelope {
+  GetLedgerPathQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetLedgerPathResponse {
+  ResponseHeader header = 1;
+  repeated BlockHeader blockHeaders = 2;
+}
+
+message GetLedgerPathResponseEnvelope {
+  GetLedgerPathResponse payload = 1;
+  bytes signature = 2;
+}
