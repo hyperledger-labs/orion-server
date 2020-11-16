@@ -12,8 +12,8 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.6.1
 	github.com/syndtr/goleveldb v1.0.0
-	github.ibm.com/blockchaindb/library v0.0.0
 	github.ibm.com/blockchaindb/protos v0.0.0
+	go.uber.org/zap v1.10.0
 )
 
 replace github.ibm.com/blockchaindb/library v0.0.0 => ../library

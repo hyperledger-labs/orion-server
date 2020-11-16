@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
-	"github.ibm.com/blockchaindb/library/pkg/constants"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/common/constants"
+	"github.ibm.com/blockchaindb/server/pkg/common/logger"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 )

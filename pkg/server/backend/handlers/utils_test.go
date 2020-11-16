@@ -3,12 +3,13 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
-	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
-	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
+	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"

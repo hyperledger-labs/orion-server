@@ -2,8 +2,8 @@ package blockprocessor
 
 import (
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/common/logger"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
 )
 

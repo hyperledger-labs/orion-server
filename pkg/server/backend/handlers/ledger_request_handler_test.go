@@ -4,15 +4,16 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
 	"net/http"
 	"net/http/httptest"
 	"path"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/common/constants"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
@@ -107,10 +108,10 @@ func TestBlockQuery(t *testing.T) {
 			expectedErr:        "error while processing 'GET /ledger/block/1' because no such block",
 		},
 		{
-			name: "invalid block id",
+			name:             "invalid block id",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint + path.Join("block", "block1"), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint+path.Join("block", "block1"), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -293,7 +294,7 @@ func TestPathQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusBadRequest,
-			expectedErr: "query error - bad or missing start/end block number",
+			expectedErr:        "query error - bad or missing start/end block number",
 		},
 	}
 

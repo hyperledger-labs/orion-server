@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/blockcreator"
 	"github.ibm.com/blockchaindb/server/pkg/blockprocessor"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
+	"github.ibm.com/blockchaindb/server/pkg/common/logger"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 	"github.ibm.com/blockchaindb/server/pkg/txreorderer"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"

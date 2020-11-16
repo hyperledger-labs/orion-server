@@ -8,8 +8,8 @@ import (
 	"net/url"
 
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/library/pkg/constants"
 	"github.ibm.com/blockchaindb/protos/types"
+	"github.ibm.com/blockchaindb/server/pkg/common/constants"
 )
 
 type Client struct {

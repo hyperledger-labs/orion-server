@@ -10,13 +10,12 @@ import (
 	"testing"
 	"time"
 
-	"github.ibm.com/blockchaindb/library/pkg/crypto"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/library/pkg/logger"
 	"github.ibm.com/blockchaindb/protos/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
+	"github.ibm.com/blockchaindb/server/pkg/common/crypto"
+	"github.ibm.com/blockchaindb/server/pkg/common/logger"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/queue"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
