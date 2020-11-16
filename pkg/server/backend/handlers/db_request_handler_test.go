@@ -42,7 +42,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -71,7 +71,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -111,7 +111,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -133,7 +133,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, bobSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -155,7 +155,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -208,80 +208,139 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 }
 
 func TestDBRequestHandler_DBTransaction(t *testing.T) {
-	userID := "testUserID"
+	userID := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	dbTx := &types.DBAdministrationTx{
+		TxID:      "1",
+		UserID:    userID,
+		CreateDBs: []string{"newDB"},
+		DeleteDBs: []string{"dbToDelete"},
+	}
+
+	aliceSig := testutils.SignatureFromTx(t, aliceSigner, dbTx)
+
 	testCases := []struct {
 		name                    string
-		dataTx                  interface{}
-		createMockAndInstrument func(t *testing.T, dataTx interface{}) backend.DB
+		txEnvFactory            func() *types.DBAdministrationTxEnvelope
+		createMockAndInstrument func(t *testing.T, dataTxEnv interface{}) backend.DB
 		expectedCode            int
+		expectedErr             string
 	}{
 		{
-			name: "submit valid db transaction",
-			dataTx: &types.DBAdministrationTxEnvelope{
-				Payload: &types.DBAdministrationTx{
-					TxID:      "1",
-					UserID:    userID,
-					CreateDBs: []string{"newDB"},
-					DeleteDBs: []string{"dbToDelete"},
-				},
-				Signature: []byte{0, 0, 0},
+			name: "submit valid dbAdmin transaction",
+			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
+				return &types.DBAdministrationTxEnvelope{
+					Payload:   dbTx,
+					Signature: aliceSig,
+				}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", userID).Return(true, nil)
+				db.On("GetCertificate", userID).Return(aliceCert, nil)
 				db.On("SubmitTransaction", mock.Anything).Run(func(args mock.Arguments) {
 					tx, ok := args[0].(*types.DBAdministrationTxEnvelope)
 					require.True(t, ok)
-					require.Equal(t, dataTx, tx)
+					require.Equal(t, dataTxEnv, tx)
 				}).Return(nil)
 				return db
 			},
 			expectedCode: http.StatusOK,
 		},
 		{
-			name: "submit configuration with missing userID",
-			dataTx: &types.DBAdministrationTxEnvelope{
-				Payload: &types.DBAdministrationTx{
-					TxID:      "1",
-					CreateDBs: []string{"newDB"},
-					DeleteDBs: []string{"dbToDelete"},
-				},
-				Signature: []byte{0, 0, 0},
+			name: "submit dbAdmin tx with missing payload",
+			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
+				return &types.DBAdministrationTxEnvelope{Payload: nil, Signature: aliceSig}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", userID).Return(false, nil)
-				return db
-			},
-			expectedCode: http.StatusForbidden,
-		},
-		{
-			name: "fail to retrieve information about submitting user",
-			dataTx: &types.DBAdministrationTxEnvelope{
-				Payload: &types.DBAdministrationTx{
-					TxID:      "1",
-					CreateDBs: []string{"newDB"},
-					DeleteDBs: []string{"dbToDelete"},
-				},
-				Signature: []byte{0, 0, 0},
-			},
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
-				db := &mocks.DB{}
-				db.On("DoesUserExist", userID).Return(false, errors.New("fail to retrieve user's record"))
 				return db
 			},
 			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing transaction envelope payload (*types.DBAdministrationTx)",
 		},
 		{
-			name:   "fail to submit transaction",
-			dataTx: &types.DBAdministrationTxEnvelope{},
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
+			name: "submit dbAdmin tx with missing userID",
+			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
+				tx := &types.DBAdministrationTx{}
+				*tx = *dbTx
+				tx.UserID = ""
+				return &types.DBAdministrationTxEnvelope{Payload: tx, Signature: aliceSig}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", mock.Anything).Return(true, nil)
-				db.On("SubmitTransaction", mock.Anything).Return(errors.New("failed to submit transactions"))
+				return db
+			},
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing UserID in transaction envelope payload (*types.DBAdministrationTx)",
+		},
+		{
+			name: "submit dbAdmin tx with missing signature",
+			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
+				return &types.DBAdministrationTxEnvelope{Payload: dbTx, Signature: nil}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing Signature in transaction envelope payload (*types.DBAdministrationTx)",
+		},
+		{
+			name: "bad signature",
+			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
+				return &types.DBAdministrationTxEnvelope{
+					Payload:   dbTx,
+					Signature: []byte("bad-sig"),
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", userID).Return(aliceCert, nil)
+
+				return db
+			},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "signature verification failed",
+		},
+		{
+			name: "no such user",
+			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
+				tx := &types.DBAdministrationTx{}
+				*tx = *dbTx
+				tx.UserID = "not-alice"
+				return &types.DBAdministrationTxEnvelope{
+					Payload:   tx,
+					Signature: aliceSig,
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", "not-alice").Return(nil, errors.New("no such user"))
+
+				return db
+			},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "signature verification failed",
+		},
+		{
+			name: "fail to submit transaction",
+			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
+				return &types.DBAdministrationTxEnvelope{
+					Payload:   dbTx,
+					Signature: aliceSig,
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", userID).Return(aliceCert, nil)
+				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))
+
 				return db
 			},
 			expectedCode: http.StatusInternalServerError,
+			expectedErr:  "oops, submission failed",
 		},
 	}
 
@@ -291,8 +350,8 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			txBytes, err := json.Marshal(tt.dataTx)
+			txEnv := tt.txEnvFactory()
+			txBytes, err := json.Marshal(txEnv)
 			require.NoError(t, err)
 			require.NotNil(t, txBytes)
 
@@ -305,11 +364,17 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 
 			rr := httptest.NewRecorder()
 
-			db := tt.createMockAndInstrument(t, tt.dataTx)
+			db := tt.createMockAndInstrument(t, txEnv)
 			handler := NewDBRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)
+			if tt.expectedCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 		})
 	}
 }

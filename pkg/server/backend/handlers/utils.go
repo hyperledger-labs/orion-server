@@ -39,23 +39,7 @@ type txHandler struct {
 }
 
 // HandleTransaction handles transaction submission
-func (t *txHandler) HandleTransaction(w http.ResponseWriter, userID string, tx interface{}) {
-	exist, err := t.db.DoesUserExist(userID)
-	if err != nil {
-		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return
-	}
-	if !exist {
-		SendHTTPResponse(
-			w,
-			http.StatusForbidden,
-			&ResponseErr{
-				ErrMsg: "transaction is rejected as the submitting user [" + userID + "] does not exist in the cluster",
-			},
-		)
-		return
-	}
-
+func (t *txHandler) HandleTransaction(w http.ResponseWriter, tx interface{}) {
 	if err := t.db.SubmitTransaction(tx); err != nil {
 		SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{ErrMsg: err.Error()})
 		return
@@ -231,18 +215,18 @@ func extractBlockQueryEnvelope(request *http.Request, responseWriter http.Respon
 	return env, respondedErr
 }
 
-func VerifyQuerySignature(
+func VerifyRequestSignature(
 	sigVerifier *cryptoservice.SignatureVerifier,
 	user string,
 	signature []byte,
-	queryPayload interface{},
+	requestPayload interface{},
 ) (error, int) {
-	queryBytes, err := json.Marshal(queryPayload)
+	requestBytes, err := json.Marshal(requestPayload)
 	if err != nil {
 		return &ResponseErr{ErrMsg: "failure during json.Marshal: " + err.Error()}, http.StatusInternalServerError
 	}
 
-	err = sigVerifier.Verify(user, signature, queryBytes)
+	err = sigVerifier.Verify(user, signature, requestBytes)
 	if err != nil {
 		return &ResponseErr{ErrMsg: "signature verification failed"}, http.StatusUnauthorized
 	}

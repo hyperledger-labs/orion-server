@@ -2,15 +2,17 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
+	"github.ibm.com/blockchaindb/server/pkg/server/backend/mocks"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/library/pkg/crypto"
 	"github.ibm.com/blockchaindb/protos/types"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 )
 
 func TestSendHTTPResponse(t *testing.T) {
@@ -51,8 +53,46 @@ func TestSendHTTPResponse(t *testing.T) {
 	})
 }
 
-func signatureFromQuery(t *testing.T, querySigner *crypto.Signer, query interface{}) []byte {
-	sig, err := cryptoservice.SignQuery(querySigner, query)
-	require.NoError(t, err)
-	return sig
+func TestVerifyRequestSignature(t *testing.T) {
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	t.Run("good sig", func(t *testing.T) {
+		db := &mocks.DB{}
+		verifier := cryptoservice.NewVerifier(db)
+		db.On("GetCertificate", "alice").Return(aliceCert, nil)
+		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
+		err, code := VerifyRequestSignature(verifier, "alice", testutils.SignatureFromTx(t, aliceSigner, payload), payload)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, code)
+	})
+
+	t.Run("no such user", func(t *testing.T) {
+		db := &mocks.DB{}
+		verifier := cryptoservice.NewVerifier(db)
+		db.On("GetCertificate", "alice").Return(nil, errors.New("no such user"))
+		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
+		err, code := VerifyRequestSignature(verifier, "alice", testutils.SignatureFromTx(t, aliceSigner, payload), payload)
+		require.EqualError(t, err, "signature verification failed")
+		require.Equal(t, http.StatusUnauthorized, code)
+	})
+
+	t.Run("bad sig", func(t *testing.T) {
+		db := &mocks.DB{}
+		verifier := cryptoservice.NewVerifier(db)
+		db.On("GetCertificate", "alice").Return(aliceCert, nil)
+		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
+		err, code := VerifyRequestSignature(verifier, "alice", []byte("bad-sig"), payload)
+		require.EqualError(t, err, "signature verification failed")
+		require.Equal(t, http.StatusUnauthorized, code)
+	})
+
+	t.Run("internal error", func(t *testing.T) {
+		db := &mocks.DB{}
+		verifier := cryptoservice.NewVerifier(db)
+		payload := make(chan struct{})
+		err, code := VerifyRequestSignature(verifier, "alice", []byte("something"), payload)
+		require.EqualError(t, err, "failure during json.Marshal: json: unsupported type: chan struct {}")
+		require.Equal(t, http.StatusInternalServerError, code)
+	})
 }

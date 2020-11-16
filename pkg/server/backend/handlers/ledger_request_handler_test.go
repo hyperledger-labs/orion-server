@@ -52,7 +52,7 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
@@ -73,7 +73,7 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
@@ -93,7 +93,7 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
@@ -205,7 +205,7 @@ func TestPathQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
 					UserID:           submittingUserName,
 					StartBlockNumber: 1,
 					EndBlockNumber:   2,
@@ -230,7 +230,7 @@ func TestPathQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
 					UserID:           submittingUserName,
 					StartBlockNumber: 1,
 					EndBlockNumber:   2,
@@ -256,7 +256,7 @@ func TestPathQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
 					UserID:           submittingUserName,
 					StartBlockNumber: 1,
 					EndBlockNumber:   2,

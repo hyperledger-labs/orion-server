@@ -50,7 +50,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -120,7 +120,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, bobSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetConfigQuery{UserID: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -138,7 +138,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -156,7 +156,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := signatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -207,43 +207,56 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 }
 
 func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
-	testCases := []struct {
+	submittingUserName := "admin"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"admin"})
+	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "admin")
+
+	configTx := &types.ConfigTx{
+		UserID: submittingUserName,
+		TxID:   "1",
+		NewConfig: &types.ClusterConfig{
+			Admins: []*types.Admin{
+				{
+					ID:          "admin1",
+					Certificate: []byte("bogus"),
+				},
+			},
+			Nodes: []*types.NodeConfig{
+				{
+					ID:          "testNode",
+					Certificate: []byte("fake"),
+					Address:     "http://localhost",
+					Port:        8080,
+				},
+			},
+		},
+		ReadOldConfigVersion: &types.Version{
+			BlockNum: 1,
+			TxNum:    1,
+		},
+	}
+	sigAdmin := testutils.SignatureFromTx(t, adminSigner, configTx)
+
+	type testCase struct {
 		name                    string
-		configTx                *types.ConfigTxEnvelope
+		txEnvFactory            func() *types.ConfigTxEnvelope
 		createMockAndInstrument func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB
 		expectedCode            int
-	}{
+		expectedErr             string
+	}
+
+	testCases := []testCase{
 		{
 			name: "submit valid configuration update",
-			configTx: &types.ConfigTxEnvelope{
-				Payload: &types.ConfigTx{
-					UserID: "admin",
-					TxID:   "1",
-					NewConfig: &types.ClusterConfig{
-						Admins: []*types.Admin{
-							{
-								ID: "admin1",
-							},
-						},
-						Nodes: []*types.NodeConfig{
-							{
-								ID:          "testNode",
-								Certificate: []byte{0, 0, 0},
-								Address:     "http://localhost",
-								Port:        8080,
-							},
-						},
-					},
-					ReadOldConfigVersion: &types.Version{
-						TxNum:    1,
-						BlockNum: 1,
-					},
-				},
-				Signature: []byte{0, 0, 0},
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{
+					Payload:   configTx,
+					Signature: sigAdmin,
+				}
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", mock.Anything).Return(true, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
 				db.On("SubmitTransaction", mock.Anything).Run(func(args mock.Arguments) {
 					config := args[0].(*types.ConfigTxEnvelope)
 					require.Equal(t, configTx, config)
@@ -254,84 +267,98 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			expectedCode: http.StatusOK,
 		},
 		{
-			name: "submit configuration with missing userID",
-			configTx: &types.ConfigTxEnvelope{
-				Payload: &types.ConfigTx{
-					TxID: "1",
-					NewConfig: &types.ClusterConfig{
-						Admins: []*types.Admin{
-							{
-								ID: "admin1",
-							},
-						},
-						Nodes: []*types.NodeConfig{
-							{
-								ID:          "testNode",
-								Certificate: []byte{0, 0, 0},
-								Address:     "http://localhost",
-								Port:        8080,
-							},
-						},
-					},
-					ReadOldConfigVersion: &types.Version{
-						TxNum:    1,
-						BlockNum: 1,
-					},
-				},
-				Signature: []byte{0, 0, 0},
+			name: "submit configuration with missing payload",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{Payload: nil, Signature: sigAdmin}
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", mock.Anything).Return(false, nil)
-				return db
-			},
-			expectedCode: http.StatusForbidden,
-		},
-		{
-			name: "fail to retrieve information about submitting user",
-			configTx: &types.ConfigTxEnvelope{
-				Payload: &types.ConfigTx{
-					TxID: "1",
-					NewConfig: &types.ClusterConfig{
-						Admins: []*types.Admin{
-							{
-								ID: "admin1",
-							},
-						},
-						Nodes: []*types.NodeConfig{
-							{
-								ID:          "testNode",
-								Certificate: []byte{0, 0, 0},
-								Address:     "http://localhost",
-								Port:        8080,
-							},
-						},
-					},
-					ReadOldConfigVersion: &types.Version{
-						TxNum:    1,
-						BlockNum: 1,
-					},
-				},
-				Signature: []byte{0, 0, 0},
-			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
-				db := &mocks.DB{}
-				db.On("DoesUserExist", mock.Anything).Return(false, errors.New("fail to retrieve user's record"))
 				return db
 			},
 			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing transaction envelope payload (*types.ConfigTx)",
 		},
 		{
-			name:     "fail to submit transaction",
-			configTx: &types.ConfigTxEnvelope{},
+			name: "submit configuration with missing userID",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				tx := &types.ConfigTx{}
+				*tx = *configTx
+				tx.UserID = ""
+				return &types.ConfigTxEnvelope{Payload: tx, Signature: sigAdmin}
+			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", mock.Anything).Return(true, nil)
-				db.On("SubmitTransaction", mock.Anything).Return(errors.New("failed to submit transactions"))
+				return db
+			},
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing UserID in transaction envelope payload (*types.ConfigTx)",
+		},
+		{
+			name: "submit configuration with missing signature",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{Payload: configTx, Signature: nil}
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing Signature in transaction envelope payload (*types.ConfigTx)",
+		},
+		{
+			name: "bad signature",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{
+					Payload:   configTx,
+					Signature: []byte("bad-sig"),
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+
+				return db
+			},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "signature verification failed",
+		},
+		{
+			name: "no such user",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				tx := &types.ConfigTx{}
+				*tx = *configTx
+				tx.UserID = "not-admin"
+				return &types.ConfigTxEnvelope{
+					Payload:   tx,
+					Signature: sigAdmin,
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", "not-admin").Return(nil, errors.New("no such user"))
+
+				return db
+			},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "signature verification failed",
+		},
+		{
+			name: "fail to submit transaction",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{
+					Payload:   configTx,
+					Signature: sigAdmin,
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))
 
 				return db
 			},
 			expectedCode: http.StatusInternalServerError,
+			expectedErr:  "oops, submission failed",
 		},
 	}
 
@@ -341,7 +368,8 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			txBytes, err := json.Marshal(tt.configTx)
+			txEnv := tt.txEnvFactory()
+			txBytes, err := json.Marshal(txEnv)
 			require.NoError(t, err)
 
 			txReader := bytes.NewReader(txBytes)
@@ -354,11 +382,16 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			rr := httptest.NewRecorder()
 			require.NotNil(t, rr)
 
-			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, tt.configTx), logger)
+			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, txEnv), logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)
-
+			if tt.expectedCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 		})
 	}
 }

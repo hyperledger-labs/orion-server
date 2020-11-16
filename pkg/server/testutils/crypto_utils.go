@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -148,3 +149,16 @@ func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate
 
 	return cert, signer
 }
+
+func SignatureFromTx(t *testing.T, signer *crypto.Signer, tx interface{}) []byte {
+	sig, err := cryptoservice.SignTx(signer, tx)
+	require.NoError(t, err)
+	return sig
+}
+
+func SignatureFromQuery(t *testing.T, signner *crypto.Signer, query interface{}) []byte {
+	sig, err := cryptoservice.SignQuery(signner, query)
+	require.NoError(t, err)
+	return sig
+}
+

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -30,7 +31,7 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 		return
 	}
 
-	err, code := VerifyQuerySignature(c.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	err, code := VerifyRequestSignature(c.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
 	if err != nil {
 		SendHTTPResponse(response, code, err)
 		return
@@ -53,14 +54,36 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 	d := json.NewDecoder(request.Body)
 	d.DisallowUnknownFields()
 
-	tx := &types.ConfigTxEnvelope{}
-	if err := d.Decode(tx); err != nil {
+	txEnv := &types.ConfigTxEnvelope{}
+	if err := d.Decode(txEnv); err != nil {
 		SendHTTPResponse(response, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return
 	}
 
-	// TODO: verify signature
-	c.txHandler.HandleTransaction(response, tx.GetPayload().GetUserID(), tx)
+	if txEnv.Payload == nil {
+		SendHTTPResponse(response, http.StatusBadRequest,
+			&ResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
+		return
+	}
+
+	if txEnv.Payload.UserID == "" {
+		SendHTTPResponse(response, http.StatusBadRequest,
+			&ResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
+		return
+	}
+
+	if len(txEnv.Signature) == 0 {
+		SendHTTPResponse(response, http.StatusBadRequest,
+			&ResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
+		return
+	}
+
+	if err, code := VerifyRequestSignature(c.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
+		SendHTTPResponse(response, code, &ResponseErr{err.Error()})
+		return
+	}
+
+	c.txHandler.HandleTransaction(response, txEnv)
 }
 
 // NewConfigRequestHandler return config transactions request handler

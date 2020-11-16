@@ -26,7 +26,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
 
-	sigFoo := signatureFromQuery(t, aliceSigner, &types.GetDataQuery{
+	sigFoo := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataQuery{
 		UserID: submittingUserName,
 		DBName: dbName,
 		Key:    "foo",
@@ -148,7 +148,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sigFooBob := signatureFromQuery(t, bobSigner, &types.GetDataQuery{
+				sigFooBob := testutils.SignatureFromQuery(t, bobSigner, &types.GetDataQuery{
 					UserID: submittingUserName,
 					DBName: dbName,
 					Key:    "foo",
@@ -236,51 +236,60 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 }
 
 func TestDataRequestHandler_DataTransaction(t *testing.T) {
-	userID := "testUserID"
+	userID := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	dataTx := &types.DataTx{
+		UserID: userID,
+		TxID:   "1",
+		DBName: "testDB",
+		DataDeletes: []*types.DataDelete{
+			{
+				Key: "foo",
+			},
+		},
+		DataReads: []*types.DataRead{
+			{
+				Key: "bar",
+				Version: &types.Version{
+					TxNum:    1,
+					BlockNum: 1,
+				},
+			},
+		},
+		DataWrites: []*types.DataWrite{
+			{
+				Key:   "xxx",
+				Value: []byte("yyy"),
+				ACL:   &types.AccessControl{},
+			},
+		},
+	}
+	aliceSig := testutils.SignatureFromTx(t, aliceSigner, dataTx)
+
 	testCases := []struct {
 		name                    string
-		dataTx                  interface{}
-		createMockAndInstrument func(t *testing.T, dataTx interface{}) backend.DB
+		txEnvFactory            func() *types.DataTxEnvelope
+		createMockAndInstrument func(t *testing.T, dataTxEnv interface{}) backend.DB
 		expectedCode            int
+		expectedErr             string
 	}{
 		{
 			name: "submit valid data transaction",
-			dataTx: &types.DataTxEnvelope{
-				Payload: &types.DataTx{
-					UserID: userID,
-					TxID:   "1",
-					DBName: "testDB",
-					DataDeletes: []*types.DataDelete{
-						{
-							Key: "foo",
-						},
-					},
-					DataReads: []*types.DataRead{
-						{
-							Key: "bar",
-							Version: &types.Version{
-								TxNum:    1,
-								BlockNum: 1,
-							},
-						},
-					},
-					DataWrites: []*types.DataWrite{
-						{
-							Key:   "xxx",
-							Value: []byte("yyy"),
-							ACL:   &types.AccessControl{},
-						},
-					},
-				},
-				Signature: []byte{0, 0, 0},
+			txEnvFactory: func() *types.DataTxEnvelope {
+				return &types.DataTxEnvelope{
+					Payload:   dataTx,
+					Signature: aliceSig,
+				}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", userID).Return(true, nil)
+				db.On("GetCertificate", userID).Return(aliceCert, nil)
 				db.On("SubmitTransaction", mock.Anything).
 					Run(func(args mock.Arguments) {
 						tx := args[0].(*types.DataTxEnvelope)
-						require.Equal(t, dataTx, tx)
+						require.Equal(t, dataTxEnv, tx)
 					}).
 					Return(nil)
 				return db
@@ -288,42 +297,98 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			expectedCode: http.StatusOK,
 		},
 		{
-			name: "submit valid data transaction",
-			dataTx: &types.DataTxEnvelope{
-				Payload: &types.DataTx{
-					UserID: userID,
-					TxID:   "1",
-					DBName: "testDB",
-				},
-				Signature: []byte{0, 0, 0},
+			name: "submit data tx with missing payload",
+			txEnvFactory: func() *types.DataTxEnvelope {
+				return &types.DataTxEnvelope{Payload: nil, Signature: aliceSig}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", userID).Return(true, nil)
-				db.On("SubmitTransaction", mock.Anything).Return(errors.New("failed to store data transaction"))
-				return db
-			},
-			expectedCode: http.StatusInternalServerError,
-		},
-		{
-			name:   "failed to retrieve submitting user id",
-			dataTx: nil,
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
-				db := &mocks.DB{}
-				db.On("DoesUserExist", mock.Anything).Return(false, errors.New("fail to read from database"))
 				return db
 			},
 			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing transaction envelope payload (*types.DataTx)",
 		},
 		{
-			name:   "submitting user doesn't exist",
-			dataTx: nil,
-			createMockAndInstrument: func(t *testing.T, dataTx interface{}) backend.DB {
+			name: "submit data tx with missing userID",
+			txEnvFactory: func() *types.DataTxEnvelope {
+				tx := &types.DataTx{}
+				*tx = *dataTx
+				tx.UserID = ""
+				return &types.DataTxEnvelope{Payload: tx, Signature: aliceSig}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", mock.Anything).Return(false, nil)
 				return db
 			},
-			expectedCode: http.StatusForbidden,
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing UserID in transaction envelope payload (*types.DataTx)",
+		},
+		{
+			name: "submit data tx with missing signature",
+			txEnvFactory: func() *types.DataTxEnvelope {
+				return &types.DataTxEnvelope{Payload: dataTx, Signature: nil}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "missing Signature in transaction envelope payload (*types.DataTx)",
+		},
+		{
+			name: "bad signature",
+			txEnvFactory: func() *types.DataTxEnvelope {
+				return &types.DataTxEnvelope{
+					Payload:   dataTx,
+					Signature: []byte("bad-sig"),
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", userID).Return(aliceCert, nil)
+
+				return db
+			},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "signature verification failed",
+		},
+		{
+			name: "no such user",
+			txEnvFactory: func() *types.DataTxEnvelope {
+				tx := &types.DataTx{}
+				*tx = *dataTx
+				tx.UserID = "not-alice"
+				return &types.DataTxEnvelope{
+					Payload:   tx,
+					Signature: aliceSig,
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", "not-alice").Return(nil, errors.New("no such user"))
+
+				return db
+			},
+			expectedCode: http.StatusUnauthorized,
+			expectedErr:  "signature verification failed",
+		},
+		{
+			name: "fail to submit transaction",
+			txEnvFactory: func() *types.DataTxEnvelope {
+				return &types.DataTxEnvelope{
+					Payload:   dataTx,
+					Signature: aliceSig,
+				}
+			},
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", userID).Return(aliceCert, nil)
+				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))
+
+				return db
+			},
+			expectedCode: http.StatusInternalServerError,
+			expectedErr:  "oops, submission failed",
 		},
 	}
 
@@ -333,8 +398,8 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			txBytes, err := json.Marshal(tt.dataTx)
+			txEnv := tt.txEnvFactory()
+			txBytes, err := json.Marshal(txEnv)
 			require.NoError(t, err)
 			require.NotNil(t, txBytes)
 
@@ -347,11 +412,17 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 
 			rr := httptest.NewRecorder()
 
-			db := tt.createMockAndInstrument(t, tt.dataTx)
+			db := tt.createMockAndInstrument(t, txEnv)
 			handler := NewDataRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)
+			if tt.expectedCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
 		})
 	}
 }

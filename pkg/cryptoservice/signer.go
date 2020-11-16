@@ -31,3 +31,25 @@ func SignQuery(querySigner *crypto.Signer, query interface{}) ([]byte, error) {
 	}
 	return sig, nil
 }
+
+func SignTx(txSigner *crypto.Signer, tx interface{}) ([]byte, error) {
+	switch v := tx.(type) {
+	case *types.ConfigTx:
+	case *types.DataTx:
+	case *types.UserAdministrationTx:
+	case *types.DBAdministrationTx:
+
+	default:
+		return nil, errors.Errorf("unknown transaction type: %T", v)
+	}
+
+	txBytes, err := json.Marshal(tx)
+	if err != nil {
+		return nil, err
+	}
+	sig, err := txSigner.Sign(txBytes)
+	if err != nil {
+		return nil, err
+	}
+	return sig, nil
+}

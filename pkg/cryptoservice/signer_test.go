@@ -2,6 +2,7 @@ package cryptoservice_test
 
 import (
 	"crypto/x509"
+	"net/http"
 	"path"
 	"testing"
 
@@ -35,8 +36,10 @@ func TestSignQuery(t *testing.T) {
 			sig, err := cryptoservice.SignQuery(signer, q)
 			require.NoError(t, err)
 			require.NotNil(t, sig)
-			err, _ = handlers.VerifyQuerySignature(sigVerifier, "alice", sig, q)
+			var status int
+			err, status = handlers.VerifyRequestSignature(sigVerifier, "alice", sig, q)
 			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, status)
 		}
 	})
 

@@ -144,24 +144,26 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 	}
 	adminUserRec.GetPayload().GetUser().GetPrivilege().DBPermission["bdb"] = types.Privilege_ReadWrite
 
-	_, err = client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
-		Payload: &types.UserAdministrationTx{
-			TxID:   uuid.New().String(),
-			UserID: "admin",
-			UserWrites: []*types.UserWrite{
-				{
-					User: adminUserRec.GetPayload().GetUser(),
-					ACL:  adminUserRec.GetPayload().GetMetadata().GetAccessControl(),
-				},
-			},
-			UserReads: []*types.UserRead{
-				{
-					UserID:  adminUserRec.GetPayload().GetUser().GetID(),
-					Version: adminUserRec.GetPayload().GetMetadata().GetVersion(),
-				},
+	userTx := &types.UserAdministrationTx{
+		TxID:   uuid.New().String(),
+		UserID: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: adminUserRec.GetPayload().GetUser(),
+				ACL:  adminUserRec.GetPayload().GetMetadata().GetAccessControl(),
 			},
 		},
-		Signature: []byte{0},
+		UserReads: []*types.UserRead{
+			{
+				UserID:  adminUserRec.GetPayload().GetUser().GetID(),
+				Version: adminUserRec.GetPayload().GetMetadata().GetVersion(),
+			},
+		},
+	}
+
+	_, err = client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, adminSigner, userTx),
 	})
 	require.NoError(t, err)
 
@@ -182,32 +184,31 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 		UserID: "admin",
 		Key:    "foo",
 	}
-	dataQuerySig, err := cryptoservice.SignQuery(adminSigner, dataQuery)
-	require.NoError(t, err)
 	data, err := client.GetData(&types.GetDataQueryEnvelope{
 		Payload:   dataQuery,
-		Signature: dataQuerySig,
+		Signature: testutils.SignatureFromQuery(t, adminSigner, dataQuery),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, data)
 	require.Nil(t, data.Payload.Value)
 
+	dataTx := &types.DataTx{
+		UserID: "admin",
+		DBName: "bdb",
+		TxID:   uuid.New().String(),
+		DataWrites: []*types.DataWrite{
+			{
+				Key:   "foo",
+				Value: []byte("bar"),
+			},
+		},
+	}
 	// TODO (bartem): need to came up with the better way to handle
 	// transaction submission and getting results back
 	_, err = client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
-			Payload: &types.DataTx{
-				UserID: "admin",
-				DBName: "bdb",
-				TxID:   uuid.New().String(),
-				DataWrites: []*types.DataWrite{
-					{
-						Key:   "foo",
-						Value: []byte("bar"),
-					},
-				},
-			},
-			Signature: []byte{0},
+			Payload:   dataTx,
+			Signature: testutils.SignatureFromTx(t, adminSigner, dataTx),
 		})
 	require.NoError(t, err)
 
@@ -218,7 +219,7 @@ func TestDataQueries_CheckKeyForExistenceAndPostNew(t *testing.T) {
 				UserID: "admin",
 				Key:    "foo",
 			},
-			Signature: dataQuerySig,
+			Signature: testutils.SignatureFromQuery(t, adminSigner, dataQuery),
 		})
 
 		return err == nil &&
@@ -248,26 +249,27 @@ func TestDataQueries_ProvisionNewUser(t *testing.T) {
 	require.NoError(t, err)
 	certBlock, _ := pem.Decode(userCert)
 
-	_, err = client.SubmitTransaction(constants.PostUserTx,
-		&types.UserAdministrationTxEnvelope{
-			Payload: &types.UserAdministrationTx{
-				TxID:   uuid.New().String(),
-				UserID: "admin",
-				UserWrites: []*types.UserWrite{
-					{
-						User: &types.User{
-							ID: "testUser",
-							Privilege: &types.Privilege{
-								DBPermission: map[string]types.Privilege_Access{
-									"bdb": types.Privilege_ReadWrite,
-								},
-							},
-							Certificate: certBlock.Bytes,
+	userTx := &types.UserAdministrationTx{
+		TxID:   uuid.New().String(),
+		UserID: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: &types.User{
+					ID: "testUser",
+					Privilege: &types.Privilege{
+						DBPermission: map[string]types.Privilege_Access{
+							"bdb": types.Privilege_ReadWrite,
 						},
 					},
+					Certificate: certBlock.Bytes,
 				},
 			},
-			Signature: []byte{0},
+		},
+	}
+	_, err = client.SubmitTransaction(constants.PostUserTx,
+		&types.UserAdministrationTxEnvelope{
+			Payload:   userTx,
+			Signature: testutils.SignatureFromTx(t, adminSigner, userTx),
 		})
 	require.NoError(t, err)
 
@@ -301,15 +303,16 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
 	require.NoError(t, err)
 
+	dbTx := &types.DBAdministrationTx{
+		TxID:      uuid.New().String(),
+		UserID:    "admin",
+		CreateDBs: []string{"testDB"},
+	}
 	// Create new database
 	_, err = client.SubmitTransaction(constants.PostDBTx,
 		&types.DBAdministrationTxEnvelope{
-			Payload: &types.DBAdministrationTx{
-				TxID:      uuid.New().String(),
-				UserID:    "admin",
-				CreateDBs: []string{"testDB"},
-			},
-			Signature: []byte{0}, // TODO
+			Payload:   dbTx,
+			Signature: testutils.SignatureFromTx(t, adminSigner, dbTx),
 		})
 	require.NoError(t, err)
 
@@ -331,24 +334,25 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 	}
 	adminUserRec.GetPayload().GetUser().GetPrivilege().DBPermission["testDB"] = types.Privilege_ReadWrite
 
-	_, err = client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
-		Payload: &types.UserAdministrationTx{
-			TxID:   uuid.New().String(),
-			UserID: "admin",
-			UserWrites: []*types.UserWrite{
-				{
-					User: adminUserRec.GetPayload().GetUser(),
-					ACL:  adminUserRec.GetPayload().GetMetadata().GetAccessControl(),
-				},
-			},
-			UserReads: []*types.UserRead{
-				{
-					UserID:  adminUserRec.GetPayload().GetUser().GetID(),
-					Version: adminUserRec.GetPayload().GetMetadata().GetVersion(),
-				},
+	userTx := &types.UserAdministrationTx{
+		TxID:   uuid.New().String(),
+		UserID: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: adminUserRec.GetPayload().GetUser(),
+				ACL:  adminUserRec.GetPayload().GetMetadata().GetAccessControl(),
 			},
 		},
-		Signature: []byte{0},
+		UserReads: []*types.UserRead{
+			{
+				UserID:  adminUserRec.GetPayload().GetUser().GetID(),
+				Version: adminUserRec.GetPayload().GetMetadata().GetVersion(),
+			},
+		},
+	}
+	_, err = client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, adminSigner, userTx),
 	})
 	require.NoError(t, err)
 
@@ -362,31 +366,30 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 	}, time.Minute, 100*time.Millisecond)
 
 	dbStatusQuery := &types.GetDBStatusQuery{UserID: "admin", DBName: "testDB"}
-	dbStatusQuerySig, err := cryptoservice.SignQuery(adminSigner, dbStatusQuery)
-	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		db, err := client.GetDBStatus(&types.GetDBStatusQueryEnvelope{
 			Payload:   dbStatusQuery,
-			Signature: dbStatusQuerySig,
+			Signature: testutils.SignatureFromQuery(t, adminSigner, dbStatusQuery),
 		})
 		return err == nil && db.GetPayload().GetExist()
 	}, time.Minute, 100*time.Millisecond)
 
+	dataTx := &types.DataTx{
+		UserID: "admin",
+		DBName: "testDB",
+		TxID:   uuid.New().String(),
+		DataWrites: []*types.DataWrite{
+			{
+				Key:   "foo",
+				Value: []byte("bar"),
+			},
+		},
+	}
 	// Post transaction into new database
 	_, err = client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
-			Payload: &types.DataTx{
-				UserID: "admin",
-				DBName: "testDB",
-				TxID:   uuid.New().String(),
-				DataWrites: []*types.DataWrite{
-					{
-						Key:   "foo",
-						Value: []byte("bar"),
-					},
-				},
-			},
-			Signature: []byte{0},
+			Payload:   dataTx,
+			Signature: testutils.SignatureFromTx(t, adminSigner, dataTx),
 		})
 	require.NoError(t, err)
 
@@ -433,7 +436,7 @@ func TestDataQueries_FailureScenarios(t *testing.T) {
 			expectedError: "[admin] has no permission to read from database [bdb]",
 		},
 		{
-			testName: "missing signature",
+			testName: "bad signature",
 			envelopeProvider: func(_ *crypto.Signer) *types.GetDataQueryEnvelope {
 				getKeyQuery := &types.GetDataQuery{
 					UserID: "admin",

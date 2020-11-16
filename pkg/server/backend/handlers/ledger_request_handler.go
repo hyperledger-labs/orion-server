@@ -47,7 +47,7 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 		return
 	}
 
-	err, code := VerifyQuerySignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
 	if err != nil {
 		SendHTTPResponse(response, code, err)
 		return
@@ -82,7 +82,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 		return
 	}
 
-	err, code := VerifyQuerySignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
 	if err != nil {
 		SendHTTPResponse(response, code, err)
 		return
