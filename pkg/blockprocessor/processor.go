@@ -58,7 +58,7 @@ func (b *BlockProcessor) Run(stopBlockProcessing chan struct{}) {
 
 			block.Header.ValidationInfo = validationInfo
 
-			if err := b.blockStore.UpdateBlock(block); err != nil {
+			if err := b.blockStore.AddSkipListLinks(block); err != nil {
 				panic(err)
 			}
 

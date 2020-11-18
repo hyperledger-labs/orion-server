@@ -18,7 +18,7 @@ func TestBlockFileStream(t *testing.T) {
 		for blockNumber := uint64(1); blockNumber <= totalBlocks; blockNumber++ {
 			b := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
 
-			require.NoError(t, s.UpdateBlock(b))
+			require.NoError(t, s.AddSkipListLinks(b))
 			require.NoError(t, s.Commit(b))
 
 			preBlockBaseHash, err = s.GetBaseHeaderHash(blockNumber)

@@ -222,7 +222,7 @@ func TestRecovery(t *testing.T) {
 		defer env.cleanup(false)
 
 		block := createSampleUserTxBlock(1, nil, nil)
-		require.NoError(t, env.s.UpdateBlock(block))
+		require.NoError(t, env.s.AddSkipListLinks(block))
 
 		b, err := proto.Marshal(block)
 		require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestRecovery(t *testing.T) {
 		defer env.cleanup(false)
 
 		block := createSampleUserTxBlock(1, nil, nil)
-		require.NoError(t, env.s.UpdateBlock(block))
+		require.NoError(t, env.s.AddSkipListLinks(block))
 
 		b, err := proto.Marshal(block)
 		require.NoError(t, err)
@@ -285,7 +285,7 @@ func TestRecovery(t *testing.T) {
 		defer env.cleanup(false)
 
 		block1 := createSampleUserTxBlock(1, nil, nil)
-		require.NoError(t, env.s.UpdateBlock(block1))
+		require.NoError(t, env.s.AddSkipListLinks(block1))
 		env.s.Commit(block1)
 
 		block1BaseHeaderHash, err := env.s.GetBaseHeaderHash(1)
@@ -294,7 +294,7 @@ func TestRecovery(t *testing.T) {
 		require.NoError(t, err)
 
 		block2 := createSampleUserTxBlock(2, block1BaseHeaderHash, block1HeaderHash)
-		require.NoError(t, env.s.UpdateBlock(block2))
+		require.NoError(t, env.s.AddSkipListLinks(block2))
 
 		b, err := proto.Marshal(block2)
 		require.NoError(t, err)
@@ -323,7 +323,7 @@ func TestRecovery(t *testing.T) {
 		defer env.cleanup(false)
 
 		block1 := createSampleUserTxBlock(1, nil, nil)
-		require.NoError(t, env.s.UpdateBlock(block1))
+		require.NoError(t, env.s.AddSkipListLinks(block1))
 		env.s.Commit(block1)
 		block1Offset := env.s.currentOffset
 
@@ -333,7 +333,7 @@ func TestRecovery(t *testing.T) {
 		require.NoError(t, err)
 
 		block2 := createSampleUserTxBlock(2, block1BaseHeaderHash, block1HeaderHash)
-		require.NoError(t, env.s.UpdateBlock(block2))
+		require.NoError(t, env.s.AddSkipListLinks(block2))
 
 		b, err := proto.Marshal(block2)
 		require.NoError(t, err)
@@ -374,7 +374,7 @@ func TestRecovery(t *testing.T) {
 			for blockNumber := uint64(1); blockNumber <= totalBlocks; blockNumber++ {
 				b := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
 
-				require.NoError(t, s.UpdateBlock(b))
+				require.NoError(t, s.AddSkipListLinks(b))
 				require.NoError(t, s.Commit(b))
 
 				height, err := s.Height()
@@ -420,7 +420,7 @@ func TestRecovery(t *testing.T) {
 				defer env.cleanup(false)
 
 				block := setup(env.s)
-				require.NoError(t, env.s.UpdateBlock(block))
+				require.NoError(t, env.s.AddSkipListLinks(block))
 
 				b, err := proto.Marshal(block)
 				require.NoError(t, err)
@@ -471,7 +471,7 @@ func TestRecovery(t *testing.T) {
 		defer env.cleanup(false)
 
 		block1 := createSampleUserTxBlock(1, nil, nil)
-		require.NoError(t, env.s.UpdateBlock(block1))
+		require.NoError(t, env.s.AddSkipListLinks(block1))
 
 		b, err := proto.Marshal(block1)
 		require.NoError(t, err)
@@ -489,7 +489,7 @@ func TestRecovery(t *testing.T) {
 		require.NoError(t, err)
 
 		block2 := createSampleUserTxBlock(2, block1BaseHeaderHash, block1HeaderHash)
-		require.NoError(t, env.s.UpdateBlock(block2))
+		require.NoError(t, env.s.AddSkipListLinks(block2))
 
 		b, err = proto.Marshal(block2)
 		require.NoError(t, err)
@@ -541,7 +541,7 @@ func TestRecovery(t *testing.T) {
 				defer env.cleanup(false)
 
 				block := createSampleUserTxBlock(1, nil, nil)
-				require.NoError(t, env.s.UpdateBlock(block))
+				require.NoError(t, env.s.AddSkipListLinks(block))
 				require.NoError(t, env.s.Commit(block))
 
 				require.NoError(t, env.s.moveToNextFileChunk())

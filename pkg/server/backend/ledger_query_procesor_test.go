@@ -8,11 +8,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 	"github.ibm.com/blockchaindb/server/pkg/blockstore"
 	"github.ibm.com/blockchaindb/server/pkg/common/logger"
 	"github.ibm.com/blockchaindb/server/pkg/identity"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/worldstate/leveldb"
 )
@@ -131,7 +131,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv) {
 			},
 		},
 	}
-	require.NoError(t, env.p.blockStore.UpdateBlock(configBlock))
+	require.NoError(t, env.p.blockStore.AddSkipListLinks(configBlock))
 	require.NoError(t, env.p.blockStore.Commit(configBlock))
 	env.blocks = []*types.BlockHeader{configBlock.GetHeader()}
 
@@ -169,7 +169,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv) {
 
 	for i := uint64(2); i < uint64(100); i++ {
 		block := createSampleBlock(i, "key0", []byte("value0"))
-		require.NoError(t, env.p.blockStore.UpdateBlock(block))
+		require.NoError(t, env.p.blockStore.AddSkipListLinks(block))
 		require.NoError(t, env.p.blockStore.Commit(block))
 		env.blocks = append(env.blocks, block.GetHeader())
 	}

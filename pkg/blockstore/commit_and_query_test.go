@@ -102,7 +102,7 @@ func TestCommitAndQuery(t *testing.T) {
 		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
 			b := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
 
-			require.NoError(t, env.s.UpdateBlock(b))
+			require.NoError(t, env.s.AddSkipListLinks(b))
 			require.NoError(t, env.s.Commit(b))
 
 			height, err := env.s.Height()

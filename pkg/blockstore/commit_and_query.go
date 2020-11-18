@@ -136,7 +136,8 @@ func (s *Store) storeIndexForBlock(number uint64, location *BlockLocation) error
 	)
 }
 
-func (s *Store) UpdateBlock(block *types.Block) error {
+// AddSkipListLinks calculated and add skip list block number to the block
+func (s *Store) AddSkipListLinks(block *types.Block) error {
 	skipListHashes := make([][]byte, 0)
 
 	for _, linkedBlockNum := range CalculateSkipListLinks(block.Header.GetBaseHeader().GetNumber()) {
