@@ -1,6 +1,6 @@
 language: go
 go:
-    - 1.14
+    - 1.15.5
 before_script:
     - scripts/pull_deps.sh || travis_terminate 1;
 script:
