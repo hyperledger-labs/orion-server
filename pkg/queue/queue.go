@@ -43,3 +43,14 @@ func (q *Queue) IsEmpty() bool {
 func (q *Queue) Capacity() int {
 	return cap(q.entries)
 }
+
+// Close drops all items in the queue and closes it
+func (q *Queue) Close() {
+	close(q.entries)
+	// there should be no Enqueue after the channel is
+	// closed. If there is an Enqueue, it is a severe
+	// bug which would result in a panic with message
+	// `send on a closed channel`. Hence, we don't perform
+	// any extra check on the Enqueue() to see whether the
+	// channel is closed or not.
+}

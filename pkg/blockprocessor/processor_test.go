@@ -29,7 +29,7 @@ type testEnv struct {
 	dbPath              string
 	blockStore          *blockstore.Store
 	blockStorePath      string
-	cleanup             func()
+	cleanup             func(bool)
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -73,7 +73,19 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
-	cleanup := func() {
+	b := New(&Config{
+		BlockQueue: queue.New(10),
+		BlockStore: blockStore,
+		DB:         db,
+		Logger:     logger,
+	})
+	go b.Run()
+
+	cleanup := func(stopBlockProcessor bool) {
+		if stopBlockProcessor {
+			b.Stop()
+		}
+
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close the db instance, %v", err)
 		}
@@ -87,23 +99,13 @@ func newTestEnv(t *testing.T) *testEnv {
 		}
 	}
 
-	b := New(&Config{
-		BlockQueue: queue.New(10),
-		BlockStore: blockStore,
-		DB:         db,
-		Logger:     logger,
-	})
-	stopBlockProcessing := make(chan struct{})
-	go b.Run(stopBlockProcessing)
-
 	return &testEnv{
-		blockProcessor:      b,
-		stopBlockProcessing: stopBlockProcessing,
-		db:                  db,
-		dbPath:              dir,
-		blockStore:          blockStore,
-		blockStorePath:      blockStorePath,
-		cleanup:             cleanup,
+		blockProcessor: b,
+		db:             db,
+		dbPath:         dir,
+		blockStore:     blockStore,
+		blockStorePath: blockStorePath,
+		cleanup:        cleanup,
 	}
 }
 
@@ -200,8 +202,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		t.Parallel()
 
 		env := newTestEnv(t)
-		defer env.cleanup()
-		defer close(env.stopBlockProcessing)
+		defer env.cleanup(true)
 
 		setup(t, env)
 
@@ -268,8 +269,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		t.Parallel()
 
 		env := newTestEnv(t)
-		defer env.cleanup()
-		defer close(env.stopBlockProcessing)
+		defer env.cleanup(true)
 
 		setup(t, env)
 
@@ -348,7 +348,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 func TestFailureAndRecovery(t *testing.T) {
 	t.Run("blockstore is ahead of stateDB by 1 block -- will recover successfully", func(t *testing.T) {
 		env := newTestEnv(t)
-		defer env.cleanup()
+		defer env.cleanup(false)
 
 		setup(t, env)
 
@@ -370,12 +370,14 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		// before committing the block to the stateDB, mimic node crash
 		// by stopping the block processor goroutine
-		close(env.stopBlockProcessing)
+		env.blockProcessor.Stop()
 
 		// mimic node restart by starting the block processor goroutine
-		env.stopBlockProcessing = make(chan struct{})
-		defer close(env.stopBlockProcessing)
-		go env.blockProcessor.Run(env.stopBlockProcessing)
+		env.blockProcessor.stop = make(chan struct{})
+		env.blockProcessor.stopped = make(chan struct{})
+		env.blockProcessor.blockQueue = queue.New(10)
+		defer env.blockProcessor.Stop()
+		go env.blockProcessor.Run()
 
 		assertStateDBHeight := func() bool {
 			stateDBHeight, err = env.db.Height()
@@ -390,7 +392,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 	t.Run("blockstore is behind stateDB by 1 block -- will result in panic", func(t *testing.T) {
 		env := newTestEnv(t)
-		defer env.cleanup()
+		defer env.cleanup(false)
 
 		setup(t, env)
 
@@ -410,19 +412,19 @@ func TestFailureAndRecovery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(2), stateDBHeight)
 
-		close(env.stopBlockProcessing)
+		env.blockProcessor.Stop()
 
-		env.stopBlockProcessing = make(chan struct{})
-		defer close(env.stopBlockProcessing)
+		env.blockProcessor.stop = make(chan struct{})
+		env.blockProcessor.stopped = make(chan struct{})
 		assertPanic := func() {
-			env.blockProcessor.Run(env.stopBlockProcessing)
+			env.blockProcessor.Run()
 		}
 		require.PanicsWithError(t, "error while recovering node: the height of state database [2] is higher than the height of block store [1]. The node cannot be recovered", assertPanic)
 	})
 
 	t.Run("blockstore is ahead of stateDB by 2 blocks -- will result in panic", func(t *testing.T) {
 		env := newTestEnv(t)
-		defer env.cleanup()
+		defer env.cleanup(false)
 
 		setup(t, env)
 
@@ -450,12 +452,14 @@ func TestFailureAndRecovery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint64(1), stateDBHeight)
 
-		close(env.stopBlockProcessing)
+		env.blockProcessor.Stop()
+
+		env.blockProcessor.stop = make(chan struct{})
+		env.blockProcessor.stopped = make(chan struct{})
 
 		env.stopBlockProcessing = make(chan struct{})
-		defer close(env.stopBlockProcessing)
 		assertPanic := func() {
-			env.blockProcessor.Run(env.stopBlockProcessing)
+			env.blockProcessor.Run()
 		}
 		require.PanicsWithError(t, "error while recovering node: the difference between the height of the block store [3] and the state database [1] cannot be greater than 1 block. The node cannot be recovered", assertPanic)
 	})

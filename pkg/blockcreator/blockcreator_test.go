@@ -67,7 +67,18 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
+	b, err := New(&Config{
+		TxBatchQueue: queue.New(10),
+		BlockQueue:   queue.New(10),
+		Logger:       logger,
+		BlockStore:   blockStore,
+	})
+	require.NoError(t, err)
+	go b.Run()
+
 	cleanup := func() {
+		b.Stop()
+
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close the db instance, %v", err)
 		}
@@ -80,15 +91,6 @@ func newTestEnv(t *testing.T) *testEnv {
 			t.Errorf("failed to remove directory %s, %v", dir, err)
 		}
 	}
-
-	b, err := New(&Config{
-		TxBatchQueue: queue.New(10),
-		BlockQueue:   queue.New(10),
-		Logger:       logger,
-		BlockStore:   blockStore,
-	})
-	require.NoError(t, err)
-	go b.Run()
 
 	return &testEnv{
 		creator:        b,

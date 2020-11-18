@@ -28,6 +28,7 @@ func TestTxReorderer(t *testing.T) {
 		Logger:             logger,
 	})
 	go b.Run()
+	defer b.Stop()
 
 	dataTx1 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
@@ -223,14 +224,7 @@ func TestTxReorderer(t *testing.T) {
 
 		for _, expectedTxBatch := range tt.expectedTxBatches {
 			txBatch := b.txBatchQueue.Dequeue()
-			// switch txBatch.(type) {
-			// case *types.Block_DataTxEnvelopes:
 			require.Equal(t, expectedTxBatch, txBatch)
-			// case *types.Block_UserAdministrationTxEnvelope:
-			// case *types.Block_DBAdministrationTxEnvelope:
-			// case *types.Block_ConfigTxEnvelope:
-			// }
-			// require.Equal(t, expectedTxBatch, txBatch)
 		}
 	}
 }

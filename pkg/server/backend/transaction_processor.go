@@ -16,14 +16,13 @@ import (
 )
 
 type transactionProcessor struct {
-	txQueue             *queue.Queue
-	txBatchQueue        *queue.Queue
-	blockQueue          *queue.Queue
-	txReorderer         *txreorderer.TxReorderer
-	blockCreator        *blockcreator.BlockCreator
-	blockProcessor      *blockprocessor.BlockProcessor
-	stopBlockProcessing chan struct{}
-	logger              *logger.SugarLogger
+	txQueue        *queue.Queue
+	txBatchQueue   *queue.Queue
+	blockQueue     *queue.Queue
+	txReorderer    *txreorderer.TxReorderer
+	blockCreator   *blockcreator.BlockCreator
+	blockProcessor *blockprocessor.BlockProcessor
+	logger         *logger.SugarLogger
 	sync.Mutex
 }
 
@@ -80,8 +79,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	// TODO: introduce channel to stop the goroutines (issue #95)
 	go p.txReorderer.Run()
 	go p.blockCreator.Run()
-	p.stopBlockProcessing = make(chan struct{})
-	go p.blockProcessor.Run(p.stopBlockProcessing)
+	go p.blockProcessor.Run()
 
 	return p, nil
 }
@@ -108,6 +106,12 @@ func (t *transactionProcessor) submitTransaction(tx interface{}) error {
 }
 
 func (t *transactionProcessor) close() error {
-	// TODO: need to signal goroutine to stop
+	t.Lock()
+	defer t.Unlock()
+
+	t.txReorderer.Stop()
+	t.blockCreator.Stop()
+	t.blockProcessor.Stop()
+
 	return nil
 }

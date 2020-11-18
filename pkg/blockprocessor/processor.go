@@ -15,6 +15,8 @@ type BlockProcessor struct {
 	blockStore *blockstore.Store
 	validator  *validator
 	committer  *committer
+	stop       chan struct{}
+	stopped    chan struct{}
 	logger     *logger.SugarLogger
 }
 
@@ -34,21 +36,35 @@ func New(conf *Config) *BlockProcessor {
 		blockStore: conf.BlockStore,
 		validator:  newValidator(conf),
 		committer:  newCommitter(conf),
+		stop:       make(chan struct{}),
+		stopped:    make(chan struct{}),
 		logger:     conf.Logger,
 	}
 }
 
 // Run runs validator and committer
-func (b *BlockProcessor) Run(stopBlockProcessing chan struct{}) {
-	b.logger.Debug("starting block processor")
+func (b *BlockProcessor) Run() {
+	b.logger.Debug("starting the block processor")
+	defer close(b.stopped)
+
 	if err := b.recoverWorldStateDBIfNeeded(); err != nil {
 		panic(errors.WithMessage(err, "error while recovering node"))
 	}
 
 	for {
 		select {
+		case <-b.stop:
+			b.logger.Info("stopping block processing")
+			return
+
 		default:
-			block := b.blockQueue.Dequeue().(*types.Block)
+			blockData := b.blockQueue.Dequeue()
+			if blockData == nil {
+				// when the queue is closed during the teardown/cleanup,
+				// the block would be nil.
+				continue
+			}
+			block := blockData.(*types.Block)
 
 			b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
 			validationInfo, err := b.validator.validateBlock(block)
@@ -66,12 +82,15 @@ func (b *BlockProcessor) Run(stopBlockProcessing chan struct{}) {
 				panic(err)
 			}
 			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
-
-		case <-stopBlockProcessing:
-			b.logger.Info("stopping block processing")
-			return
 		}
 	}
+}
+
+// Stop stops the block processor
+func (b *BlockProcessor) Stop() {
+	b.blockQueue.Close()
+	close(b.stop)
+	<-b.stopped
 }
 
 func (b *BlockProcessor) recoverWorldStateDBIfNeeded() error {

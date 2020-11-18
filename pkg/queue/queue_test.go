@@ -45,4 +45,7 @@ func TestTransactionQueue(t *testing.T) {
 		return true
 	}
 	require.Never(t, blockedDequeue, 1*time.Second, 100*time.Second)
+
+	q.Close()
+	require.Nil(t, q.Dequeue())
 }

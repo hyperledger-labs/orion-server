@@ -16,6 +16,8 @@ type TxReorderer struct {
 	txBatchQueue       *queue.Queue
 	maxTxCountPerBatch uint32
 	batchTimeout       time.Duration
+	stop               chan struct{}
+	stopped            chan struct{}
 	logger             *logger.SugarLogger
 	// TODO:
 	// tx merkle tree
@@ -40,69 +42,93 @@ func New(conf *Config) *TxReorderer {
 		txBatchQueue:       conf.TxBatchQueue,
 		maxTxCountPerBatch: conf.MaxTxCountPerBatch,
 		batchTimeout:       conf.BatchTimeout,
+		stop:               make(chan struct{}),
+		stopped:            make(chan struct{}),
 		logger:             conf.Logger,
 	}
 }
 
 // Run runs the transactions batch creator
-func (b *TxReorderer) Run() {
+func (r *TxReorderer) Run() {
+	defer close(r.stopped)
+	r.logger.Info("starting the transactions reorderer")
+
 	txs := &types.DataTxEnvelopes{}
 
 	for {
-		tx := b.txQueue.Dequeue()
+		select {
+		case <-r.stop:
+			r.logger.Info("stopping the transaction reorderer")
+			return
 
-		switch tx.(type) {
-		case *types.DataTxEnvelope:
-			txs.Envelopes = append(txs.Envelopes, tx.(*types.DataTxEnvelope))
-
-			if uint32(len(txs.Envelopes)) == b.maxTxCountPerBatch {
-				b.logger.Debug("enqueueing data transactions")
-				b.enqueueDataTxBatch(txs)
-				txs = &types.DataTxEnvelopes{}
-			}
-		case *types.UserAdministrationTxEnvelope:
-			if len(txs.Envelopes) > 0 {
-				b.enqueueDataTxBatch(txs)
-				txs = &types.DataTxEnvelopes{}
+		default:
+			tx := r.txQueue.Dequeue()
+			if tx == nil {
+				// when the queue is closed during the teardown/cleanup,
+				// the dequeued tx would be nil.
+				continue
 			}
 
-			b.logger.Debug("enqueueing user administrative transaction")
-			b.txBatchQueue.Enqueue(
-				&types.Block_UserAdministrationTxEnvelope{
-					UserAdministrationTxEnvelope: tx.(*types.UserAdministrationTxEnvelope),
-				},
-			)
-		case *types.DBAdministrationTxEnvelope:
-			if len(txs.Envelopes) > 0 {
-				b.enqueueDataTxBatch(txs)
-				txs = &types.DataTxEnvelopes{}
-			}
+			switch tx.(type) {
+			case *types.DataTxEnvelope:
+				txs.Envelopes = append(txs.Envelopes, tx.(*types.DataTxEnvelope))
 
-			b.logger.Debug("enqueueing db administrative transaction")
-			b.txBatchQueue.Enqueue(
-				&types.Block_DBAdministrationTxEnvelope{
-					DBAdministrationTxEnvelope: tx.(*types.DBAdministrationTxEnvelope),
-				},
-			)
-		case *types.ConfigTxEnvelope:
-			if len(txs.Envelopes) > 0 {
-				b.enqueueDataTxBatch(txs)
-				txs = &types.DataTxEnvelopes{}
-			}
+				if uint32(len(txs.Envelopes)) == r.maxTxCountPerBatch {
+					r.logger.Debug("enqueueing data transactions")
+					r.enqueueDataTxBatch(txs)
+					txs = &types.DataTxEnvelopes{}
+				}
+			case *types.UserAdministrationTxEnvelope:
+				if len(txs.Envelopes) > 0 {
+					r.enqueueDataTxBatch(txs)
+					txs = &types.DataTxEnvelopes{}
+				}
 
-			b.logger.Debug("enqueueing cluster config transaction")
-			b.txBatchQueue.Enqueue(
-				&types.Block_ConfigTxEnvelope{
-					ConfigTxEnvelope: tx.(*types.ConfigTxEnvelope),
-				},
-			)
+				r.logger.Debug("enqueueing user administrative transaction")
+				r.txBatchQueue.Enqueue(
+					&types.Block_UserAdministrationTxEnvelope{
+						UserAdministrationTxEnvelope: tx.(*types.UserAdministrationTxEnvelope),
+					},
+				)
+			case *types.DBAdministrationTxEnvelope:
+				if len(txs.Envelopes) > 0 {
+					r.enqueueDataTxBatch(txs)
+					txs = &types.DataTxEnvelopes{}
+				}
+
+				r.logger.Debug("enqueueing db administrative transaction")
+				r.txBatchQueue.Enqueue(
+					&types.Block_DBAdministrationTxEnvelope{
+						DBAdministrationTxEnvelope: tx.(*types.DBAdministrationTxEnvelope),
+					},
+				)
+			case *types.ConfigTxEnvelope:
+				if len(txs.Envelopes) > 0 {
+					r.enqueueDataTxBatch(txs)
+					txs = &types.DataTxEnvelopes{}
+				}
+
+				r.logger.Debug("enqueueing cluster config transaction")
+				r.txBatchQueue.Enqueue(
+					&types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: tx.(*types.ConfigTxEnvelope),
+					},
+				)
+			}
 		}
 	}
 }
 
-func (b *TxReorderer) enqueueDataTxBatch(txBatch *types.DataTxEnvelopes) {
-	b.logger.Debugf("enqueueing [%d] data transactions", len(txBatch.Envelopes))
-	b.txBatchQueue.Enqueue(
+// Stop stops the transaction reorderer
+func (r *TxReorderer) Stop() {
+	r.txQueue.Close()
+	close(r.stop)
+	<-r.stopped
+}
+
+func (r *TxReorderer) enqueueDataTxBatch(txBatch *types.DataTxEnvelopes) {
+	r.logger.Debugf("enqueueing [%d] data transactions", len(txBatch.Envelopes))
+	r.txBatchQueue.Enqueue(
 		&types.Block_DataTxEnvelopes{
 			DataTxEnvelopes: txBatch,
 		},

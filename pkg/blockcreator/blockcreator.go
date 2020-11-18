@@ -16,6 +16,8 @@ type BlockCreator struct {
 	nextBlockNumber             uint64
 	previousBlockHeaderBaseHash []byte
 	blockStore                  *blockstore.Store
+	stop                        chan struct{}
+	stopped                     chan struct{}
 	logger                      *logger.SugarLogger
 }
 
@@ -45,56 +47,81 @@ func New(conf *Config) (*BlockCreator, error) {
 		nextBlockNumber:             height + 1,
 		logger:                      conf.Logger,
 		blockStore:                  conf.BlockStore,
+		stop:                        make(chan struct{}),
+		stopped:                     make(chan struct{}),
 		previousBlockHeaderBaseHash: lastBlockBaseHash,
 	}, nil
 }
 
 // Run runs the block assembler in an infinite loop
 func (b *BlockCreator) Run() {
+	defer close(b.stopped)
+
+	b.logger.Info("starting the block creator")
+
 	for {
-		txBatch := b.txBatchQueue.Dequeue()
+		select {
+		case <-b.stop:
+			b.logger.Info("stopping the block creator")
+			return
 
-		blkNum := b.nextBlockNumber
+		default:
+			txBatch := b.txBatchQueue.Dequeue()
+			if txBatch == nil {
+				// when the queue is closed during the teardown/cleanup,
+				// the dequeued txBatch would be nil.
+				continue
+			}
 
-		baseHeader, err := b.createBaseHeader(blkNum)
-		if err != nil {
-			b.logger.Panicf("Error while filling block header, possible problems with block indexes {%v}", err)
+			blkNum := b.nextBlockNumber
+
+			baseHeader, err := b.createBaseHeader(blkNum)
+			if err != nil {
+				b.logger.Panicf("Error while filling block header, possible problems with block indexes {%v}", err)
+			}
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: baseHeader,
+				},
+			}
+
+			switch txBatch.(type) {
+			case *types.Block_DataTxEnvelopes:
+				block.Payload = txBatch.(*types.Block_DataTxEnvelopes)
+				b.logger.Debugf("created block %d with %d data transactions\n",
+					blkNum,
+					len(txBatch.(*types.Block_DataTxEnvelopes).DataTxEnvelopes.Envelopes),
+				)
+
+			case *types.Block_UserAdministrationTxEnvelope:
+				block.Payload = txBatch.(*types.Block_UserAdministrationTxEnvelope)
+				b.logger.Debugf("created block %d with an user administrative transaction", blkNum)
+
+			case *types.Block_ConfigTxEnvelope:
+				block.Payload = txBatch.(*types.Block_ConfigTxEnvelope)
+				b.logger.Debugf("created block %d with a cluster config administrative transaction", blkNum)
+
+			case *types.Block_DBAdministrationTxEnvelope:
+				block.Payload = txBatch.(*types.Block_DBAdministrationTxEnvelope)
+				b.logger.Debugf("created block %d with a DB administrative transaction", blkNum)
+			}
+
+			b.blockQueue.Enqueue(block)
+			h, err := blockstore.ComputeBlockBaseHash(block)
+			if err != nil {
+				b.logger.Panicf("Error calculating block hash {%v}", err)
+			}
+			b.previousBlockHeaderBaseHash = h
+			b.nextBlockNumber++
 		}
-		block := &types.Block{
-			Header: &types.BlockHeader{
-				BaseHeader: baseHeader,
-			},
-		}
-
-		switch txBatch.(type) {
-		case *types.Block_DataTxEnvelopes:
-			block.Payload = txBatch.(*types.Block_DataTxEnvelopes)
-			b.logger.Debugf("created block %d with %d data transactions\n",
-				blkNum,
-				len(txBatch.(*types.Block_DataTxEnvelopes).DataTxEnvelopes.Envelopes),
-			)
-
-		case *types.Block_UserAdministrationTxEnvelope:
-			block.Payload = txBatch.(*types.Block_UserAdministrationTxEnvelope)
-			b.logger.Debugf("created block %d with an user administrative transaction", blkNum)
-
-		case *types.Block_ConfigTxEnvelope:
-			block.Payload = txBatch.(*types.Block_ConfigTxEnvelope)
-			b.logger.Debugf("created block %d with a cluster config administrative transaction", blkNum)
-
-		case *types.Block_DBAdministrationTxEnvelope:
-			block.Payload = txBatch.(*types.Block_DBAdministrationTxEnvelope)
-			b.logger.Debugf("created block %d with a DB administrative transaction", blkNum)
-		}
-
-		b.blockQueue.Enqueue(block)
-		h, err := blockstore.ComputeBlockBaseHash(block)
-		if err != nil {
-			b.logger.Panicf("Error calculating block hash {%v}", err)
-		}
-		b.previousBlockHeaderBaseHash = h
-		b.nextBlockNumber++
 	}
+}
+
+// Stop stops the block creator
+func (b *BlockCreator) Stop() {
+	b.txBatchQueue.Close()
+	close(b.stop)
+	<-b.stopped
 }
 
 func (b *BlockCreator) createBaseHeader(blockNum uint64) (*types.BlockHeaderBase, error) {
