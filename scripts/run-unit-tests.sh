@@ -10,7 +10,7 @@ run_tests() {
     fi
 
     time {
-        go test "${flags[@]}" "${race_flags[@]}" -failfast -tags "$GO_TAGS" "$@" -short -timeout=20m -v -p 1
+        go test "${flags[@]}" "${race_flags[@]}" -failfast -tags "$GO_TAGS" "$@" -short -timeout=20m -v -p 4
     }
 }
 
