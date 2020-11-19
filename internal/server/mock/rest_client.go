@@ -1,0 +1,184 @@
+package mock
+
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"net/url"
+
+	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/server/pkg/constants"
+	"github.ibm.com/blockchaindb/server/pkg/types"
+)
+
+type Client struct {
+	RawURL     string
+	BaseURL    *url.URL
+	UserAgent  string
+	httpClient *http.Client
+}
+
+type ResponseErr struct {
+	Error string `json:"error,omitempty"`
+}
+
+func NewRESTClient(rawurl string) (*Client, error) {
+	res := new(Client)
+	var err error
+	res.RawURL = rawurl
+	res.BaseURL, err = url.Parse(rawurl)
+	if err != nil {
+		return nil, errors.Wrapf(err, "parsing url %s", rawurl)
+	}
+	res.httpClient = http.DefaultClient
+	return res, nil
+}
+
+func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBStatusResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetDBStatus(e.Payload.DBName),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDBStatusResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetData(e.Payload.DBName, e.Payload.Key),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetUser(e.Payload.TargetUserID),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetUserResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetConfig(),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetConfigResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*http.Response, error) {
+	u := c.BaseURL.ResolveReference(
+		&url.URL{
+			Path: urlPath,
+		},
+	)
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.UserAgent)
+	req.Header.Set(constants.UserHeader, userID)
+	req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(signature))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		errorRes := new(ResponseErr)
+		err = json.NewDecoder(resp.Body).Decode(errorRes)
+		if err != nil {
+			return nil, err
+		}
+		return nil, errors.New(errorRes.Error)
+	}
+
+	return resp, nil
+}
+
+func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*types.ResponseEnvelope, error) {
+	u := c.BaseURL.ResolveReference(
+		&url.URL{
+			Path: urlPath,
+		},
+	)
+
+	buf := &bytes.Buffer{}
+	if err := json.NewEncoder(buf).Encode(tx); err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, u.String(), buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", c.UserAgent)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errorRes := &ResponseErr{}
+		if err = json.NewDecoder(resp.Body).Decode(errorRes); err != nil {
+			return nil, err
+		}
+
+		return nil, errors.New(errorRes.Error)
+	}
+
+	res := &types.ResponseEnvelope{}
+	if err = json.NewDecoder(resp.Body).Decode(res); err != nil {
+		return nil, err
+	}
+
+	if res.Data == nil {
+		return nil, nil
+	}
+	return res, err
+}
