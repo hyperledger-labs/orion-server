@@ -2,8 +2,10 @@ package blockprocessor
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -29,6 +31,9 @@ type testEnv struct {
 	dbPath              string
 	blockStore          *blockstore.Store
 	blockStorePath      string
+	userID              string
+	userCert            *x509.Certificate
+	userSigner          *crypto.Signer
 	cleanup             func(bool)
 }
 
@@ -73,6 +78,9 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser"})
+	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
+
 	b := New(&Config{
 		BlockQueue: queue.New(10),
 		BlockStore: blockStore,
@@ -105,6 +113,9 @@ func newTestEnv(t *testing.T) *testEnv {
 		dbPath:         dir,
 		blockStore:     blockStore,
 		blockStorePath: blockStorePath,
+		userID:              "testUser",
+		userCert:            userCert,
+		userSigner:          userSigner,
 		cleanup:        cleanup,
 	}
 }
@@ -141,6 +152,7 @@ func setup(t *testing.T, env *testEnv) {
 						},
 					},
 				},
+				Signature: nil,
 			},
 		},
 	}
@@ -156,7 +168,8 @@ func setup(t *testing.T, env *testEnv) {
 	require.Eventually(t, assertConfigHasCommitted, 2*time.Second, 100*time.Millisecond)
 
 	user := &types.User{
-		ID: "testUser",
+		ID:          env.userID,
+		Certificate: env.userCert.Raw,
 		Privilege: &types.Privilege{
 			DBPermission: map[string]types.Privilege_Access{
 				worldstate.DefaultDBName: types.Privilege_ReadWrite,
@@ -172,7 +185,7 @@ func setup(t *testing.T, env *testEnv) {
 			DBName: worldstate.UsersDBName,
 			Writes: []*worldstate.KVWithMetadata{
 				{
-					Key:   string(identity.UserNamespace) + "testUser",
+					Key:   string(identity.UserNamespace) + env.userID,
 					Value: u,
 					Metadata: &types.Metadata{
 						Version: &types.Version{
@@ -215,7 +228,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			expectedBlockHeight uint64
 		}{
 			{
-				block:         createSampleBlock(2, "key1", []byte("value-1")),
+				block:         createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner),
 				key:           "key1",
 				expectedValue: []byte("value-1"),
 				expectedMetadata: &types.Metadata{
@@ -227,7 +240,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 				expectedBlockHeight: 2,
 			},
 			{
-				block:         createSampleBlock(3, "key1", []byte("value-2")),
+				block:         createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner),
 				key:           "key1",
 				expectedValue: []byte("value-2"),
 				expectedMetadata: &types.Metadata{
@@ -286,8 +299,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}{
 			{
 				blocks: []*types.Block{
-					createSampleBlock(2, "key1", []byte("value-1")),
-					createSampleBlock(3, "key1", []byte("value-2")),
+					createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner),
+					createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner),
 				},
 				key:           "key1",
 				expectedValue: []byte("value-2"),
@@ -299,8 +312,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 				},
 				expectedBlockHeight: 3,
 				expectedBlocks: []*types.Block{
-					createSampleBlock(2, "key1", []byte("value-1")),
-					createSampleBlock(3, "key1", []byte("value-2")),
+					createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner),
+					createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner),
 				},
 			},
 		}
@@ -352,7 +365,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(2, "key1", []byte("value-1"))
+		block2 := createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner)
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -396,7 +409,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(2, "key1", []byte("value-1"))
+		block2 := createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner)
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -428,7 +441,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(2, "key1", []byte("value-1"))
+		block2 := createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner)
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -436,7 +449,7 @@ func TestFailureAndRecovery(t *testing.T) {
 		}
 		require.NoError(t, env.blockProcessor.committer.commitToBlockStore(block2))
 
-		block3 := createSampleBlock(3, "key1", []byte("value-2"))
+		block3 := createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner)
 		block3.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -465,7 +478,7 @@ func TestFailureAndRecovery(t *testing.T) {
 	})
 }
 
-func createSampleBlock(blockNumber uint64, key string, value []byte) *types.Block {
+func createSampleBlock(t *testing.T, blockNumber uint64, key string, value []byte, signer *crypto.Signer) *types.Block {
 	return &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
@@ -480,18 +493,16 @@ func createSampleBlock(blockNumber uint64, key string, value []byte) *types.Bloc
 		Payload: &types.Block_DataTxEnvelopes{
 			DataTxEnvelopes: &types.DataTxEnvelopes{
 				Envelopes: []*types.DataTxEnvelope{
-					{
-						Payload: &types.DataTx{
-							UserID: "testUser",
-							DBName: worldstate.DefaultDBName,
-							DataWrites: []*types.DataWrite{
-								{
-									Key:   key,
-									Value: value,
-								},
+					testutils.SignedDataTxEnvelope(t, signer, &types.DataTx{
+						UserID: "testUser",
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   key,
+								Value: value,
 							},
 						},
-					},
+					}),
 				},
 			},
 		},

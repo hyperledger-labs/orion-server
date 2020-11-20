@@ -14,10 +14,17 @@ import (
 type userAdminTxValidator struct {
 	db              worldstate.DB
 	identityQuerier *identity.Querier
+	sigValidator    *txSigValidator
 	logger          *logger.SugarLogger
 }
 
-func (v *userAdminTxValidator) validate(tx *types.UserAdministrationTx) (*types.ValidationInfo, error) {
+func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelope) (*types.ValidationInfo, error) {
+	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
+	if err != nil || valInfo.Flag != types.Flag_VALID {
+		return valInfo, err
+	}
+
+	tx := txEnv.Payload
 	hasPerm, err := v.identityQuerier.HasUserAdministrationPrivilege(tx.UserID)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "error while checking user administrative privilege for user [%s]", tx.UserID)

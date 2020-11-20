@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -160,4 +161,36 @@ func SignatureFromQuery(t *testing.T, signner *crypto.Signer, query interface{})
 	sig, err := cryptoservice.SignQuery(signner, query)
 	require.NoError(t, err)
 	return sig
+}
+
+func SignedDataTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.DataTx) *types.DataTxEnvelope {
+	env := &types.DataTxEnvelope{
+		Payload:   tx,
+		Signature: SignatureFromTx(t, signer, tx),
+	}
+	return env
+}
+
+func SignedConfigTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.ConfigTx) *types.ConfigTxEnvelope {
+	env := &types.ConfigTxEnvelope{
+		Payload:   tx,
+		Signature: SignatureFromTx(t, signer, tx),
+	}
+	return env
+}
+
+func SignedUserAdministrationTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.UserAdministrationTx) *types.UserAdministrationTxEnvelope {
+	env := &types.UserAdministrationTxEnvelope{
+		Payload:   tx,
+		Signature: SignatureFromTx(t, signer, tx),
+	}
+	return env
+}
+
+func SignedDBAdministrationTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.DBAdministrationTx) *types.DBAdministrationTxEnvelope {
+	env := &types.DBAdministrationTxEnvelope{
+		Payload:   tx,
+		Signature: SignatureFromTx(t, signer, tx),
+	}
+	return env
 }

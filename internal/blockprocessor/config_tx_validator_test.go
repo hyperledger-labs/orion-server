@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -15,19 +16,26 @@ import (
 func TestValidateConfigTx(t *testing.T) {
 	t.Parallel()
 
+	userID := "adminUser"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser"})
+	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
+	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
+
 	cert, err := ioutil.ReadFile("./testdata/sample.cert")
 	require.NoError(t, err)
 	dcCert, _ := pem.Decode(cert)
 
 	setup := func(db worldstate.DB) {
 		nonAdminUser := &types.User{
-			ID: "nonAdminUser",
+			ID:          "nonAdminUser",
+			Certificate: nonAdminCert.Raw,
 		}
 		nonAdminUserSerialized, err := proto.Marshal(nonAdminUser)
 		require.NoError(t, err)
 
 		adminUser := &types.User{
-			ID: "adminUser",
+			ID:          userID,
+			Certificate: adminCert.Raw,
 			Privilege: &types.Privilege{
 				ClusterAdministration: true,
 			},
@@ -56,25 +64,35 @@ func TestValidateConfigTx(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		tx             *types.ConfigTx
+		txEnv          *types.ConfigTxEnvelope
 		expectedResult *types.ValidationInfo
 	}{
 		{
 			name: "invalid: submitter does not have cluster admin privilege",
-			tx: &types.ConfigTx{
+			txEnv: testutils.SignedConfigTxEnvelope(t, nonAdminSigner, &types.ConfigTx{
 				UserID: "nonAdminUser",
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [nonAdminUser] has no privilege to perform cluster administrative operations",
 			},
 		},
 		{
+			name: "invalid: signature verification failure",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserID: "nonAdminUser",
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_UNAUTHORISED,
+				ReasonIfInvalid: "signature verification failed: x509: ECDSA verification failure",
+			},
+		},
+		{
 			name: "invalid: node config is empty",
-			tx: &types.ConfigTx{
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserID:    "adminUser",
 				NewConfig: &types.ClusterConfig{},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "node config is empty. There must be at least single node in the cluster",
@@ -82,7 +100,7 @@ func TestValidateConfigTx(t *testing.T) {
 		},
 		{
 			name: "invalid: admin config is empty",
-			tx: &types.ConfigTx{
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserID: "adminUser",
 				NewConfig: &types.ClusterConfig{
 					Nodes: []*types.NodeConfig{
@@ -93,7 +111,7 @@ func TestValidateConfigTx(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "admin config is empty. There must be at least single admin in the cluster",
@@ -101,7 +119,7 @@ func TestValidateConfigTx(t *testing.T) {
 		},
 		{
 			name: "invalid: mvcc conflict",
-			tx: &types.ConfigTx{
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserID: "adminUser",
 				ReadOldConfigVersion: &types.Version{
 					BlockNum: 100,
@@ -122,7 +140,7 @@ func TestValidateConfigTx(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
 				ReasonIfInvalid: "mvcc conflict has occurred as the read old configuration does not match the committed version",
@@ -130,7 +148,7 @@ func TestValidateConfigTx(t *testing.T) {
 		},
 		{
 			name: "valid",
-			tx: &types.ConfigTx{
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserID:               "adminUser",
 				ReadOldConfigVersion: nil,
 				NewConfig: &types.ClusterConfig{
@@ -148,7 +166,7 @@ func TestValidateConfigTx(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -165,7 +183,7 @@ func TestValidateConfigTx(t *testing.T) {
 
 			setup(env.db)
 
-			result, err := env.validator.configTxValidator.validate(tt.tx)
+			result, err := env.validator.configTxValidator.validate(tt.txEnv)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})

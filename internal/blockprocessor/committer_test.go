@@ -488,10 +488,10 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", sampleVersion, nil),
-							constructUserForTest(t, "user2", sampleVersion, nil),
-							constructUserForTest(t, "user3", sampleVersion, nil),
-							constructUserForTest(t, "user4", sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, nil),
+							constructUserForTest(t, "user2", nil, sampleVersion, nil),
+							constructUserForTest(t, "user3", nil, sampleVersion, nil),
+							constructUserForTest(t, "user4", nil, sampleVersion, nil),
 						},
 					},
 				}
@@ -542,7 +542,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, nil),
 						},
 					},
 				}

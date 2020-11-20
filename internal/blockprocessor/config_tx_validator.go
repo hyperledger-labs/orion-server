@@ -15,10 +15,17 @@ import (
 type configTxValidator struct {
 	db              worldstate.DB
 	identityQuerier *identity.Querier
+	sigValidator    *txSigValidator
 	logger          *logger.SugarLogger
 }
 
-func (v *configTxValidator) validate(tx *types.ConfigTx) (*types.ValidationInfo, error) {
+func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
+	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
+	if err != nil || valInfo.Flag != types.Flag_VALID {
+		return valInfo, err
+	}
+
+	tx := txEnv.Payload
 	hasPerm, err := v.identityQuerier.HasClusterAdministrationPrivilege(tx.UserID)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "error while checking cluster administrative privilege for user [%s]", tx.UserID)

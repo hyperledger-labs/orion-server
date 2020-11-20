@@ -1,6 +1,7 @@
 package blockprocessor
 
 import (
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -13,6 +14,10 @@ import (
 func TestValidateDBAdminTx(t *testing.T) {
 	t.Parallel()
 
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"userWithMorePrivilege", "userWithLessPrivilege"})
+	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "userWithMorePrivilege")
+	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "userWithLessPrivilege")
+
 	sampleMetadataData := &types.Metadata{
 		Version: &types.Version{
 			BlockNum: 2,
@@ -21,7 +26,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 	}
 
 	userWithLessPrivilege := &types.User{
-		ID: "userWithLessPrivilege",
+		ID:          "userWithLessPrivilege",
+		Certificate: nonAdminCert.Raw,
 	}
 	userWithLessPrivilegeSerialized, err := proto.Marshal(userWithLessPrivilege)
 	require.NoError(t, err)
@@ -40,7 +46,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 	}
 
 	userWithMorePrivilege := &types.User{
-		ID: "userWithMorePrivilege",
+		ID:          "userWithMorePrivilege",
+		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
 			DBAdministration: true,
 		},
@@ -64,18 +71,49 @@ func TestValidateDBAdminTx(t *testing.T) {
 	tests := []struct {
 		name           string
 		setup          func(db worldstate.DB)
-		tx             *types.DBAdministrationTx
+		txEnv          *types.DBAdministrationTxEnvelope
 		expectedResult *types.ValidationInfo
 	}{
+		{
+			name: "invalid: signature verification failure",
+			setup: func(db worldstate.DB) {
+				require.NoError(t, db.Commit(privilegedUser, 1))
+
+				createDB := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "db3",
+							},
+							{
+								Key: "db4",
+							},
+						},
+					},
+				}
+				require.NoError(t, db.Commit(createDB, 1))
+			},
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, nonAdminSigner, &types.DBAdministrationTx{
+				UserID:    "userWithMorePrivilege",
+				CreateDBs: []string{"db1", "db2"},
+				DeleteDBs: []string{"db3", "db4"},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_UNAUTHORISED,
+				ReasonIfInvalid: "signature verification failed: x509: ECDSA verification failure",
+			},
+		},
 		{
 			name: "invalid: user does not have db admin privilege",
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(underPrivilegedUser, 1))
 			},
-			tx: &types.DBAdministrationTx{
-				UserID:    "userWithLessPrivilege",
-				CreateDBs: []string{"db1"},
-			},
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, nonAdminSigner,
+				&types.DBAdministrationTx{
+					UserID:    "userWithLessPrivilege",
+					CreateDBs: []string{"db1"},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [userWithLessPrivilege] has no privilege to perform database administrative operations",
@@ -86,10 +124,11 @@ func TestValidateDBAdminTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
-			tx: &types.DBAdministrationTx{
-				UserID:    "userWithMorePrivilege",
-				CreateDBs: []string{"db1", "db1"},
-			},
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
+				&types.DBAdministrationTx{
+					UserID:    "userWithMorePrivilege",
+					CreateDBs: []string{"db1", "db1"},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the database [db1] is duplicated in the create list",
@@ -100,10 +139,10 @@ func TestValidateDBAdminTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
-			tx: &types.DBAdministrationTx{
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
 				UserID:    "userWithMorePrivilege",
 				DeleteDBs: []string{"db1", "db1"},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the database [db1] does not exist in the cluster and hence, it cannot be deleted",
@@ -129,11 +168,11 @@ func TestValidateDBAdminTx(t *testing.T) {
 				}
 				require.NoError(t, db.Commit(createDB, 1))
 			},
-			tx: &types.DBAdministrationTx{
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
 				UserID:    "userWithMorePrivilege",
 				CreateDBs: []string{"db1", "db2"},
 				DeleteDBs: []string{"db3", "db4"},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -150,7 +189,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.dbAdminTxValidator.validate(tt.tx)
+			result, err := env.validator.dbAdminTxValidator.validate(tt.txEnv)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})

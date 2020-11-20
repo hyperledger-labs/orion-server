@@ -12,10 +12,17 @@ import (
 type dataTxValidator struct {
 	db              worldstate.DB
 	identityQuerier *identity.Querier
+	sigValidator    *txSigValidator
 	logger          *logger.SugarLogger
 }
 
-func (v *dataTxValidator) validate(tx *types.DataTx, pendingUpdates map[string]bool) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingUpdates map[string]bool) (*types.ValidationInfo, error) {
+	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
+	if err != nil || valInfo.Flag != types.Flag_VALID {
+		return valInfo, err
+	}
+
+	tx := txEnv.Payload
 	switch {
 	case !v.db.Exist(tx.DBName):
 		return &types.ValidationInfo{

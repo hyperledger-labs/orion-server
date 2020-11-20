@@ -2,6 +2,9 @@ package backend
 
 import (
 	"bytes"
+	"crypto/x509"
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -24,6 +27,9 @@ type txProcessorTestEnv struct {
 	blockStore     *blockstore.Store
 	blockStorePath string
 	txProcessor    *transactionProcessor
+	userID         string
+	userCert       *x509.Certificate
+	userSigner     *crypto.Signer
 	cleanup        func()
 }
 
@@ -68,6 +74,9 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser"})
+	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
+
 	cleanup := func() {
 		if err := db.Close(); err != nil {
 			t.Errorf("error while closing the db instance, %v", err)
@@ -101,6 +110,9 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		blockStorePath: blockStorePath,
 		blockStore:     blockStore,
 		txProcessor:    txProcessor,
+		userID:         "testUser",
+		userCert:       userCert,
+		userSigner:     userSigner,
 		cleanup:        cleanup,
 	}
 }
@@ -111,13 +123,14 @@ func TestTransactionProcessor(t *testing.T) {
 	conf := testConfiguration(t)
 	defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
-	setup := func(env *txProcessorTestEnv, userID, dbName string) {
+	setup := func(env *txProcessorTestEnv, dbName string) {
 		configTx, err := prepareConfigTx(conf)
 		require.NoError(t, err)
 		require.NoError(t, env.txProcessor.submitTransaction(configTx))
 
 		user := &types.User{
-			ID: userID,
+			ID:          env.userID,
+			Certificate: env.userCert.Raw,
 			Privilege: &types.Privilege{
 				DBPermission: map[string]types.Privilege_Access{
 					dbName: types.Privilege_ReadWrite,
@@ -133,7 +146,7 @@ func TestTransactionProcessor(t *testing.T) {
 				DBName: worldstate.UsersDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   string(identity.UserNamespace) + userID,
+						Key:   string(identity.UserNamespace) + env.userID,
 						Value: u,
 						Metadata: &types.Metadata{
 							Version: &types.Version{
@@ -158,22 +171,20 @@ func TestTransactionProcessor(t *testing.T) {
 		env := newTxProcessorTestEnv(t)
 		defer env.cleanup()
 
-		setup(env, "testUser", worldstate.DefaultDBName)
+		setup(env, worldstate.DefaultDBName)
 
-		tx := &types.DataTxEnvelope{
-			Payload: &types.DataTx{
-				UserID:    "testUser",
-				DBName:    worldstate.DefaultDBName,
-				TxID:      "tx1",
-				DataReads: []*types.DataRead{},
-				DataWrites: []*types.DataWrite{
-					{
-						Key:   "test-key1",
-						Value: []byte("test-value1"),
-					},
+		tx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
+			UserID:    "testUser",
+			DBName:    worldstate.DefaultDBName,
+			TxID:      "tx1",
+			DataReads: []*types.DataRead{},
+			DataWrites: []*types.DataWrite{
+				{
+					Key:   "test-key1",
+					Value: []byte("test-value1"),
 				},
 			},
-		}
+		})
 
 		require.NoError(t, env.txProcessor.submitTransaction(tx))
 

@@ -6,6 +6,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -13,9 +14,15 @@ import (
 func TestValidateDataTx(t *testing.T) {
 	t.Parallel()
 
+	userID := "operatingUser"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"operatingUser", "bogusUser"})
+	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "operatingUser")
+	bogusCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "bogusUser")
+
 	addUserWithCorrectPrivilege := func(db worldstate.DB) {
 		user := &types.User{
-			ID: "operatingUser",
+			ID:          userID,
+			Certificate: userCert.Raw,
 			Privilege: &types.Privilege{
 				DBPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
@@ -43,14 +50,16 @@ func TestValidateDataTx(t *testing.T) {
 	tests := []struct {
 		name           string
 		setup          func(db worldstate.DB)
-		tx             *types.DataTx
+		txEnv          *types.DataTxEnvelope
 		pendingUpdates map[string]bool
 		expectedResult *types.ValidationInfo
 	}{
 		{
-			name:  "invalid: database does not exist",
-			setup: func(db worldstate.DB) {},
-			tx: &types.DataTx{
+			name: "invalid: database does not exist",
+			setup: func(db worldstate.DB) {
+				addUserWithCorrectPrivilege(db)
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: "db1",
 				DataWrites: []*types.DataWrite{
@@ -58,16 +67,18 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 				ReasonIfInvalid: "the database [db1] does not exist in the cluster",
 			},
 		},
 		{
-			name:  "invalid: system database name cannot be used in a transaction",
-			setup: func(db worldstate.DB) {},
-			tx: &types.DataTx{
+			name: "invalid: system database name cannot be used in a transaction",
+			setup: func(db worldstate.DB) {
+				addUserWithCorrectPrivilege(db)
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.ConfigDBName,
 				DataWrites: []*types.DataWrite{
@@ -75,10 +86,38 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the database [" + worldstate.ConfigDBName + "] is a system database and no user can write to a system database via data transaction. Use appropriate transaction type to modify the system database",
+			},
+		},
+		{
+			name: "invalid: signature verification failure",
+			setup: func(db worldstate.DB) {
+				user := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, "operatingUser", bogusCert.Raw, nil, nil),
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(user, 1))
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
+				UserID: "operatingUser",
+				DBName: worldstate.DefaultDBName,
+				DataWrites: []*types.DataWrite{
+					{
+						Key: "key1",
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_UNAUTHORISED,
+				ReasonIfInvalid: "signature verification failed: x509: ECDSA verification failure",
 			},
 		},
 		{
@@ -88,14 +127,14 @@ func TestValidateDataTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, nil),
+							constructUserForTest(t, "operatingUser", userCert.Raw, nil, nil),
 						},
 					},
 				}
 
 				require.NoError(t, db.Commit(user, 1))
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataWrites: []*types.DataWrite{
@@ -103,7 +142,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no read-write permission on the database [" + worldstate.DefaultDBName + "]",
@@ -114,7 +153,7 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataWrites: []*types.DataWrite{
@@ -127,7 +166,7 @@ func TestValidateDataTx(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the user [user1] defined in the access control for the key [key1] does not exist",
@@ -138,7 +177,7 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataWrites: []*types.DataWrite{
@@ -151,7 +190,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key2",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the key [key2] does not exist in the database and hence, it cannot be deleted",
@@ -181,7 +220,7 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataWrites: []*types.DataWrite{
@@ -194,7 +233,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the key [key1] is being updated as well as deleted. Only one operation per key is allowed within a transaction",
@@ -225,7 +264,7 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataReads: []*types.DataRead{
@@ -233,7 +272,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no read permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
@@ -264,7 +303,7 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataWrites: []*types.DataWrite{
@@ -272,7 +311,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
@@ -303,7 +342,7 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataDeletes: []*types.DataDelete{
@@ -311,7 +350,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]. Hence, the user cannot delete the key",
@@ -322,7 +361,7 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataReads: []*types.DataRead{
@@ -330,7 +369,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key1",
 					},
 				},
-			},
+			}),
 			pendingUpdates: map[string]bool{
 				"key1": true,
 			},
@@ -382,7 +421,7 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
 				DataReads: []*types.DataRead{
@@ -405,7 +444,7 @@ func TestValidateDataTx(t *testing.T) {
 						Key: "key2",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -415,10 +454,10 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			tx: &types.DataTx{
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
 				DBName: worldstate.DefaultDBName,
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -435,7 +474,7 @@ func TestValidateDataTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.validate(tt.tx, tt.pendingUpdates)
+			result, err := env.validator.dataTxValidator.validate(tt.txEnv, tt.pendingUpdates)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
@@ -505,8 +544,8 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, nil),
-							constructUserForTest(t, "user2", nil, nil),
+							constructUserForTest(t, "user1", nil, nil, nil),
+							constructUserForTest(t, "user2", nil, nil, nil),
 						},
 					},
 				}

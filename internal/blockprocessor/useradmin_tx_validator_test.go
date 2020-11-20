@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -15,18 +16,24 @@ import (
 func TestValidateUsedAdminTx(t *testing.T) {
 	t.Parallel()
 
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser"})
+	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
+	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
+
 	cert, err := ioutil.ReadFile("./testdata/sample.cert")
 	require.NoError(t, err)
 	dcCert, _ := pem.Decode(cert)
 
 	nonAdminUser := &types.User{
-		ID: "nonAdminUser",
+		ID:          "nonAdminUser",
+		Certificate: nonAdminCert.Raw,
 	}
 	nonAdminUserSerialized, err := proto.Marshal(nonAdminUser)
 	require.NoError(t, err)
 
 	adminUser := &types.User{
-		ID: "adminUser",
+		ID:          "adminUser",
+		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
 			UserAdministration: true,
 		},
@@ -42,9 +49,42 @@ func TestValidateUsedAdminTx(t *testing.T) {
 	tests := []struct {
 		name           string
 		setup          func(db worldstate.DB)
-		tx             *types.UserAdministrationTx
+		txEnv          *types.UserAdministrationTxEnvelope
 		expectedResult *types.ValidationInfo
 	}{
+		{
+			name: "invalid: signature verification failure",
+			setup: func(db worldstate.DB) {
+				newUsers := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key:   string(identity.UserNamespace) + "adminUser",
+								Value: adminUserSerialized,
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(newUsers, 1))
+			},
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, nonAdminSigner, &types.UserAdministrationTx{
+				UserID: "adminUser",
+				UserReads: []*types.UserRead{
+					{
+						UserID: "user1",
+					},
+					{
+						UserID: "user2",
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_UNAUTHORISED,
+				ReasonIfInvalid: "signature verification failed: x509: ECDSA verification failure",
+			},
+		},
 		{
 			name: "invalid: submitter does not have user admin privilege",
 			setup: func(db worldstate.DB) {
@@ -62,9 +102,10 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "nonAdminUser",
-			},
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, nonAdminSigner,
+				&types.UserAdministrationTx{
+					UserID: "nonAdminUser",
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [nonAdminUser] has no privilege to perform user administrative operations",
@@ -87,16 +128,17 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "adminUser",
-				UserWrites: []*types.UserWrite{
-					{
-						User: &types.User{
-							ID: "",
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
+				&types.UserAdministrationTx{
+					UserID: "adminUser",
+					UserWrites: []*types.UserWrite{
+						{
+							User: &types.User{
+								ID: "",
+							},
 						},
 					},
-				},
-			},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an user in the write list with an empty ID. A valid userID must be an non-empty string",
@@ -119,14 +161,15 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "adminUser",
-				UserDeletes: []*types.UserDelete{
-					{
-						UserID: "",
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
+				&types.UserAdministrationTx{
+					UserID: "adminUser",
+					UserDeletes: []*types.UserDelete{
+						{
+							UserID: "",
+						},
 					},
-				},
-			},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an user in the delete list with an empty ID. A valid userID must be an non-empty string",
@@ -149,17 +192,18 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "adminUser",
-				UserDeletes: []*types.UserDelete{
-					{
-						UserID: "user1",
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
+				&types.UserAdministrationTx{
+					UserID: "adminUser",
+					UserDeletes: []*types.UserDelete{
+						{
+							UserID: "user1",
+						},
+						{
+							UserID: "user1",
+						},
 					},
-					{
-						UserID: "user1",
-					},
-				},
-			},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there are two users with the same userID [user1] in the delete list. The userIDs in the delete list must be unique",
@@ -176,7 +220,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
 								ReadUsers: map[string]bool{
 									"user2": true,
 								},
@@ -187,14 +231,15 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "adminUser",
-				UserReads: []*types.UserRead{
-					{
-						UserID: "user1",
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
+				&types.UserAdministrationTx{
+					UserID: "adminUser",
+					UserReads: []*types.UserRead{
+						{
+							UserID: "user1",
+						},
 					},
-				},
-			},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [adminUser] has no read permission on the user [user1]",
@@ -211,7 +256,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"user2": true,
 								},
@@ -222,17 +267,18 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "adminUser",
-				UserWrites: []*types.UserWrite{
-					{
-						User: &types.User{
-							ID:          "user1",
-							Certificate: dcCert.Bytes,
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
+				&types.UserAdministrationTx{
+					UserID: "adminUser",
+					UserWrites: []*types.UserWrite{
+						{
+							User: &types.User{
+								ID:          "user1",
+								Certificate: dcCert.Bytes,
+							},
 						},
 					},
-				},
-			},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [adminUser] has no write permission on the user [user1]",
@@ -249,7 +295,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"user2": true,
 								},
@@ -260,14 +306,15 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "adminUser",
-				UserDeletes: []*types.UserDelete{
-					{
-						UserID: "user1",
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
+				&types.UserAdministrationTx{
+					UserID: "adminUser",
+					UserDeletes: []*types.UserDelete{
+						{
+							UserID: "user1",
+						},
 					},
-				},
-			},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [adminUser] has no write permission on the user [user1]. Hence, the delete operation cannot be performed",
@@ -284,7 +331,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
 								ReadUsers: map[string]bool{
 									"adminUser": true,
 								},
@@ -295,18 +342,19 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
-				UserID: "adminUser",
-				UserReads: []*types.UserRead{
-					{
-						UserID: "user1",
-						Version: &types.Version{
-							BlockNum: 100,
-							TxNum:    1000,
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
+				&types.UserAdministrationTx{
+					UserID: "adminUser",
+					UserReads: []*types.UserRead{
+						{
+							UserID: "user1",
+							Version: &types.Version{
+								BlockNum: 100,
+								TxNum:    1000,
+							},
 						},
 					},
-				},
-			},
+				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
 				ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the user [user1] has changed",
@@ -329,7 +377,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
-			tx: &types.UserAdministrationTx{
+			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner, &types.UserAdministrationTx{
 				UserID: "adminUser",
 				UserReads: []*types.UserRead{
 					{
@@ -339,7 +387,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 						UserID: "user2",
 					},
 				},
-			},
+			}),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -356,7 +404,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.userAdminTxValidator.validate(tt.tx)
+			result, err := env.validator.userAdminTxValidator.validate(tt.txEnv)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
@@ -687,21 +735,17 @@ func TestValidateACLOnUserReads(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", sampleVersion, nil),
-							constructUserForTest(t, "user1", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user2", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"user1": true,
-									},
+							}),
+							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"user1": true,
 								},
-							),
+							}),
 						},
 					},
 				}
@@ -728,22 +772,18 @@ func TestValidateACLOnUserReads(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", sampleVersion, nil),
-							constructUserForTest(t, "user1", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user2", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							}),
+							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user3", sampleVersion, nil),
+							}),
+							constructUserForTest(t, "user3", nil, sampleVersion, nil),
 						},
 					},
 				}
@@ -818,21 +858,17 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", sampleVersion, nil),
-							constructUserForTest(t, "user1", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user2", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"user1": true,
-									},
+							}),
+							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"user1": true,
 								},
-							),
+							}),
 						},
 					},
 				}
@@ -863,22 +899,18 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", sampleVersion, nil),
-							constructUserForTest(t, "user1", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user2", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							}),
+							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user3", sampleVersion, nil),
+							}),
+							constructUserForTest(t, "user3", nil, sampleVersion, nil),
 						},
 					},
 				}
@@ -961,21 +993,17 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", sampleVersion, nil),
-							constructUserForTest(t, "user1", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user2", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"user1": true,
-									},
+							}),
+							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"user1": true,
 								},
-							),
+							}),
 						},
 					},
 				}
@@ -1002,14 +1030,12 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", sampleVersion, nil),
-							constructUserForTest(t, "user1", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
+							}),
 						},
 					},
 				}
@@ -1036,21 +1062,17 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", sampleVersion, nil),
-							constructUserForTest(t, "user1", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
-							constructUserForTest(t, "user2", sampleVersion,
-								&types.AccessControl{
-									ReadWriteUsers: map[string]bool{
-										"operatingUser": true,
-									},
+							}),
+							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+								ReadWriteUsers: map[string]bool{
+									"operatingUser": true,
 								},
-							),
+							}),
 						},
 					},
 				}
@@ -1127,7 +1149,7 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", version1, nil),
+							constructUserForTest(t, "user1", nil, version1, nil),
 						},
 					},
 				}
@@ -1155,8 +1177,8 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", version1, nil),
-							constructUserForTest(t, "user2", version3, nil),
+							constructUserForTest(t, "user1", nil, version1, nil),
+							constructUserForTest(t, "user2", nil, version3, nil),
 						},
 					},
 				}
@@ -1184,8 +1206,8 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", version1, nil),
-							constructUserForTest(t, "user2", version3, nil),
+							constructUserForTest(t, "user1", nil, version1, nil),
+							constructUserForTest(t, "user2", nil, version3, nil),
 						},
 					},
 				}
@@ -1244,14 +1266,11 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 	}
 }
 
-func constructUserForTest(
-	t *testing.T,
-	userID string,
-	version *types.Version,
-	acl *types.AccessControl,
-) *worldstate.KVWithMetadata {
+func constructUserForTest(t *testing.T, userID string, certRaw []byte, version *types.Version, acl *types.AccessControl) *worldstate.KVWithMetadata {
 	user := &types.User{
-		ID: userID,
+		ID:          userID,
+		Certificate: certRaw,
+		Privilege:   nil,
 	}
 	userSerialized, err := proto.Marshal(user)
 	require.NoError(t, err)
