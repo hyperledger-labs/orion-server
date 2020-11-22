@@ -1,12 +1,12 @@
 package blockprocessor
 
 import (
-	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -78,21 +78,6 @@ func TestValidateDBAdminTx(t *testing.T) {
 			name: "invalid: signature verification failure",
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
-
-				createDB := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
-						Writes: []*worldstate.KVWithMetadata{
-							{
-								Key: "db3",
-							},
-							{
-								Key: "db4",
-							},
-						},
-					},
-				}
-				require.NoError(t, db.Commit(createDB, 1))
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, nonAdminSigner, &types.DBAdministrationTx{
 				UserID:    "userWithMorePrivilege",
