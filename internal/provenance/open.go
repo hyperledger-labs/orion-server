@@ -40,6 +40,8 @@ type Store struct {
 	logger      *logger.SugarLogger
 }
 
+// Config holds the configuration parameter of the
+// provenance store
 type Config struct {
 	StoreDir string
 	Logger   *logger.SugarLogger
