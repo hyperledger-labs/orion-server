@@ -125,6 +125,17 @@ message AccessControl {
   map<string, bool> read_write_users = 2;
 }
 
+message KVWithMetadata{
+    string key = 1;
+    bytes value = 2;
+    Metadata metadata = 3;
+}
+
+message ValueWithMetadata{
+    bytes value = 1;
+    Metadata metadata = 3;
+}
+
 message Digest {
   // Ledger merkle tree root
   bytes root_hash = 1;

@@ -3,10 +3,13 @@ module github.ibm.com/blockchaindb/server
 go 1.14
 
 require (
+	github.com/cayleygraph/cayley v0.7.7
+	github.com/cayleygraph/quad v1.1.0
 	github.com/golang/protobuf v1.4.2
-	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
+	github.com/golang/snappy v0.0.1
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/mux v1.7.4
+	github.com/hidal-go/hidalgo v0.0.0-20201109092204-05749a6d73df
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/viper v1.4.0
