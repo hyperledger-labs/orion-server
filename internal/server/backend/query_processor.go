@@ -5,12 +5,14 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type queryProcessor struct {
 	nodeID          string
+	signer          *crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier
@@ -19,6 +21,7 @@ type queryProcessor struct {
 
 type queryProcessorConfig struct {
 	nodeID          string
+	signer          *crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier
@@ -28,6 +31,7 @@ type queryProcessorConfig struct {
 func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 	return &queryProcessor{
 		nodeID:          conf.nodeID,
+		signer:          conf.signer,
 		db:              conf.db,
 		blockStore:      conf.blockStore,
 		identityQuerier: conf.identityQuerier,
@@ -54,7 +58,7 @@ func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseE
 	}
 
 	var err error
-	if status.Signature, err = cryptoservice.Sign(status.Payload); err != nil {
+	if status.Signature, err = cryptoservice.SignQueryResponse(q.signer, status.Payload); err != nil {
 		return nil, err
 	}
 	return status, nil
@@ -104,7 +108,7 @@ func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetD
 		Signature: nil,
 	}
 
-	if state.Signature, err = cryptoservice.Sign(state.Payload); err != nil {
+	if state.Signature, err = cryptoservice.SignQueryResponse(q.signer, state.Payload); err != nil {
 		return nil, err
 	}
 
@@ -139,7 +143,7 @@ func (q *queryProcessor) getUser(querierUserID, targetUserID string) (*types.Get
 		Signature: nil,
 	}
 
-	if u.Signature, err = cryptoservice.Sign(u.Payload); err != nil {
+	if u.Signature, err = cryptoservice.SignQueryResponse(q.signer, u.Payload); err != nil {
 		return nil, err
 	}
 
@@ -165,7 +169,7 @@ func (q *queryProcessor) getConfig() (*types.GetConfigResponseEnvelope, error) {
 		Signature: nil,
 	}
 
-	if c.Signature, err = cryptoservice.Sign(c.Payload); err != nil {
+	if c.Signature, err = cryptoservice.SignQueryResponse(q.signer, c.Payload); err != nil {
 		return nil, err
 	}
 

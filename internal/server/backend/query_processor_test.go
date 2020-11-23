@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"crypto/x509"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -17,10 +19,15 @@ import (
 type queryProcessorTestEnv struct {
 	db      *leveldb.LevelDB
 	q       *queryProcessor
+	cert    *x509.Certificate
 	cleanup func(t *testing.T)
 }
 
 func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
+	nodeID := "test-node-id1"
+	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
+	nodeCert, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
+
 	path, err := ioutil.TempDir("/tmp", "queryProcessor")
 	require.NoError(t, err)
 
@@ -57,15 +64,19 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 	}
 
 	qProcConfig := &queryProcessorConfig{
-		nodeID:          "test-node-id1",
+		nodeID:          nodeID,
+		signer:          nodeSigner,
 		db:              db,
+		blockStore:      nil,
 		identityQuerier: identity.NewQuerier(db),
 		logger:          logger,
 	}
 
+	qProc := newQueryProcessor(qProcConfig)
 	return &queryProcessorTestEnv{
 		db:      db,
-		q:       newQueryProcessor(qProcConfig),
+		q:       qProc,
+		cert:    nodeCert,
 		cleanup: cleanup,
 	}
 }
@@ -532,7 +543,8 @@ func TestGetUser(t *testing.T) {
 
 				response, err := env.q.getUser(tt.querierUserID, tt.targetUserID)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(tt.expectedRespose, response))
+				require.True(t, proto.Equal(tt.expectedRespose.Payload, response.Payload))
+				testutils.VerifyPayloadSignature(t, env.cert.Raw, response.Payload, response.Signature)
 			})
 		}
 	})
@@ -675,17 +687,19 @@ func TestGetConfig(t *testing.T) {
 		configEnvelope, err := env.q.getConfig()
 		require.NoError(t, err)
 
-		expectedConfigEnvelope := &types.GetConfigResponseEnvelope{
-			Payload: &types.GetConfigResponse{
-				Header: &types.ResponseHeader{
-					NodeID: env.q.nodeID,
-				},
-				Config:   clusterConfig,
-				Metadata: metadata,
+		payload := &types.GetConfigResponse{
+			Header: &types.ResponseHeader{
+				NodeID: env.q.nodeID,
 			},
-			Signature: nil,
+			Config:   clusterConfig,
+			Metadata: metadata,
 		}
-		require.True(t, proto.Equal(expectedConfigEnvelope, configEnvelope))
+		expectedConfigEnvelope := &types.GetConfigResponseEnvelope{
+			Payload:   payload,
+			Signature: testutils.SignatureFromQueryResponse(t, env.q.signer, payload),
+		}
+		require.True(t, proto.Equal(expectedConfigEnvelope.Payload, configEnvelope.Payload))
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, configEnvelope.Payload, configEnvelope.Signature)
 	})
 
 	t.Run("getConfig returns err", func(t *testing.T) {

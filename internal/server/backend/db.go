@@ -5,15 +5,15 @@ import (
 	"encoding/pem"
 	"io/ioutil"
 
-	"github.ibm.com/blockchaindb/server/internal/identity"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/fileops"
+	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -109,14 +109,6 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 
 	querier := identity.NewQuerier(levelDB)
 
-	qProcConfig := &queryProcessorConfig{
-		nodeID:          conf.Node.Identity.ID,
-		db:              levelDB,
-		blockStore:      blockStore,
-		identityQuerier: querier,
-		logger:          logger,
-	}
-
 	txProcConf := &txProcessorConfig{
 		db:                 levelDB,
 		blockStore:         blockStore,
@@ -133,8 +125,14 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 		return nil, errors.WithMessage(err, "can't initiate tx processor")
 	}
 
+	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: conf.Node.Identity.KeyPath})
+	if err != nil {
+		return nil, errors.Wrap(err, "can't load private key")
+	}
+
 	ledgerQueryProcessorConfig := &ledgerQueryProcessorConfig{
 		nodeID:          conf.Node.Identity.ID,
+		signer:          signer,
 		db:              levelDB,
 		blockStore:      blockStore,
 		identityQuerier: querier,
@@ -142,8 +140,19 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 	}
 	ledgerQueryProcessor := newLedgerQueryProcessor(ledgerQueryProcessorConfig)
 
+	qProcConfig := &queryProcessorConfig{
+		nodeID:          conf.Node.Identity.ID,
+		signer:          signer,
+		db:              levelDB,
+		blockStore:      blockStore,
+		identityQuerier: querier,
+		logger:          logger,
+	}
+
+	queryProcessor := newQueryProcessor(qProcConfig)
+
 	return &db{
-		queryProcessor:       newQueryProcessor(qProcConfig),
+		queryProcessor:       queryProcessor,
 		ledgerQueryProcessor: ledgerQueryProcessor,
 		txProcessor:          txProcessor,
 		logger:               logger,

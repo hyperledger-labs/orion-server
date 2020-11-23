@@ -25,6 +25,10 @@ type ledgerProcessorTestEnv struct {
 }
 
 func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
+	nodeID := "test-node-id1"
+	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
+	_, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
+
 	path, err := ioutil.TempDir("/tmp", "ledgerQueryProcessor")
 	require.NoError(t, err)
 
@@ -78,7 +82,8 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 	}
 
 	conf := &ledgerQueryProcessorConfig{
-		nodeID:          "test-node-id1",
+		nodeID:          nodeID,
+		signer:          nodeSigner,
 		db:              db,
 		blockStore:      blockStore,
 		identityQuerier: identity.NewQuerier(db),

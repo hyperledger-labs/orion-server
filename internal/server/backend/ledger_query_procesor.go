@@ -8,12 +8,14 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type ledgerQueryProcessor struct {
 	nodeID          string
+	signer          *crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier
@@ -22,6 +24,7 @@ type ledgerQueryProcessor struct {
 
 type ledgerQueryProcessorConfig struct {
 	nodeID          string
+	signer          *crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier
@@ -31,9 +34,11 @@ type ledgerQueryProcessorConfig struct {
 func newLedgerQueryProcessor(conf *ledgerQueryProcessorConfig) *ledgerQueryProcessor {
 	return &ledgerQueryProcessor{
 		nodeID:          conf.nodeID,
+		signer:          conf.signer,
 		db:              conf.db,
 		blockStore:      conf.blockStore,
 		identityQuerier: conf.identityQuerier,
+		logger:          conf.logger,
 	}
 }
 
@@ -61,7 +66,7 @@ func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*
 		Signature: nil,
 	}
 
-	if result.Signature, err = cryptoservice.Sign(result.Payload); err != nil {
+	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +110,7 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 		Signature: nil,
 	}
 
-	if result.Signature, err = cryptoservice.Sign(result.Payload); err != nil {
+	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
 		return nil, err
 	}
 	return result, nil

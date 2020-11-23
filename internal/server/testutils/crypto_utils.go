@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -163,6 +164,12 @@ func SignatureFromQuery(t *testing.T, signner *crypto.Signer, query interface{})
 	return sig
 }
 
+func SignatureFromQueryResponse(t *testing.T, signer *crypto.Signer, queryResp interface{}) []byte {
+	sig, err := cryptoservice.SignQueryResponse(signer, queryResp)
+	require.NoError(t, err)
+	return sig
+}
+
 func SignedDataTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.DataTx) *types.DataTxEnvelope {
 	env := &types.DataTxEnvelope{
 		Payload:   tx,
@@ -193,4 +200,12 @@ func SignedDBAdministrationTxEnvelope(t *testing.T, signer *crypto.Signer, tx *t
 		Signature: SignatureFromTx(t, signer, tx),
 	}
 	return env
+}
+
+func VerifyPayloadSignature(t *testing.T, rawCert []byte, payload interface{}, sig []byte) {
+	ver, err := crypto.NewVerifier(rawCert)
+	require.NoError(t, err)
+	payloadBytes, err := json.Marshal(payload)
+	require.NoError(t, err)
+	ver.Verify(payloadBytes, sig)
 }
