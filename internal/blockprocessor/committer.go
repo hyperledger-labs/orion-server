@@ -5,6 +5,7 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -17,37 +18,78 @@ const (
 )
 
 type committer struct {
-	db         worldstate.DB
-	blockStore *blockstore.Store
-	logger     *logger.SugarLogger
+	db              worldstate.DB
+	blockStore      *blockstore.Store
+	provenanceStore *provenance.Store
+	logger          *logger.SugarLogger
 	// TODO
-	// 1. Provenance Store
 	// 2. Proof Store
 }
 
 func newCommitter(conf *Config) *committer {
 	return &committer{
-		db:         conf.DB,
-		blockStore: conf.BlockStore,
-		logger:     conf.Logger,
+		db:              conf.DB,
+		blockStore:      conf.BlockStore,
+		provenanceStore: conf.ProvenanceStore,
+		logger:          conf.Logger,
 	}
 }
 
 func (c *committer) commitBlock(block *types.Block) error {
 	if err := c.commitToBlockStore(block); err != nil {
-		return errors.WithMessagef(err, "error while committing block %d to the block store", block.Header.BaseHeader.Number)
+		return errors.WithMessagef(
+			err,
+			"error while committing block %d to the block store",
+			block.GetHeader().GetBaseHeader().GetNumber(),
+		)
 	}
 
-	return c.commitToStateDB(block)
-	//TODO: add code to commit to provenance store
+	return c.commitToDBs(block)
 }
 
 func (c *committer) commitToBlockStore(block *types.Block) error {
-	return c.blockStore.Commit(block)
+	if err := c.blockStore.Commit(block); err != nil {
+		return errors.WithMessagef(err, "failed to commit block %d to block store", block.Header.BaseHeader.Number)
+	}
+
+	return nil
 }
 
-func (c *committer) commitToStateDB(block *types.Block) error {
+func (c *committer) commitToDBs(block *types.Block) error {
+	blockNum := block.GetHeader().GetBaseHeader().GetNumber()
+
+	dbsUpdates, provenanceData, err := c.constructDBAndProvenanceEntries(block)
+	if err != nil {
+		return errors.WithMessagef(err, "error while constructing database and provenance entries for block %d", blockNum)
+	}
+
+	if err := c.commitToProvenanceStore(blockNum, provenanceData); err != nil {
+		return errors.WithMessagef(err, "error while committing block %d to the block store", blockNum)
+	}
+
+	return c.commitToStateDB(blockNum, dbsUpdates)
+}
+
+func (c *committer) commitToProvenanceStore(blockNum uint64, provenanceData []*provenance.TxDataForProvenance) error {
+	if err := c.provenanceStore.Commit(blockNum, provenanceData); err != nil {
+		return errors.WithMessagef(err, "failed to commit block %d to provenance store", blockNum)
+	}
+
+	return nil
+}
+
+func (c *committer) commitToStateDB(blockNum uint64, dbsUpdates []*worldstate.DBUpdates) error {
+	if err := c.db.Commit(dbsUpdates, blockNum); err != nil {
+		return errors.WithMessagef(err, "failed to commit block %d to state database", blockNum)
+	}
+
+	return nil
+}
+
+func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worldstate.DBUpdates, []*provenance.TxDataForProvenance, error) {
 	var dbsUpdates []*worldstate.DBUpdates
+	var provenanceData []*provenance.TxDataForProvenance
+	dbWriteKeyVersion := make(map[string]*types.Version)
 	blockValidationInfo := block.Header.ValidationInfo
 
 	c.logger.Debugf("committing to the state changes from the block number %d", block.GetHeader().GetBaseHeader().GetNumber())
@@ -66,10 +108,21 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 			}
 
 			tx := txsEnvelopes[txNum].Payload
+
+			pData, err := constructProvenanceEntriesForDataTx(c.db, tx, version, dbWriteKeyVersion)
+			if err != nil {
+				return nil, nil, err
+			}
+			provenanceData = append(provenanceData, pData)
+
 			dbsUpdates = append(
 				dbsUpdates,
 				constructDBEntriesForDataTx(tx, version),
 			)
+
+			for _, w := range dbsUpdates[len(dbsUpdates)-1].Writes {
+				dbWriteKeyVersion[w.Key] = w.Metadata.Version
+			}
 		}
 		c.logger.Debugf("constructed %d, updates for data transactions, block number %d",
 			len(blockValidationInfo),
@@ -77,7 +130,7 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 
 	case *types.Block_UserAdministrationTxEnvelope:
 		if blockValidationInfo[userAdminTxIndex].Flag != types.Flag_VALID {
-			return nil
+			return nil, nil, nil
 		}
 
 		version := &types.Version{
@@ -88,7 +141,7 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 		tx := block.GetUserAdministrationTxEnvelope().GetPayload()
 		entries, err := identity.ConstructDBEntriesForUserAdminTx(tx, version)
 		if err != nil {
-			return errors.WithMessage(err, "error while creating entries for the user admin transaction")
+			return nil, nil, errors.WithMessage(err, "error while creating entries for the user admin transaction")
 		}
 
 		dbsUpdates = []*worldstate.DBUpdates{entries}
@@ -97,7 +150,7 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 
 	case *types.Block_DBAdministrationTxEnvelope:
 		if blockValidationInfo[dbAdminTxIndex].Flag != types.Flag_VALID {
-			return nil
+			return nil, nil, nil
 		}
 
 		version := &types.Version{
@@ -114,7 +167,7 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 
 	case *types.Block_ConfigTxEnvelope:
 		if blockValidationInfo[configTxIndex].Flag != types.Flag_VALID {
-			return nil
+			return nil, nil, nil
 		}
 
 		version := &types.Version{
@@ -124,13 +177,13 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 
 		committedConfig, _, err := c.db.GetConfig()
 		if err != nil {
-			return errors.WithMessage(err, "error while fetching committed configuration")
+			return nil, nil, errors.WithMessage(err, "error while fetching committed configuration")
 		}
 
 		tx := block.GetConfigTxEnvelope().GetPayload()
 		entries, err := constructDBEntriesForConfigTx(tx, committedConfig, version)
 		if err != nil {
-			return errors.WithMessage(err, "error while constructing entries for the config transaction")
+			return nil, nil, errors.WithMessage(err, "error while constructing entries for the config transaction")
 		}
 
 		dbsUpdates = entries
@@ -138,11 +191,7 @@ func (c *committer) commitToStateDB(block *types.Block) error {
 			block.GetHeader().GetBaseHeader().GetNumber())
 	}
 
-	blockNum := block.Header.BaseHeader.Number
-	if err := c.db.Commit(dbsUpdates, blockNum); err != nil {
-		return errors.WithMessagef(err, "failed to commit block %d to state database", blockNum)
-	}
-	return nil
+	return dbsUpdates, provenanceData, nil
 }
 
 func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) *worldstate.DBUpdates {
@@ -220,4 +269,54 @@ func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterC
 		adminUpdates,
 		configUpdates,
 	}, nil
+}
+
+func constructProvenanceEntriesForDataTx(
+	db worldstate.DB,
+	tx *types.DataTx,
+	version *types.Version,
+	dirtyWriteKeyVersion map[string]*types.Version,
+) (*provenance.TxDataForProvenance, error) {
+	txData := &provenance.TxDataForProvenance{
+		DBName:             tx.DBName,
+		UserID:             tx.UserID,
+		TxID:               tx.TxID,
+		OldVersionOfWrites: make(map[string]*types.Version),
+	}
+
+	for _, read := range tx.DataReads {
+		k := &provenance.KeyWithVersion{
+			Key:     read.Key,
+			Version: read.Version,
+		}
+		txData.Reads = append(txData.Reads, k)
+	}
+
+	for _, write := range tx.DataWrites {
+		kv := &types.KVWithMetadata{
+			Key:   write.Key,
+			Value: write.Value,
+			Metadata: &types.Metadata{
+				Version:       version,
+				AccessControl: write.ACL,
+			},
+		}
+		txData.Writes = append(txData.Writes, kv)
+
+		version, ok := dirtyWriteKeyVersion[write.Key]
+		if !ok {
+			var err error
+			version, err = db.GetVersion(tx.DBName, write.Key)
+			if err != nil {
+				return nil, err
+			}
+			if version == nil {
+				continue
+			}
+		}
+
+		txData.OldVersionOfWrites[write.Key] = version
+	}
+
+	return txData, nil
 }

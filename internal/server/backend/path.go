@@ -9,3 +9,7 @@ func constructWorldStatePath(dir string) string {
 func constructBlockStorePath(dir string) string {
 	return filepath.Join(dir, "blockstore")
 }
+
+func constructProvenanceStorePath(dir string) string {
+	return filepath.Join(dir, "provenancestore")
+}

@@ -16,6 +16,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/mtree"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
@@ -79,14 +80,29 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
+	provenanceStorePath := filepath.Join(dir, "provenancestore")
+	provenanceStore, err := provenance.Open(
+		&provenance.Config{
+			StoreDir: provenanceStorePath,
+			Logger:   logger,
+		},
+	)
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, err)
+		}
+		t.Fatalf("error while creating the block store, %v", err)
+	}
+
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 
 	b := New(&Config{
-		BlockQueue: queue.New(10),
-		BlockStore: blockStore,
-		DB:         db,
-		Logger:     logger,
+		BlockQueue:      queue.New(10),
+		BlockStore:      blockStore,
+		ProvenanceStore: provenanceStore,
+		DB:              db,
+		Logger:          logger,
 	})
 
 	go b.Start()
@@ -95,6 +111,10 @@ func newTestEnv(t *testing.T) *testEnv {
 	cleanup := func(stopBlockProcessor bool) {
 		if stopBlockProcessor {
 			b.Stop()
+		}
+
+		if err := provenanceStore.Close(); err != nil {
+			t.Errorf("failed to close the provenance store")
 		}
 
 		if err := db.Close(); err != nil {
@@ -433,7 +453,11 @@ func TestFailureAndRecovery(t *testing.T) {
 				Flag: types.Flag_VALID,
 			},
 		}
-		require.NoError(t, env.blockProcessor.committer.commitToStateDB(block2))
+
+		dbsUpdates, provenanceData, err := env.blockProcessor.committer.constructDBAndProvenanceEntries(block2)
+		require.NoError(t, err)
+		require.NoError(t, env.blockProcessor.committer.commitToProvenanceStore(2, provenanceData))
+		require.NoError(t, env.blockProcessor.committer.commitToStateDB(2, dbsUpdates))
 
 		blockStoreHeight, err := env.blockStore.Height()
 		require.NoError(t, err)

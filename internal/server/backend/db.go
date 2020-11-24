@@ -11,6 +11,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/fileops"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -114,11 +115,22 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 		return nil, errors.WithMessage(err, "error while creating the block store")
 	}
 
+	provenanceStore, err := provenance.Open(
+		&provenance.Config{
+			StoreDir: constructProvenanceStorePath(ledgerDir),
+			Logger:   logger,
+		},
+	)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while creating the block sotre")
+	}
+
 	querier := identity.NewQuerier(levelDB)
 
 	txProcConf := &txProcessorConfig{
 		db:                 levelDB,
 		blockStore:         blockStore,
+		provenanceStore:    provenanceStore,
 		txQueueLength:      conf.Node.QueueLength.Transaction,
 		txBatchQueueLength: conf.Node.QueueLength.ReorderedTransactionBatch,
 		blockQueueLength:   conf.Node.QueueLength.Block,

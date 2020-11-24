@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/mtree"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -25,10 +26,11 @@ type BlockProcessor struct {
 // Config holds the configuration information needed to bootstrap the
 // block processor
 type Config struct {
-	BlockQueue *queue.Queue
-	BlockStore *blockstore.Store
-	DB         worldstate.DB
-	Logger     *logger.SugarLogger
+	BlockQueue      *queue.Queue
+	BlockStore      *blockstore.Store
+	DB              worldstate.DB
+	ProvenanceStore *provenance.Store
+	Logger          *logger.SugarLogger
 }
 
 // New creates a ValidatorAndCommitter
@@ -145,9 +147,7 @@ func (b *BlockProcessor) recoverWorldStateDBIfNeeded() error {
 			return err
 		}
 
-		if err := b.committer.commitToStateDB(block); err != nil {
-			return err
-		}
+		return b.committer.commitToDBs(block)
 	}
 
 	return nil

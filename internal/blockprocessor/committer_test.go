@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -68,7 +69,25 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
+	provenanceStorePath := filepath.Join(dir, "provenancestore")
+	provenanceStore, err := provenance.Open(
+		&provenance.Config{
+			StoreDir: provenanceStorePath,
+			Logger:   logger,
+		},
+	)
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, err)
+		}
+		t.Fatalf("error while creating the block store, %v", err)
+	}
+
 	cleanup := func() {
+		if err := provenanceStore.Close(); err != nil {
+			t.Errorf("error while closing the provenance store, %v", err)
+		}
+
 		if err := db.Close(); err != nil {
 			t.Errorf("error while closing the db instance, %v", err)
 		}
@@ -83,9 +102,10 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	}
 
 	c := &Config{
-		DB:         db,
-		BlockStore: blockStore,
-		Logger:     logger,
+		DB:              db,
+		BlockStore:      blockStore,
+		ProvenanceStore: provenanceStore,
+		Logger:          logger,
 	}
 	return &committerTestEnv{
 		db:              db,
@@ -256,7 +276,7 @@ func TestBlockStoreCommitter(t *testing.T) {
 
 		block := getSampleBlock(10)
 		err := env.committer.commitToBlockStore(block)
-		require.EqualError(t, err, "expected block number [1] but received [10]")
+		require.EqualError(t, err, "failed to commit block 10 to block store: expected block number [1] but received [10]")
 	})
 }
 
@@ -453,7 +473,10 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 					},
 				},
 			}
-			require.NoError(t, env.committer.commitToStateDB(block))
+
+			dbsUpdates, _, err := env.committer.constructDBAndProvenanceEntries(block)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToStateDB(2, dbsUpdates))
 
 			for _, kv := range tt.expectedDataAfter {
 				val, meta, err := env.db.Get(worldstate.DefaultDBName, kv.Key)
@@ -602,7 +625,8 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 					},
 				},
 			}
-			require.NoError(t, env.committer.commitToStateDB(block))
+
+			require.NoError(t, env.committer.commitToDBs(block))
 
 			for _, user := range tt.expectedUsersAfter {
 				exist, err := env.identityQuerier.DoesUserExist(user)
@@ -714,7 +738,8 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 					},
 				},
 			}
-			require.NoError(t, env.committer.commitToStateDB(block))
+
+			require.NoError(t, env.committer.commitToDBs(block))
 
 			for _, dbName := range tt.expectedDBsAfter {
 				require.True(t, env.db.Exist(dbName))
@@ -856,13 +881,449 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			}
 			blockNumber = 1
 			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx, validationInfo)
-			env.committer.commitToStateDB(configBlock)
+			require.NoError(t, env.committer.commitToDBs(configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsBefore)
 
 			blockNumber++
 			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx, tt.valInfo)
-			env.committer.commitToStateDB(configBlock)
+			require.NoError(t, env.committer.commitToDBs(configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsAfter)
+		})
+	}
+}
+func TestProvenanceStoreCommitterForDataBlock(t *testing.T) {
+	t.Parallel()
+
+	setup := func(env *committerTestEnv) {
+		data := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.DefaultDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					constructDataEntryForTest("key0", []byte("value0"), &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					}),
+				},
+			},
+		}
+		require.NoError(t, env.committer.db.Commit(data, 1))
+
+		txsData := []*provenance.TxDataForProvenance{
+			{
+				DBName: worldstate.DefaultDBName,
+				UserID: "user1",
+				TxID:   "tx0",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "key0",
+						Value: []byte("value0"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, env.committer.provenanceStore.Commit(1, txsData))
+	}
+
+	tests := []struct {
+		name         string
+		txs          []*types.DataTxEnvelope
+		valInfo      []*types.ValidationInfo
+		query        func(s *provenance.Store) ([]*types.ValueWithMetadata, error)
+		expectedData []*types.ValueWithMetadata
+	}{
+		{
+			name: "previous value link within the block",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key1",
+								Value: []byte("value1"),
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx2",
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key1",
+								Value: []byte("value2"),
+							},
+						},
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetPreviousValues(
+					worldstate.DefaultDBName,
+					"key1",
+					&types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+					-1,
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "previous value link with the already committed value",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key0",
+								Value: []byte("value1"),
+							},
+						},
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetPreviousValues(
+					worldstate.DefaultDBName,
+					"key0",
+					&types.Version{
+						BlockNum: 2,
+						TxNum:    0,
+					},
+					-1,
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value0"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "tx with read set",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+						DataReads: []*types.DataRead{
+							{
+								Key: "key0",
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
+						},
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key0",
+								Value: []byte("value1"),
+							},
+						},
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				kvs, err := s.GetValuesReadByUser("user1")
+				if err != nil {
+					return nil, err
+				}
+
+				var values []*types.ValueWithMetadata
+				for _, kv := range kvs {
+					values = append(
+						values,
+						&types.ValueWithMetadata{
+							Value:    kv.Value,
+							Metadata: kv.Metadata,
+						},
+					)
+				}
+
+				return values, nil
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value0"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+			setup(env)
+
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: tt.valInfo,
+				},
+				Payload: &types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: tt.txs,
+					},
+				},
+			}
+
+			_, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToProvenanceStore(2, provenanceData))
+
+			actualData, err := tt.query(env.committer.provenanceStore)
+			require.NoError(t, err)
+			require.ElementsMatch(t, tt.expectedData, actualData)
+		})
+	}
+}
+
+func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
+	tests := []struct {
+		name                   string
+		tx                     *types.DataTx
+		version                *types.Version
+		setup                  func(db worldstate.DB)
+		dirtyWriteKeyVersion   map[string]*types.Version
+		expectedProvenanceData *provenance.TxDataForProvenance
+	}{
+		{
+			name: "tx with only reads",
+			tx: &types.DataTx{
+				DBName: worldstate.DefaultDBName,
+				UserID: "user1",
+				TxID:   "tx1",
+				DataReads: []*types.DataRead{
+					{
+						Key: "key1",
+						Version: &types.Version{
+							BlockNum: 5,
+							TxNum:    10,
+						},
+					},
+					{
+						Key: "key2",
+						Version: &types.Version{
+							BlockNum: 9,
+							TxNum:    1,
+						},
+					},
+				},
+			},
+			version: &types.Version{
+				BlockNum: 10,
+				TxNum:    3,
+			},
+			setup: func(db worldstate.DB) {},
+			expectedProvenanceData: &provenance.TxDataForProvenance{
+				DBName: worldstate.DefaultDBName,
+				UserID: "user1",
+				TxID:   "tx1",
+				Reads: []*provenance.KeyWithVersion{
+					{
+						Key: "key1",
+						Version: &types.Version{
+							BlockNum: 5,
+							TxNum:    10,
+						},
+					},
+					{
+						Key: "key2",
+						Version: &types.Version{
+							BlockNum: 9,
+							TxNum:    1,
+						},
+					},
+				},
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+		},
+		{
+			name: "tx with writes and previous version",
+			tx: &types.DataTx{
+				DBName: worldstate.DefaultDBName,
+				UserID: "user2",
+				TxID:   "tx2",
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+					},
+					{
+						Key:   "key2",
+						Value: []byte("value2"),
+					},
+					{
+						Key:   "key3",
+						Value: []byte("value3"),
+					},
+				},
+			},
+			version: &types.Version{
+				BlockNum: 10,
+				TxNum:    3,
+			},
+			setup: func(db worldstate.DB) {
+				update := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key:   "key1",
+								Value: []byte("value1"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 3,
+										TxNum:    3,
+									},
+								},
+							},
+							{
+								Key:   "key2",
+								Value: []byte("value2"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 5,
+										TxNum:    5,
+									},
+								},
+							},
+						},
+					},
+				}
+				require.NoError(t, db.Commit(update, 1))
+			},
+			dirtyWriteKeyVersion: map[string]*types.Version{
+				"key1": {
+					BlockNum: 4,
+					TxNum:    4,
+				},
+			},
+			expectedProvenanceData: &provenance.TxDataForProvenance{
+				DBName: worldstate.DefaultDBName,
+				UserID: "user2",
+				TxID:   "tx2",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 10,
+								TxNum:    3,
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 10,
+								TxNum:    3,
+							},
+						},
+					},
+					{
+						Key:   "key3",
+						Value: []byte("value3"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 10,
+								TxNum:    3,
+							},
+						},
+					},
+				},
+				OldVersionOfWrites: map[string]*types.Version{
+					"key1": {
+						BlockNum: 4,
+						TxNum:    4,
+					},
+					"key2": {
+						BlockNum: 5,
+						TxNum:    5,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+			tt.setup(env.db)
+
+			provenanceData, err := constructProvenanceEntriesForDataTx(env.db, tt.tx, tt.version, tt.dirtyWriteKeyVersion)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedProvenanceData, provenanceData)
 		})
 	}
 }

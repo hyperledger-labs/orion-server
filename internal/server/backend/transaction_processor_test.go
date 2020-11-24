@@ -14,6 +14,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/mtree"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -75,12 +76,27 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
+	provenanceStorePath := constructProvenanceStorePath(dir)
+	provenanceStore, err := provenance.Open(
+		&provenance.Config{
+			StoreDir: provenanceStorePath,
+			Logger:   logger,
+		},
+	)
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, rmErr)
+		}
+		t.Fatalf("error while creating provenancestore, %v", err)
+	}
+
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 
 	txProcConf := &txProcessorConfig{
 		db:                 db,
 		blockStore:         blockStore,
+		provenanceStore:    provenanceStore,
 		txQueueLength:      100,
 		txBatchQueueLength: 100,
 		blockQueueLength:   100,
@@ -95,6 +111,11 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		if err := txProcessor.close(); err != nil {
 			t.Errorf("error while closing the transaction processor")
 		}
+
+		if err := provenanceStore.Close(); err != nil {
+			t.Errorf("error while closing the provenance store")
+		}
+
 		if err := db.Close(); err != nil {
 			t.Errorf("error while closing the db instance, %v", err)
 		}

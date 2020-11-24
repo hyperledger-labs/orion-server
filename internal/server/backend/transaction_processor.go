@@ -9,6 +9,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/blockcreator"
 	"github.ibm.com/blockchaindb/server/internal/blockprocessor"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/txreorderer"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
@@ -29,6 +30,7 @@ type transactionProcessor struct {
 type txProcessorConfig struct {
 	db                 worldstate.DB
 	blockStore         *blockstore.Store
+	provenanceStore    *provenance.Store
 	txQueueLength      uint32
 	txBatchQueueLength uint32
 	blockQueueLength   uint32
@@ -69,10 +71,11 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 
 	p.blockProcessor = blockprocessor.New(
 		&blockprocessor.Config{
-			BlockQueue: p.blockQueue,
-			BlockStore: conf.blockStore,
-			DB:         conf.db,
-			Logger:     conf.logger,
+			BlockQueue:      p.blockQueue,
+			BlockStore:      conf.blockStore,
+			ProvenanceStore: conf.provenanceStore,
+			DB:              conf.db,
+			Logger:          conf.logger,
 		},
 	)
 
