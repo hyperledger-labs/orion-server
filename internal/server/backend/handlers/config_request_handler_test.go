@@ -395,3 +395,198 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() *http.Request
+		dbMockFactory      func(response *types.GetNodeConfigResponseEnvelope) backend.DB
+		expectedResponse   *types.GetNodeConfigResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "successfully retrieve single node configuration",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{
+					UserID: submittingUserName,
+					NodeID: "node1",
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetNodeConfig", "node1").Return(response, nil)
+				return db
+			},
+			expectedResponse: &types.GetNodeConfigResponseEnvelope{
+				Payload: &types.GetNodeConfigResponse{
+					Header: &types.ResponseHeader{
+						NodeID: "testNodeId",
+					},
+					NodeConfig: &types.NodeConfig{
+						ID:          "node1",
+						Address:     "http://localhost",
+						Port:        8080,
+						Certificate: []byte{0, 0, 0},
+					},
+				},
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        "",
+		},
+		{
+			name: "missing nodeId",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath(""), nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{
+					UserID: submittingUserName,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "query error - bad or missing node id",
+		},
+		{
+			name: "missing user header",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req
+			},
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+				return &mocks.DB{}
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
+		},
+		{
+			name: "missing signature header",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				return req
+			},
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+				return &mocks.DB{}
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
+		},
+		{
+			name: "fail to verify signature of submitting user",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetNodeConfigQuery{
+					UserID: submittingUserName,
+					NodeID: "node1",
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetNodeConfig", "node1").Return(nil, nil)
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "submitting user doesn't exists",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{UserID: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				db.On("GetNodeConfig", "node1").Return(nil, nil)
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "failing to get config from DB",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{
+					UserID: submittingUserName,
+					NodeID: "node1",
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetNodeConfig", "node1").Return(nil, errors.New("failed to get configuration"))
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /config/node/node1' because failed to get configuration",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(fmt.Sprintf("GetNodesConfig %s", tt.name), func(t *testing.T) {
+			req := tt.requestFactory()
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+
+			rr := httptest.NewRecorder()
+			handler := NewConfigRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.GetNodeConfigResponseEnvelope{}
+				err := json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+				// TODO verify signature on responses
+			}
+		})
+	}
+}

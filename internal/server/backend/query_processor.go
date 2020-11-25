@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"strings"
+
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/internal/identity"
@@ -168,6 +170,33 @@ func (q *queryProcessor) getConfig() (*types.GetConfigResponseEnvelope, error) {
 		Signature: nil,
 	}
 
+	if c.Signature, err = cryptoservice.SignQueryResponse(q.signer, c.Payload); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func (q *queryProcessor) getNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error) {
+	config, _, err := q.db.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	c := &types.GetNodeConfigResponseEnvelope{
+		Payload: &types.GetNodeConfigResponse{
+			Header: &types.ResponseHeader{
+				NodeID: q.nodeID,
+			},
+		},
+		Signature: nil,
+	}
+
+	for _, node := range config.Nodes {
+		if strings.Compare(node.ID, nodeID) == 0 {
+			c.Payload.NodeConfig = node
+		}
+	}
 	if c.Signature, err = cryptoservice.SignQueryResponse(q.signer, c.Payload); err != nil {
 		return nil, err
 	}

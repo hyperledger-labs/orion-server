@@ -49,6 +49,32 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 	SendHTTPResponse(response, http.StatusOK, config)
 }
 
+func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *http.Request) {
+	queryEnv, respondedErr := extractNodeConfigQueryEnvelope(request, response)
+	if respondedErr {
+		return
+	}
+
+	err, code := VerifyRequestSignature(c.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, code, err)
+		return
+	}
+
+	config, err := c.db.GetNodeConfig(queryEnv.GetPayload().GetNodeID())
+
+	if err != nil {
+		SendHTTPResponse(
+			response,
+			http.StatusInternalServerError,
+			&ResponseErr{"error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
+		)
+		return
+	}
+
+	SendHTTPResponse(response, http.StatusOK, config)
+}
+
 func (c *configRequestHandler) configTransaction(response http.ResponseWriter, request *http.Request) {
 	d := json.NewDecoder(request.Body)
 	d.DisallowUnknownFields()
@@ -99,6 +125,8 @@ func NewConfigRequestHandler(db backend.DB, logger *logger.SugarLogger) *configR
 
 	handler.router.HandleFunc(constants.GetConfig, handler.configQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostConfigTx, handler.configTransaction).Methods(http.MethodPost)
+	handler.router.HandleFunc(constants.GetNodeConfig, handler.nodeQuery).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetNodesConfig, handler.nodeQuery).Methods(http.MethodGet)
 
 	return handler
 }

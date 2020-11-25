@@ -56,6 +56,20 @@ func TestURLConstruction(t *testing.T) {
 			},
 			expectedURL: "/ledger/path?start=10&end=20",
 		},
+		{
+			name: "URLNodeConfigPath",
+			execute: func() string {
+				return URLForNodeConfigPath("node1")
+			},
+			expectedURL: "/config/node/node1",
+		},
+		{
+			name: "URLNodeConfigPath all nodes",
+			execute: func() string {
+				return URLForNodeConfigPath("")
+			},
+			expectedURL: "/config/node",
+		},
 	}
 
 	for _, tt := range tests {

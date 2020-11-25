@@ -25,6 +25,8 @@ const (
 	ConfigEndpoint = "/config/"
 	PostConfigTx   = "/config/tx"
 	GetConfig      = "/config/tx"
+	GetNodesConfig = "/config/node"
+	GetNodeConfig  = "/config/node/{nodeId}"
 
 	LedgerEndpoint = "/ledger/"
 	GetBlockHeader = "/ledger/block/{blockId}"
@@ -61,4 +63,12 @@ func URLForLedgerBlock(blockNum uint64) string {
 
 func URLForLedgerPath(start, end uint64) string {
 	return LedgerEndpoint + fmt.Sprintf("path?start=%d&end=%d", start, end)
+}
+
+func URLForNodeConfigPath(nodeID string) string {
+	if len(nodeID) == 0 {
+		return GetNodesConfig
+	}
+	return path.Join(GetNodesConfig, nodeID)
+
 }

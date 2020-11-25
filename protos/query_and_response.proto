@@ -79,6 +79,16 @@ message GetConfigQuery {
   string userID = 1;
 }
 
+message GetNodeConfigQueryEnvelope {
+  GetNodeConfigQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetNodeConfigQuery {
+  string userID = 1;
+  string nodeID = 2;
+}
+
 message GetConfigResponseEnvelope {
   GetConfigResponse payload = 1;
   bytes signature = 2;
@@ -88,6 +98,16 @@ message GetConfigResponse {
   ResponseHeader header = 1;
   ClusterConfig config = 2;
   Metadata metadata = 3;
+}
+
+message GetNodeConfigResponseEnvelope {
+  GetNodeConfigResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetNodeConfigResponse {
+  ResponseHeader header = 1;
+  NodeConfig node_config = 2;
 }
 
 message Metadata {

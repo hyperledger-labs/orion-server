@@ -40,6 +40,9 @@ type DB interface {
 	// GetConfig returns database configuration
 	GetConfig() (*types.GetConfigResponseEnvelope, error)
 
+	// GetNodeConfig returns single node subsection of database configuration
+	GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error)
+
 	// GetDBStatus returns status for database, checks whenever database was created
 	GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error)
 
@@ -181,6 +184,11 @@ func (d *db) GetCertificate(userID string) (*x509.Certificate, error) {
 // GetUser returns user's record
 func (d *db) GetUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error) {
 	return d.queryProcessor.getUser(querierUserID, targetUserID)
+}
+
+// GetNodeConfig returns single node subsection of database configuration
+func (d *db) GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error) {
+	return d.queryProcessor.getNodeConfig(nodeID)
 }
 
 // GetConfig returns database configuration

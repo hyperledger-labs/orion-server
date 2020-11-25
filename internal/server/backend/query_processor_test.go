@@ -650,6 +650,12 @@ func TestGetConfig(t *testing.T) {
 					Port:        1234,
 					Certificate: []byte("cert"),
 				},
+				{
+					ID:          "node2",
+					Address:     "127.0.0.1",
+					Port:        2345,
+					Certificate: []byte("cert"),
+				},
 			},
 			Admins: []*types.Admin{
 				{
@@ -695,8 +701,7 @@ func TestGetConfig(t *testing.T) {
 			Metadata: metadata,
 		}
 		expectedConfigEnvelope := &types.GetConfigResponseEnvelope{
-			Payload:   payload,
-			Signature: testutils.SignatureFromQueryResponse(t, env.q.signer, payload),
+			Payload: payload,
 		}
 		require.True(t, proto.Equal(expectedConfigEnvelope.Payload, configEnvelope.Payload))
 		testutils.VerifyPayloadSignature(t, env.cert.Raw, configEnvelope.Payload, configEnvelope.Signature)
@@ -731,4 +736,88 @@ func TestGetConfig(t *testing.T) {
 		require.Contains(t, err.Error(), "error while unmarshaling committed cluster configuration")
 		require.Nil(t, configEnvelope)
 	})
+
+	t.Run("getNodeConfig returns single node and multiple nodes config", func(t *testing.T) {
+		env := newQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		clusterConfig := &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					ID:          "node1",
+					Address:     "127.0.0.1",
+					Port:        1234,
+					Certificate: []byte("cert"),
+				},
+				{
+					ID:          "node2",
+					Address:     "127.0.0.1",
+					Port:        2345,
+					Certificate: []byte("cert"),
+				},
+			},
+			Admins: []*types.Admin{
+				{
+					ID:          "admin",
+					Certificate: []byte("cert"),
+				},
+			},
+			RootCACertificate: []byte("cert"),
+		}
+
+		config, err := proto.Marshal(clusterConfig)
+		require.NoError(t, err)
+
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		}
+
+		dbUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      worldstate.ConfigKey,
+						Value:    config,
+						Metadata: metadata,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.db.Commit(dbUpdates, 1))
+
+		singleNodeConfigEnvelope, err := env.q.getNodeConfig("node1")
+		require.NoError(t, err)
+
+		expectedSingleNodeConfigEnvelope := &types.GetNodeConfigResponseEnvelope{
+			Payload: &types.GetNodeConfigResponse{
+				Header: &types.ResponseHeader{
+					NodeID: env.q.nodeID,
+				},
+				NodeConfig: clusterConfig.Nodes[0],
+			},
+			Signature: nil,
+		}
+		require.True(t, proto.Equal(expectedSingleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Payload))
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, singleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Signature)
+
+		singleNodeConfigEnvelope, err = env.q.getNodeConfig("node3")
+		require.NoError(t, err)
+
+		expectedSingleNodeConfigEnvelope = &types.GetNodeConfigResponseEnvelope{
+			Payload: &types.GetNodeConfigResponse{
+				Header: &types.ResponseHeader{
+					NodeID: env.q.nodeID,
+				},
+				NodeConfig: nil,
+			},
+			Signature: nil,
+		}
+		require.True(t, proto.Equal(expectedSingleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Payload))
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, singleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Signature)
+	})
+
 }

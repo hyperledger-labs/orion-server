@@ -158,6 +158,32 @@ func extractConfigQueryEnvelope(request *http.Request, responseWriter http.Respo
 	return env, respondedErr
 }
 
+func extractNodeConfigQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetNodeConfigQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	env = &types.GetNodeConfigQueryEnvelope{
+		Payload: &types.GetNodeConfigQuery{
+			UserID: querierUserID,
+		},
+		Signature: signature,
+	}
+
+	params := mux.Vars(request)
+	valStr, ok := params["nodeId"]
+	if !ok {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{
+			ErrMsg: "query error - bad or missing node id",
+		})
+		return nil, true
+	}
+	env.Payload.NodeID = valStr
+	return env, false
+}
+
 func extractLedgerPathQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetLedgerPathQueryEnvelope, respondedErr bool) {
 	querierUserID, signature, err := validateAndParseHeader(&request.Header)
 	if err != nil {
