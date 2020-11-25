@@ -3,8 +3,6 @@ package backend
 import (
 	"bytes"
 	"crypto/x509"
-	"github.ibm.com/blockchaindb/server/internal/server/testutils"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -17,7 +15,9 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 

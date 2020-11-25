@@ -66,23 +66,27 @@ func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, requ
 
 	txEnv := &types.UserAdministrationTxEnvelope{}
 	if err := d.Decode(txEnv); err != nil {
+		u.logger.Errorf(err.Error())
 		SendHTTPResponse(response, http.StatusBadRequest, &ResponseErr{err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
+		u.logger.Errorf(fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload))
 		SendHTTPResponse(response, http.StatusBadRequest,
 			&ResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserID == "" {
+		u.logger.Errorf(fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload))
 		SendHTTPResponse(response, http.StatusBadRequest,
 			&ResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
+		u.logger.Errorf(fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload))
 		SendHTTPResponse(response, http.StatusBadRequest,
 			&ResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return

@@ -9,8 +9,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 	"io/ioutil"
 	"math/big"
 	"net"
@@ -20,7 +18,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 func IssueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certificate) ([]byte, []byte, error) {

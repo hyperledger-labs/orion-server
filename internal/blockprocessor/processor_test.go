@@ -5,7 +5,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"github.ibm.com/blockchaindb/server/internal/server/testutils"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
@@ -113,9 +113,9 @@ func newTestEnv(t *testing.T) *testEnv {
 		dbPath:         dir,
 		blockStore:     blockStore,
 		blockStorePath: blockStorePath,
-		userID:              "testUser",
-		userCert:            userCert,
-		userSigner:          userSigner,
+		userID:         "testUser",
+		userCert:       userCert,
+		userSigner:     userSigner,
 		cleanup:        cleanup,
 	}
 }

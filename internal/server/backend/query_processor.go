@@ -142,7 +142,6 @@ func (q *queryProcessor) getUser(querierUserID, targetUserID string) (*types.Get
 		},
 		Signature: nil,
 	}
-
 	if u.Signature, err = cryptoservice.SignQueryResponse(q.signer, u.Payload); err != nil {
 		return nil, err
 	}

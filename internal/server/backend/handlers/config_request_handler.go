@@ -46,7 +46,6 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 		)
 		return
 	}
-
 	SendHTTPResponse(response, http.StatusOK, config)
 }
 

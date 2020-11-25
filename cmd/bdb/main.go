@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.ibm.com/blockchaindb/server/config"
-	"github.ibm.com/blockchaindb/server/internal/server"
+	"github.ibm.com/blockchaindb/server/pkg/server"
 )
 
 var (

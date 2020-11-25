@@ -9,7 +9,7 @@ import (
 
 	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/internal/server/backend/mocks"
-	"github.ibm.com/blockchaindb/server/internal/server/testutils"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
