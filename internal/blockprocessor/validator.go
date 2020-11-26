@@ -2,8 +2,8 @@ package blockprocessor
 
 import (
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )

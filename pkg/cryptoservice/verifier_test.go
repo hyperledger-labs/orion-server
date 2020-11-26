@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice/mocks"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice/mocks"
 )
 
 func TestNewVerifier(t *testing.T) {

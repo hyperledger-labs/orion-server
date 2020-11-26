@@ -3,8 +3,9 @@ package blockprocessor
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )

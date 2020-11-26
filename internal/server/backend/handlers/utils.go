@@ -9,9 +9,9 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/gorilla/mux"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
 	"github.ibm.com/blockchaindb/server/internal/server/backend"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 

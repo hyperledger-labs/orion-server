@@ -1,11 +1,11 @@
 package identity
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 
@@ -14,6 +14,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
@@ -85,9 +86,14 @@ func TestQuerier(t *testing.T) {
 		},
 	}
 
-	b, err := ioutil.ReadFile(path.Join("..", "cryptoservice", "testdata", "alice.pem"))
+	caCert, caKey, err := testutils.GenerateRootCA("root", "127.0.0.1")
 	require.NoError(t, err)
-	bl, _ := pem.Decode(b)
+	keyPair, err := tls.X509KeyPair(caCert, caKey)
+	require.NoError(t, err)
+	require.NotNil(t, keyPair)
+	cert, _, err := testutils.IssueCertificate("alice", "127.0.0.1", keyPair)
+	require.NoError(t, err)
+	bl, _ := pem.Decode(cert)
 	require.NotNil(t, bl)
 	certRaw := bl.Bytes
 	certParsed, err := x509.ParseCertificate(certRaw)

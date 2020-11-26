@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice"
-	"github.ibm.com/blockchaindb/server/internal/cryptoservice/mocks"
 	"github.ibm.com/blockchaindb/server/internal/server/backend/handlers"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
+	"github.ibm.com/blockchaindb/server/pkg/cryptoservice/mocks"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
