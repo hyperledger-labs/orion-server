@@ -8,7 +8,7 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
-func SignQuery(querySigner *crypto.Signer, query interface{}) ([]byte, error) {
+func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	switch v := query.(type) {
 	case *types.GetConfigQuery:
 	case *types.GetDataQuery:
@@ -25,7 +25,7 @@ func SignQuery(querySigner *crypto.Signer, query interface{}) ([]byte, error) {
 	return signPayload(querySigner, query)
 }
 
-func SignTx(txSigner *crypto.Signer, tx interface{}) ([]byte, error) {
+func SignTx(txSigner crypto.Signer, tx interface{}) ([]byte, error) {
 	switch v := tx.(type) {
 	case *types.ConfigTx:
 	case *types.DataTx:
@@ -39,7 +39,7 @@ func SignTx(txSigner *crypto.Signer, tx interface{}) ([]byte, error) {
 	return signPayload(txSigner, tx)
 }
 
-func signPayload(signer *crypto.Signer, payload interface{}) ([]byte, error) {
+func signPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -51,7 +51,7 @@ func signPayload(signer *crypto.Signer, payload interface{}) ([]byte, error) {
 	return sig, nil
 }
 
-func SignQueryResponse(responseSigner *crypto.Signer, queryResp interface{}) ([]byte, error) {
+func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]byte, error) {
 	switch v := queryResp.(type) {
 	case *types.GetUserResponse:
 	case *types.GetDataResponse:

@@ -184,14 +184,13 @@ func createSignerOptions() *SignerOptions {
 	}
 }
 
-func loadUserSideVerifierAndNodeSideSigner(t *testing.T, verifierRawCert []byte, signerOpt *SignerOptions) (*Verifier, *Signer) {
+func loadUserSideVerifierAndNodeSideSigner(t *testing.T, verifierRawCert []byte, signerOpt *SignerOptions) (*Verifier, Signer) {
 	userSideRegistry, err := NewVerifier(verifierRawCert)
 	validateLoadedCrypto(t, userSideRegistry, err)
 
 	nodeSideSigner, err := NewSigner(signerOpt)
 	require.NoError(t, err)
 	require.NotNil(t, nodeSideSigner)
-	require.NotNil(t, nodeSideSigner.singer)
 
 	return userSideRegistry, nodeSideSigner
 }

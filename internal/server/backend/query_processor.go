@@ -14,7 +14,7 @@ import (
 
 type queryProcessor struct {
 	nodeID          string
-	signer          *crypto.Signer
+	signer          crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier
@@ -23,7 +23,7 @@ type queryProcessor struct {
 
 type queryProcessorConfig struct {
 	nodeID          string
-	signer          *crypto.Signer
+	signer          crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	identityQuerier *identity.Querier

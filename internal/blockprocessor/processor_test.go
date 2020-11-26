@@ -33,7 +33,7 @@ type testEnv struct {
 	blockStorePath      string
 	userID              string
 	userCert            *x509.Certificate
-	userSigner          *crypto.Signer
+	userSigner          crypto.Signer
 	cleanup             func(bool)
 }
 
@@ -478,7 +478,7 @@ func TestFailureAndRecovery(t *testing.T) {
 	})
 }
 
-func createSampleBlock(t *testing.T, blockNumber uint64, key string, value []byte, signer *crypto.Signer) *types.Block {
+func createSampleBlock(t *testing.T, blockNumber uint64, key string, value []byte, signer crypto.Signer) *types.Block {
 	return &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{

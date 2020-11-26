@@ -411,13 +411,13 @@ func TestDataQueries_CreateNewDB(t *testing.T) {
 func TestDataQueries_FailureScenarios(t *testing.T) {
 	testCases := []struct {
 		testName         string
-		envelopeProvider func(signer *crypto.Signer) *types.GetDataQueryEnvelope
+		envelopeProvider func(signer crypto.Signer) *types.GetDataQueryEnvelope
 		expectedError    string
 		skip             bool
 	}{
 		{
 			testName: "do not have db access",
-			envelopeProvider: func(signer *crypto.Signer) *types.GetDataQueryEnvelope {
+			envelopeProvider: func(signer crypto.Signer) *types.GetDataQueryEnvelope {
 				getKeyQuery := &types.GetDataQuery{
 					UserID: "admin",
 					DBName: "bdb",
@@ -436,7 +436,7 @@ func TestDataQueries_FailureScenarios(t *testing.T) {
 		},
 		{
 			testName: "bad signature",
-			envelopeProvider: func(_ *crypto.Signer) *types.GetDataQueryEnvelope {
+			envelopeProvider: func(_ crypto.Signer) *types.GetDataQueryEnvelope {
 				getKeyQuery := &types.GetDataQuery{
 					UserID: "admin",
 					DBName: "bdb",
@@ -452,7 +452,7 @@ func TestDataQueries_FailureScenarios(t *testing.T) {
 		},
 		{
 			testName: "missing database",
-			envelopeProvider: func(signer *crypto.Signer) *types.GetDataQueryEnvelope {
+			envelopeProvider: func(signer crypto.Signer) *types.GetDataQueryEnvelope {
 				getKeyQuery := &types.GetDataQuery{
 					UserID: "admin",
 					DBName: "testDB",

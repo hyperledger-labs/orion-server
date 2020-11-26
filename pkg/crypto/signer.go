@@ -17,7 +17,11 @@ type SignerOptions struct {
 }
 
 // Signer is cryptographic primitive used only to sign messages. Each entity usually access single Signer
-type Signer struct {
+type Signer interface {
+	Sign(msgBytes []byte) ([]byte, error)
+}
+
+type signer struct {
 	singer *ecdsa.PrivateKey
 }
 
@@ -59,7 +63,7 @@ func (k *KeyLoader) Load(keyPEMBlock []byte) (crypto.PrivateKey, error) {
 	return key, nil
 }
 
-func NewSigner(opt *SignerOptions) (*Signer, error) {
+func NewSigner(opt *SignerOptions) (Signer, error) {
 	keyPEMBlock, err := ioutil.ReadFile(opt.KeyFilePath)
 	if err != nil {
 		return nil, err
@@ -70,12 +74,12 @@ func NewSigner(opt *SignerOptions) (*Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Signer{
+	return &signer{
 		singer: key.(*ecdsa.PrivateKey),
 	}, nil
 }
 
-func (s *Signer) Sign(msgBytes []byte) ([]byte, error) {
+func (s *signer) Sign(msgBytes []byte) ([]byte, error) {
 	h, err := ComputeSHA256Hash(msgBytes)
 	if err != nil {
 		return nil, err

@@ -29,7 +29,7 @@ type txProcessorTestEnv struct {
 	txProcessor    *transactionProcessor
 	userID         string
 	userCert       *x509.Certificate
-	userSigner     *crypto.Signer
+	userSigner     crypto.Signer
 	cleanup        func()
 }
 

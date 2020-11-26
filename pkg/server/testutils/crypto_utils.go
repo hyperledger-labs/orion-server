@@ -143,7 +143,7 @@ func GenerateTestClientCrypto(t *testing.T, names []string) string {
 	return tempDir
 }
 
-func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate, *crypto.Signer) {
+func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate, crypto.Signer) {
 	cert := getTestdataCert(t, path.Join(tempDir, name+".pem"))
 	signer, err := crypto.NewSigner(
 		&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, name+".key")})
@@ -152,25 +152,25 @@ func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate
 	return cert, signer
 }
 
-func SignatureFromTx(t *testing.T, signer *crypto.Signer, tx interface{}) []byte {
+func SignatureFromTx(t *testing.T, signer crypto.Signer, tx interface{}) []byte {
 	sig, err := cryptoservice.SignTx(signer, tx)
 	require.NoError(t, err)
 	return sig
 }
 
-func SignatureFromQuery(t *testing.T, signner *crypto.Signer, query interface{}) []byte {
+func SignatureFromQuery(t *testing.T, signner crypto.Signer, query interface{}) []byte {
 	sig, err := cryptoservice.SignQuery(signner, query)
 	require.NoError(t, err)
 	return sig
 }
 
-func SignatureFromQueryResponse(t *testing.T, signer *crypto.Signer, queryResp interface{}) []byte {
+func SignatureFromQueryResponse(t *testing.T, signer crypto.Signer, queryResp interface{}) []byte {
 	sig, err := cryptoservice.SignQueryResponse(signer, queryResp)
 	require.NoError(t, err)
 	return sig
 }
 
-func SignedDataTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.DataTx) *types.DataTxEnvelope {
+func SignedDataTxEnvelope(t *testing.T, signer crypto.Signer, tx *types.DataTx) *types.DataTxEnvelope {
 	env := &types.DataTxEnvelope{
 		Payload:   tx,
 		Signature: SignatureFromTx(t, signer, tx),
@@ -178,7 +178,7 @@ func SignedDataTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.DataTx)
 	return env
 }
 
-func SignedConfigTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.ConfigTx) *types.ConfigTxEnvelope {
+func SignedConfigTxEnvelope(t *testing.T, signer crypto.Signer, tx *types.ConfigTx) *types.ConfigTxEnvelope {
 	env := &types.ConfigTxEnvelope{
 		Payload:   tx,
 		Signature: SignatureFromTx(t, signer, tx),
@@ -186,7 +186,7 @@ func SignedConfigTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.Confi
 	return env
 }
 
-func SignedUserAdministrationTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.UserAdministrationTx) *types.UserAdministrationTxEnvelope {
+func SignedUserAdministrationTxEnvelope(t *testing.T, signer crypto.Signer, tx *types.UserAdministrationTx) *types.UserAdministrationTxEnvelope {
 	env := &types.UserAdministrationTxEnvelope{
 		Payload:   tx,
 		Signature: SignatureFromTx(t, signer, tx),
@@ -194,7 +194,7 @@ func SignedUserAdministrationTxEnvelope(t *testing.T, signer *crypto.Signer, tx 
 	return env
 }
 
-func SignedDBAdministrationTxEnvelope(t *testing.T, signer *crypto.Signer, tx *types.DBAdministrationTx) *types.DBAdministrationTxEnvelope {
+func SignedDBAdministrationTxEnvelope(t *testing.T, signer crypto.Signer, tx *types.DBAdministrationTx) *types.DBAdministrationTxEnvelope {
 	env := &types.DBAdministrationTxEnvelope{
 		Payload:   tx,
 		Signature: SignatureFromTx(t, signer, tx),
