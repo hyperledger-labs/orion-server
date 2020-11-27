@@ -74,12 +74,13 @@ type DB interface {
 }
 
 type db struct {
-	queryProcessor       *queryProcessor
-	txProcessor          *transactionProcessor
-	ledgerQueryProcessor *ledgerQueryProcessor
-	logger               *logger.SugarLogger
+	worldstateQueryProcessor *worldstateQueryProcessor
+	ledgerQueryProcessor     *ledgerQueryProcessor
+	txProcessor              *transactionProcessor
+	logger                   *logger.SugarLogger
 }
 
+// NewDB creates a new database backend which handles both the queries and transactions.
 func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error) {
 	if conf.Node.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
@@ -143,7 +144,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 	}
 	ledgerQueryProcessor := newLedgerQueryProcessor(ledgerQueryProcessorConfig)
 
-	qProcConfig := &queryProcessorConfig{
+	qProcConfig := &worldstateQueryProcessorConfig{
 		nodeID:          conf.Node.Identity.ID,
 		signer:          signer,
 		db:              levelDB,
@@ -151,54 +152,53 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 		identityQuerier: querier,
 		logger:          logger,
 	}
-
-	queryProcessor := newQueryProcessor(qProcConfig)
+	worldstateQueryProcessor := newWorldstateQueryProcessor(qProcConfig)
 
 	return &db{
-		queryProcessor:       queryProcessor,
-		ledgerQueryProcessor: ledgerQueryProcessor,
-		txProcessor:          txProcessor,
-		logger:               logger,
+		worldstateQueryProcessor: worldstateQueryProcessor,
+		ledgerQueryProcessor:     ledgerQueryProcessor,
+		txProcessor:              txProcessor,
+		logger:                   logger,
 	}, nil
 }
 
 // LedgerHeight returns ledger height
 func (d *db) LedgerHeight() (uint64, error) {
-	return d.queryProcessor.blockStore.Height()
+	return d.worldstateQueryProcessor.blockStore.Height()
 }
 
 // Height returns ledger height
 func (d *db) Height() (uint64, error) {
-	return d.queryProcessor.db.Height()
+	return d.worldstateQueryProcessor.db.Height()
 }
 
 // DoesUserExist checks whenever userID exists
 func (d *db) DoesUserExist(userID string) (bool, error) {
-	return d.queryProcessor.identityQuerier.DoesUserExist(userID)
+	return d.worldstateQueryProcessor.identityQuerier.DoesUserExist(userID)
 }
 
 func (d *db) GetCertificate(userID string) (*x509.Certificate, error) {
-	return d.queryProcessor.identityQuerier.GetCertificate(userID)
+	return d.worldstateQueryProcessor.identityQuerier.GetCertificate(userID)
 }
 
 // GetUser returns user's record
 func (d *db) GetUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error) {
-	return d.queryProcessor.getUser(querierUserID, targetUserID)
+	return d.worldstateQueryProcessor.getUser(querierUserID, targetUserID)
 }
 
 // GetNodeConfig returns single node subsection of database configuration
 func (d *db) GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error) {
-	return d.queryProcessor.getNodeConfig(nodeID)
+	return d.worldstateQueryProcessor.getNodeConfig(nodeID)
 }
 
 // GetConfig returns database configuration
 func (d *db) GetConfig() (*types.GetConfigResponseEnvelope, error) {
-	return d.queryProcessor.getConfig()
+	return d.worldstateQueryProcessor.getConfig()
 }
 
 // GetDBStatus returns database status
 func (d *db) GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
-	return d.queryProcessor.getDBStatus(dbName)
+	return d.worldstateQueryProcessor.getDBStatus(dbName)
 }
 
 // SubmitTransaction submits transaction
@@ -208,12 +208,12 @@ func (d *db) SubmitTransaction(tx interface{}) error {
 
 // GetData returns value for provided key
 func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
-	return d.queryProcessor.getData(dbName, querierUserID, key)
+	return d.worldstateQueryProcessor.getData(dbName, querierUserID, key)
 }
 
 // Close closes and release resources used by db
 func (d *db) Close() error {
-	if err := d.queryProcessor.close(); err != nil {
+	if err := d.worldstateQueryProcessor.close(); err != nil {
 		return err
 	}
 
@@ -255,7 +255,7 @@ func (d *db) IsReady() (bool, error) {
 }
 
 func (d *db) IsDBExists(name string) bool {
-	return d.queryProcessor.isDBExists(name)
+	return d.worldstateQueryProcessor.isDBExists(name)
 }
 
 type certsInGenesisConfig struct {

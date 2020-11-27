@@ -16,14 +16,14 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
-type queryProcessorTestEnv struct {
+type worldstateQueryProcessorTestEnv struct {
 	db      *leveldb.LevelDB
-	q       *queryProcessor
+	q       *worldstateQueryProcessor
 	cert    *x509.Certificate
 	cleanup func(t *testing.T)
 }
 
-func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
+func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorTestEnv {
 	nodeID := "test-node-id1"
 	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
 	nodeCert, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
@@ -63,7 +63,7 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 		}
 	}
 
-	qProcConfig := &queryProcessorConfig{
+	qProcConfig := &worldstateQueryProcessorConfig{
 		nodeID:          nodeID,
 		signer:          nodeSigner,
 		db:              db,
@@ -72,8 +72,8 @@ func newQueryProcessorTestEnv(t *testing.T) *queryProcessorTestEnv {
 		logger:          logger,
 	}
 
-	qProc := newQueryProcessor(qProcConfig)
-	return &queryProcessorTestEnv{
+	qProc := newWorldstateQueryProcessor(qProcConfig)
+	return &worldstateQueryProcessorTestEnv{
 		db:      db,
 		q:       qProc,
 		cert:    nodeCert,
@@ -86,7 +86,7 @@ func TestGetDBStatus(t *testing.T) {
 
 	t.Run("getDBStatus-Returns-Status", func(t *testing.T) {
 		t.Parallel()
-		env := newQueryProcessorTestEnv(t)
+		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
 		createDB := []*worldstate.DBUpdates{
@@ -176,7 +176,7 @@ func TestGetData(t *testing.T) {
 
 	t.Run("getData returns data", func(t *testing.T) {
 		t.Parallel()
-		env := newQueryProcessorTestEnv(t)
+		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
 		setup(env.db, "testUser", "test-db")
@@ -255,7 +255,7 @@ func TestGetData(t *testing.T) {
 
 	t.Run("getData returns permission error due to ACL", func(t *testing.T) {
 		t.Parallel()
-		env := newQueryProcessorTestEnv(t)
+		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
 		setup(env.db, "testUser", "test-db")
@@ -297,7 +297,7 @@ func TestGetData(t *testing.T) {
 
 	t.Run("getData returns permission error due to directly accessing system database", func(t *testing.T) {
 		t.Parallel()
-		env := newQueryProcessorTestEnv(t)
+		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
 		setup(env.db, "testUser", "test-db")
@@ -536,7 +536,7 @@ func TestGetUser(t *testing.T) {
 		for _, tt := range tests {
 			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
-				env := newQueryProcessorTestEnv(t)
+				env := newWorldstateQueryProcessorTestEnv(t)
 				defer env.cleanup(t)
 
 				tt.setup(env.db)
@@ -622,7 +622,7 @@ func TestGetUser(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				t.Parallel()
 
-				env := newQueryProcessorTestEnv(t)
+				env := newWorldstateQueryProcessorTestEnv(t)
 				defer env.cleanup(t)
 
 				tt.setup(env.db)
@@ -639,7 +639,7 @@ func TestGetConfig(t *testing.T) {
 	t.Parallel()
 
 	t.Run("getConfig returns config", func(t *testing.T) {
-		env := newQueryProcessorTestEnv(t)
+		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
 		clusterConfig := &types.ClusterConfig{
@@ -708,7 +708,7 @@ func TestGetConfig(t *testing.T) {
 	})
 
 	t.Run("getConfig returns err", func(t *testing.T) {
-		env := newQueryProcessorTestEnv(t)
+		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
 		metadata := &types.Metadata{
@@ -738,7 +738,7 @@ func TestGetConfig(t *testing.T) {
 	})
 
 	t.Run("getNodeConfig returns single node and multiple nodes config", func(t *testing.T) {
-		env := newQueryProcessorTestEnv(t)
+		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
 		clusterConfig := &types.ClusterConfig{

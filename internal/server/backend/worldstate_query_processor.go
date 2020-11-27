@@ -12,7 +12,7 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
-type queryProcessor struct {
+type worldstateQueryProcessor struct {
 	nodeID          string
 	signer          crypto.Signer
 	db              worldstate.DB
@@ -21,7 +21,7 @@ type queryProcessor struct {
 	logger          *logger.SugarLogger
 }
 
-type queryProcessorConfig struct {
+type worldstateQueryProcessorConfig struct {
 	nodeID          string
 	signer          crypto.Signer
 	db              worldstate.DB
@@ -30,8 +30,8 @@ type queryProcessorConfig struct {
 	logger          *logger.SugarLogger
 }
 
-func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
-	return &queryProcessor{
+func newWorldstateQueryProcessor(conf *worldstateQueryProcessorConfig) *worldstateQueryProcessor {
+	return &worldstateQueryProcessor{
 		nodeID:          conf.nodeID,
 		signer:          conf.signer,
 		db:              conf.db,
@@ -41,12 +41,12 @@ func newQueryProcessor(conf *queryProcessorConfig) *queryProcessor {
 	}
 }
 
-func (q *queryProcessor) isDBExists(name string) bool {
+func (q *worldstateQueryProcessor) isDBExists(name string) bool {
 	return q.db.Exist(name)
 }
 
 // getDBStatus returns the status about a database, i.e., whether a database exist or not
-func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
+func (q *worldstateQueryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
 	// ACL is meaningless here as this call is to check whether a DB exist. Even with ACL,
 	// the user can infer the information.
 	status := &types.GetDBStatusResponseEnvelope{
@@ -67,7 +67,7 @@ func (q *queryProcessor) getDBStatus(dbName string) (*types.GetDBStatusResponseE
 }
 
 // getState return the state associated with a given key
-func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
+func (q *worldstateQueryProcessor) getData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
 	if worldstate.IsSystemDB(dbName) {
 		return nil, &PermissionErr{
 			ErrMsg: "no user can directly read from a system database [" + dbName + "]. " +
@@ -117,7 +117,7 @@ func (q *queryProcessor) getData(dbName, querierUserID, key string) (*types.GetD
 	return state, nil
 }
 
-func (q *queryProcessor) getUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error) {
+func (q *worldstateQueryProcessor) getUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error) {
 	user, metadata, err := q.identityQuerier.GetUser(targetUserID)
 	if err != nil {
 		if _, ok := err.(*identity.UserNotFoundErr); !ok {
@@ -151,7 +151,7 @@ func (q *queryProcessor) getUser(querierUserID, targetUserID string) (*types.Get
 	return u, nil
 }
 
-func (q *queryProcessor) getConfig() (*types.GetConfigResponseEnvelope, error) {
+func (q *worldstateQueryProcessor) getConfig() (*types.GetConfigResponseEnvelope, error) {
 	// ACL may not be needed for the read as it would be useful to fetch IPs of
 	// all nodes even without cluster admin privilege. We can add it later if needed
 	config, metadata, err := q.db.GetConfig()
@@ -177,7 +177,7 @@ func (q *queryProcessor) getConfig() (*types.GetConfigResponseEnvelope, error) {
 	return c, nil
 }
 
-func (q *queryProcessor) getNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error) {
+func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error) {
 	config, _, err := q.db.GetConfig()
 	if err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ func (q *queryProcessor) getNodeConfig(nodeID string) (*types.GetNodeConfigRespo
 	return c, nil
 }
 
-func (q *queryProcessor) close() error {
+func (q *worldstateQueryProcessor) close() error {
 	if err := q.db.Close(); err != nil {
 		return err
 	}
