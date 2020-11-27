@@ -52,6 +52,9 @@ type DB interface {
 	// GetBlockHeader returns ledger block header
 	GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
 
+	// GetTxProof returns intermediate hashes to recalculate merkle tree root from tx hash
+	GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error)
+
 	// GetLedgerPath returns list of blocks that forms shortest path in skip list chain in ledger
 	GetLedgerPath(userId string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
 
@@ -266,6 +269,10 @@ type certsInGenesisConfig struct {
 
 func (d *db) GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
 	return d.ledgerQueryProcessor.getBlockHeader(userId, blockNum)
+}
+
+func (d *db) GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
+	return d.ledgerQueryProcessor.getProof(userId, blockNum, txIdx)
 }
 
 func (d *db) GetLedgerPath(userId string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {

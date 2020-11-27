@@ -6,6 +6,7 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/mtree"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
@@ -114,6 +115,54 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 		return nil, err
 	}
 	return result, nil
+}
+
+func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
+	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasAccess {
+		return nil, &PermissionErr{fmt.Sprintf("user %s doesn't has permision to access ledger", userId)}
+	}
+	block, err := p.blockStore.Get(blockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	path, err := p.calculateProof(block, txIdx)
+	if err != nil {
+		return nil, err
+	}
+	result := &types.GetTxProofResponseEnvelope{
+		Payload: &types.GetTxProofResponse{
+			Header: &types.ResponseHeader{
+				NodeID: p.nodeID,
+			},
+			Hashes: path,
+		},
+		Signature: nil,
+	}
+
+	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
+		return nil, err
+	}
+	return result, nil
+
+	return result, nil
+}
+
+func (p *ledgerQueryProcessor) calculateProof(block *types.Block, txIdx uint64) ([][]byte, error) {
+	root, err := mtree.BuildTreeForBlockTx(block)
+	if err != nil {
+		return nil, err
+	}
+	path, err := root.Proof(int(txIdx))
+	if err != nil {
+		return nil, err
+	}
+	return path, nil
 }
 
 func (p *ledgerQueryProcessor) findPath(endBlock *types.BlockHeader, startIndex uint64) ([]*types.BlockHeader, error) {

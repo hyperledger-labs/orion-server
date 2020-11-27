@@ -427,10 +427,10 @@ func createSampleUserTxBlock(blockNumber uint64, preBlockBaseHash []byte, preBlo
 			BaseHeader: &types.BlockHeaderBase{
 				Number:                 blockNumber,
 				PreviousBaseHeaderHash: preBlockBaseHash,
-				TxMerkelTreeRootHash:   []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
 				LastCommittedBlockHash: preBlockHash,
 				LastCommittedBlockNum:  blockNumber - 1,
 			},
+			TxMerkelTreeRootHash:    []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
 			StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
 			ValidationInfo: []*types.ValidationInfo{
 				{

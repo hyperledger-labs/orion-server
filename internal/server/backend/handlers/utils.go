@@ -241,6 +241,38 @@ func extractBlockQueryEnvelope(request *http.Request, responseWriter http.Respon
 	return env, respondedErr
 }
 
+func extractGetTxProofQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetTxProofQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	params := mux.Vars(request)
+	blockNum, respErr := getUintParam("blockId", params)
+	if respErr != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
+		return nil, true
+	}
+
+	txIndex, respErr := getUintParam("idx", params)
+	if respErr != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
+		return nil, true
+	}
+
+	env = &types.GetTxProofQueryEnvelope{
+		Payload: &types.GetTxProofQuery{
+			UserID:      querierUserID,
+			BlockNumber: blockNum,
+			TxIndex:     txIndex,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
 func VerifyRequestSignature(
 	sigVerifier *cryptoservice.SignatureVerifier,
 	user string,

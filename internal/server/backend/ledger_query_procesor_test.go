@@ -2,6 +2,8 @@ package backend
 
 import (
 	"crypto/tls"
+	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -10,8 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/mtree"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -22,6 +26,7 @@ type ledgerProcessorTestEnv struct {
 	p       *ledgerQueryProcessor
 	cleanup func(t *testing.T)
 	blocks  []*types.BlockHeader
+	blockTx []*types.DataTxEnvelopes
 }
 
 func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
@@ -137,8 +142,12 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv) {
 		},
 	}
 	require.NoError(t, env.p.blockStore.AddSkipListLinks(configBlock))
+	root, err := mtree.BuildTreeForBlockTx(configBlock)
+	require.NoError(t, err)
+	configBlock.Header.TxMerkelTreeRootHash = root.Hash()
 	require.NoError(t, env.p.blockStore.Commit(configBlock))
 	env.blocks = []*types.BlockHeader{configBlock.GetHeader()}
+	env.blockTx = []*types.DataTxEnvelopes{{}}
 
 	user := &types.User{
 		ID: "testUser",
@@ -173,41 +182,58 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv) {
 	require.NoError(t, env.db.Commit(createUser, 1))
 
 	for i := uint64(2); i < uint64(100); i++ {
-		block := createSampleBlock(i, "key0", []byte("value0"))
+		key := make([]string, 0)
+		value := make([][]byte, 0)
+		for j := uint64(0); j < i; j++ {
+			key = append(key, fmt.Sprintf("key%d", j))
+			value = append(value, []byte(fmt.Sprintf("value_%d", j)))
+		}
+		block := createSampleBlock(i, key, value)
 		require.NoError(t, env.p.blockStore.AddSkipListLinks(block))
+		root, err := mtree.BuildTreeForBlockTx(block)
+		require.NoError(t, err)
+		block.Header.TxMerkelTreeRootHash = root.Hash()
 		require.NoError(t, env.p.blockStore.Commit(block))
+
 		env.blocks = append(env.blocks, block.GetHeader())
+		env.blockTx = append(env.blockTx, block.GetDataTxEnvelopes())
 	}
 }
 
-func createSampleBlock(blockNumber uint64, key string, value []byte) *types.Block {
+func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.Block {
+	envelopes := make([]*types.DataTxEnvelope, 0)
+	for i := 0; i < len(key); i++ {
+		e := &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				UserID: "testUser",
+				DBName: worldstate.DefaultDBName,
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   key[i],
+						Value: value[i],
+					},
+				},
+			},
+		}
+		envelopes = append(envelopes, e)
+	}
+
+	valInfo := make([]*types.ValidationInfo, 0)
+	for i := 0; i < len(key); i++ {
+		valInfo = append(valInfo, &types.ValidationInfo{
+			Flag: types.Flag_VALID,
+		})
+	}
 	return &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
 				Number: blockNumber,
 			},
-			ValidationInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
-				},
-			},
+			ValidationInfo: valInfo,
 		},
 		Payload: &types.Block_DataTxEnvelopes{
 			DataTxEnvelopes: &types.DataTxEnvelopes{
-				Envelopes: []*types.DataTxEnvelope{
-					{
-						Payload: &types.DataTx{
-							UserID: "testUser",
-							DBName: worldstate.DefaultDBName,
-							DataWrites: []*types.DataWrite{
-								{
-									Key:   key,
-									Value: value,
-								},
-							},
-						},
-					},
-				},
+				Envelopes: envelopes,
 			},
 		},
 	}
@@ -408,6 +434,114 @@ func TestGetPath(t *testing.T) {
 				for idx, expectedBlock := range testCase.expectedBlocks {
 					require.True(t, proto.Equal(expectedBlock, path.GetPayload().GetBlockHeaders()[idx]))
 				}
+			}
+		})
+	}
+}
+
+func TestGetProof(t *testing.T) {
+	t.Parallel()
+	env := newLedgerProcessorTestEnv(t)
+	defer env.cleanup(t)
+	setup(t, env)
+
+	testCases := []struct {
+		name         string
+		blockNumber  uint64
+		txIndex      uint64
+		expectedRoot []byte
+		expectedTx   *types.DataTxEnvelope
+		user         string
+		isError      bool
+		errorMsg     string
+	}{
+		{
+			name:         "Getting block 5, tx 2 - correct",
+			blockNumber:  5,
+			txIndex:      2,
+			expectedRoot: env.blocks[4].TxMerkelTreeRootHash,
+			expectedTx:   env.blockTx[4].Envelopes[2],
+			user:         "testUser",
+			isError:      false,
+		},
+		{
+			name:         "Getting block 17, tx 5 - correct",
+			blockNumber:  17,
+			txIndex:      5,
+			expectedRoot: env.blocks[16].TxMerkelTreeRootHash,
+			expectedTx:   env.blockTx[16].Envelopes[5],
+			user:         "testUser",
+			isError:      false,
+		},
+		{
+			name:         "Getting block 45, tx 0 - correct",
+			blockNumber:  45,
+			txIndex:      0,
+			expectedRoot: env.blocks[44].TxMerkelTreeRootHash,
+			expectedTx:   env.blockTx[44].Envelopes[0],
+			user:         "testUser",
+			isError:      false,
+		},
+		{
+			name:         "Getting block 98, tx 90 - correct",
+			blockNumber:  98,
+			txIndex:      90,
+			expectedRoot: env.blocks[97].TxMerkelTreeRootHash,
+			expectedTx:   env.blockTx[97].Envelopes[90],
+			user:         "testUser",
+			isError:      false,
+		},
+		{
+			name:        "Getting block 88, tx 100 - tx not exist",
+			blockNumber: 88,
+			txIndex:     100,
+			user:        "testUser",
+			isError:     true,
+			errorMsg:    ": node with index 100 is not part of merkle tree (0, 87)",
+		},
+		{
+			name:        "Getting block 515 - not exist",
+			blockNumber: 515,
+			user:        "testUser",
+			isError:     true,
+			errorMsg:    "requested block number [515] cannot be greater than the last committed block number [99]",
+		},
+		{
+			name:        "Getting block 40 - wrong user",
+			blockNumber: 40,
+			user:        "userNotExist",
+			isError:     true,
+			errorMsg:    "user userNotExist doesn't has permision to access ledger",
+		},
+		{
+			name:        "Getting block 77 - wrong user",
+			blockNumber: 77,
+			user:        "userNotExist",
+			isError:     true,
+			errorMsg:    "user userNotExist doesn't has permision to access ledger",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			proof, err := env.p.getProof(testCase.user, testCase.blockNumber, testCase.txIndex)
+			if !testCase.isError {
+				require.NoError(t, err)
+				txBytes, err := json.Marshal(testCase.expectedTx)
+				require.NoError(t, err)
+				valInfoBytes, err := json.Marshal(env.blocks[testCase.blockNumber-1].ValidationInfo[testCase.txIndex])
+				require.NoError(t, err)
+				txBytes = append(txBytes, valInfoBytes...)
+				currRoot, err := crypto.ComputeSHA256Hash(txBytes)
+				require.NoError(t, err)
+				for _, h := range proof.Payload.Hashes {
+					currRoot, err = crypto.ConcatenateHashes(currRoot, h)
+					require.NoError(t, err)
+				}
+				require.Equal(t, testCase.expectedRoot, currRoot)
+			} else {
+				require.Error(t, err)
+				require.Contains(t, testCase.errorMsg, err.Error())
 			}
 		})
 	}

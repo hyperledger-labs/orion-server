@@ -70,6 +70,13 @@ func TestURLConstruction(t *testing.T) {
 			},
 			expectedURL: "/config/node",
 		},
+		{
+			name: "URLTxProof",
+			execute: func() string {
+				return URLTxProof(1, 2)
+			},
+			expectedURL: "/ledger/proof/1?idx=2",
+		},
 	}
 
 	for _, tt := range tests {

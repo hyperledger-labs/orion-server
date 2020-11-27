@@ -226,6 +226,29 @@ func (_m *DB) GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope
 	return r0, r1
 }
 
+// GetTxProof provides a mock function with given fields: userId, blockNum, txIdx
+func (_m *DB) GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
+	ret := _m.Called(userId, blockNum, txIdx)
+
+	var r0 *types.GetTxProofResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string, uint64, uint64) *types.GetTxProofResponseEnvelope); ok {
+		r0 = rf(userId, blockNum, txIdx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetTxProofResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, uint64, uint64) error); ok {
+		r1 = rf(userId, blockNum, txIdx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetUser provides a mock function with given fields: querierUserID, targetUserID
 func (_m *DB) GetUser(querierUserID string, targetUserID string) (*types.GetUserResponseEnvelope, error) {
 	ret := _m.Called(querierUserID, targetUserID)

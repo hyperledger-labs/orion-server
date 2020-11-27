@@ -17,6 +17,7 @@ func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	case *types.GetBlockQuery:
 	case *types.GetLedgerPathQuery:
 	case *types.GetNodeConfigQuery:
+	case *types.GetTxProofQuery:
 
 	default:
 		return nil, errors.Errorf("unknown query type: %T", v)
@@ -60,6 +61,7 @@ func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]b
 	case *types.GetLedgerPathResponse:
 	case *types.GetBlockResponse:
 	case *types.GetNodeConfigResponse:
+	case *types.GetTxProofResponse:
 
 	default:
 		return nil, errors.Errorf("unknown query response type: %T", v)

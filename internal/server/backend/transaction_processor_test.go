@@ -13,6 +13,7 @@ import (
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/mtree"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -246,6 +247,9 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		}
 
+		root, err := mtree.BuildTreeForBlockTx(expectedBlock)
+		require.NoError(t, err)
+		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
 		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
 		require.True(t, proto.Equal(expectedBlock, block))

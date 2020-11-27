@@ -29,10 +29,14 @@ func NewLedgerRequestHandler(db backend.DB, logger *logger.SugarLogger) *ledgerR
 
 	// HTTP GET "/ledger/block/{blockId}" gets block header
 	handler.router.HandleFunc(constants.GetBlockHeader, handler.blockQuery).Methods(http.MethodGet)
-	// HTTP GET "/ledger/path/{startId}/{endId}" gets shortest path between blocks
+	// HTTP GET "/ledger/path?start={startId}&end={endId}" gets shortest path between blocks
 	handler.router.HandleFunc(constants.GetPath, handler.pathQuery).Methods(http.MethodGet).Queries("start", "{startId:[0-9]+}", "end", "{endId:[0-9]+}")
-	// HTTP GET "/ledger/path/{startId}/{endId}" gets shortest path between blocks
+	// HTTP GET "/ledger/proof/{blockId}?idx={idx}" gets proof for tx with idx index inside block blockId
+	handler.router.HandleFunc(constants.GetTxProof, handler.txProof).Methods(http.MethodGet).Queries("idx", "{idx:[0-9]+}")
+	// HTTP GET "/ledger/path?start={startId}&end={endId}" with invalid query params
 	handler.router.HandleFunc(constants.GetPath, handler.invalidPathQuery).Methods(http.MethodGet)
+	// HTTP GET "/ledger/proof/{blockId}?idx={idx}" with invalid query params
+	handler.router.HandleFunc(constants.GetTxProof, handler.invalidTxProof).Methods(http.MethodGet)
 
 	return handler
 }
@@ -111,9 +115,51 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 	SendHTTPResponse(response, http.StatusOK, data)
 }
 
+func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *http.Request) {
+	queryEnv, respondedErr := extractGetTxProofQueryEnvelope(request, response)
+	if respondedErr {
+		return
+	}
+
+	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, code, err)
+		return
+	}
+
+	data, err := p.db.GetTxProof(queryEnv.GetPayload().GetUserID(), queryEnv.GetPayload().GetBlockNumber(), queryEnv.GetPayload().GetTxIndex())
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *backend.PermissionErr:
+			status = http.StatusForbidden
+		default:
+			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
+		}
+
+		SendHTTPResponse(
+			response,
+			status,
+			&ResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	SendHTTPResponse(response, http.StatusOK, data)
+}
+
 func (p *ledgerRequestHandler) invalidPathQuery(response http.ResponseWriter, request *http.Request) {
 	err := &ResponseErr{
 		ErrMsg: "query error - bad or missing start/end block number",
+	}
+	SendHTTPResponse(response, http.StatusBadRequest, err)
+}
+
+func (p *ledgerRequestHandler) invalidTxProof(response http.ResponseWriter, request *http.Request) {
+	err := &ResponseErr{
+		ErrMsg: "query error - bad or missing tx index",
 	}
 	SendHTTPResponse(response, http.StatusBadRequest, err)
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
+	"github.ibm.com/blockchaindb/server/internal/mtree"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
@@ -219,6 +220,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 		setup(t, env)
 
+		tx := createSampleTx(t, []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
+
 		testCases := []struct {
 			block               *types.Block
 			dbName              string
@@ -228,7 +231,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			expectedBlockHeight uint64
 		}{
 			{
-				block:         createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner),
+				block:         createSampleBlock(2, tx[:1]),
 				key:           "key1",
 				expectedValue: []byte("value-1"),
 				expectedMetadata: &types.Metadata{
@@ -240,7 +243,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 				expectedBlockHeight: 2,
 			},
 			{
-				block:         createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner),
+				block:         createSampleBlock(3, tx[1:]),
 				key:           "key1",
 				expectedValue: []byte("value-2"),
 				expectedMetadata: &types.Metadata{
@@ -289,6 +292,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		genesisHash, err := env.blockStore.GetHash(uint64(1))
 		require.NoError(t, err)
 
+		tx := createSampleTx(t, []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
 		testCases := []struct {
 			blocks              []*types.Block
 			key                 string
@@ -299,8 +303,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}{
 			{
 				blocks: []*types.Block{
-					createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner),
-					createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner),
+					createSampleBlock(2, tx[:1]),
+					createSampleBlock(3, tx[1:]),
 				},
 				key:           "key1",
 				expectedValue: []byte("value-2"),
@@ -312,15 +316,20 @@ func TestValidatorAndCommitter(t *testing.T) {
 				},
 				expectedBlockHeight: 3,
 				expectedBlocks: []*types.Block{
-					createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner),
-					createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner),
+					createSampleBlock(2, tx[:1]),
+					createSampleBlock(3, tx[1:]),
 				},
 			},
 		}
 
 		for _, tt := range testCases {
 			for _, block := range tt.expectedBlocks {
+				// Because we update both SkipchainHashes and TxMerkelTreeRootHash during process, we want to precalculate them
+				// the expected blocks
 				block.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, tt.expectedBlocks, block.Header.BaseHeader.Number)
+				root, err := mtree.BuildTreeForBlockTx(block)
+				require.NoError(t, err)
+				block.Header.TxMerkelTreeRootHash = root.Hash()
 			}
 		}
 
@@ -350,9 +359,14 @@ func TestValidatorAndCommitter(t *testing.T) {
 				block, err := env.blockStore.Get(expectedBlock.GetHeader().GetBaseHeader().GetNumber())
 				expectedBlockJSON, _ := json.Marshal(expectedBlock)
 				blockJSON, _ := json.Marshal(block)
+				precalculatedSkipListBlockJSON, _ := json.Marshal(precalculatedSkipListBlock)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(expectedBlock, block), "Expected\t %s\nBlock\t\t %s\n", expectedBlockJSON, blockJSON)
-				require.Equal(t, precalculatedSkipListBlock.Header.SkipchainHashes, block.Header.SkipchainHashes)
+				require.True(t, proto.Equal(expectedBlock, block), "Expected - before save\t %s\nBlock\t\t\t %s\n", expectedBlockJSON, blockJSON)
+				require.True(t, proto.Equal(precalculatedSkipListBlock, block), "Expected - fully precalculated\t %s\nBlock\t\t\t %s\n", precalculatedSkipListBlockJSON, blockJSON)
+				require.Equal(t, precalculatedSkipListBlock.Header.SkipchainHashes, block.Header.SkipchainHashes, "Expected\t %s\nBlock\t\t %s\n", precalculatedSkipListBlockJSON, blockJSON)
+				root, err := mtree.BuildTreeForBlockTx(expectedBlock)
+				require.NoError(t, err)
+				require.Equal(t, root.Hash(), block.Header.TxMerkelTreeRootHash)
 			}
 		}
 	})
@@ -365,7 +379,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner)
+		block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -409,7 +423,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner)
+		block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -441,7 +455,8 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(t, 2, "key1", []byte("value-1"), env.userSigner)
+		tx := createSampleTx(t, []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
+		block2 := createSampleBlock(2, tx[:1])
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -449,7 +464,7 @@ func TestFailureAndRecovery(t *testing.T) {
 		}
 		require.NoError(t, env.blockProcessor.committer.commitToBlockStore(block2))
 
-		block3 := createSampleBlock(t, 3, "key1", []byte("value-2"), env.userSigner)
+		block3 := createSampleBlock(3, tx[1:])
 		block3.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -478,7 +493,7 @@ func TestFailureAndRecovery(t *testing.T) {
 	})
 }
 
-func createSampleBlock(t *testing.T, blockNumber uint64, key string, value []byte, signer crypto.Signer) *types.Block {
+func createSampleBlock(blockNumber uint64, env []*types.DataTxEnvelope) *types.Block {
 	return &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
@@ -492,21 +507,28 @@ func createSampleBlock(t *testing.T, blockNumber uint64, key string, value []byt
 		},
 		Payload: &types.Block_DataTxEnvelopes{
 			DataTxEnvelopes: &types.DataTxEnvelopes{
-				Envelopes: []*types.DataTxEnvelope{
-					testutils.SignedDataTxEnvelope(t, signer, &types.DataTx{
-						UserID: "testUser",
-						DBName: worldstate.DefaultDBName,
-						DataWrites: []*types.DataWrite{
-							{
-								Key:   key,
-								Value: value,
-							},
-						},
-					}),
-				},
+				Envelopes: env,
 			},
 		},
 	}
+}
+
+func createSampleTx(t *testing.T, key []string, value [][]byte, signer crypto.Signer) []*types.DataTxEnvelope {
+	envelopes := make([]*types.DataTxEnvelope, 0)
+	for i := 0; i < len(key); i++ {
+		e := testutils.SignedDataTxEnvelope(t, signer, &types.DataTx{
+			UserID: "testUser",
+			DBName: worldstate.DefaultDBName,
+			DataWrites: []*types.DataWrite{
+				{
+					Key:   key[i],
+					Value: value[i],
+				},
+			},
+		})
+		envelopes = append(envelopes, e)
+	}
+	return envelopes
 }
 
 func calculateBlockHashes(t *testing.T, genesisHash []byte, blocks []*types.Block, blockNum uint64) [][]byte {

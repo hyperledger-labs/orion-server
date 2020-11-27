@@ -330,3 +330,159 @@ func TestPathQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestProofQuery(t *testing.T) {
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() (*http.Request, error)
+		dbMockFactory      func(response *types.GetTxProofResponseEnvelope) backend.DB
+		expectedResponse   *types.GetTxProofResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "valid get path request",
+			expectedResponse: &types.GetTxProofResponseEnvelope{
+				Signature: []byte{0, 0, 0},
+				Payload: &types.GetTxProofResponse{
+					Header: &types.ResponseHeader{
+						NodeID: "testNodeID",
+					},
+					Hashes: [][]byte{[]byte("hash1"), []byte("hash2")},
+				},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxProof(2, 1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
+					UserID:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTxProof", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:             "user doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxProof(2,1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
+					UserID:           submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				db.On("GetTxProof", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name:             "no tx exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxProof(2, 2), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
+					UserID:           submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     2,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTxProof", submittingUserName, uint64(2), uint64(2)).Return(response, errors.Errorf("node with index 2 is not part of merkle tree (1, 1)"))
+				return db
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /ledger/proof/2?idx=2' because node with index 2 is not part of merkle tree (1, 1)",
+		},
+		{
+			name:             "wrong url, idx not exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "2"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("DoesUserExist", submittingUserName).
+					Return(true, nil)
+				db.On("GetTxProof", submittingUserName, uint64(2), uint64(2)).Return(response, errors.Errorf("query error - bad or missing tx index"))
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "query error - bad or missing tx index",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			rr := httptest.NewRecorder()
+			handler := NewLedgerRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.GetTxProofResponseEnvelope{}
+				rr.Body.Bytes()
+				err = json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+			}
+		})
+	}
+}

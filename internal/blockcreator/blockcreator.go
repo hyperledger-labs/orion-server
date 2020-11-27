@@ -128,7 +128,6 @@ func (b *BlockCreator) createBaseHeader(blockNum uint64) (*types.BlockHeaderBase
 	baseHeader := &types.BlockHeaderBase{
 		Number:                 blockNum,
 		PreviousBaseHeaderHash: b.previousBlockHeaderBaseHash,
-		TxMerkelTreeRootHash:   nil,
 	}
 
 	if blockNum > 1 {

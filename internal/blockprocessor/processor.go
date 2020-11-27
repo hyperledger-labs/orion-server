@@ -3,6 +3,7 @@ package blockprocessor
 import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
+	"github.ibm.com/blockchaindb/server/internal/mtree"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -77,6 +78,12 @@ func (b *BlockProcessor) Run() {
 			if err := b.blockStore.AddSkipListLinks(block); err != nil {
 				panic(err)
 			}
+
+			root, err := mtree.BuildTreeForBlockTx(block)
+			if err != nil {
+				panic(err)
+			}
+			block.Header.TxMerkelTreeRootHash = root.Hash()
 
 			if err = b.committer.commitBlock(block); err != nil {
 				panic(err)

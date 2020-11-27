@@ -31,6 +31,7 @@ const (
 	LedgerEndpoint = "/ledger/"
 	GetBlockHeader = "/ledger/block/{blockId}"
 	GetPath        = "/ledger/path"
+	GetTxProof     = "/ledger/proof/{blockId}"
 )
 
 // URLForGetData returns url for GET request to retrieve
@@ -63,6 +64,10 @@ func URLForLedgerBlock(blockNum uint64) string {
 
 func URLForLedgerPath(start, end uint64) string {
 	return LedgerEndpoint + fmt.Sprintf("path?start=%d&end=%d", start, end)
+}
+
+func URLTxProof(blockNum uint64, txIdx int) string {
+	return LedgerEndpoint + fmt.Sprintf("proof/%d?idx=%d", blockNum, txIdx)
 }
 
 func URLForNodeConfigPath(nodeID string) string {
