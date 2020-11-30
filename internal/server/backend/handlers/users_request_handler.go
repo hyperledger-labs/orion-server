@@ -13,12 +13,34 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
+// usersRequestHandler handles query and transaction associated
+// the user administration
 type usersRequestHandler struct {
 	db          backend.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	txHandler   *txHandler
 	logger      *logger.SugarLogger
+}
+
+// NewUsersRequestHandler creates users request handler
+func NewUsersRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+	handler := &usersRequestHandler{
+		db:          db,
+		sigVerifier: cryptoservice.NewVerifier(db),
+		router:      mux.NewRouter(),
+		txHandler: &txHandler{
+			db: db,
+		},
+		logger: logger,
+	}
+
+	// HTTP GET "/user/{userid}" get user record with given userID
+	handler.router.HandleFunc(constants.GetUser, handler.getUser).Methods(http.MethodGet)
+	// HTTP POST "user/tx" submit user creation transaction
+	handler.router.HandleFunc(constants.PostUserTx, handler.userTransaction).Methods(http.MethodPost)
+
+	return handler
 }
 
 func (u *usersRequestHandler) ServeHTTP(responseWriter http.ResponseWriter, request *http.Request) {
@@ -97,25 +119,5 @@ func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, requ
 		return
 	}
 
-	u.txHandler.HandleTransaction(response, txEnv)
-}
-
-// NewUsersRequestHandler creates users request handler
-func NewUsersRequestHandler(db backend.DB, logger *logger.SugarLogger) *usersRequestHandler {
-	handler := &usersRequestHandler{
-		db:          db,
-		sigVerifier: cryptoservice.NewVerifier(db),
-		router:      mux.NewRouter(),
-		txHandler: &txHandler{
-			db: db,
-		},
-		logger: logger,
-	}
-
-	// HTTP GET "/user/{userid}" get user record with given userID
-	handler.router.HandleFunc(constants.GetUser, handler.getUser).Methods(http.MethodGet)
-	// HTTP POST "user/tx" submit user creation transaction
-	handler.router.HandleFunc(constants.PostUserTx, handler.userTransaction).Methods(http.MethodPost)
-
-	return handler
+	u.txHandler.handleTransaction(response, txEnv)
 }

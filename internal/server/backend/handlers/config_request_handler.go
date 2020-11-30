@@ -13,12 +13,34 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
+// configRequestHandler handles query and transaction associated
+// with the cluster configuration
 type configRequestHandler struct {
 	db          backend.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	txHandler   *txHandler
 	logger      *logger.SugarLogger
+}
+
+// NewConfigRequestHandler return config query and transactions request handler
+func NewConfigRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+	handler := &configRequestHandler{
+		db:          db,
+		sigVerifier: cryptoservice.NewVerifier(db),
+		router:      mux.NewRouter(),
+		txHandler: &txHandler{
+			db: db,
+		},
+		logger: logger,
+	}
+
+	handler.router.HandleFunc(constants.GetConfig, handler.configQuery).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.PostConfigTx, handler.configTransaction).Methods(http.MethodPost)
+	handler.router.HandleFunc(constants.GetNodeConfig, handler.nodeQuery).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetNodesConfig, handler.nodeQuery).Methods(http.MethodGet)
+
+	return handler
 }
 
 func (c *configRequestHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -108,25 +130,6 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 		return
 	}
 
-	c.txHandler.HandleTransaction(response, txEnv)
+	c.txHandler.handleTransaction(response, txEnv)
 }
 
-// NewConfigRequestHandler return config transactions request handler
-func NewConfigRequestHandler(db backend.DB, logger *logger.SugarLogger) *configRequestHandler {
-	handler := &configRequestHandler{
-		db:          db,
-		sigVerifier: cryptoservice.NewVerifier(db),
-		router:      mux.NewRouter(),
-		txHandler: &txHandler{
-			db: db,
-		},
-		logger: logger,
-	}
-
-	handler.router.HandleFunc(constants.GetConfig, handler.configQuery).Methods(http.MethodGet)
-	handler.router.HandleFunc(constants.PostConfigTx, handler.configTransaction).Methods(http.MethodPost)
-	handler.router.HandleFunc(constants.GetNodeConfig, handler.nodeQuery).Methods(http.MethodGet)
-	handler.router.HandleFunc(constants.GetNodesConfig, handler.nodeQuery).Methods(http.MethodGet)
-
-	return handler
-}

@@ -11,6 +11,8 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 )
 
+// ledgerRequestHandler handles query associated with the
+// chain of blocks
 type ledgerRequestHandler struct {
 	db          backend.DB
 	sigVerifier *cryptoservice.SignatureVerifier
@@ -19,7 +21,7 @@ type ledgerRequestHandler struct {
 }
 
 // NewLedgerRequestHandler creates users request handler
-func NewLedgerRequestHandler(db backend.DB, logger *logger.SugarLogger) *ledgerRequestHandler {
+func NewLedgerRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &ledgerRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db),

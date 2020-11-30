@@ -39,7 +39,7 @@ type txHandler struct {
 }
 
 // HandleTransaction handles transaction submission
-func (t *txHandler) HandleTransaction(w http.ResponseWriter, tx interface{}) {
+func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}) {
 	if err := t.db.SubmitTransaction(tx); err != nil {
 		SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{ErrMsg: err.Error()})
 		return

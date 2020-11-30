@@ -13,12 +13,32 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
+// dataRequestHandler handles query and transaction associated
+// the user's data/state
 type dataRequestHandler struct {
 	db          backend.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	txHandler   *txHandler
 	logger      *logger.SugarLogger
+}
+
+// NewDataRequestHandler returns handler capable to serve incoming data requests
+func NewDataRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+	handler := &dataRequestHandler{
+		db:          db,
+		sigVerifier: cryptoservice.NewVerifier(db),
+		router:      mux.NewRouter(),
+		txHandler: &txHandler{
+			db: db,
+		},
+		logger: logger,
+	}
+
+	handler.router.HandleFunc(constants.GetData, handler.dataQuery).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.PostDataTx, handler.dataTransaction).Methods(http.MethodPost)
+
+	return handler
 }
 
 func (d *dataRequestHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -101,23 +121,6 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		return
 	}
 
-	d.txHandler.HandleTransaction(response, txEnv)
+	d.txHandler.handleTransaction(response, txEnv)
 }
 
-// NewDataRequestHandler returns handler capable to serve incoming data requests
-func NewDataRequestHandler(db backend.DB, logger *logger.SugarLogger) *dataRequestHandler {
-	handler := &dataRequestHandler{
-		db:          db,
-		sigVerifier: cryptoservice.NewVerifier(db),
-		router:      mux.NewRouter(),
-		txHandler: &txHandler{
-			db: db,
-		},
-		logger: logger,
-	}
-
-	handler.router.HandleFunc(constants.GetData, handler.dataQuery).Methods(http.MethodGet)
-	handler.router.HandleFunc(constants.PostDataTx, handler.dataTransaction).Methods(http.MethodPost)
-
-	return handler
-}
