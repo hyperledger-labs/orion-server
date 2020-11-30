@@ -149,8 +149,6 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 		return nil, err
 	}
 	return result, nil
-
-	return result, nil
 }
 
 func (p *ledgerQueryProcessor) calculateProof(block *types.Block, txIdx uint64) ([][]byte, error) {
