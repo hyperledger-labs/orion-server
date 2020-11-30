@@ -42,9 +42,16 @@ func IssueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certifica
 	}
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, ca, pubKey, rootCAKeyPair.PrivateKey)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
 	keyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	caPvtPemByte := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
 
 	return certPem, caPvtPemByte, nil
@@ -66,9 +73,16 @@ func GenerateRootCA(subjectCN string, host string) ([]byte, []byte, error) {
 	template.IsCA = true
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, template, template, pubKey, privKey)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 	keyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	keyPem := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
 
 	return certPem, keyPem, nil
