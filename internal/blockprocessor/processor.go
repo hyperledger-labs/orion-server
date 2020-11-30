@@ -16,6 +16,7 @@ type BlockProcessor struct {
 	blockStore *blockstore.Store
 	validator  *validator
 	committer  *committer
+	started    chan struct{}
 	stop       chan struct{}
 	stopped    chan struct{}
 	logger     *logger.SugarLogger
@@ -37,14 +38,15 @@ func New(conf *Config) *BlockProcessor {
 		blockStore: conf.BlockStore,
 		validator:  newValidator(conf),
 		committer:  newCommitter(conf),
+		started:    make(chan struct{}),
 		stop:       make(chan struct{}),
 		stopped:    make(chan struct{}),
 		logger:     conf.Logger,
 	}
 }
 
-// Run runs validator and committer
-func (b *BlockProcessor) Run() {
+// Start starts the validator and committer
+func (b *BlockProcessor) Start() {
 	b.logger.Debug("starting the block processor")
 	defer close(b.stopped)
 
@@ -52,6 +54,8 @@ func (b *BlockProcessor) Run() {
 		panic(errors.WithMessage(err, "error while recovering node"))
 	}
 
+	b.logger.Debug("block processor has been started successfully")
+	close(b.started)
 	for {
 		select {
 		case <-b.stop:
@@ -91,6 +95,11 @@ func (b *BlockProcessor) Run() {
 			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
 		}
 	}
+}
+
+// WaitTillStart waits till the block processor is started
+func (b *BlockProcessor) WaitTillStart() {
+	<-b.started
 }
 
 // Stop stops the block processor

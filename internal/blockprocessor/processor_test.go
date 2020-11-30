@@ -88,7 +88,9 @@ func newTestEnv(t *testing.T) *testEnv {
 		DB:         db,
 		Logger:     logger,
 	})
-	go b.Run()
+
+	go b.Start()
+	b.WaitTillStart()
 
 	cleanup := func(stopBlockProcessor bool) {
 		if stopBlockProcessor {
@@ -400,11 +402,13 @@ func TestFailureAndRecovery(t *testing.T) {
 		env.blockProcessor.Stop()
 
 		// mimic node restart by starting the block processor goroutine
+		env.blockProcessor.started = make(chan struct{})
 		env.blockProcessor.stop = make(chan struct{})
 		env.blockProcessor.stopped = make(chan struct{})
 		env.blockProcessor.blockQueue = queue.New(10)
 		defer env.blockProcessor.Stop()
-		go env.blockProcessor.Run()
+		go env.blockProcessor.Start()
+		env.blockProcessor.WaitTillStart()
 
 		assertStateDBHeight := func() bool {
 			stateDBHeight, err = env.db.Height()
@@ -444,7 +448,7 @@ func TestFailureAndRecovery(t *testing.T) {
 		env.blockProcessor.stop = make(chan struct{})
 		env.blockProcessor.stopped = make(chan struct{})
 		assertPanic := func() {
-			env.blockProcessor.Run()
+			env.blockProcessor.Start()
 		}
 		require.PanicsWithError(t, "error while recovering node: the height of state database [2] is higher than the height of block store [1]. The node cannot be recovered", assertPanic)
 	})
@@ -487,7 +491,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		env.stopBlockProcessing = make(chan struct{})
 		assertPanic := func() {
-			env.blockProcessor.Run()
+			env.blockProcessor.Start()
 		}
 		require.PanicsWithError(t, "error while recovering node: the difference between the height of the block store [3] and the state database [1] cannot be greater than 1 block. The node cannot be recovered", assertPanic)
 	})

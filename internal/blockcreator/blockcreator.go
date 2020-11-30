@@ -16,6 +16,7 @@ type BlockCreator struct {
 	nextBlockNumber             uint64
 	previousBlockHeaderBaseHash []byte
 	blockStore                  *blockstore.Store
+	started                     chan struct{}
 	stop                        chan struct{}
 	stopped                     chan struct{}
 	logger                      *logger.SugarLogger
@@ -47,18 +48,19 @@ func New(conf *Config) (*BlockCreator, error) {
 		nextBlockNumber:             height + 1,
 		logger:                      conf.Logger,
 		blockStore:                  conf.BlockStore,
+		started:                     make(chan struct{}),
 		stop:                        make(chan struct{}),
 		stopped:                     make(chan struct{}),
 		previousBlockHeaderBaseHash: lastBlockBaseHash,
 	}, nil
 }
 
-// Run runs the block assembler in an infinite loop
-func (b *BlockCreator) Run() {
+// Start runs the block assembler in an infinite loop
+func (b *BlockCreator) Start() {
 	defer close(b.stopped)
 
 	b.logger.Info("starting the block creator")
-
+	close(b.started)
 	for {
 		select {
 		case <-b.stop:
@@ -115,6 +117,11 @@ func (b *BlockCreator) Run() {
 			b.nextBlockNumber++
 		}
 	}
+}
+
+// WaitTillStart waits till the block creator is started
+func (b *BlockCreator) WaitTillStart() {
+	<-b.started
 }
 
 // Stop stops the block creator

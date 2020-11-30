@@ -76,10 +76,12 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		},
 	)
 
-	// TODO: introduce channel to stop the goroutines (issue #95)
-	go p.txReorderer.Run()
-	go p.blockCreator.Run()
-	go p.blockProcessor.Run()
+	go p.txReorderer.Start()
+	p.txReorderer.WaitTillStart()
+	go p.blockCreator.Start()
+	p.blockCreator.WaitTillStart()
+	go p.blockProcessor.Start()
+	p.blockProcessor.WaitTillStart()
 
 	return p, nil
 }

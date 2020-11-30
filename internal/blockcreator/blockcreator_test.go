@@ -74,7 +74,8 @@ func newTestEnv(t *testing.T) *testEnv {
 		BlockStore:   blockStore,
 	})
 	require.NoError(t, err)
-	go b.Run()
+	go b.Start()
+	b.WaitTillStart()
 
 	cleanup := func() {
 		b.Stop()

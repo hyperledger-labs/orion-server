@@ -27,7 +27,8 @@ func TestTxReorderer(t *testing.T) {
 		BatchTimeout:       50 * time.Millisecond,
 		Logger:             logger,
 	})
-	go b.Run()
+	go b.Start()
+	b.WaitTillStart()
 	defer b.Stop()
 
 	dataTx1 := &types.DataTxEnvelope{

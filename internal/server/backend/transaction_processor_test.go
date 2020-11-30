@@ -78,20 +78,6 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 
-	cleanup := func() {
-		if err := db.Close(); err != nil {
-			t.Errorf("error while closing the db instance, %v", err)
-		}
-
-		if err := blockStore.Close(); err != nil {
-			t.Errorf("error while closing blockstore, %v", err)
-		}
-
-		if err := os.RemoveAll(dir); err != nil {
-			t.Fatalf("error while removing directory %s, %v", dir, err)
-		}
-	}
-
 	txProcConf := &txProcessorConfig{
 		db:                 db,
 		blockStore:         blockStore,
@@ -104,6 +90,23 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	}
 	txProcessor, err := newTransactionProcessor(txProcConf)
 	require.NoError(t, err)
+
+	cleanup := func() {
+		if err := txProcessor.close(); err != nil {
+			t.Errorf("error while closing the transaction processor")
+		}
+		if err := db.Close(); err != nil {
+			t.Errorf("error while closing the db instance, %v", err)
+		}
+
+		if err := blockStore.Close(); err != nil {
+			t.Errorf("error while closing blockstore, %v", err)
+		}
+
+		if err := os.RemoveAll(dir); err != nil {
+			t.Fatalf("error while removing directory %s, %v", dir, err)
+		}
+	}
 
 	return &txProcessorTestEnv{
 		dbPath:         dbPath,

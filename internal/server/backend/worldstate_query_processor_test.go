@@ -819,5 +819,4 @@ func TestGetConfig(t *testing.T) {
 		require.True(t, proto.Equal(expectedSingleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Payload))
 		testutils.VerifyPayloadSignature(t, env.cert.Raw, singleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Signature)
 	})
-
 }

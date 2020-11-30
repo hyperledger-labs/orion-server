@@ -16,6 +16,7 @@ type TxReorderer struct {
 	txBatchQueue       *queue.Queue
 	maxTxCountPerBatch uint32
 	batchTimeout       time.Duration
+	started            chan struct{}
 	stop               chan struct{}
 	stopped            chan struct{}
 	logger             *logger.SugarLogger
@@ -42,16 +43,18 @@ func New(conf *Config) *TxReorderer {
 		txBatchQueue:       conf.TxBatchQueue,
 		maxTxCountPerBatch: conf.MaxTxCountPerBatch,
 		batchTimeout:       conf.BatchTimeout,
+		started:            make(chan struct{}),
 		stop:               make(chan struct{}),
 		stopped:            make(chan struct{}),
 		logger:             conf.Logger,
 	}
 }
 
-// Run runs the transactions batch creator
-func (r *TxReorderer) Run() {
+// Start starts the transactions batch creator
+func (r *TxReorderer) Start() {
 	defer close(r.stopped)
 	r.logger.Info("starting the transactions reorderer")
+	close(r.started)
 
 	txs := &types.DataTxEnvelopes{}
 
@@ -117,6 +120,11 @@ func (r *TxReorderer) Run() {
 			}
 		}
 	}
+}
+
+// WaitTillStart waits till the transaction reorderer is started
+func (r *TxReorderer) WaitTillStart() {
+	<-r.started
 }
 
 // Stop stops the transaction reorderer
