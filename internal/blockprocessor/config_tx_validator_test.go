@@ -88,6 +88,17 @@ func TestValidateConfigTx(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: new config is empty",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserID:    "adminUser",
+				NewConfig: nil,
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "new config is empty. There must be at least single node and an admin in the cluster",
+			},
+		},
+		{
 			name: "invalid: node config is empty",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserID:    "adminUser",

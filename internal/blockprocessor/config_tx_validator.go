@@ -37,6 +37,13 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		}, nil
 	}
 
+	if tx.NewConfig == nil {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "new config is empty. There must be at least single node and an admin in the cluster",
+		}, nil
+	}
+
 	if r := validateNodeConfig(tx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
 		return r, nil
 	}
