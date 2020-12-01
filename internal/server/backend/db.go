@@ -81,6 +81,9 @@ type db struct {
 	worldstateQueryProcessor *worldstateQueryProcessor
 	ledgerQueryProcessor     *ledgerQueryProcessor
 	txProcessor              *transactionProcessor
+	db                       worldstate.DB
+	blockStore               *blockstore.Store
+	provenanceStore          *provenance.Store
 	logger                   *logger.SugarLogger
 }
 
@@ -173,6 +176,9 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 		worldstateQueryProcessor: worldstateQueryProcessor,
 		ledgerQueryProcessor:     ledgerQueryProcessor,
 		txProcessor:              txProcessor,
+		db:                       levelDB,
+		blockStore:               blockStore,
+		provenanceStore:          provenanceStore,
 		logger:                   logger,
 	}, nil
 }
@@ -228,11 +234,23 @@ func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseE
 
 // Close closes and release resources used by db
 func (d *db) Close() error {
-	if err := d.worldstateQueryProcessor.close(); err != nil {
-		return err
+	if err := d.txProcessor.close(); err != nil {
+		return errors.WithMessage(err, "error while closing the transaction processor")
 	}
 
-	return d.txProcessor.close()
+	if err := d.db.Close(); err != nil {
+		return errors.WithMessage(err, "error while closing the worldstate database")
+	}
+
+	if err := d.provenanceStore.Close(); err != nil {
+		return errors.WithMessage(err, "error while closing the provenance store")
+	}
+
+	if err := d.blockStore.Close(); err != nil {
+		return errors.WithMessage(err, "error while closing the block store")
+	}
+
+	return nil
 }
 
 // BootstrapDB bootstraps DB with system tables

@@ -204,14 +204,6 @@ func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeC
 	return c, nil
 }
 
-func (q *worldstateQueryProcessor) close() error {
-	if err := q.db.Close(); err != nil {
-		return err
-	}
-
-	return q.blockStore.Close()
-}
-
 type PermissionErr struct {
 	ErrMsg string
 }
