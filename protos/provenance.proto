@@ -79,3 +79,9 @@ message GetTxProofResponseEnvelope {
   bytes signature = 2;
 }
 
+message TxReceipt {
+  BlockHeader header = 1;
+  uint64 tx_index = 2;
+}
+
+
