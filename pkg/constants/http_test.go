@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 func TestURLConstruction(t *testing.T) {
@@ -76,6 +77,71 @@ func TestURLConstruction(t *testing.T) {
 				return URLTxProof(1, 2)
 			},
 			expectedURL: "/ledger/proof/1?idx=2",
+		},
+		{
+			name: "URLForGetHistoricalData",
+			execute: func() string {
+				return URLForGetHistoricalData("db1", "key1")
+			},
+			expectedURL: "/provenance/data/history/db1/key1",
+		},
+		{
+			name: "URLForGetHistoricalDataAt",
+			execute: func() string {
+				return URLForGetHistoricalDataAt("db2", "key2", &types.Version{
+					BlockNum: 10,
+					TxNum:    5,
+				})
+			},
+			expectedURL: "/provenance/data/history/db2/key2?blocknumber=10&transactionnumber=5",
+		},
+		{
+			name: "URLForPreviousGetHistoricalData",
+			execute: func() string {
+				return URLForGetPreviousHistoricalData("db3", "key3", &types.Version{
+					BlockNum: 12,
+					TxNum:    6,
+				})
+			},
+			expectedURL: "/provenance/data/history/db3/key3?blocknumber=12&transactionnumber=6&direction=previous",
+		},
+		{
+			name: "URLForNextGetHistoricalData",
+			execute: func() string {
+				return URLForGetNextHistoricalData("db4", "key4", &types.Version{
+					BlockNum: 22,
+					TxNum:    16,
+				})
+			},
+			expectedURL: "/provenance/data/history/db4/key4?blocknumber=22&transactionnumber=16&direction=next",
+		},
+		{
+			name: "URLForGetDataReaders",
+			execute: func() string {
+				return URLForGetDataReaders("db5", "key5")
+			},
+			expectedURL: "/provenance/data/readers/db5/key5",
+		},
+		{
+			name: "URLForGetDataWriters",
+			execute: func() string {
+				return URLForGetDataWriters("db6", "key6")
+			},
+			expectedURL: "/provenance/data/writers/db6/key6",
+		},
+		{
+			name: "URLForGetDataReadBy",
+			execute: func() string {
+				return URLForGetDataReadBy("user1")
+			},
+			expectedURL: "/provenance/data/read/user1",
+		},
+		{
+			name: "URLForGetDataWrittenBy",
+			execute: func() string {
+				return URLForGetDataWrittenBy("user2")
+			},
+			expectedURL: "/provenance/data/written/user2",
 		},
 	}
 

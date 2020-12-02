@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path"
 	"strconv"
+
+	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 const (
@@ -32,6 +34,14 @@ const (
 	GetBlockHeader = "/ledger/block/{blockId}"
 	GetPath        = "/ledger/path"
 	GetTxProof     = "/ledger/proof/{blockId}"
+
+	ProvenanceEndpoint  = "/provenance/"
+	GetHistoricalData   = "/provenance/data/history/{dbname}/{key}"
+	GetDataReaders      = "/provenance/data/readers/{dbname}/{key}"
+	GetDataWriters      = "/provenance/data/writers/{dbname}/{key}"
+	GetDataReadBy       = "/provenance/data/read/{userId}"
+	GetDataWrittenBy    = "/provenance/data/written/{userId}"
+	GetTxIDsSubmittedBy = "/provenance/data/tx/{userId}"
 )
 
 // URLForGetData returns url for GET request to retrieve
@@ -75,5 +85,63 @@ func URLForNodeConfigPath(nodeID string) string {
 		return GetNodesConfig
 	}
 	return path.Join(GetNodesConfig, nodeID)
+}
 
+// URLForGetHistoricalData returns url for GET request to
+// retrieve all values associated with a given key on a database
+func URLForGetHistoricalData(dbName, key string) string {
+	return ProvenanceEndpoint + path.Join("data", "history", dbName, key)
+}
+
+// URLForGetHistoricalDataAt returns url for GET request to
+// retrieve a value at a particular version for a given key on a database
+func URLForGetHistoricalDataAt(dbName, key string, version *types.Version) string {
+	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum)
+}
+
+// URLForGetPreviousHistoricalData returns url for GET request to
+// retrieve previous values for a given key on a database from a particular version
+func URLForGetPreviousHistoricalData(dbName, key string, version *types.Version) string {
+	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum) +
+		"&direction=previous"
+}
+
+// URLForGetNextHistoricalData returns url for GET request to
+// retrieve next values for a given key on a database from a particular version
+func URLForGetNextHistoricalData(dbName, key string, version *types.Version) string {
+	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum) +
+		"&direction=next"
+}
+
+// URLForGetDataReaders returns url for GET request to
+// retrive all users who have read a given key from a database
+func URLForGetDataReaders(dbName, key string) string {
+	return ProvenanceEndpoint + path.Join("data", "readers", dbName, key)
+}
+
+// URLForGetDataWriters returns url for GET request to
+// retrive all users who have written a given key from a database
+func URLForGetDataWriters(dbName, key string) string {
+	return ProvenanceEndpoint + path.Join("data", "writers", dbName, key)
+}
+
+// URLForGetDataReadBy returns url for GET request to
+// retrieve all data read by a given user
+func URLForGetDataReadBy(userID string) string {
+	return ProvenanceEndpoint + path.Join("data", "read", userID)
+}
+
+// URLForGetDataWrittenBy returns url for GET request to
+// retrieve all data written by a given user
+func URLForGetDataWrittenBy(userID string) string {
+	return ProvenanceEndpoint + path.Join("data", "written", userID)
+}
+
+// URLForGetTxIDsSubmittedBy returns url for GET request to
+// retrieve all txIDs submitted by a given user
+func URLForGetTxIDsSubmittedBy(userID string) string {
+	return ProvenanceEndpoint + path.Join("data", "tx", userID)
 }
