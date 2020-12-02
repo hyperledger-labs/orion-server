@@ -103,6 +103,23 @@ func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigRes
 	return res, err
 }
 
+func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*types.GetHistoricalDataResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetHistoricalData(e.Payload.DBName, e.Payload.Key),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetHistoricalDataResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*http.Response, error) {
 	u := c.BaseURL.ResolveReference(
 		&url.URL{
