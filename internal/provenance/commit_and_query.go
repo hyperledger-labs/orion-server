@@ -3,7 +3,6 @@ package provenance
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 	"strings"
 
 	"github.com/cayleygraph/cayley"
@@ -51,6 +50,13 @@ type KeyWithVersion struct {
 	Version *types.Version
 }
 
+// TxIDLocation refers to the location of a TxID
+// in the block
+type TxIDLocation struct {
+	BlockNum uint64 `json:"block_num"`
+	TxIndex  int    `json:"tx_index"`
+}
+
 // Commit commits the txsData to a graph database. The following relationships are stored
 //  1. userID--(submitted)-->txID
 //  2. blockNum--(includes)->txID
@@ -65,12 +71,16 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 	cayleyTx := graph.NewTransaction()
 	values := make(map[string]string)
 
-	for _, tx := range txsData {
+	for index, tx := range txsData {
 		s.logger.Debugf("userID[%s]---(submitted)--->txID[%s]", tx.UserID, tx.TxID)
 		cayleyTx.AddQuad(quad.Make(tx.UserID, SUBMITTED, tx.TxID, ""))
 
-		s.logger.Debugf("blockNum[%d]---(includes)--->txID[%s]", blockNum, tx.TxID)
-		cayleyTx.AddQuad(quad.Make(strconv.FormatUint(blockNum, 10), INCLUDES, tx.TxID, ""))
+		loc, err := json.Marshal(&TxIDLocation{blockNum, index})
+		if err != nil {
+			return errors.WithMessage(err, "error while marshaling txID location")
+		}
+		s.logger.Debugf("loc[%s]]---(includes)--->txID[%s]", loc, tx.TxID)
+		cayleyTx.AddQuad(quad.Make(string(loc), INCLUDES, tx.TxID, ""))
 
 		for _, read := range tx.Reads {
 			value, err := s.getValueVertex(tx.DBName, read.Key, read.Version)
@@ -273,6 +283,21 @@ func (s *Store) GetTxIDsSubmittedByUser(userID string) ([]string, error) {
 	return txIDs, err
 }
 
+// GetTxIDLocation returns the location, i.e, block number and the tx index, of a given txID
+func (s *Store) GetTxIDLocation(txID string) (*TxIDLocation, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	p := cayley.StartPath(s.cayleyGraph, quad.String(txID)).In(quad.String(INCLUDES))
+
+	vertex, err := p.Iterate(context.Background()).FirstValue(s.cayleyGraph.QuadStore)
+	if err != nil {
+		return nil, err
+	}
+
+	return vertexToTxIDLocation(vertex)
+}
+
 func (s *Store) getValuesRecursively(dbName, key string, version *types.Version, predicate string, limit int) ([]*types.ValueWithMetadata, error) {
 	valueVertex, err := s.getValueVertex(dbName, key, version)
 	if err != nil {
@@ -366,6 +391,15 @@ func vertexToValue(qv quad.Value) (*types.ValueWithMetadata, error) {
 		Value:    kv.Value,
 		Metadata: kv.Metadata,
 	}, nil
+}
+
+func vertexToTxIDLocation(qv quad.Value) (*TxIDLocation, error) {
+	loc := &TxIDLocation{}
+	if err := json.Unmarshal([]byte(quad.ToString(qv)), loc); err != nil {
+		return nil, err
+	}
+
+	return loc, nil
 }
 
 const separator = "$"

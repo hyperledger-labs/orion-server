@@ -998,3 +998,39 @@ func TestGetPreviousValues(t *testing.T) {
 		})
 	}
 }
+
+func TestGetTxIDLocation(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	setup(t, env.s)
+
+	tests := []struct {
+		txID     string
+		expected *TxIDLocation
+	}{
+		{
+			txID: "tx2",
+			expected: &TxIDLocation{
+				BlockNum: 1,
+				TxIndex:  1,
+			},
+		},
+		{
+			txID: "tx4",
+			expected: &TxIDLocation{
+				BlockNum: 2,
+				TxIndex:  1,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.txID, func(t *testing.T) {
+			loc, err := env.s.GetTxIDLocation(tt.txID)
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, loc)
+		})
+	}
+}
