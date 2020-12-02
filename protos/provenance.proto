@@ -79,9 +79,132 @@ message GetTxProofResponseEnvelope {
   bytes signature = 2;
 }
 
+message GetHistoricalDataQuery {
+    string userID = 1;
+    string DBName = 2;
+    string key = 3;
+    Version version = 4;
+    string direction = 5;
+}
+
+message GetHistoricalDataQueryEnvelope {
+    GetHistoricalDataQuery payload = 1;
+    bytes signature = 2;
+}
+
+message GetHistoricalDataResponse {
+    ResponseHeader header = 1;
+    repeated ValueWithMetadata values = 2;
+}
+
+message GetHistoricalDataResponseEnvelope {
+  GetHistoricalDataResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetDataReadersQuery {
+    string userID = 1;
+    string DBName = 2;
+    string key = 3;
+}
+
+message GetDataReadersQueryEnvelope {
+    GetDataReadersQuery payload = 1;
+    bytes signature = 2;
+}
+
+message GetDataReadersResponse {
+    ResponseHeader header = 1;
+    map<string, uint32> read_by = 2;
+}
+
+message GetDataReadersResponseEnvelope {
+  GetDataReadersResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetDataWritersQuery {
+    string userID = 1;
+    string DBName = 2;
+    string key = 3;
+}
+
+message GetDataWritersQueryEnvelope {
+    GetDataWritersQuery payload = 1;
+    bytes signature = 2;
+}
+
+message GetDataWritersResponse {
+    ResponseHeader header = 1;
+    map<string, uint32> written_by = 2;
+}
+
+message GetDataWritersResponseEnvelope {
+  GetDataWritersResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetDataReadByQuery {
+    string userID = 1;
+    string target_userID = 2;
+}
+
+message GetDataReadByQueryEnvelope {
+    GetDataReadByQuery payload = 1;
+    bytes signature = 2;
+}
+
+message GetDataReadByResponse {
+    ResponseHeader header = 1;
+    repeated KVWithMetadata KVs = 2;
+}
+
+message GetDataReadByResponseEnvelope {
+  GetDataReadByResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetDataWrittenByQuery {
+    string userID = 1;
+    string target_userID = 2;
+}
+
+message GetDataWrittenByQueryEnvelope {
+    GetDataWrittenByQuery payload = 1;
+    bytes signature = 2;
+}
+
+message GetDataWrittenByResponse {
+    ResponseHeader header = 1;
+    repeated KVWithMetadata KVs = 2;
+}
+message GetDataWrittenByResponseEnvelope {
+  GetDataWrittenByResponse payload = 1;
+  bytes signature = 2;
+}
+
+message GetTxIDsSubmittedByQuery {
+    string userID = 1;
+    string target_userID = 2;
+}
+
+message GetTxIDsSubmittedByQueryEnvelope {
+    GetTxIDsSubmittedByQuery payload = 1;
+    bytes signature = 2;
+}
+
+message GetTxIDsSubmittedByResponse {
+    ResponseHeader header = 1;
+    repeated string txIDs = 2;
+}
+
+message GetTxIDsSubmittedByResponseEnvelope {
+  GetTxIDsSubmittedByResponse payload = 1;
+  bytes signature = 2;
+}
+
 message TxReceipt {
   BlockHeader header = 1;
   uint64 tx_index = 2;
 }
-
 
