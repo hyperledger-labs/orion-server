@@ -224,7 +224,7 @@ func (s *Store) GetValuesWrittenByUser(userID string) ([]*types.KVWithMetadata, 
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-func (s *Store) GetReaders(dbName, key string) (map[string]int, error) {
+func (s *Store) GetReaders(dbName, key string) (map[string]uint32, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -235,7 +235,7 @@ func (s *Store) GetReaders(dbName, key string) (map[string]int, error) {
 		return nil, err
 	}
 
-	userIDs := make(map[string]int)
+	userIDs := make(map[string]uint32)
 	for _, qv := range vertices {
 		userIDs[quad.ToString(qv)]++
 	}
@@ -244,7 +244,7 @@ func (s *Store) GetReaders(dbName, key string) (map[string]int, error) {
 }
 
 // GetWriters returns all userIDs who have modified a given key as well as the modifcation frequency
-func (s *Store) GetWriters(dbName, key string) (map[string]int, error) {
+func (s *Store) GetWriters(dbName, key string) (map[string]uint32, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -255,7 +255,7 @@ func (s *Store) GetWriters(dbName, key string) (map[string]int, error) {
 		return nil, err
 	}
 
-	userIDs := make(map[string]int)
+	userIDs := make(map[string]uint32)
 	for _, qv := range vertices {
 		userIDs[quad.ToString(qv)]++
 	}

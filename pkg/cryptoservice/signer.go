@@ -2,6 +2,7 @@ package cryptoservice
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -18,6 +19,12 @@ func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	case *types.GetLedgerPathQuery:
 	case *types.GetNodeConfigQuery:
 	case *types.GetTxProofQuery:
+	case *types.GetHistoricalDataQuery:
+	case *types.GetDataReadersQuery:
+	case *types.GetDataWritersQuery:
+	case *types.GetDataReadByQuery:
+	case *types.GetDataWrittenByQuery:
+	case *types.GetTxIDsSubmittedByQuery:
 
 	default:
 		return nil, errors.Errorf("unknown query type: %T", v)
@@ -40,18 +47,6 @@ func SignTx(txSigner crypto.Signer, tx interface{}) ([]byte, error) {
 	return signPayload(txSigner, tx)
 }
 
-func signPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
-	payloadBytes, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	sig, err := signer.Sign(payloadBytes)
-	if err != nil {
-		return nil, err
-	}
-	return sig, nil
-}
-
 func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]byte, error) {
 	switch v := queryResp.(type) {
 	case *types.GetUserResponse:
@@ -62,6 +57,12 @@ func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]b
 	case *types.GetBlockResponse:
 	case *types.GetNodeConfigResponse:
 	case *types.GetTxProofResponse:
+	case *types.GetHistoricalDataResponse:
+	case *types.GetDataReadersResponse:
+	case *types.GetDataWritersResponse:
+	case *types.GetDataReadByResponse:
+	case *types.GetDataWrittenByResponse:
+	case *types.GetTxIDsSubmittedByResponse:
 
 	default:
 		return nil, errors.Errorf("unknown query response type: %T", v)
@@ -69,3 +70,19 @@ func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]b
 
 	return signPayload(responseSigner, queryResp)
 }
+
+func signPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println(string(payloadBytes))
+
+	sig, err := signer.Sign(payloadBytes)
+	if err != nil {
+		return nil, err
+	}
+	return sig, nil
+}
+

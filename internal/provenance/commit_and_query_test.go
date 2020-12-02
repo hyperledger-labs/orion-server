@@ -455,13 +455,13 @@ func TestGetReaders(t *testing.T) {
 		name            string
 		dbName          string
 		key             string
-		expectedReaders map[string]int
+		expectedReaders map[string]uint32
 	}{
 		{
 			name:   "fetch users who have read key1",
 			dbName: "db1",
 			key:    "key1",
-			expectedReaders: map[string]int{
+			expectedReaders: map[string]uint32{
 				"user1": 1,
 				"user2": 1,
 			},
@@ -470,7 +470,7 @@ func TestGetReaders(t *testing.T) {
 			name:   "fetch users who have read key2",
 			dbName: "db1",
 			key:    "key2",
-			expectedReaders: map[string]int{
+			expectedReaders: map[string]uint32{
 				"user2": 2,
 			},
 		},
@@ -497,13 +497,13 @@ func TestGetWriters(t *testing.T) {
 		name            string
 		dbName          string
 		key             string
-		expectedWriters map[string]int
+		expectedWriters map[string]uint32
 	}{
 		{
 			name:   "fetch users who have written to key1",
 			dbName: "db1",
 			key:    "key1",
-			expectedWriters: map[string]int{
+			expectedWriters: map[string]uint32{
 				"user1": 2,
 				"user2": 2,
 			},
@@ -512,7 +512,7 @@ func TestGetWriters(t *testing.T) {
 			name:   "fetch users who have written to key2",
 			dbName: "db1",
 			key:    "key2",
-			expectedWriters: map[string]int{
+			expectedWriters: map[string]uint32{
 				"user1": 1,
 				"user2": 1,
 			},

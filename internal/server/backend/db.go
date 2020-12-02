@@ -51,13 +51,42 @@ type DB interface {
 	GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error)
 
 	// GetBlockHeader returns ledger block header
-	GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
+	GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
 
 	// GetTxProof returns intermediate hashes to recalculate merkle tree root from tx hash
-	GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error)
+	GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error)
 
 	// GetLedgerPath returns list of blocks that forms shortest path in skip list chain in ledger
-	GetLedgerPath(userId string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
+	GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
+
+	// GetValues returns all values associated with a given key
+	GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error)
+
+	// GetValueAt returns the value of a given key at a particular version
+	GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+
+	// GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
+	// by the limit parameters.
+	GetPreviousValues(dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+
+	// GetNextValues returns next values of a given key and a version. The number of records returned would be limited
+	// by the limit parameters.
+	GetNextValues(dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+
+	// GetValuesReadByUser returns all values read by a given user
+	GetValuesReadByUser(userID string) (*types.GetDataReadByResponseEnvelope, error)
+
+	// GetValuesReadByUser returns all values read by a given user
+	GetValuesWrittenByUser(userID string) (*types.GetDataWrittenByResponseEnvelope, error)
+
+	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
+	GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error)
+
+	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
+	GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error)
+
+	// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
+	GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error)
 
 	// SubmitTransaction submits transaction to the database
 	SubmitTransaction(tx interface{}) error
@@ -80,6 +109,7 @@ type DB interface {
 type db struct {
 	worldstateQueryProcessor *worldstateQueryProcessor
 	ledgerQueryProcessor     *ledgerQueryProcessor
+	provenanceQueryProcessor *provenanceQueryProcessor
 	txProcessor              *transactionProcessor
 	db                       worldstate.DB
 	blockStore               *blockstore.Store
@@ -88,7 +118,7 @@ type db struct {
 }
 
 // NewDB creates a new database backend which handles both the queries and transactions.
-func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error) {
+func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) {
 	if conf.Node.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
 	}
@@ -130,57 +160,103 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (*db, error)
 
 	querier := identity.NewQuerier(levelDB)
 
-	txProcConf := &txProcessorConfig{
-		db:                 levelDB,
-		blockStore:         blockStore,
-		provenanceStore:    provenanceStore,
-		txQueueLength:      conf.Node.QueueLength.Transaction,
-		txBatchQueueLength: conf.Node.QueueLength.ReorderedTransactionBatch,
-		blockQueueLength:   conf.Node.QueueLength.Block,
-		maxTxCountPerBatch: conf.Consensus.MaxTransactionCountPerBlock,
-		batchTimeout:       conf.Consensus.BlockTimeout,
-		logger:             logger,
-	}
-
-	txProcessor, err := newTransactionProcessor(txProcConf)
-	if err != nil {
-		return nil, errors.WithMessage(err, "can't initiate tx processor")
-	}
-
 	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: conf.Node.Identity.KeyPath})
 	if err != nil {
 		return nil, errors.Wrap(err, "can't load private key")
 	}
 
-	ledgerQueryProcessorConfig := &ledgerQueryProcessorConfig{
-		nodeID:          conf.Node.Identity.ID,
-		signer:          signer,
-		db:              levelDB,
-		blockStore:      blockStore,
-		identityQuerier: querier,
-		logger:          logger,
-	}
-	ledgerQueryProcessor := newLedgerQueryProcessor(ledgerQueryProcessorConfig)
+	worldstateQueryProcessor := newWorldstateQueryProcessor(
+		&worldstateQueryProcessorConfig{
+			nodeID:          conf.Node.Identity.ID,
+			signer:          signer,
+			db:              levelDB,
+			blockStore:      blockStore,
+			identityQuerier: querier,
+			logger:          logger,
+		},
+	)
 
-	qProcConfig := &worldstateQueryProcessorConfig{
-		nodeID:          conf.Node.Identity.ID,
-		signer:          signer,
-		db:              levelDB,
-		blockStore:      blockStore,
-		identityQuerier: querier,
-		logger:          logger,
+	ledgerQueryProcessor := newLedgerQueryProcessor(
+		&ledgerQueryProcessorConfig{
+			nodeID:          conf.Node.Identity.ID,
+			signer:          signer,
+			db:              levelDB,
+			blockStore:      blockStore,
+			identityQuerier: querier,
+			logger:          logger,
+		},
+	)
+
+	provenanceQueryProcessor := newProvenanceQueryProcessor(
+		&provenanceQueryProcessorConfig{
+			nodeID:          conf.Node.Identity.ID,
+			signer:          signer,
+			provenanceStore: provenanceStore,
+			logger:          logger,
+		},
+	)
+
+	txProcessor, err := newTransactionProcessor(
+		&txProcessorConfig{
+			db:                 levelDB,
+			blockStore:         blockStore,
+			provenanceStore:    provenanceStore,
+			txQueueLength:      conf.Node.QueueLength.Transaction,
+			txBatchQueueLength: conf.Node.QueueLength.ReorderedTransactionBatch,
+			blockQueueLength:   conf.Node.QueueLength.Block,
+			maxTxCountPerBatch: conf.Consensus.MaxTransactionCountPerBlock,
+			batchTimeout:       conf.Consensus.BlockTimeout,
+			logger:             logger,
+		},
+	)
+	if err != nil {
+		return nil, errors.WithMessage(err, "can't initiate tx processor")
 	}
-	worldstateQueryProcessor := newWorldstateQueryProcessor(qProcConfig)
 
 	return &db{
 		worldstateQueryProcessor: worldstateQueryProcessor,
 		ledgerQueryProcessor:     ledgerQueryProcessor,
+		provenanceQueryProcessor: provenanceQueryProcessor,
 		txProcessor:              txProcessor,
 		db:                       levelDB,
 		blockStore:               blockStore,
 		provenanceStore:          provenanceStore,
 		logger:                   logger,
 	}, nil
+}
+
+// BootstrapDB bootstraps DB with system tables
+func (d *db) BootstrapDB(conf *config.Configurations) error {
+	configTx, err := prepareConfigTx(conf)
+	if err != nil {
+		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
+	}
+
+	if err := d.txProcessor.submitTransaction(configTx); err != nil {
+		return errors.Wrap(err, "error while committing configuration transaction")
+	}
+	return nil
+}
+
+// IsReady returns true once instance of the DB is properly initiated, meaning
+// all system tables was created successfully
+func (d *db) IsReady() (bool, error) {
+	height, err := d.LedgerHeight()
+	if err != nil {
+		return false, err
+	}
+
+	dbHeight, err := d.Height()
+	if err != nil {
+		return false, err
+	}
+
+	for _, sysDB := range worldstate.SystemDBs() {
+		if !d.IsDBExists(sysDB) {
+			return false, nil
+		}
+	}
+	return height > 0 && dbHeight > 0, nil
 }
 
 // LedgerHeight returns ledger height
@@ -232,6 +308,69 @@ func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseE
 	return d.worldstateQueryProcessor.getData(dbName, querierUserID, key)
 }
 
+func (d *db) IsDBExists(name string) bool {
+	return d.worldstateQueryProcessor.isDBExists(name)
+}
+
+func (d *db) GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
+	return d.ledgerQueryProcessor.getBlockHeader(userID, blockNum)
+}
+
+func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
+	return d.ledgerQueryProcessor.getProof(userID, blockNum, txIdx)
+}
+
+func (d *db) GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
+	return d.ledgerQueryProcessor.getPath(userID, start, end)
+}
+
+// GetValues returns all values associated with a given key
+func (d *db) GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetValues(dbName, key)
+}
+
+// GetValueAt returns the value of a given key at a particular version
+func (d *db) GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetValueAt(dbName, key, version)
+}
+
+// GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
+// by the limit parameters.
+func (d *db) GetPreviousValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetPreviousValues(dbName, key, version)
+}
+
+// GetNextValues returns next values of a given key and a version. The number of records returned would be limited
+// by the limit parameters.
+func (d *db) GetNextValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetNextValues(dbName, key, version)
+}
+
+// GetValuesReadByUser returns all values read by a given user
+func (d *db) GetValuesReadByUser(userID string) (*types.GetDataReadByResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetValuesReadByUser(userID)
+}
+
+// GetValuesReadByUser returns all values read by a given user
+func (d *db) GetValuesWrittenByUser(userID string) (*types.GetDataWrittenByResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetValuesWrittenByUser(userID)
+}
+
+// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
+func (d *db) GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetReaders(dbName, key)
+}
+
+// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
+func (d *db) GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetWriters(dbName, key)
+}
+
+// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
+func (d *db) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetTxIDsSubmittedByUser(userID)
+}
+
 // Close closes and release resources used by db
 func (d *db) Close() error {
 	if err := d.txProcessor.close(); err != nil {
@@ -251,62 +390,6 @@ func (d *db) Close() error {
 	}
 
 	return nil
-}
-
-// BootstrapDB bootstraps DB with system tables
-func (d *db) BootstrapDB(conf *config.Configurations) error {
-	configTx, err := prepareConfigTx(conf)
-	if err != nil {
-		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
-	}
-
-	if err := d.txProcessor.submitTransaction(configTx); err != nil {
-		return errors.Wrap(err, "error while committing configuration transaction")
-	}
-	return nil
-}
-
-// IsReady returns true once instance of the DB is properly initiated, meaning
-// all system tables was created successfully
-func (d *db) IsReady() (bool, error) {
-	height, err := d.LedgerHeight()
-	if err != nil {
-		return false, err
-	}
-
-	dbHeight, err := d.Height()
-	if err != nil {
-		return false, err
-	}
-
-	for _, sysDB := range worldstate.SystemDBs() {
-		if !d.IsDBExists(sysDB) {
-			return false, nil
-		}
-	}
-	return height > 0 && dbHeight > 0, nil
-}
-
-func (d *db) IsDBExists(name string) bool {
-	return d.worldstateQueryProcessor.isDBExists(name)
-}
-
-type certsInGenesisConfig struct {
-	nodeCert   []byte
-	adminCert  []byte
-	rootCACert []byte
-}
-
-func (d *db) GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
-	return d.ledgerQueryProcessor.getBlockHeader(userId, blockNum)
-}
-
-func (d *db) GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
-	return d.ledgerQueryProcessor.getProof(userId, blockNum, txIdx)
-}
-
-func (d *db) GetLedgerPath(userId string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
-	return d.ledgerQueryProcessor.getPath(userId, start, end)
 }
 
 func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {
@@ -340,6 +423,12 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 		},
 		// TODO: we can make the node itself sign the transaction
 	}, nil
+}
+
+type certsInGenesisConfig struct {
+	nodeCert   []byte
+	adminCert  []byte
+	rootCACert []byte
 }
 
 func readCerts(conf *config.Configurations) (*certsInGenesisConfig, error) {
