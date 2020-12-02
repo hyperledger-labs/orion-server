@@ -34,6 +34,7 @@ const (
 	GetBlockHeader = "/ledger/block/{blockId}"
 	GetPath        = "/ledger/path"
 	GetTxProof     = "/ledger/proof/{blockId}"
+	GetTxReceipt   = "/ledger/tx/receipt/{txId}"
 
 	ProvenanceEndpoint  = "/provenance/"
 	GetHistoricalData   = "/provenance/data/history/{dbname}/{key}"
@@ -144,4 +145,8 @@ func URLForGetDataWrittenBy(userID string) string {
 // retrieve all txIDs submitted by a given user
 func URLForGetTxIDsSubmittedBy(userID string) string {
 	return ProvenanceEndpoint + path.Join("data", "tx", userID)
+}
+
+func URLForGetTransactionReceipt(txId string) string {
+	return LedgerEndpoint + path.Join("tx", "receipt", txId)
 }

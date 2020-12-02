@@ -143,6 +143,13 @@ func TestURLConstruction(t *testing.T) {
 			},
 			expectedURL: "/provenance/data/written/user2",
 		},
+		{
+			name: "URLForGetTransactionReceipt",
+			execute: func() string {
+				return URLForGetTransactionReceipt("tx1")
+			},
+			expectedURL: "/ledger/tx/receipt/tx1",
+		},
 	}
 
 	for _, tt := range tests {

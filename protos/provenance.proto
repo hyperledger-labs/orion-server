@@ -208,3 +208,23 @@ message TxReceipt {
   uint64 tx_index = 2;
 }
 
+message GetTxReceiptQuery {
+  string userID = 1;
+  string txID = 2;
+}
+
+message GetTxReceiptQueryEnvelope {
+  GetTxReceiptQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetTxReceiptResponse {
+  ResponseHeader header = 1;
+  TxReceipt receipt = 2;
+}
+
+message GetTxReceiptResponseEnvelope {
+  GetTxReceiptResponse payload = 1;
+  bytes signature = 2;
+}
+
