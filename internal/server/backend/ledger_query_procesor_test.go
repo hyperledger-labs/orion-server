@@ -97,6 +97,9 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		if err := blockStore.Close(); err != nil {
 			t.Errorf("error while closing blockstore, %v", err)
 		}
+		if err := provenanceStore.Close(); err != nil {
+			t.Errorf("error while closing blockstore, %v", err)
+		}
 		if err := os.RemoveAll(path); err != nil {
 			t.Fatalf("failed to remove %s due to %v", path, err)
 		}
