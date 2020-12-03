@@ -99,6 +99,13 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 
 		for txNum, txValidationInfo := range blockValidationInfo {
 			if txValidationInfo.Flag != types.Flag_VALID {
+				provenanceData = append(
+					provenanceData,
+					&provenance.TxDataForProvenance{
+						IsValid: false,
+						TxID:    txsEnvelopes[txNum].Payload.TxID,
+					},
+				)
 				continue
 			}
 
@@ -278,6 +285,7 @@ func constructProvenanceEntriesForDataTx(
 	dirtyWriteKeyVersion map[string]*types.Version,
 ) (*provenance.TxDataForProvenance, error) {
 	txData := &provenance.TxDataForProvenance{
+		IsValid:            true,
 		DBName:             tx.DBName,
 		UserID:             tx.UserID,
 		TxID:               tx.TxID,

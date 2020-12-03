@@ -891,7 +891,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 		})
 	}
 }
-func TestProvenanceStoreCommitterForDataBlock(t *testing.T) {
+func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 	t.Parallel()
 
 	setup := func(env *committerTestEnv) {
@@ -912,9 +912,10 @@ func TestProvenanceStoreCommitterForDataBlock(t *testing.T) {
 
 		txsData := []*provenance.TxDataForProvenance{
 			{
-				DBName: worldstate.DefaultDBName,
-				UserID: "user1",
-				TxID:   "tx0",
+				IsValid: true,
+				DBName:  worldstate.DefaultDBName,
+				UserID:  "user1",
+				TxID:    "tx0",
 				Writes: []*types.KVWithMetadata{
 					{
 						Key:   "key0",
@@ -1107,6 +1108,52 @@ func TestProvenanceStoreCommitterForDataBlock(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "invalid tx",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+						DataReads: []*types.DataRead{
+							{
+								Key: "key0",
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
+						},
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				},
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				kvs, err := s.GetValuesReadByUser("user1")
+				if err != nil {
+					return nil, err
+				}
+
+				var values []*types.ValueWithMetadata
+				for _, kv := range kvs {
+					values = append(
+						values,
+						&types.ValueWithMetadata{
+							Value:    kv.Value,
+							Metadata: kv.Metadata,
+						},
+					)
+				}
+
+				return values, nil
+			},
+			expectedData: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -1139,6 +1186,85 @@ func TestProvenanceStoreCommitterForDataBlock(t *testing.T) {
 			actualData, err := tt.query(env.committer.provenanceStore)
 			require.NoError(t, err)
 			require.ElementsMatch(t, tt.expectedData, actualData)
+		})
+	}
+}
+
+func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name         string
+		txs          []*types.DataTxEnvelope
+		valInfo      []*types.ValidationInfo
+		query        func(s *provenance.Store) (*provenance.TxIDLocation, error)
+		expectedData *provenance.TxIDLocation
+	}{
+		{
+			name: "invalid txID",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx2",
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				},
+			},
+			query: func(s *provenance.Store) (*provenance.TxIDLocation, error) {
+				return s.GetTxIDLocation("tx2")
+			},
+			expectedData: &provenance.TxIDLocation{
+				BlockNum: 2,
+				TxIndex:  1,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: tt.valInfo,
+				},
+				Payload: &types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: tt.txs,
+					},
+				},
+			}
+
+			_, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToProvenanceStore(2, provenanceData))
+
+			actualData, err := tt.query(env.committer.provenanceStore)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedData, actualData)
 		})
 	}
 }
@@ -1181,9 +1307,10 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 			},
 			setup: func(db worldstate.DB) {},
 			expectedProvenanceData: &provenance.TxDataForProvenance{
-				DBName: worldstate.DefaultDBName,
-				UserID: "user1",
-				TxID:   "tx1",
+				IsValid: true,
+				DBName:  worldstate.DefaultDBName,
+				UserID:  "user1",
+				TxID:    "tx1",
 				Reads: []*provenance.KeyWithVersion{
 					{
 						Key: "key1",
@@ -1265,9 +1392,10 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 				},
 			},
 			expectedProvenanceData: &provenance.TxDataForProvenance{
-				DBName: worldstate.DefaultDBName,
-				UserID: "user2",
-				TxID:   "tx2",
+				IsValid: true,
+				DBName:  worldstate.DefaultDBName,
+				UserID:  "user2",
+				TxID:    "tx2",
 				Writes: []*types.KVWithMetadata{
 					{
 						Key:   "key1",

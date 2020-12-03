@@ -68,9 +68,10 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 func setupProvenanceStore(t *testing.T, p *provenance.Store) {
 	block1TxsData := []*provenance.TxDataForProvenance{
 		{
-			DBName: "db1",
-			UserID: "user1",
-			TxID:   "tx1",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user1",
+			TxID:    "tx1",
 			Writes: []*types.KVWithMetadata{
 				{
 					Key:   "key1",
@@ -85,9 +86,10 @@ func setupProvenanceStore(t *testing.T, p *provenance.Store) {
 			},
 		},
 		{
-			DBName: "db1",
-			UserID: "user1",
-			TxID:   "tx2",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user1",
+			TxID:    "tx2",
 			Writes: []*types.KVWithMetadata{
 				{
 					Key:   "key2",
@@ -111,9 +113,10 @@ func setupProvenanceStore(t *testing.T, p *provenance.Store) {
 
 	block2TxsData := []*provenance.TxDataForProvenance{
 		{
-			DBName: "db1",
-			UserID: "user1",
-			TxID:   "tx3",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user1",
+			TxID:    "tx3",
 			Reads: []*provenance.KeyWithVersion{
 				{
 					Key: "key1",
@@ -143,9 +146,10 @@ func setupProvenanceStore(t *testing.T, p *provenance.Store) {
 			},
 		},
 		{
-			DBName: "db1",
-			UserID: "user2",
-			TxID:   "tx4",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx4",
 			Reads: []*provenance.KeyWithVersion{
 				{
 					Key: "key2",
@@ -178,9 +182,10 @@ func setupProvenanceStore(t *testing.T, p *provenance.Store) {
 
 	block3TxsData := []*provenance.TxDataForProvenance{
 		{
-			DBName: "db1",
-			UserID: "user2",
-			TxID:   "tx5",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx5",
 			Reads: []*provenance.KeyWithVersion{
 				{
 					Key: "key1",

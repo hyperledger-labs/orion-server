@@ -3,6 +3,7 @@ package provenance
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/cayleygraph/cayley"
@@ -36,6 +37,7 @@ const (
 // TxDataForProvenance holds the transaction data that is
 // needed for the provenance store
 type TxDataForProvenance struct {
+	IsValid            bool
 	DBName             string
 	UserID             string
 	TxID               string
@@ -72,15 +74,21 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 	values := make(map[string]string)
 
 	for index, tx := range txsData {
-		s.logger.Debugf("userID[%s]---(submitted)--->txID[%s]", tx.UserID, tx.TxID)
-		cayleyTx.AddQuad(quad.Make(tx.UserID, SUBMITTED, tx.TxID, ""))
-
 		loc, err := json.Marshal(&TxIDLocation{blockNum, index})
 		if err != nil {
 			return errors.WithMessage(err, "error while marshaling txID location")
 		}
 		s.logger.Debugf("loc[%s]]---(includes)--->txID[%s]", loc, tx.TxID)
 		cayleyTx.AddQuad(quad.Make(string(loc), INCLUDES, tx.TxID, ""))
+
+		if !tx.IsValid {
+			s.logger.Debugf("as txID [%s] is invalid, we created vertex and edge to represent only the relation [location--(includes)-->txID]", tx.TxID)
+			// if needed in the future, we can store more details about the invalid transactions.
+			continue
+		}
+
+		s.logger.Debugf("userID[%s]---(submitted)--->txID[%s]", tx.UserID, tx.TxID)
+		cayleyTx.AddQuad(quad.Make(tx.UserID, SUBMITTED, tx.TxID, ""))
 
 		for _, read := range tx.Reads {
 			value, err := s.getValueVertex(tx.DBName, read.Key, read.Version)
@@ -113,6 +121,7 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 			oldVersion, ok := tx.OldVersionOfWrites[actualKey]
 			if !ok {
 				values[actualKey] = string(newValue)
+				fmt.Println(values)
 				continue
 			}
 
@@ -124,6 +133,7 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 			if oldValue == nil {
 				oldValueStr, ok := values[actualKey]
 				if !ok {
+					fmt.Println(values)
 					s.logger.Debugf("key [%s] version [%d,%d] for which oldValue is not found", actualKey, oldVersion.BlockNum, oldVersion.TxNum)
 					return errors.Errorf("error while finding the previous version of the key[%s]", write.Key)
 				}

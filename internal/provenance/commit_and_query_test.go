@@ -61,9 +61,10 @@ func newTestEnv(t *testing.T) *testEnv {
 func setup(t *testing.T, s *Store) {
 	block1TxsData := []*TxDataForProvenance{
 		{
-			DBName: "db1",
-			UserID: "user1",
-			TxID:   "tx1",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user1",
+			TxID:    "tx1",
 			Writes: []*types.KVWithMetadata{
 				{
 					Key:   "key1",
@@ -78,9 +79,10 @@ func setup(t *testing.T, s *Store) {
 			},
 		},
 		{
-			DBName: "db1",
-			UserID: "user1",
-			TxID:   "tx2",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user1",
+			TxID:    "tx2",
 			Writes: []*types.KVWithMetadata{
 				{
 					Key:   "key2",
@@ -100,13 +102,18 @@ func setup(t *testing.T, s *Store) {
 				},
 			},
 		},
+		{
+			IsValid: false,
+			TxID:    "tx10",
+		},
 	}
 
 	block2TxsData := []*TxDataForProvenance{
 		{
-			DBName: "db1",
-			UserID: "user1",
-			TxID:   "tx3",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user1",
+			TxID:    "tx3",
 			Reads: []*KeyWithVersion{
 				{
 					Key: "key1",
@@ -136,9 +143,10 @@ func setup(t *testing.T, s *Store) {
 			},
 		},
 		{
-			DBName: "db1",
-			UserID: "user2",
-			TxID:   "tx4",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx4",
 			Reads: []*KeyWithVersion{
 				{
 					Key: "key2",
@@ -171,9 +179,10 @@ func setup(t *testing.T, s *Store) {
 
 	block3TxsData := []*TxDataForProvenance{
 		{
-			DBName: "db1",
-			UserID: "user2",
-			TxID:   "tx5",
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx5",
 			Reads: []*KeyWithVersion{
 				{
 					Key: "key1",
@@ -1018,10 +1027,10 @@ func TestGetTxIDLocation(t *testing.T) {
 			},
 		},
 		{
-			txID: "tx4",
+			txID: "tx10",
 			expected: &TxIDLocation{
-				BlockNum: 2,
-				TxIndex:  1,
+				BlockNum: 1,
+				TxIndex:  2,
 			},
 		},
 	}
