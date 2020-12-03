@@ -273,6 +273,33 @@ func extractGetTxProofQueryEnvelope(request *http.Request, responseWriter http.R
 	return env, respondedErr
 }
 
+func extractGetTxReceiptQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetTxReceiptQueryEnvelope, respondedErr bool) {
+	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		return nil, true
+	}
+
+	params := mux.Vars(request)
+	txId, ok := params["txId"]
+	if !ok {
+		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{
+			ErrMsg: "query error - bad or missing txId literal",
+		})
+		return nil, true
+	}
+
+	env = &types.GetTxReceiptQueryEnvelope{
+		Payload: &types.GetTxReceiptQuery{
+			UserID: querierUserID,
+			TxID:   txId,
+		},
+		Signature: signature,
+	}
+
+	return env, respondedErr
+}
+
 func VerifyRequestSignature(
 	sigVerifier *cryptoservice.SignatureVerifier,
 	user string,

@@ -132,4 +132,3 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 
 	c.txHandler.handleTransaction(response, txEnv)
 }
-

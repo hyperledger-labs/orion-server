@@ -337,6 +337,29 @@ func (_m *DB) GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.G
 	return r0, r1
 }
 
+// GetTxReceipt provides a mock function with given fields: userId, txID
+func (_m *DB) GetTxReceipt(userId string, txID string) (*types.GetTxReceiptResponseEnvelope, error) {
+	ret := _m.Called(userId, txID)
+
+	var r0 *types.GetTxReceiptResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string, string) *types.GetTxReceiptResponseEnvelope); ok {
+		r0 = rf(userId, txID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetTxReceiptResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(userId, txID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetUser provides a mock function with given fields: querierUserID, targetUserID
 func (_m *DB) GetUser(querierUserID string, targetUserID string) (*types.GetUserResponseEnvelope, error) {
 	ret := _m.Called(querierUserID, targetUserID)

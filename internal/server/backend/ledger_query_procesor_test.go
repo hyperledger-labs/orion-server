@@ -8,6 +8,8 @@ import (
 	"os"
 	"testing"
 
+	"github.ibm.com/blockchaindb/server/internal/provenance"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
@@ -38,7 +40,7 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 	require.NoError(t, err)
 
 	c := &logger.Config{
-		Level:         "debug",
+		Level:         "info",
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
@@ -74,6 +76,20 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
+	provenanceStorePath := constructProvenanceStorePath(path)
+	provenanceStore, err := provenance.Open(
+		&provenance.Config{
+			StoreDir: provenanceStorePath,
+			Logger:   logger,
+		},
+	)
+	if err != nil {
+		if rmErr := os.RemoveAll(path); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", path, rmErr)
+		}
+		t.Fatalf("error while creating provenancestore, %v", err)
+	}
+
 	cleanup := func(t *testing.T) {
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close leveldb: %v", err)
@@ -91,6 +107,7 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		signer:          nodeSigner,
 		db:              db,
 		blockStore:      blockStore,
+		provenanceStore: provenanceStore,
 		identityQuerier: identity.NewQuerier(db),
 		logger:          logger,
 	}
@@ -102,7 +119,7 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 	}
 }
 
-func setup(t *testing.T, env *ledgerProcessorTestEnv) {
+func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 	instCert, adminCert := generateCrypto(t)
 	//	dcCert, _ := pem.Decode(cert)
 
@@ -181,7 +198,9 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv) {
 
 	require.NoError(t, env.db.Commit(createUser, 1))
 
-	for i := uint64(2); i < uint64(100); i++ {
+	dirtyWriteKeyVersion := make(map[string]*types.Version, 0)
+
+	for i := uint64(2); i < uint64(blocksNum); i++ {
 		key := make([]string, 0)
 		value := make([][]byte, 0)
 		for j := uint64(0); j < i; j++ {
@@ -195,6 +214,10 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv) {
 		block.Header.TxMerkelTreeRootHash = root.Hash()
 		require.NoError(t, env.p.blockStore.Commit(block))
 
+		pData := createProvenanceDataFromBlock(block, dirtyWriteKeyVersion)
+		err = env.p.provenanceStore.Commit(block.GetHeader().GetBaseHeader().GetNumber(), pData)
+		require.NoError(t, err)
+
 		env.blocks = append(env.blocks, block.GetHeader())
 		env.blockTx = append(env.blockTx, block.GetDataTxEnvelopes())
 	}
@@ -206,6 +229,7 @@ func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.
 		e := &types.DataTxEnvelope{
 			Payload: &types.DataTx{
 				UserID: "testUser",
+				TxID:   fmt.Sprintf("Tx%d%s", blockNumber, key[i]),
 				DBName: worldstate.DefaultDBName,
 				DataWrites: []*types.DataWrite{
 					{
@@ -239,11 +263,70 @@ func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.
 	}
 }
 
+func createProvenanceDataFromBlock(block *types.Block, dirtyWriteKeyVersion map[string]*types.Version) []*provenance.TxDataForProvenance {
+	var provenanceData []*provenance.TxDataForProvenance
+	txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
+
+	for txNum, tx := range txsEnvelopes {
+		version := &types.Version{
+			BlockNum: block.GetHeader().GetBaseHeader().GetNumber(),
+			TxNum:    uint64(txNum),
+		}
+
+		pData := constructProvenanceEntriesForDataTx(tx.GetPayload(), version, dirtyWriteKeyVersion)
+		provenanceData = append(provenanceData, pData)
+	}
+
+	return provenanceData
+}
+
+func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Version, dirtyWriteKeyVersion map[string]*types.Version) *provenance.TxDataForProvenance {
+	txData := &provenance.TxDataForProvenance{
+		DBName:             tx.DBName,
+		UserID:             tx.UserID,
+		TxID:               tx.TxID,
+		OldVersionOfWrites: make(map[string]*types.Version),
+	}
+
+	for _, read := range tx.DataReads {
+		k := &provenance.KeyWithVersion{
+			Key:     read.Key,
+			Version: read.Version,
+		}
+		txData.Reads = append(txData.Reads, k)
+	}
+
+	for _, write := range tx.DataWrites {
+		kv := &types.KVWithMetadata{
+			Key:   write.Key,
+			Value: write.Value,
+			Metadata: &types.Metadata{
+				Version:       version,
+				AccessControl: write.ACL,
+			},
+		}
+		txData.Writes = append(txData.Writes, kv)
+
+		oldVersion, ok := dirtyWriteKeyVersion[write.Key]
+		if !ok {
+			continue
+		}
+
+		txData.OldVersionOfWrites[write.Key] = oldVersion
+	}
+
+	for _, w := range tx.DataWrites {
+		dirtyWriteKeyVersion[w.Key] = version
+	}
+
+	return txData
+}
+
 func TestGetBlock(t *testing.T) {
 	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
-	setup(t, env)
+	setup(t, env, 20)
 
 	testCases := []struct {
 		name          string
@@ -268,22 +351,22 @@ func TestGetBlock(t *testing.T) {
 			isError:       false,
 		},
 		{
-			name:          "Getting block 45 - correct",
-			blockNumber:   45,
-			expectedBlock: env.blocks[44],
+			name:          "Getting block 12 - correct",
+			blockNumber:   12,
+			expectedBlock: env.blocks[11],
 			user:          "testUser",
 			isError:       false,
 		},
 		{
-			name:          "Getting block 98 - correct",
-			blockNumber:   98,
-			expectedBlock: env.blocks[97],
+			name:          "Getting block 9 - correct",
+			blockNumber:   9,
+			expectedBlock: env.blocks[8],
 			user:          "testUser",
 			isError:       false,
 		},
 		{
-			name:          "Getting block 101 - not exist",
-			blockNumber:   101,
+			name:          "Getting block 21 - not exist",
+			blockNumber:   21,
 			expectedBlock: nil,
 			user:          "testUser",
 			isError:       false,
@@ -296,16 +379,8 @@ func TestGetBlock(t *testing.T) {
 			isError:       false,
 		},
 		{
-			name:          "Getting block 40 - wrong user",
-			blockNumber:   40,
-			expectedBlock: nil,
-			user:          "userNotExist",
-			isError:       true,
-			errorMsg:      "user userNotExist doesn't has permision to access ledger",
-		},
-		{
-			name:          "Getting block 77 - wrong user",
-			blockNumber:   77,
+			name:          "Getting block 10 - wrong user",
+			blockNumber:   10,
 			expectedBlock: nil,
 			user:          "userNotExist",
 			isError:       true,
@@ -335,7 +410,7 @@ func TestGetPath(t *testing.T) {
 	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
-	setup(t, env)
+	setup(t, env, 100)
 
 	testCases := []struct {
 		name           string
@@ -443,7 +518,7 @@ func TestGetProof(t *testing.T) {
 	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
-	setup(t, env)
+	setup(t, env, 100)
 
 	testCases := []struct {
 		name         string
@@ -542,6 +617,87 @@ func TestGetProof(t *testing.T) {
 			} else {
 				require.Error(t, err)
 				require.Contains(t, testCase.errorMsg, err.Error())
+			}
+		})
+	}
+}
+
+func TestGetTxReceipt(t *testing.T) {
+	t.Parallel()
+	env := newLedgerProcessorTestEnv(t)
+	defer env.cleanup(t)
+	setup(t, env, 20)
+
+	testCases := []struct {
+		name        string
+		txId        string
+		blockNumber uint64
+		txIndex     uint64
+		user        string
+		isError     bool
+		errorMsg    string
+	}{
+		{
+			name:        "Getting receipt for Tx5key3 - correct",
+			txId:        "Tx5key3",
+			blockNumber: 5,
+			txIndex:     3,
+			user:        "testUser",
+			isError:     false,
+		},
+		{
+			name:        "Getting receipt for Tx15key13 - correct",
+			txId:        "Tx15key13",
+			blockNumber: 15,
+			txIndex:     13,
+			user:        "testUser",
+			isError:     false,
+		},
+		{
+			name:        "Getting receipt for Tx9key7 - correct",
+			txId:        "Tx9key7",
+			blockNumber: 9,
+			txIndex:     7,
+			user:        "testUser",
+			isError:     false,
+		},
+		{
+			name:        "Getting receipt for Tx19key17 - correct",
+			txId:        "Tx19key17",
+			blockNumber: 19,
+			txIndex:     17,
+			user:        "testUser",
+			isError:     false,
+		},
+		{
+			name:        "Getting receipt for Tx15key20 - no tx exist",
+			txId:        "Tx15key20",
+			blockNumber: 0,
+			txIndex:     0,
+			user:        "testUser",
+			isError:     true,
+			errorMsg:    "unexpected end of JSON input",
+		},
+		{
+			name:        "Getting receipt for Tx9key7 - no user exist",
+			txId:        "Tx9key7",
+			blockNumber: 0,
+			txIndex:     0,
+			user:        "nonExistUser",
+			isError:     true,
+			errorMsg:    "user nonExistUser doesn't has permision to access ledger",
+		},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			receipt, err := env.p.getTxReceipt(tt.user, tt.txId)
+			if !tt.isError {
+				require.NoError(t, err)
+				require.Equal(t, tt.txIndex, receipt.GetPayload().GetReceipt().GetTxIndex())
+				require.True(t, proto.Equal(env.blocks[tt.blockNumber-1], receipt.GetPayload().GetReceipt().GetHeader()))
+			} else {
+				require.Error(t, err)
+				require.Contains(t, tt.errorMsg, err.Error())
 			}
 		})
 	}

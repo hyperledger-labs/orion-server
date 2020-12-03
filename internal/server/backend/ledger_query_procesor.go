@@ -3,6 +3,8 @@ package backend
 import (
 	"fmt"
 
+	"github.ibm.com/blockchaindb/server/internal/provenance"
+
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
@@ -19,6 +21,7 @@ type ledgerQueryProcessor struct {
 	signer          crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
+	provenanceStore *provenance.Store
 	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
 }
@@ -28,6 +31,7 @@ type ledgerQueryProcessorConfig struct {
 	signer          crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
+	provenanceStore *provenance.Store
 	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
 }
@@ -38,6 +42,7 @@ func newLedgerQueryProcessor(conf *ledgerQueryProcessorConfig) *ledgerQueryProce
 		signer:          conf.signer,
 		db:              conf.db,
 		blockStore:      conf.blockStore,
+		provenanceStore: conf.provenanceStore,
 		identityQuerier: conf.identityQuerier,
 		logger:          conf.logger,
 	}
@@ -141,6 +146,44 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 				NodeID: p.nodeID,
 			},
 			Hashes: path,
+		},
+		Signature: nil,
+	}
+
+	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.GetTxReceiptResponseEnvelope, error) {
+	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasAccess {
+		return nil, &PermissionErr{fmt.Sprintf("user %s doesn't has permision to access ledger", userId)}
+	}
+	txLoc, err := p.provenanceStore.GetTxIDLocation(txId)
+	if err != nil {
+		return nil, err
+	}
+
+	blockHeader, err := p.blockStore.GetHeader(txLoc.BlockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &types.GetTxReceiptResponseEnvelope{
+		Payload: &types.GetTxReceiptResponse{
+			Header: &types.ResponseHeader{
+				NodeID: p.nodeID,
+			},
+			Receipt: &types.TxReceipt{
+				Header:  blockHeader,
+				TxIndex: uint64(txLoc.TxIndex),
+			},
 		},
 		Signature: nil,
 	}

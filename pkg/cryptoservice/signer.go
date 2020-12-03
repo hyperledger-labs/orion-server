@@ -19,6 +19,7 @@ func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	case *types.GetLedgerPathQuery:
 	case *types.GetNodeConfigQuery:
 	case *types.GetTxProofQuery:
+	case *types.GetTxReceiptQuery:
 	case *types.GetHistoricalDataQuery:
 	case *types.GetDataReadersQuery:
 	case *types.GetDataWritersQuery:
@@ -57,6 +58,7 @@ func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]b
 	case *types.GetBlockResponse:
 	case *types.GetNodeConfigResponse:
 	case *types.GetTxProofResponse:
+	case *types.GetTxReceiptResponse:
 	case *types.GetHistoricalDataResponse:
 	case *types.GetDataReadersResponse:
 	case *types.GetDataWritersResponse:

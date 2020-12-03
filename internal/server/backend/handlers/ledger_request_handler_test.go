@@ -381,13 +381,13 @@ func TestProofQuery(t *testing.T) {
 			name:             "user doesn't exist",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLTxProof(2,1), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxProof(2, 1), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
-					UserID:           submittingUserName,
+					UserID:      submittingUserName,
 					BlockNumber: 2,
 					TxIndex:     1,
 				})
@@ -413,7 +413,7 @@ func TestProofQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
-					UserID:           submittingUserName,
+					UserID:      submittingUserName,
 					BlockNumber: 2,
 					TxIndex:     2,
 				})
@@ -478,6 +478,144 @@ func TestProofQuery(t *testing.T) {
 
 			if tt.expectedResponse != nil {
 				res := &types.GetTxProofResponseEnvelope{}
+				rr.Body.Bytes()
+				err = json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+			}
+		})
+	}
+}
+
+func TestTxReceiptQuery(t *testing.T) {
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() (*http.Request, error)
+		dbMockFactory      func(response *types.GetTxReceiptResponseEnvelope) backend.DB
+		expectedResponse   *types.GetTxReceiptResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "valid get receipt request",
+			expectedResponse: &types.GetTxReceiptResponseEnvelope{
+				Signature: []byte{0, 0, 0},
+				Payload: &types.GetTxReceiptResponse{
+					Header: &types.ResponseHeader{
+						NodeID: "testNodeID",
+					},
+					Receipt: &types.TxReceipt{
+						Header: &types.BlockHeader{
+							BaseHeader: &types.BlockHeaderBase{
+								Number: 2,
+							},
+						},
+						TxIndex: 1,
+					},
+				},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetTransactionReceipt("tx1"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxReceiptQuery{
+					UserID: submittingUserName,
+					TxID:   "tx1",
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:             "user doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetTransactionReceipt("tx1"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxReceiptQuery{
+					UserID: submittingUserName,
+					TxID:   "tx1",
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name:             "tx not exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetTransactionReceipt("tx1"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxReceiptQuery{
+					UserID: submittingUserName,
+					TxID:   "tx1",
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) backend.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, errors.Errorf("tx not found"))
+				return db
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /ledger/tx/receipt/tx1' because tx not found",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			rr := httptest.NewRecorder()
+			handler := NewLedgerRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &ResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.GetTxReceiptResponseEnvelope{}
 				rr.Body.Bytes()
 				err = json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)

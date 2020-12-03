@@ -123,4 +123,3 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 
 	d.txHandler.handleTransaction(response, txEnv)
 }
-

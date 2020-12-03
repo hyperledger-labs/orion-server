@@ -35,6 +35,8 @@ func NewLedgerRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Han
 	handler.router.HandleFunc(constants.GetPath, handler.pathQuery).Methods(http.MethodGet).Queries("start", "{startId:[0-9]+}", "end", "{endId:[0-9]+}")
 	// HTTP GET "/ledger/proof/{blockId}?idx={idx}" gets proof for tx with idx index inside block blockId
 	handler.router.HandleFunc(constants.GetTxProof, handler.txProof).Methods(http.MethodGet).Queries("idx", "{idx:[0-9]+}")
+	// HTTP GET "/ledger/tx/receipt/{txId}" gets transaction receipt
+	handler.router.HandleFunc(constants.GetTxReceipt, handler.txReceipt).Methods(http.MethodGet)
 	// HTTP GET "/ledger/path?start={startId}&end={endId}" with invalid query params
 	handler.router.HandleFunc(constants.GetPath, handler.invalidPathQuery).Methods(http.MethodGet)
 	// HTTP GET "/ledger/proof/{blockId}?idx={idx}" with invalid query params
@@ -130,6 +132,41 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 	}
 
 	data, err := p.db.GetTxProof(queryEnv.GetPayload().GetUserID(), queryEnv.GetPayload().GetBlockNumber(), queryEnv.GetPayload().GetTxIndex())
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *backend.PermissionErr:
+			status = http.StatusForbidden
+		default:
+			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
+		}
+
+		SendHTTPResponse(
+			response,
+			status,
+			&ResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	SendHTTPResponse(response, http.StatusOK, data)
+}
+
+func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *http.Request) {
+	queryEnv, respondedErr := extractGetTxReceiptQueryEnvelope(request, response)
+	if respondedErr {
+		return
+	}
+
+	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
+	if err != nil {
+		SendHTTPResponse(response, code, err)
+		return
+	}
+
+	data, err := p.db.GetTxReceipt(queryEnv.GetPayload().GetUserID(), queryEnv.GetPayload().GetTxID())
 	if err != nil {
 		var status int
 

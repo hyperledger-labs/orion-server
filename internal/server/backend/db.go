@@ -88,6 +88,10 @@ type DB interface {
 	// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
 	GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error)
 
+	// GetTxReceipt returns transaction receipt - block header of ledger block that contains the transaction
+	// and transaction index inside the block
+	GetTxReceipt(userId string, txID string) (*types.GetTxReceiptResponseEnvelope, error)
+
 	// SubmitTransaction submits transaction to the database
 	SubmitTransaction(tx interface{}) error
 
@@ -176,16 +180,17 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 		},
 	)
 
-	ledgerQueryProcessor := newLedgerQueryProcessor(
-		&ledgerQueryProcessorConfig{
-			nodeID:          conf.Node.Identity.ID,
-			signer:          signer,
-			db:              levelDB,
-			blockStore:      blockStore,
-			identityQuerier: querier,
-			logger:          logger,
-		},
-	)
+	ledgerQueryProcessorConfig := &ledgerQueryProcessorConfig{
+		nodeID:          conf.Node.Identity.ID,
+		signer:          signer,
+		db:              levelDB,
+		blockStore:      blockStore,
+		provenanceStore: provenanceStore,
+		identityQuerier: querier,
+		logger:          logger,
+	}
+	ledgerQueryProcessor := newLedgerQueryProcessor(ledgerQueryProcessorConfig)
+
 
 	provenanceQueryProcessor := newProvenanceQueryProcessor(
 		&provenanceQueryProcessorConfig{
@@ -322,6 +327,10 @@ func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.Ge
 
 func (d *db) GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
 	return d.ledgerQueryProcessor.getPath(userID, start, end)
+}
+
+func (d *db) GetTxReceipt(userId string, txID string) (*types.GetTxReceiptResponseEnvelope, error) {
+	return d.ledgerQueryProcessor.getTxReceipt(userId, txID)
 }
 
 // GetValues returns all values associated with a given key
