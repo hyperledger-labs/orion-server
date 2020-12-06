@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 
@@ -222,8 +221,6 @@ func (p *provenanceRequestHandler) extractVerifiedQueryPayload(w http.ResponseWr
 			TargetUserID: params["userId"],
 		}
 	}
-
-	fmt.Println(payload)
 
 	err, status := VerifyRequestSignature(p.sigVerifier, querierUserID, signature, payload)
 	if err != nil {

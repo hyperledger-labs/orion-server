@@ -3,7 +3,6 @@ package provenance
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/cayleygraph/cayley"
@@ -121,7 +120,6 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 			oldVersion, ok := tx.OldVersionOfWrites[actualKey]
 			if !ok {
 				values[actualKey] = string(newValue)
-				fmt.Println(values)
 				continue
 			}
 
@@ -133,7 +131,6 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 			if oldValue == nil {
 				oldValueStr, ok := values[actualKey]
 				if !ok {
-					fmt.Println(values)
 					s.logger.Debugf("key [%s] version [%d,%d] for which oldValue is not found", actualKey, oldVersion.BlockNum, oldVersion.TxNum)
 					return errors.Errorf("error while finding the previous version of the key[%s]", write.Key)
 				}

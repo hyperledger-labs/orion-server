@@ -2,7 +2,6 @@ package cryptoservice
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -79,12 +78,9 @@ func signPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
 		return nil, err
 	}
 
-	fmt.Println(string(payloadBytes))
-
 	sig, err := signer.Sign(payloadBytes)
 	if err != nil {
 		return nil, err
 	}
 	return sig, nil
 }
-
