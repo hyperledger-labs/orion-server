@@ -610,11 +610,17 @@ func TestGetProof(t *testing.T) {
 				valInfoBytes, err := json.Marshal(env.blocks[testCase.blockNumber-1].ValidationInfo[testCase.txIndex])
 				require.NoError(t, err)
 				txBytes = append(txBytes, valInfoBytes...)
-				currRoot, err := crypto.ComputeSHA256Hash(txBytes)
+				txHash, err := crypto.ComputeSHA256Hash(txBytes)
 				require.NoError(t, err)
-				for _, h := range proof.Payload.Hashes {
-					currRoot, err = crypto.ConcatenateHashes(currRoot, h)
-					require.NoError(t, err)
+				var currRoot []byte
+				for i, h := range proof.Payload.Hashes {
+					if i == 0 {
+						require.Equal(t, txHash, h)
+						currRoot = txHash
+					} else {
+						currRoot, err = crypto.ConcatenateHashes(currRoot, h)
+						require.NoError(t, err)
+					}
 				}
 				require.Equal(t, testCase.expectedRoot, currRoot)
 			} else {

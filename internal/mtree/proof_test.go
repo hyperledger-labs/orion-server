@@ -22,31 +22,31 @@ func TestNodeProof(t *testing.T) {
 			name:    "Data block full tree",
 			block:   generateDataBlock(t, 32),
 			idx:     0,
-			pathLen: 5,
+			pathLen: 6,
 		},
 		{
 			name:    "Data block half tree plus one",
 			block:   generateDataBlock(t, 33),
 			idx:     32,
-			pathLen: 1,
+			pathLen: 2,
 		},
 		{
 			name:    "Data block half tree plus two right",
 			block:   generateDataBlock(t, 34),
 			idx:     33,
-			pathLen: 2,
+			pathLen: 3,
 		},
 		{
 			name:    "Data block half tree plus two left",
 			block:   generateDataBlock(t, 34),
 			idx:     32,
-			pathLen: 2,
+			pathLen: 3,
 		},
 		{
 			name:    "Data block half tree plus two left",
 			block:   generateDataBlock(t, 34),
 			idx:     31,
-			pathLen: 6,
+			pathLen: 7,
 		},
 		{
 			name:    "Data block half tree plus two index out of bounds",
@@ -59,7 +59,7 @@ func TestNodeProof(t *testing.T) {
 			name:    "Config block, no intermediate hashes",
 			block:   generateConfigBlock(t),
 			idx:     0,
-			pathLen: 0,
+			pathLen: 1,
 		},
 	}
 	for i := 0; i < len(tests); i++ {
@@ -89,11 +89,15 @@ func TestNodeProof(t *testing.T) {
 					require.NoError(t, err)
 					txHash, err := crypto.ComputeSHA256Hash(append(txBytes, viBytes...))
 
-					rootHash := txHash
-
-					for _, h := range intermediateHashes {
-						rootHash, err = crypto.ConcatenateHashes(rootHash, h)
-						require.NoError(t, err)
+					var rootHash []byte
+					for i, h := range intermediateHashes {
+						if i == 0 {
+							require.Equal(t, txHash, h)
+							rootHash = h
+						} else {
+							rootHash, err = crypto.ConcatenateHashes(rootHash, h)
+							require.NoError(t, err)
+						}
 					}
 
 					require.Equal(t, tt.root, rootHash)

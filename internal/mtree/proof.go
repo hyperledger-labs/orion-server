@@ -43,7 +43,7 @@ func computeProofFromPath(path []*Node) [][]byte {
 	if len(path) == 0 {
 		return nil
 	}
-	proof := make([][]byte, 0)
+	proof := [][]byte{path[0].Hash()}
 
 	for _, n := range path[:len(path)-1] {
 		siblingHash := n.Sibling().Hash()
