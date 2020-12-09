@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/internal/server/backend"
-	"github.ibm.com/blockchaindb/server/internal/server/backend/handlers"
+	"github.ibm.com/blockchaindb/server/internal/httphandler"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 )
