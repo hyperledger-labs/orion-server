@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 // usersRequestHandler handles query and transaction associated
 // the user administration
 type usersRequestHandler struct {
-	db          backend.DB
+	db          bcdb.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	txHandler   *txHandler
@@ -24,7 +24,7 @@ type usersRequestHandler struct {
 }
 
 // NewUsersRequestHandler creates users request handler
-func NewUsersRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+func NewUsersRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &usersRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db),
@@ -48,23 +48,18 @@ func (u *usersRequestHandler) ServeHTTP(responseWriter http.ResponseWriter, requ
 }
 
 func (u *usersRequestHandler) getUser(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractUserQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetUser, u.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetUserQuery)
 
-	err, status := VerifyRequestSignature(u.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, status, err)
-		return
-	}
-
-	user, err := u.db.GetUser(queryEnv.Payload.UserID, queryEnv.Payload.TargetUserID)
+	user, err := u.db.GetUser(query.UserID, query.TargetUserID)
 	if err != nil {
 		var status int
 
 		switch err.(type) {
-		case *backend.PermissionErr:
+		case *bcdb.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError

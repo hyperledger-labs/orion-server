@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/base64"
@@ -20,7 +20,7 @@ import (
 type testCase struct {
 	name               string
 	request            *http.Request
-	dbMockFactory      func(response interface{}) backend.DB
+	dbMockFactory      func(response interface{}) bcdb.DB
 	expectedStatusCode int
 	expectedResponse   interface{}
 	expectedErr        string
@@ -66,7 +66,7 @@ func TestGetHistoricalData(t *testing.T) {
 				aliceSigner,
 				submittingUserName,
 			),
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetValues", dbName, key).Return(genericResponse, nil)
@@ -89,7 +89,7 @@ func TestGetHistoricalData(t *testing.T) {
 				aliceSigner,
 				submittingUserName,
 			),
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetValueAt", dbName, key, version).Return(response, nil)
@@ -113,7 +113,7 @@ func TestGetHistoricalData(t *testing.T) {
 				aliceSigner,
 				submittingUserName,
 			),
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetPreviousValues", dbName, key, version).Return(response, nil)
@@ -137,7 +137,7 @@ func TestGetHistoricalData(t *testing.T) {
 				aliceSigner,
 				submittingUserName,
 			),
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetNextValues", dbName, key, version).Return(response, nil)
@@ -159,7 +159,7 @@ func TestGetHistoricalData(t *testing.T) {
 				aliceSigner,
 				submittingUserName,
 			),
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetValues", dbName, key).Return(nil, errors.New("error in provenance db"))
@@ -219,7 +219,7 @@ func TestGetDataReaders(t *testing.T) {
 		{
 			name:    "valid",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetReaders", dbName, key).Return(genericResponse, nil)
@@ -231,7 +231,7 @@ func TestGetDataReaders(t *testing.T) {
 		{
 			name:    "internal server error",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetReaders", dbName, key).Return(nil, errors.New("error in provenance db"))
@@ -287,7 +287,7 @@ func TestGetDataWriters(t *testing.T) {
 		{
 			name:    "valid",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetWriters", dbName, key).Return(genericResponse, nil)
@@ -299,7 +299,7 @@ func TestGetDataWriters(t *testing.T) {
 		{
 			name:    "internal server error",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetWriters", dbName, key).Return(nil, errors.New("error in provenance db"))
@@ -356,7 +356,7 @@ func TestGetDataReadBy(t *testing.T) {
 		{
 			name:    "valid",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetValuesReadByUser", targetUserID).Return(genericResponse, nil)
@@ -368,7 +368,7 @@ func TestGetDataReadBy(t *testing.T) {
 		{
 			name:    "internal server error",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetValuesReadByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
@@ -425,7 +425,7 @@ func TestGetDataWrittenBy(t *testing.T) {
 		{
 			name:    "valid",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetValuesWrittenByUser", targetUserID).Return(genericResponse, nil)
@@ -437,7 +437,7 @@ func TestGetDataWrittenBy(t *testing.T) {
 		{
 			name:    "internal server error",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetValuesWrittenByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
@@ -489,7 +489,7 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 		{
 			name:    "valid",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetTxIDsSubmittedByUser", targetUserID).Return(genericResponse, nil)
@@ -501,7 +501,7 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 		{
 			name:    "internal server error",
 			request: req,
-			dbMockFactory: func(response interface{}) backend.DB {
+			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetTxIDsSubmittedByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
@@ -570,7 +570,7 @@ func constructTestCaseForSigVerificationFailure(t *testing.T, url string, submit
 	return testCase{
 		name:    "submitting user does not eixst",
 		request: req,
-		dbMockFactory: func(response interface{}) backend.DB {
+		dbMockFactory: func(response interface{}) bcdb.DB {
 			db := &mocks.DB{}
 			db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"), nil)
 			return db

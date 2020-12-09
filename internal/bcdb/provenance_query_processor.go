@@ -1,4 +1,4 @@
-package backend
+package bcdb
 
 import (
 	"github.ibm.com/blockchaindb/server/internal/provenance"

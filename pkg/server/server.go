@@ -17,7 +17,7 @@ import (
 
 // BCDBHTTPServer holds the database and http server objects
 type BCDBHTTPServer struct {
-	db      backend.DB
+	db      bcdb.DB
 	handler http.Handler
 	listen  net.Listener
 	conf    *config.Configurations
@@ -38,18 +38,18 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		return nil, err
 	}
 
-	db, err := backend.NewDB(conf, logger)
+	db, err := bcdb.NewDB(conf, logger)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating the database object")
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(constants.UserEndpoint, handlers.NewUsersRequestHandler(db, logger))
-	mux.Handle(constants.DataEndpoint, handlers.NewDataRequestHandler(db, logger))
-	mux.Handle(constants.DBEndpoint, handlers.NewDBRequestHandler(db, logger))
-	mux.Handle(constants.ConfigEndpoint, handlers.NewConfigRequestHandler(db, logger))
-	mux.Handle(constants.LedgerEndpoint, handlers.NewLedgerRequestHandler(db, logger))
-	mux.Handle(constants.ProvenanceEndpoint, handlers.NewProvenanceRequestHandler(db, logger))
+	mux.Handle(constants.UserEndpoint, httphandler.NewUsersRequestHandler(db, logger))
+	mux.Handle(constants.DataEndpoint, httphandler.NewDataRequestHandler(db, logger))
+	mux.Handle(constants.DBEndpoint, httphandler.NewDBRequestHandler(db, logger))
+	mux.Handle(constants.ConfigEndpoint, httphandler.NewConfigRequestHandler(db, logger))
+	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, logger))
+	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, logger))
 
 	netConf := conf.Node.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)

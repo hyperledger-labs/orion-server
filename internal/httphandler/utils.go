@@ -1,15 +1,17 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/gorilla/mux"
-	"github.ibm.com/blockchaindb/server/internal/bcdb"
+	backend "github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -48,256 +50,133 @@ func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}) {
 	SendHTTPResponse(w, http.StatusOK, empty.Empty{})
 }
 
-func extractDataQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetDataQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
+func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string, signVerifier *cryptoservice.SignatureVerifier) (interface{}, bool) {
+	querierUserID, signature, err := validateAndParseHeader(&r.Header)
 	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
 		return nil, true
 	}
 
-	params := mux.Vars(request)
-	dbName, ok := params["dbname"]
-	if !ok {
-		SendHTTPResponse(responseWriter,
-			http.StatusBadRequest,
-			&ResponseErr{
-				ErrMsg: "query error - bad or missing database name",
-			})
-		return nil, true
-	}
-	key, ok := params["key"]
-	if !ok {
-		SendHTTPResponse(responseWriter,
-			http.StatusBadRequest,
-			&ResponseErr{
-				ErrMsg: "query error - bad or missing key",
-			})
-		return nil, true
-	}
+	var payload interface{}
+	params := mux.Vars(r)
 
-	env = &types.GetDataQueryEnvelope{
-		Payload: &types.GetDataQuery{
+	switch queryType {
+	case constants.GetData:
+		payload = &types.GetDataQuery{
 			UserID: querierUserID,
-			DBName: dbName,
-			Key:    key,
-		},
-		Signature: signature,
-	}
-
-	return env, respondedErr
-}
-
-func extractUserQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetUserQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	params := mux.Vars(request)
-	targetUserID, ok := params["userid"]
-	if !ok {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{"query error - bad or missing userid"})
-		return
-	}
-
-	env = &types.GetUserQueryEnvelope{
-		Payload: &types.GetUserQuery{
+			DBName: params["dbname"],
+			Key:    params["key"],
+		}
+	case constants.GetUser:
+		payload = &types.GetUserQuery{
 			UserID:       querierUserID,
-			TargetUserID: targetUserID,
-		},
-		Signature: signature,
-	}
-
-	return env, respondedErr
-}
-
-func extractDBStatusQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetDBStatusQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	params := mux.Vars(request)
-	dbName, ok := params["dbname"]
-	if !ok {
-		SendHTTPResponse(responseWriter,
-			http.StatusBadRequest,
-			&ResponseErr{
-				ErrMsg: "query error - bad or missing database name",
-			})
-		return nil, true
-	}
-
-	env = &types.GetDBStatusQueryEnvelope{
-		Payload: &types.GetDBStatusQuery{
+			TargetUserID: params["userid"],
+		}
+	case constants.GetDBStatus:
+		payload = &types.GetDBStatusQuery{
 			UserID: querierUserID,
-			DBName: dbName,
-		},
-		Signature: signature,
-	}
-
-	return env, respondedErr
-}
-
-func extractConfigQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetConfigQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	env = &types.GetConfigQueryEnvelope{
-		Payload: &types.GetConfigQuery{
+			DBName: params["dbname"],
+		}
+	case constants.GetConfig:
+		payload = &types.GetConfigQuery{
 			UserID: querierUserID,
-		},
-		Signature: signature,
-	}
-
-	return env, respondedErr
-}
-
-func extractNodeConfigQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetNodeConfigQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	env = &types.GetNodeConfigQueryEnvelope{
-		Payload: &types.GetNodeConfigQuery{
+		}
+	case constants.GetNodeConfig:
+		payload = &types.GetNodeConfigQuery{
 			UserID: querierUserID,
-		},
-		Signature: signature,
-	}
+			NodeID: params["nodeId"],
+		}
+	case constants.GetBlockHeader:
+		blockNum, err := getUintParam("blockId", params)
+		if err != nil {
+			SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
 
-	params := mux.Vars(request)
-	valStr, ok := params["nodeId"]
-	if !ok {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{
-			ErrMsg: "query error - bad or missing node id",
-		})
-		return nil, true
-	}
-	env.Payload.NodeID = valStr
-	return env, false
-}
-
-func extractLedgerPathQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetLedgerPathQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	params := mux.Vars(request)
-	startNum, respErr := getUintParam("startId", params)
-	if respErr != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return nil, true
-	}
-
-	endNum, respErr := getUintParam("endId", params)
-	if respErr != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return nil, true
-	}
-
-	env = &types.GetLedgerPathQueryEnvelope{
-		Payload: &types.GetLedgerPathQuery{
-			UserID:           querierUserID,
-			StartBlockNumber: startNum,
-			EndBlockNumber:   endNum,
-		},
-		Signature: signature,
-	}
-
-	return env, respondedErr
-}
-
-func extractBlockQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetBlockQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	params := mux.Vars(request)
-	blockNum, respErr := getUintParam("blockId", params)
-	if respErr != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return nil, true
-	}
-
-	env = &types.GetBlockQueryEnvelope{
-		Payload: &types.GetBlockQuery{
+		payload = &types.GetBlockQuery{
 			UserID:      querierUserID,
 			BlockNumber: blockNum,
-		},
-		Signature: signature,
-	}
+		}
+	case constants.GetPath:
+		startBlockNum, endBlockNum, err := getStartAndEndBlockNum(params)
+		if err != nil {
+			fmt.Println(err, startBlockNum, endBlockNum)
+			SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
 
-	return env, respondedErr
-}
+		payload = &types.GetLedgerPathQuery{
+			UserID:           querierUserID,
+			StartBlockNumber: startBlockNum,
+			EndBlockNumber:   endBlockNum,
+		}
+	case constants.GetTxProof:
+		blockNum, txIndex, err := getBlockNumAndTxIndex(params)
+		if err != nil {
+			SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
 
-func extractGetTxProofQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetTxProofQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	params := mux.Vars(request)
-	blockNum, respErr := getUintParam("blockId", params)
-	if respErr != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return nil, true
-	}
-
-	txIndex, respErr := getUintParam("idx", params)
-	if respErr != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, respErr)
-		return nil, true
-	}
-
-	env = &types.GetTxProofQueryEnvelope{
-		Payload: &types.GetTxProofQuery{
+		payload = &types.GetTxProofQuery{
 			UserID:      querierUserID,
 			BlockNumber: blockNum,
 			TxIndex:     txIndex,
-		},
-		Signature: signature,
-	}
-
-	return env, respondedErr
-}
-
-func extractGetTxReceiptQueryEnvelope(request *http.Request, responseWriter http.ResponseWriter) (env *types.GetTxReceiptQueryEnvelope, respondedErr bool) {
-	querierUserID, signature, err := validateAndParseHeader(&request.Header)
-	if err != nil {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	params := mux.Vars(request)
-	txId, ok := params["txId"]
-	if !ok {
-		SendHTTPResponse(responseWriter, http.StatusBadRequest, &ResponseErr{
-			ErrMsg: "query error - bad or missing txId literal",
-		})
-		return nil, true
-	}
-
-	env = &types.GetTxReceiptQueryEnvelope{
-		Payload: &types.GetTxReceiptQuery{
+		}
+	case constants.GetTxReceipt:
+		payload = &types.GetTxReceiptQuery{
 			UserID: querierUserID,
-			TxID:   txId,
-		},
-		Signature: signature,
+			TxID:   params["txId"],
+		}
+	case constants.GetHistoricalData:
+		version, err := getVersion(params)
+		if err != nil {
+			SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
+		payload = &types.GetHistoricalDataQuery{
+			UserID:    querierUserID,
+			DBName:    params["dbname"],
+			Key:       params["key"],
+			Version:   version,
+			Direction: params["direction"],
+		}
+	case constants.GetDataReaders:
+		payload = &types.GetDataReadersQuery{
+			UserID: querierUserID,
+			DBName: params["dbname"],
+			Key:    params["key"],
+		}
+	case constants.GetDataWriters:
+		payload = &types.GetDataWritersQuery{
+			UserID: querierUserID,
+			DBName: params["dbname"],
+			Key:    params["key"],
+		}
+	case constants.GetDataReadBy:
+		payload = &types.GetDataReadByQuery{
+			UserID:       querierUserID,
+			TargetUserID: params["userId"],
+		}
+	case constants.GetDataWrittenBy:
+		payload = &types.GetDataWrittenByQuery{
+			UserID:       querierUserID,
+			TargetUserID: params["userId"],
+		}
+	case constants.GetTxIDsSubmittedBy:
+		payload = &types.GetTxIDsSubmittedByQuery{
+			UserID:       querierUserID,
+			TargetUserID: params["userId"],
+		}
 	}
 
-	return env, respondedErr
+	err, status := VerifyRequestSignature(signVerifier, querierUserID, signature, payload)
+	if err != nil {
+		SendHTTPResponse(w, status, err)
+		return nil, true
+	}
+
+	return payload, false
 }
 
 func VerifyRequestSignature(
@@ -335,4 +214,69 @@ func validateAndParseHeader(h *http.Header) (string, []byte, error) {
 	}
 
 	return userID, signatureBytes, nil
+}
+
+func getBlockNumAndTxIndex(params map[string]string) (uint64, uint64, error) {
+	blockNum, err := getUintParam("blockId", params)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	txIndex, err := getUintParam("idx", params)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return blockNum, txIndex, nil
+}
+
+func getStartAndEndBlockNum(params map[string]string) (uint64, uint64, error) {
+	startBlockNum, err := getUintParam("startId", params)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	endBlockNum, err := getUintParam("endId", params)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return startBlockNum, endBlockNum, nil
+}
+
+func getVersion(params map[string]string) (*types.Version, error) {
+	if _, ok := params["blknum"]; !ok {
+		return nil, nil
+	}
+
+	blockNum, err := getUintParam("blknum", params)
+	if err != nil {
+		return nil, err
+	}
+
+	txNum, err := getUintParam("txnum", params)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.Version{
+		BlockNum: blockNum,
+		TxNum:    txNum,
+	}, nil
+}
+
+func getUintParam(key string, params map[string]string) (uint64, *ResponseErr) {
+	valStr, ok := params[key]
+	if !ok {
+		return 0, &ResponseErr{
+			ErrMsg: "query error - bad or missing literal: " + key,
+		}
+	}
+	val, err := strconv.ParseUint(valStr, 10, 64)
+	if err != nil {
+		return 0, &ResponseErr{
+			ErrMsg: "query error - bad or missing literal: " + key + " " + err.Error(),
+		}
+	}
+	return val, nil
 }

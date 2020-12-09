@@ -1,8 +1,7 @@
-package handlers
+package httphandler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
@@ -15,7 +14,7 @@ import (
 // provenanceRequestHandler handles query and transaction associated
 // with the cluster configuration
 type provenanceRequestHandler struct {
-	db          backend.DB
+	db          bcdb.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	txHandler   *txHandler
@@ -23,7 +22,7 @@ type provenanceRequestHandler struct {
 }
 
 // NewProvenanceRequestHandler return config query and transactions request handler
-func NewProvenanceRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &provenanceRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db),
@@ -56,7 +55,7 @@ func (p *provenanceRequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Requ
 }
 
 func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *http.Request) {
-	payload, respondedErr := p.extractVerifiedQueryPayload(w, r, constants.GetHistoricalData)
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetHistoricalData, p.sigVerifier)
 	if respondedErr {
 		return
 	}
@@ -89,7 +88,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 }
 
 func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http.Request) {
-	payload, respondedErr := p.extractVerifiedQueryPayload(w, r, constants.GetDataReaders)
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetDataReaders, p.sigVerifier)
 	if respondedErr {
 		return
 	}
@@ -105,7 +104,7 @@ func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http
 }
 
 func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http.Request) {
-	payload, respondedErr := p.extractVerifiedQueryPayload(w, r, constants.GetDataWriters)
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetDataWriters, p.sigVerifier)
 	if respondedErr {
 		return
 	}
@@ -121,7 +120,7 @@ func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http
 }
 
 func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *http.Request) {
-	payload, respondedErr := p.extractVerifiedQueryPayload(w, r, constants.GetDataReadBy)
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetDataReadBy, p.sigVerifier)
 	if respondedErr {
 		return
 	}
@@ -137,7 +136,7 @@ func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *h
 }
 
 func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r *http.Request) {
-	payload, respondedErr := p.extractVerifiedQueryPayload(w, r, constants.GetDataWrittenBy)
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetDataWrittenBy, p.sigVerifier)
 	if respondedErr {
 		return
 	}
@@ -153,7 +152,7 @@ func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r
 }
 
 func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r *http.Request) {
-	payload, respondedErr := p.extractVerifiedQueryPayload(w, r, constants.GetTxIDsSubmittedBy)
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetTxIDsSubmittedBy, p.sigVerifier)
 	if respondedErr {
 		return
 	}
@@ -166,94 +165,6 @@ func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r 
 	}
 
 	SendHTTPResponse(w, http.StatusOK, response)
-}
-
-func (p *provenanceRequestHandler) extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string) (interface{}, bool) {
-	querierUserID, signature, err := validateAndParseHeader(&r.Header)
-	if err != nil {
-		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
-		return nil, true
-	}
-
-	var payload interface{}
-	params := mux.Vars(r)
-
-	switch queryType {
-	case constants.GetHistoricalData:
-		version, err := getVersion(params)
-		if err != nil {
-			SendHTTPResponse(w, http.StatusBadRequest, err)
-			return nil, true
-		}
-
-		payload = &types.GetHistoricalDataQuery{
-			UserID:    querierUserID,
-			DBName:    params["dbname"],
-			Key:       params["key"],
-			Version:   version,
-			Direction: params["direction"],
-		}
-	case constants.GetDataReaders:
-		payload = &types.GetDataReadersQuery{
-			UserID: querierUserID,
-			DBName: params["dbname"],
-			Key:    params["key"],
-		}
-	case constants.GetDataWriters:
-		payload = &types.GetDataWritersQuery{
-			UserID: querierUserID,
-			DBName: params["dbname"],
-			Key:    params["key"],
-		}
-	case constants.GetDataReadBy:
-		payload = &types.GetDataReadByQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userId"],
-		}
-	case constants.GetDataWrittenBy:
-		payload = &types.GetDataWrittenByQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userId"],
-		}
-	case constants.GetTxIDsSubmittedBy:
-		payload = &types.GetTxIDsSubmittedByQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userId"],
-		}
-	}
-
-	err, status := VerifyRequestSignature(p.sigVerifier, querierUserID, signature, payload)
-	if err != nil {
-		SendHTTPResponse(w, status, err)
-		return nil, true
-	}
-
-	return payload, false
-}
-
-func getVersion(params map[string]string) (*types.Version, error) {
-	if _, ok := params["blknum"]; !ok {
-		return nil, nil
-	}
-
-	blockNum, err := strconv.ParseUint(params["blknum"], 10, 64)
-	if err != nil {
-		return nil, &ResponseErr{
-			ErrMsg: "query error - bad block number: " + err.Error(),
-		}
-	}
-
-	txNum, err := strconv.ParseUint(params["txnum"], 10, 64)
-	if err != nil {
-		return nil, &ResponseErr{
-			ErrMsg: "query error - bad transaction number: " + err.Error(),
-		}
-	}
-
-	return &types.Version{
-		BlockNum: blockNum,
-		TxNum:    txNum,
-	}, nil
 }
 
 func processInternalError(w http.ResponseWriter, r *http.Request, err error) {

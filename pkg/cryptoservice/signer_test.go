@@ -33,7 +33,7 @@ func TestSignQuery(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, sig)
 			var status int
-			err, status = handlers.VerifyRequestSignature(sigVerifier, "alice", sig, q)
+			err, status = httphandler.VerifyRequestSignature(sigVerifier, "alice", sig, q)
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, status)
 		}

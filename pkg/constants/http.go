@@ -31,9 +31,9 @@ const (
 	GetNodeConfig  = "/config/node/{nodeId}"
 
 	LedgerEndpoint = "/ledger/"
-	GetBlockHeader = "/ledger/block/{blockId}"
+	GetBlockHeader = "/ledger/block/{blockId:[0-9]+}"
 	GetPath        = "/ledger/path"
-	GetTxProof     = "/ledger/proof/{blockId}"
+	GetTxProof     = "/ledger/proof/{blockId:[0-9]}"
 	GetTxReceipt   = "/ledger/tx/receipt/{txId}"
 
 	ProvenanceEndpoint  = "/provenance/"
@@ -82,9 +82,6 @@ func URLTxProof(blockNum uint64, txIdx int) string {
 }
 
 func URLForNodeConfigPath(nodeID string) string {
-	if len(nodeID) == 0 {
-		return GetNodesConfig
-	}
 	return path.Join(GetNodesConfig, nodeID)
 }
 

@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"bytes"
@@ -35,7 +35,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.GetDataResponseEnvelope) backend.DB
+		dbMockFactory      func(response *types.GetDataResponseEnvelope) bcdb.DB
 		expectedResponse   *types.GetDataResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
@@ -66,7 +66,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetData", dbName, submittingUserName, "foo").Return(response, nil)
@@ -86,12 +86,12 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
 				db.On("GetData", dbName, submittingUserName, "foo").
-					Return(nil, &backend.PermissionErr{ErrMsg: "access forbidden"})
+					Return(nil, &bcdb.PermissionErr{ErrMsg: "access forbidden"})
 				return db
 			},
 			expectedStatusCode: http.StatusForbidden,
@@ -108,7 +108,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
@@ -131,7 +131,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
@@ -157,7 +157,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooBob))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
@@ -175,7 +175,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				}
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedStatusCode: http.StatusBadRequest,
@@ -193,7 +193,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetDataResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedStatusCode: http.StatusBadRequest,
@@ -271,7 +271,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		txEnvFactory            func() *types.DataTxEnvelope
-		createMockAndInstrument func(t *testing.T, dataTxEnv interface{}) backend.DB
+		createMockAndInstrument func(t *testing.T, dataTxEnv interface{}) bcdb.DB
 		expectedCode            int
 		expectedErr             string
 	}{
@@ -283,7 +283,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", userID).Return(aliceCert, nil)
 				db.On("SubmitTransaction", mock.Anything).
@@ -301,7 +301,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DataTxEnvelope {
 				return &types.DataTxEnvelope{Payload: nil, Signature: aliceSig}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -316,7 +316,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 				tx.UserID = ""
 				return &types.DataTxEnvelope{Payload: tx, Signature: aliceSig}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -328,7 +328,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DataTxEnvelope {
 				return &types.DataTxEnvelope{Payload: dataTx, Signature: nil}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -343,7 +343,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					Signature: []byte("bad-sig"),
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", userID).Return(aliceCert, nil)
 
@@ -363,7 +363,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", "not-alice").Return(nil, errors.New("no such user"))
 
@@ -380,7 +380,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) backend.DB {
+			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", userID).Return(aliceCert, nil)
 				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))

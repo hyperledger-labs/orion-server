@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 // dataRequestHandler handles query and transaction associated
 // the user's data/state
 type dataRequestHandler struct {
-	db          backend.DB
+	db          bcdb.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	txHandler   *txHandler
@@ -24,7 +24,7 @@ type dataRequestHandler struct {
 }
 
 // NewDataRequestHandler returns handler capable to serve incoming data requests
-func NewDataRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &dataRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db),
@@ -46,31 +46,25 @@ func (d *dataRequestHandler) ServeHTTP(response http.ResponseWriter, request *ht
 }
 
 func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractDataQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetData, d.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetDataQuery)
 
-	err, status := VerifyRequestSignature(d.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, status, err)
-		return
-	}
-
-	dbName := queryEnv.GetPayload().GetDBName()
-	if !d.db.IsDBExists(dbName) {
+	if !d.db.IsDBExists(query.DBName) {
 		SendHTTPResponse(response, http.StatusBadRequest, &ResponseErr{
-			ErrMsg: "error db '" + dbName + "' doesn't exist",
+			ErrMsg: "error db '" + query.DBName + "' doesn't exist",
 		})
 		return
 	}
 
-	data, err := d.db.GetData(dbName, queryEnv.GetPayload().GetUserID(), queryEnv.GetPayload().GetKey())
+	data, err := d.db.GetData(query.DBName, query.UserID, query.Key)
 	if err != nil {
 		var status int
 
 		switch err.(type) {
-		case *backend.PermissionErr:
+		case *bcdb.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError

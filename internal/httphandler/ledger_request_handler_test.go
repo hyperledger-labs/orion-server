@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/base64"
@@ -26,7 +26,7 @@ func TestBlockQuery(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.GetBlockResponseEnvelope) backend.DB
+		dbMockFactory      func(response *types.GetBlockResponseEnvelope) bcdb.DB
 		expectedResponse   *types.GetBlockResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
@@ -34,7 +34,6 @@ func TestBlockQuery(t *testing.T) {
 		{
 			name: "valid get header request",
 			expectedResponse: &types.GetBlockResponseEnvelope{
-				Signature: []byte{0, 0, 0},
 				Payload: &types.GetBlockResponse{
 					Header: &types.ResponseHeader{
 						NodeID: "testNodeID",
@@ -56,7 +55,7 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
@@ -77,7 +76,7 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
@@ -97,7 +96,7 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(nil, errors.New("no such block"))
@@ -105,28 +104,6 @@ func TestBlockQuery(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusInternalServerError, // TODO deal with 404 not found, it's not a 5xx
 			expectedErr:        "error while processing 'GET /ledger/block/1' because no such block",
-		},
-		{
-			name:             "invalid block id",
-			expectedResponse: nil,
-			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint+path.Join("block", "block1"), nil)
-				if err != nil {
-					return nil, err
-				}
-				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
-				return req, nil
-			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) backend.DB {
-				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
-				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
-				return db
-			},
-			expectedStatusCode: http.StatusBadRequest,
-			expectedErr:        "query error - bad or missing block number literal blockId strconv.ParseUint: parsing \"block1\": invalid syntax",
 		},
 	}
 
@@ -172,7 +149,7 @@ func TestPathQuery(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.GetLedgerPathResponseEnvelope) backend.DB
+		dbMockFactory      func(response *types.GetLedgerPathResponseEnvelope) bcdb.DB
 		expectedResponse   *types.GetLedgerPathResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
@@ -213,7 +190,7 @@ func TestPathQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(2)).Return(response, nil)
@@ -238,7 +215,7 @@ func TestPathQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(2)).Return(response, nil)
@@ -264,7 +241,7 @@ func TestPathQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(2)).Return(response, errors.Errorf("can't find path in blocks skip list between 2 1"))
@@ -285,7 +262,7 @@ func TestPathQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("DoesUserExist", submittingUserName).
 					Return(true, nil)
@@ -339,7 +316,7 @@ func TestProofQuery(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.GetTxProofResponseEnvelope) backend.DB
+		dbMockFactory      func(response *types.GetTxProofResponseEnvelope) bcdb.DB
 		expectedResponse   *types.GetTxProofResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
@@ -369,7 +346,7 @@ func TestProofQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetTxProof", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
@@ -394,7 +371,7 @@ func TestProofQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				db.On("GetTxProof", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
@@ -420,7 +397,7 @@ func TestProofQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetTxProof", submittingUserName, uint64(2), uint64(2)).Return(response, errors.Errorf("node with index 2 is not part of merkle tree (1, 1)"))
@@ -441,7 +418,7 @@ func TestProofQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("DoesUserExist", submittingUserName).
 					Return(true, nil)
@@ -495,7 +472,7 @@ func TestTxReceiptQuery(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.GetTxReceiptResponseEnvelope) backend.DB
+		dbMockFactory      func(response *types.GetTxReceiptResponseEnvelope) bcdb.DB
 		expectedResponse   *types.GetTxReceiptResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
@@ -531,7 +508,7 @@ func TestTxReceiptQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, nil)
@@ -555,7 +532,7 @@ func TestTxReceiptQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, nil)
@@ -580,7 +557,7 @@ func TestTxReceiptQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, errors.Errorf("tx not found"))

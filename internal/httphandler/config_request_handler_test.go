@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"bytes"
@@ -40,7 +40,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() *http.Request
-		dbMockFactory      func(response *types.GetConfigResponseEnvelope) backend.DB
+		dbMockFactory      func(response *types.GetConfigResponseEnvelope) bcdb.DB
 		expectedResponse   *types.GetConfigResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
@@ -54,7 +54,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetConfig").Return(response, nil)
@@ -94,7 +94,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req
 			},
-			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -108,7 +108,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				return req
 			},
-			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -124,7 +124,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
@@ -142,7 +142,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
@@ -160,7 +160,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetConfig").Return(nil, errors.New("failed to get configuration"))
@@ -240,7 +240,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 	type testCase struct {
 		name                    string
 		txEnvFactory            func() *types.ConfigTxEnvelope
-		createMockAndInstrument func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB
+		createMockAndInstrument func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB
 		expectedCode            int
 		expectedErr             string
 	}
@@ -254,7 +254,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
 				db.On("SubmitTransaction", mock.Anything).Run(func(args mock.Arguments) {
@@ -271,7 +271,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				return &types.ConfigTxEnvelope{Payload: nil, Signature: sigAdmin}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -286,7 +286,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 				tx.UserID = ""
 				return &types.ConfigTxEnvelope{Payload: tx, Signature: sigAdmin}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -298,7 +298,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				return &types.ConfigTxEnvelope{Payload: configTx, Signature: nil}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -313,7 +313,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: []byte("bad-sig"),
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
 
@@ -333,7 +333,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", "not-admin").Return(nil, errors.New("no such user"))
 
@@ -350,7 +350,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) backend.DB {
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
 				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))
@@ -405,7 +405,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() *http.Request
-		dbMockFactory      func(response *types.GetNodeConfigResponseEnvelope) backend.DB
+		dbMockFactory      func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB
 		expectedResponse   *types.GetNodeConfigResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
@@ -422,7 +422,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetNodeConfig", "node1").Return(response, nil)
@@ -445,33 +445,13 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 			expectedErr:        "",
 		},
 		{
-			name: "missing nodeId",
-			requestFactory: func() *http.Request {
-				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath(""), nil)
-				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{
-					UserID: submittingUserName,
-				})
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
-				return req
-			},
-			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
-				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				return db
-			},
-			expectedResponse:   nil,
-			expectedStatusCode: http.StatusBadRequest,
-			expectedErr:        "query error - bad or missing node id",
-		},
-		{
 			name: "missing user header",
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req
 			},
-			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -485,7 +465,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				return req
 			},
-			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -504,7 +484,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetNodeConfig", "node1").Return(nil, nil)
@@ -523,7 +503,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				db.On("GetNodeConfig", "node1").Return(nil, nil)
@@ -545,7 +525,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) backend.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetNodeConfig", "node1").Return(nil, errors.New("failed to get configuration"))

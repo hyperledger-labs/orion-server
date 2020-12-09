@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/json"
@@ -7,12 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/bcdb/mocks"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 

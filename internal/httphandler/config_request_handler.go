@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 // configRequestHandler handles query and transaction associated
 // with the cluster configuration
 type configRequestHandler struct {
-	db          backend.DB
+	db          bcdb.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	txHandler   *txHandler
@@ -24,7 +24,7 @@ type configRequestHandler struct {
 }
 
 // NewConfigRequestHandler return config query and transactions request handler
-func NewConfigRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+func NewConfigRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &configRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db),
@@ -36,9 +36,8 @@ func NewConfigRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Han
 	}
 
 	handler.router.HandleFunc(constants.GetConfig, handler.configQuery).Methods(http.MethodGet)
-	handler.router.HandleFunc(constants.PostConfigTx, handler.configTransaction).Methods(http.MethodPost)
 	handler.router.HandleFunc(constants.GetNodeConfig, handler.nodeQuery).Methods(http.MethodGet)
-	handler.router.HandleFunc(constants.GetNodesConfig, handler.nodeQuery).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.PostConfigTx, handler.configTransaction).Methods(http.MethodPost)
 
 	return handler
 }
@@ -48,14 +47,8 @@ func (c *configRequestHandler) ServeHTTP(response http.ResponseWriter, request *
 }
 
 func (c *configRequestHandler) configQuery(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractConfigQueryEnvelope(request, response)
+	_, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetConfig, c.sigVerifier)
 	if respondedErr {
-		return
-	}
-
-	err, code := VerifyRequestSignature(c.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, code, err)
 		return
 	}
 
@@ -72,18 +65,13 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 }
 
 func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractNodeConfigQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetNodeConfig, c.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetNodeConfigQuery)
 
-	err, code := VerifyRequestSignature(c.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, code, err)
-		return
-	}
-
-	config, err := c.db.GetNodeConfig(queryEnv.GetPayload().GetNodeID())
+	config, err := c.db.GetNodeConfig(query.NodeID)
 
 	if err != nil {
 		SendHTTPResponse(

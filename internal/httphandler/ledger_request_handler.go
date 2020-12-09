@@ -1,27 +1,27 @@
-package handlers
+package httphandler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 // ledgerRequestHandler handles query associated with the
 // chain of blocks
 type ledgerRequestHandler struct {
-	db          backend.DB
+	db          bcdb.DB
 	sigVerifier *cryptoservice.SignatureVerifier
 	router      *mux.Router
 	logger      *logger.SugarLogger
 }
 
 // NewLedgerRequestHandler creates users request handler
-func NewLedgerRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
+func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &ledgerRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db),
@@ -50,23 +50,18 @@ func (p *ledgerRequestHandler) ServeHTTP(responseWriter http.ResponseWriter, req
 }
 
 func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractBlockQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetBlockHeader, p.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetBlockQuery)
 
-	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, code, err)
-		return
-	}
-
-	data, err := p.db.GetBlockHeader(queryEnv.Payload.UserID, queryEnv.Payload.BlockNumber)
+	data, err := p.db.GetBlockHeader(query.UserID, query.BlockNumber)
 	if err != nil {
 		var status int
 
 		switch err.(type) {
-		case *backend.PermissionErr:
+		case *bcdb.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
@@ -85,23 +80,18 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 }
 
 func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractLedgerPathQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetPath, p.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetLedgerPathQuery)
 
-	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, code, err)
-		return
-	}
-
-	data, err := p.db.GetLedgerPath(queryEnv.Payload.UserID, queryEnv.Payload.StartBlockNumber, queryEnv.Payload.EndBlockNumber)
+	data, err := p.db.GetLedgerPath(query.UserID, query.StartBlockNumber, query.EndBlockNumber)
 	if err != nil {
 		var status int
 
 		switch err.(type) {
-		case *backend.PermissionErr:
+		case *bcdb.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError
@@ -120,23 +110,18 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 }
 
 func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractGetTxProofQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetTxProof, p.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetTxProofQuery)
 
-	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, code, err)
-		return
-	}
-
-	data, err := p.db.GetTxProof(queryEnv.GetPayload().GetUserID(), queryEnv.GetPayload().GetBlockNumber(), queryEnv.GetPayload().GetTxIndex())
+	data, err := p.db.GetTxProof(query.UserID, query.BlockNumber, query.TxIndex)
 	if err != nil {
 		var status int
 
 		switch err.(type) {
-		case *backend.PermissionErr:
+		case *bcdb.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
@@ -155,23 +140,18 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 }
 
 func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractGetTxReceiptQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetTxReceipt, p.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetTxReceiptQuery)
 
-	err, code := VerifyRequestSignature(p.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, code, err)
-		return
-	}
-
-	data, err := p.db.GetTxReceipt(queryEnv.GetPayload().GetUserID(), queryEnv.GetPayload().GetTxID())
+	data, err := p.db.GetTxReceipt(query.UserID, query.TxID)
 	if err != nil {
 		var status int
 
 		switch err.(type) {
-		case *backend.PermissionErr:
+		case *bcdb.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
@@ -201,20 +181,4 @@ func (p *ledgerRequestHandler) invalidTxProof(response http.ResponseWriter, requ
 		ErrMsg: "query error - bad or missing tx index",
 	}
 	SendHTTPResponse(response, http.StatusBadRequest, err)
-}
-
-func getUintParam(key string, params map[string]string) (uint64, *ResponseErr) {
-	valStr, ok := params[key]
-	if !ok {
-		return 0, &ResponseErr{
-			ErrMsg: "query error - bad or missing block number literal" + key,
-		}
-	}
-	val, err := strconv.ParseUint(valStr, 10, 64)
-	if err != nil {
-		return 0, &ResponseErr{
-			ErrMsg: "query error - bad or missing block number literal " + key + " " + err.Error(),
-		}
-	}
-	return val, nil
 }

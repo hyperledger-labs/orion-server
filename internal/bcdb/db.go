@@ -1,4 +1,4 @@
-package backend
+package bcdb
 
 import (
 	"crypto/x509"
@@ -121,7 +121,7 @@ type db struct {
 	logger                   *logger.SugarLogger
 }
 
-// NewDB creates a new database backend which handles both the queries and transactions.
+// NewDB creates a new database bcdb which handles both the queries and transactions.
 func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) {
 	if conf.Node.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
@@ -190,7 +190,6 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 		logger:          logger,
 	}
 	ledgerQueryProcessor := newLedgerQueryProcessor(ledgerQueryProcessorConfig)
-
 
 	provenanceQueryProcessor := newProvenanceQueryProcessor(
 		&provenanceQueryProcessorConfig{

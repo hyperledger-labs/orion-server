@@ -1,4 +1,4 @@
-package handlers
+package httphandler
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.ibm.com/blockchaindb/server/internal/bcdb"
+	backend "github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -46,18 +46,13 @@ func (d *dbRequestHandler) ServeHTTP(response http.ResponseWriter, request *http
 }
 
 func (d *dbRequestHandler) dbStatus(response http.ResponseWriter, request *http.Request) {
-	queryEnv, respondedErr := extractDBStatusQueryEnvelope(request, response)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetDBStatus, d.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetDBStatusQuery)
 
-	err, status := VerifyRequestSignature(d.sigVerifier, queryEnv.Payload.UserID, queryEnv.Signature, queryEnv.Payload)
-	if err != nil {
-		SendHTTPResponse(response, status, err)
-		return
-	}
-
-	dbStatus, err := d.db.GetDBStatus(queryEnv.Payload.DBName)
+	dbStatus, err := d.db.GetDBStatus(query.DBName)
 	if err != nil {
 		SendHTTPResponse(
 			response,
