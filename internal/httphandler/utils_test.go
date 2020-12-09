@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.ibm.com/blockchaindb/server/internal/server/backend/mocks"
+	"github.ibm.com/blockchaindb/server/internal/bcdb/mocks"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 
