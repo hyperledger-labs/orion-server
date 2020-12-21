@@ -126,14 +126,14 @@ message AccessControl {
 }
 
 message KVWithMetadata{
-    string key = 1;
-    bytes value = 2;
-    Metadata metadata = 3;
+  string key = 1;
+  bytes value = 2;
+  Metadata metadata = 3;
 }
 
 message ValueWithMetadata{
-    bytes value = 1;
-    Metadata metadata = 3;
+  bytes value = 1;
+  Metadata metadata = 3;
 }
 
 message Digest {
@@ -145,17 +145,6 @@ message Digest {
 
 message ResponseHeader {
   string nodeID = 1;
-}
-
-message Response {
-  ResponseHeader header = 1;
-  bytes txid = 2;
-  bool status = 3;
-}
-
-message ResponseEnvelope {
-  Response data = 1;
-  bytes signature = 2;
 }
 
 message ValidationInfo {

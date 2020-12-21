@@ -154,7 +154,7 @@ func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*ht
 	return resp, nil
 }
 
-func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*types.ResponseEnvelope, error) {
+func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*http.Response, error) {
 	u := c.BaseURL.ResolveReference(
 		&url.URL{
 			Path: urlPath,
@@ -189,13 +189,5 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*types.Respo
 		return nil, errors.New(errorRes.Error)
 	}
 
-	res := &types.ResponseEnvelope{}
-	if err = json.NewDecoder(resp.Body).Decode(res); err != nil {
-		return nil, err
-	}
-
-	if res.Data == nil {
-		return nil, nil
-	}
-	return res, err
+	return resp, err
 }
