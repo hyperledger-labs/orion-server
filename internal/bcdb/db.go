@@ -476,3 +476,13 @@ func createLedgerDir(dir string) error {
 
 	return fileops.CreateDir(dir)
 }
+
+// DuplicateTxIDError is an error to denote that a transaction
+// has a duplicate txID
+type DuplicateTxIDError struct {
+	txID string
+}
+
+func (e *DuplicateTxIDError) Error() string {
+	return "the transaction has a duplicate txID [" + e.txID + "]"
+}

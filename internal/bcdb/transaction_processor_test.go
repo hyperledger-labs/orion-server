@@ -142,61 +142,66 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	}
 }
 
+func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Configurations, dbName string) {
+	configTx, err := prepareConfigTx(conf)
+	require.NoError(t, err)
+	require.NoError(t, env.txProcessor.submitTransaction(configTx))
+
+	user := &types.User{
+		ID:          env.userID,
+		Certificate: env.userCert.Raw,
+		Privilege: &types.Privilege{
+			DBPermission: map[string]types.Privilege_Access{
+				dbName: types.Privilege_ReadWrite,
+			},
+		},
+	}
+
+	u, err := proto.Marshal(user)
+	require.NoError(t, err)
+
+	createUser := []*worldstate.DBUpdates{
+		{
+			DBName: worldstate.UsersDBName,
+			Writes: []*worldstate.KVWithMetadata{
+				{
+					Key:   string(identity.UserNamespace) + env.userID,
+					Value: u,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    1,
+						},
+					},
+				},
+			},
+		},
+	}
+	require.NoError(t, env.db.Commit(createUser, 2))
+	genesisCommitted := func() bool {
+		height, _ := env.blockStore.Height()
+		return height > uint64(0)
+	}
+	require.Eventually(t, genesisCommitted, time.Second*2, time.Millisecond*100)
+
+	noPendingTxs := func() bool {
+		return env.txProcessor.pendingTxs.isEmpty()
+	}
+	require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
+}
+
 func TestTransactionProcessor(t *testing.T) {
 	t.Parallel()
 
 	conf := testConfiguration(t)
 	defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
-	setup := func(env *txProcessorTestEnv, dbName string) {
-		configTx, err := prepareConfigTx(conf)
-		require.NoError(t, err)
-		require.NoError(t, env.txProcessor.submitTransaction(configTx))
-
-		user := &types.User{
-			ID:          env.userID,
-			Certificate: env.userCert.Raw,
-			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
-					dbName: types.Privilege_ReadWrite,
-				},
-			},
-		}
-
-		u, err := proto.Marshal(user)
-		require.NoError(t, err)
-
-		createUser := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
-				Writes: []*worldstate.KVWithMetadata{
-					{
-						Key:   string(identity.UserNamespace) + env.userID,
-						Value: u,
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 2,
-								TxNum:    1,
-							},
-						},
-					},
-				},
-			},
-		}
-		require.NoError(t, env.db.Commit(createUser, 2))
-		genesisCommitted := func() bool {
-			height, _ := env.blockStore.Height()
-			return height > uint64(0)
-		}
-		require.Eventually(t, genesisCommitted, time.Second+5, time.Millisecond*100)
-	}
-
 	t.Run("commit a data transaction", func(t *testing.T) {
 		t.Parallel()
 		env := newTxProcessorTestEnv(t)
 		defer env.cleanup()
 
-		setup(env, worldstate.DefaultDBName)
+		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
 		tx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
 			UserID:    "testUser",
@@ -277,7 +282,92 @@ func TestTransactionProcessor(t *testing.T) {
 		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
 		require.True(t, proto.Equal(expectedBlock, block))
+
+		noPendingTxs := func() bool {
+			return env.txProcessor.pendingTxs.isEmpty()
+		}
+		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
 	})
+
+	t.Run("duplicate txID with the already committed transaction", func(t *testing.T) {
+		t.Parallel()
+		env := newTxProcessorTestEnv(t)
+		defer env.cleanup()
+
+		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+
+		dataTx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
+			UserID: "testUser",
+			DBName: worldstate.DefaultDBName,
+			TxID:   "tx1",
+		})
+
+		require.NoError(t, env.txProcessor.submitTransaction(dataTx))
+		noPendingTxs := func() bool {
+			return env.txProcessor.pendingTxs.isEmpty()
+		}
+		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
+
+		userTx := testutils.SignedUserAdministrationTxEnvelope(t, env.userSigner, &types.UserAdministrationTx{
+			UserID: "testUser",
+			TxID:   "tx1",
+		})
+		require.EqualError(t, env.txProcessor.submitTransaction(userTx), "the transaction has a duplicate txID [tx1]")
+	})
+
+	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
+		t.Parallel()
+		env := newTxProcessorTestEnv(t)
+		defer env.cleanup()
+
+		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+
+		dbTx := testutils.SignedDBAdministrationTxEnvelope(t, env.userSigner, &types.DBAdministrationTx{
+			UserID: "testUser",
+			TxID:   "tx1",
+		})
+		configTx := testutils.SignedConfigTxEnvelope(t, env.userSigner, &types.ConfigTx{
+			UserID: "testUser",
+			TxID:   "tx1",
+		})
+		userTx := testutils.SignedUserAdministrationTxEnvelope(t, env.userSigner, &types.UserAdministrationTx{
+			UserID: "testUser",
+			TxID:   "tx2",
+		})
+
+		require.NoError(t, env.txProcessor.submitTransaction(dbTx))
+		require.EqualError(t, env.txProcessor.submitTransaction(configTx), "the transaction has a duplicate txID [tx1]")
+		require.NoError(t, env.txProcessor.submitTransaction(userTx))
+		noPendingTxs := func() bool {
+			return env.txProcessor.pendingTxs.isEmpty()
+		}
+		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
+	})
+
+	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
+		t.Parallel()
+		env := newTxProcessorTestEnv(t)
+		defer env.cleanup()
+
+		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+
+		require.EqualError(t, env.txProcessor.submitTransaction([]byte("hello")), "unexpected transaction type")
+	})
+}
+
+func TestPendingTxs(t *testing.T) {
+	pendingTxs := &pendingTxs{
+		txIDs: make(map[string]bool),
+	}
+
+	require.True(t, pendingTxs.isEmpty())
+	pendingTxs.add("tx1")
+	require.True(t, pendingTxs.has("tx1"))
+	require.False(t, pendingTxs.has("tx2"))
+	pendingTxs.add("tx2")
+	require.True(t, pendingTxs.has("tx2"))
+	pendingTxs.remove([]string{"tx1", "tx2"})
+	require.True(t, pendingTxs.isEmpty())
 }
 
 func testConfiguration(t *testing.T) *config.Configurations {

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockcreator"
 	"github.ibm.com/blockchaindb/server/internal/blockprocessor"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
@@ -28,6 +29,8 @@ type transactionProcessor struct {
 	txReorderer    *txreorderer.TxReorderer
 	blockCreator   *blockcreator.BlockCreator
 	blockProcessor *blockprocessor.BlockProcessor
+	blockStore     *blockstore.Store
+	pendingTxs     *pendingTxs
 	logger         *logger.SugarLogger
 	sync.Mutex
 }
@@ -93,13 +96,40 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	go p.blockProcessor.Start()
 	p.blockProcessor.WaitTillStart()
 
+	p.pendingTxs = &pendingTxs{
+		txIDs: make(map[string]bool),
+	}
+	p.blockStore = conf.blockStore
+
 	return p, nil
 }
 
 // submitTransaction enqueue the transaction to the transaction queue
 func (t *transactionProcessor) submitTransaction(tx interface{}) error {
+	var txID string
+	switch tx.(type) {
+	case *types.DataTxEnvelope:
+		txID = tx.(*types.DataTxEnvelope).Payload.TxID
+	case *types.UserAdministrationTxEnvelope:
+		txID = tx.(*types.UserAdministrationTxEnvelope).Payload.TxID
+	case *types.DBAdministrationTxEnvelope:
+		txID = tx.(*types.DBAdministrationTxEnvelope).Payload.TxID
+	case *types.ConfigTxEnvelope:
+		txID = tx.(*types.ConfigTxEnvelope).Payload.TxID
+	default:
+		return errors.Errorf("unexpected transaction type")
+	}
+
 	t.Lock()
 	defer t.Unlock()
+
+	duplicate, err := t.isTxIDDuplicate(txID)
+	if err != nil {
+		return err
+	}
+	if duplicate {
+		return &DuplicateTxIDError{txID}
+	}
 
 	if t.txQueue.IsFull() {
 		return fmt.Errorf("transaction queue is full. It means the server load is high. Try after sometime")
@@ -114,14 +144,54 @@ func (t *transactionProcessor) submitTransaction(tx interface{}) error {
 	t.txQueue.Enqueue(tx)
 	t.logger.Debug("transaction is enqueued for re-ordering")
 
+	t.pendingTxs.add(txID)
+
 	return nil
 }
 
 func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) error {
 	t.logger.Debugf("received commit event for block[%d]", block.GetHeader().GetBaseHeader().GetNumber())
-	// TODO: in the subsequent PR, we will process the block to facilitate the detection of
-	// duplicate txID
+
+	var txIDs []string
+
+	switch block.Payload.(type) {
+	case *types.Block_DataTxEnvelopes:
+		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
+		for _, tx := range dataTxEnvs {
+			txIDs = append(txIDs, tx.Payload.TxID)
+		}
+
+	case *types.Block_UserAdministrationTxEnvelope:
+		userTxEnv := block.GetUserAdministrationTxEnvelope()
+		txIDs = append(txIDs, userTxEnv.Payload.TxID)
+
+	case *types.Block_DBAdministrationTxEnvelope:
+		dbTxEnv := block.GetDBAdministrationTxEnvelope()
+		txIDs = append(txIDs, dbTxEnv.Payload.TxID)
+
+	case *types.Block_ConfigTxEnvelope:
+		configTxEnv := block.GetConfigTxEnvelope()
+		txIDs = append(txIDs, configTxEnv.Payload.TxID)
+
+	default:
+		return errors.Errorf("unexpected transaction envelope in the block")
+	}
+
+	t.pendingTxs.remove(txIDs)
+
 	return nil
+}
+
+func (t *transactionProcessor) isTxIDDuplicate(txID string) (bool, error) {
+	if t.pendingTxs.has(txID) {
+		return true, nil
+	}
+
+	isTxIDAlreadyCommitted, err := t.blockStore.DoesTxIDExist(txID)
+	if err != nil {
+		return false, err
+	}
+	return isTxIDAlreadyCommitted, nil
 }
 
 func (t *transactionProcessor) close() error {
@@ -133,4 +203,39 @@ func (t *transactionProcessor) close() error {
 	t.blockProcessor.Stop()
 
 	return nil
+}
+
+type pendingTxs struct {
+	txIDs map[string]bool
+	sync.RWMutex
+}
+
+func (p *pendingTxs) add(txID string) {
+	p.Lock()
+	defer p.Unlock()
+
+	p.txIDs[txID] = true
+}
+
+func (p *pendingTxs) remove(txIDs []string) {
+	p.Lock()
+	defer p.Unlock()
+
+	for _, txID := range txIDs {
+		delete(p.txIDs, txID)
+	}
+}
+
+func (p *pendingTxs) has(txID string) bool {
+	p.RLock()
+	defer p.RUnlock()
+
+	return p.txIDs[txID]
+}
+
+func (p *pendingTxs) isEmpty() bool {
+	p.RLock()
+	defer p.RUnlock()
+
+	return len(p.txIDs) == 0
 }
