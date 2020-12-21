@@ -14,6 +14,11 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/txreorderer"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/types"
+)
+
+const (
+	commitListenerName = "transactionProcessor"
 )
 
 type transactionProcessor struct {
@@ -79,6 +84,8 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		},
 	)
 
+	p.blockProcessor.RegisterBlockCommitListener(commitListenerName, p)
+
 	go p.txReorderer.Start()
 	p.txReorderer.WaitTillStart()
 	go p.blockCreator.Start()
@@ -107,6 +114,13 @@ func (t *transactionProcessor) submitTransaction(tx interface{}) error {
 	t.txQueue.Enqueue(tx)
 	t.logger.Debug("transaction is enqueued for re-ordering")
 
+	return nil
+}
+
+func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) error {
+	t.logger.Debugf("received commit event for block[%d]", block.GetHeader().GetBaseHeader().GetNumber())
+	// TODO: in the subsequent PR, we will process the block to facilitate the detection of
+	// duplicate txID
 	return nil
 }
 

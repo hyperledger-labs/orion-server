@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/server/internal/blockprocessor/mocks"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/mtree"
@@ -518,6 +520,63 @@ func TestFailureAndRecovery(t *testing.T) {
 			env.blockProcessor.Start()
 		}
 		require.PanicsWithError(t, "error while recovering node: the difference between the height of the block store [3] and the state database [1] cannot be greater than 1 block. The node cannot be recovered", assertPanic)
+	})
+}
+
+func TestBlockCommitListener(t *testing.T) {
+	t.Run("listener is involved successfully", func(t *testing.T) {
+		env := newTestEnv(t)
+		defer env.cleanup(false)
+
+		setup(t, env)
+		block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
+		block2.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+		expectedBlock := proto.Clone(block2).(*types.Block)
+		expectedBlock.XXX_sizecache = 0
+		genesisHash, err := env.blockStore.GetHash(uint64(1))
+		expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, []*types.Block{block2}, 2)
+		root, err := mtree.BuildTreeForBlockTx(block2)
+		require.NoError(t, err)
+		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+
+		listener1 := &mocks.BlockCommitListener{}
+		listener1.On("PostBlockCommitProcessing", mock.Anything).Return(func(arg mock.Arguments) {
+			receivedBlock := arg.Get(0).(*types.Block)
+			require.True(t, proto.Equal(expectedBlock, receivedBlock))
+		}).Return(nil)
+		listener2 := &mocks.BlockCommitListener{}
+		listener2.On("PostBlockCommitProcessing", mock.Anything).Return(func(arg mock.Arguments) {
+			receivedBlock := arg.Get(0).(*types.Block)
+			require.True(t, proto.Equal(expectedBlock, receivedBlock))
+		}).Return(nil)
+
+		env.blockProcessor.RegisterBlockCommitListener("listener1", listener1)
+		env.blockProcessor.RegisterBlockCommitListener("listener2", listener2)
+
+		env.blockProcessor.blockQueue.Enqueue(block2)
+		require.Eventually(t, env.blockProcessor.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
+
+		assertCommittedBlock := func() bool {
+			height, err := env.blockStore.Height()
+			if err != nil {
+				return false
+			}
+			if height != 2 {
+				return false
+			}
+
+			block, err := env.blockStore.Get(2)
+			if err != nil {
+				return false
+			}
+			return proto.Equal(block2, block)
+		}
+
+		require.Eventually(t, assertCommittedBlock, 2*time.Second, 100*time.Millisecond)
 	})
 }
 

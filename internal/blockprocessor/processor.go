@@ -1,6 +1,8 @@
 package blockprocessor
 
 import (
+	"sync"
+
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/mtree"
@@ -17,6 +19,7 @@ type BlockProcessor struct {
 	blockStore *blockstore.Store
 	validator  *validator
 	committer  *committer
+	listeners  *blockCommitListeners
 	started    chan struct{}
 	stop       chan struct{}
 	stopped    chan struct{}
@@ -40,6 +43,7 @@ func New(conf *Config) *BlockProcessor {
 		blockStore: conf.BlockStore,
 		validator:  newValidator(conf),
 		committer:  newCommitter(conf),
+		listeners:  newBlockCommitListeners(conf.Logger),
 		started:    make(chan struct{}),
 		stop:       make(chan struct{}),
 		stopped:    make(chan struct{}),
@@ -95,6 +99,10 @@ func (b *BlockProcessor) Start() {
 				panic(err)
 			}
 			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
+
+			if err = b.listeners.invoke(block); err != nil {
+				panic(err)
+			}
 		}
 	}
 }
@@ -148,6 +156,59 @@ func (b *BlockProcessor) recoverWorldStateDBIfNeeded() error {
 		}
 
 		return b.committer.commitToDBs(block)
+	}
+
+	return nil
+}
+
+// RegisterBlockCommitListener registers a commit listener with the block processor
+func (b *BlockProcessor) RegisterBlockCommitListener(name string, listener BlockCommitListener) error {
+	return b.listeners.add(name, listener)
+}
+
+type blockCommitListeners struct {
+	listens map[string]BlockCommitListener
+	logger  *logger.SugarLogger
+	sync.RWMutex
+}
+
+func newBlockCommitListeners(logger *logger.SugarLogger) *blockCommitListeners {
+	return &blockCommitListeners{
+		listens: make(map[string]BlockCommitListener),
+		logger:  logger,
+	}
+}
+
+//go:generate mockery --dir . --name BlockCommitListener --case underscore --output mocks/
+
+// BlockCommitListener is a listener who listens to the
+// commit events
+type BlockCommitListener interface {
+	PostBlockCommitProcessing(block *types.Block) error
+}
+
+func (l *blockCommitListeners) add(name string, listener BlockCommitListener) error {
+	l.Lock()
+	defer l.Unlock()
+
+	l.logger.Info("Registering listener [" + name + "]")
+	if _, ok := l.listens[name]; ok {
+		return errors.Errorf("the listener [" + name + "] is already registered")
+	}
+
+	l.listens[name] = listener
+	return nil
+}
+
+func (l *blockCommitListeners) invoke(block *types.Block) error {
+	l.RLock()
+	defer l.RUnlock()
+
+	for name, listener := range l.listens {
+		l.logger.Debug("Invoking listener ["+name+"] for block [%d]", block.Header.BaseHeader.Number)
+		if err := listener.PostBlockCommitProcessing(block); err != nil {
+			return errors.WithMessage(err, "error while invoking listener ["+name+"]")
+		}
 	}
 
 	return nil
