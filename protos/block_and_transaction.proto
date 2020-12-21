@@ -4,7 +4,6 @@ option go_package = "github.ibm.com/blockchaindb/protos/types";
 
 package types;
 
-import "query_and_response.proto";
 import "configuration.proto";
 
 // Block holds the chain information and transactions
@@ -131,4 +130,67 @@ message UserWrite {
 
 message UserDelete {
     string userID = 1;
+}
+
+message Metadata {
+  Version version = 1;
+  AccessControl access_control = 2;
+}
+
+message Version {
+  uint64 block_num = 1;
+  uint64 tx_num = 2;
+}
+
+message AccessControl {
+  map<string, bool> read_users = 1;
+  map<string, bool> read_write_users = 2;
+}
+
+message KVWithMetadata{
+  string key = 1;
+  bytes value = 2;
+  Metadata metadata = 3;
+}
+
+message ValueWithMetadata{
+  bytes value = 1;
+  Metadata metadata = 3;
+}
+
+message Digest {
+  // Ledger merkle tree root
+  bytes root_hash = 1;
+  // Ledger height
+  uint64 height = 2;
+}
+
+message ValidationInfo {
+  Flag flag = 1;
+  string reason_if_invalid = 2;
+}
+
+message TxProof {
+  BlockHeader header = 1;
+  repeated bytes path = 2;
+}
+
+message BlockProof {
+  uint64 block_number = 1;
+  repeated BlockHeader path = 2;
+}
+
+message TxReceipt {
+  BlockHeader header = 1;
+  uint64 tx_index = 2;
+}
+
+enum Flag {
+  VALID = 0;
+  INVALID_MVCC_CONFLICT_WITHIN_BLOCK = 1;
+  INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE = 2;
+  INVALID_DATABASE_DOES_NOT_EXIST = 3;
+  INVALID_NO_PERMISSION = 4;
+  INVALID_INCORRECT_ENTRIES = 5;
+  INVALID_UNAUTHORISED = 6;
 }
