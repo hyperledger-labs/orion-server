@@ -27,7 +27,7 @@ type dbRequestHandler struct {
 func NewDBRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &dbRequestHandler{
 		db:          db,
-		sigVerifier: cryptoservice.NewVerifier(db),
+		sigVerifier: cryptoservice.NewVerifier(db, logger),
 		router:      mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,

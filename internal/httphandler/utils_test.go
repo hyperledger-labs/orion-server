@@ -3,6 +3,7 @@ package httphandler
 import (
 	"encoding/json"
 	"errors"
+	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -54,12 +55,20 @@ func TestSendHTTPResponse(t *testing.T) {
 }
 
 func TestVerifyRequestSignature(t *testing.T) {
+	lg, err := logger.New(&logger.Config{
+		Level:         "info",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+		Name:          "unit-test",
+	})
+	require.NoError(t, err)
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	t.Run("good sig", func(t *testing.T) {
 		db := &mocks.DB{}
-		verifier := cryptoservice.NewVerifier(db)
+		verifier := cryptoservice.NewVerifier(db, lg)
 		db.On("GetCertificate", "alice").Return(aliceCert, nil)
 		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
 		err, code := VerifyRequestSignature(verifier, "alice", testutils.SignatureFromTx(t, aliceSigner, payload), payload)
@@ -69,7 +78,7 @@ func TestVerifyRequestSignature(t *testing.T) {
 
 	t.Run("no such user", func(t *testing.T) {
 		db := &mocks.DB{}
-		verifier := cryptoservice.NewVerifier(db)
+		verifier := cryptoservice.NewVerifier(db, lg)
 		db.On("GetCertificate", "alice").Return(nil, errors.New("no such user"))
 		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
 		err, code := VerifyRequestSignature(verifier, "alice", testutils.SignatureFromTx(t, aliceSigner, payload), payload)
@@ -79,7 +88,7 @@ func TestVerifyRequestSignature(t *testing.T) {
 
 	t.Run("bad sig", func(t *testing.T) {
 		db := &mocks.DB{}
-		verifier := cryptoservice.NewVerifier(db)
+		verifier := cryptoservice.NewVerifier(db, lg)
 		db.On("GetCertificate", "alice").Return(aliceCert, nil)
 		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
 		err, code := VerifyRequestSignature(verifier, "alice", []byte("bad-sig"), payload)
@@ -89,7 +98,7 @@ func TestVerifyRequestSignature(t *testing.T) {
 
 	t.Run("internal error", func(t *testing.T) {
 		db := &mocks.DB{}
-		verifier := cryptoservice.NewVerifier(db)
+		verifier := cryptoservice.NewVerifier(db, lg)
 		payload := make(chan struct{})
 		err, code := VerifyRequestSignature(verifier, "alice", []byte("something"), payload)
 		require.EqualError(t, err, "failure during json.Marshal: json: unsupported type: chan struct {}")

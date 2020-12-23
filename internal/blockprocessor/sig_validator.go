@@ -22,11 +22,14 @@ func (s *txSigValidator) validate(
 ) (*types.ValidationInfo, error) {
 	requestBytes, err := json.Marshal(txPayload)
 	if err != nil {
+		s.logger.Errorf("Error during json.Marshal Tx: %s, error: %s", txPayload, err)
 		return nil, errors.Wrapf(err, "failed to json.Marshal Tx: %s", txPayload)
 	}
 
 	err = s.sigVerifier.Verify(user, signature, requestBytes)
 	if err != nil {
+		s.logger.Debugf("Failed to verify Tx (Flag_INVALID_UNAUTHORISED): user: %s, sig: %x, payload: %s, error: %s",
+			user, signature, txPayload, err)
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_UNAUTHORISED,
 			ReasonIfInvalid: fmt.Sprintf("signature verification failed: %s", err.Error()),

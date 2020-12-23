@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"io/ioutil"
 	"path"
 	"testing"
@@ -14,12 +15,16 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice/mocks"
 )
 
+var lg *logger.SugarLogger
+
 func TestNewVerifier(t *testing.T) {
-	verifier := cryptoservice.NewVerifier(&mocks.UserDBQuerier{})
+	setup(t)
+	verifier := cryptoservice.NewVerifier(&mocks.UserDBQuerier{}, lg)
 	require.NotNil(t, verifier)
 }
 
 func TestSignatureVerifier_Verify(t *testing.T) {
+	setup(t)
 	userData := generateUserData(t)
 	userDB := &mocks.UserDBQuerier{}
 	userDB.GetCertificateCalls(
@@ -31,7 +36,7 @@ func TestSignatureVerifier_Verify(t *testing.T) {
 			return nil, errors.New("user not found")
 		},
 	)
-	verifier := cryptoservice.NewVerifier(userDB)
+	verifier := cryptoservice.NewVerifier(userDB, lg)
 	require.NotNil(t, verifier)
 
 	t.Run("Verify correctly", func(t *testing.T) {
@@ -103,4 +108,16 @@ func loadRawCertificate(t *testing.T, pemFile string) []byte {
 	bl, _ := pem.Decode(b)
 	require.NotNil(t, bl)
 	return bl.Bytes
+}
+
+func setup(t *testing.T) {
+	var err error
+	lg, err = logger.New(&logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+		Name:          "unit-test",
+	})
+	require.NoError(t, err)
 }

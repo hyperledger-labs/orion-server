@@ -1,6 +1,7 @@
 package cryptoservice_test
 
 import (
+	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"net/http"
 	"testing"
 
@@ -13,11 +14,19 @@ import (
 )
 
 func TestSignQuery(t *testing.T) {
+	lg, err := logger.New(&logger.Config{
+		Level:         "info",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+		Name:          "unit-test",
+	})
+	require.NoError(t, err)
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
 	cert, signer := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	userDB := &mocks.UserDBQuerier{}
-	sigVerifier := cryptoservice.NewVerifier(userDB)
+	sigVerifier := cryptoservice.NewVerifier(userDB, lg)
 	userDB.GetCertificateReturns(cert, nil)
 
 	t.Run("Sign correctly", func(t *testing.T) {

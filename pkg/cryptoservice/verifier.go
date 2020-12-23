@@ -2,6 +2,7 @@ package cryptoservice
 
 import (
 	"crypto/x509"
+	"github.ibm.com/blockchaindb/server/pkg/logger"
 
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 )
@@ -12,9 +13,10 @@ type UserDBQuerier interface {
 	GetCertificate(userID string) (*x509.Certificate, error)
 }
 
-func NewVerifier(userQuerier UserDBQuerier) *SignatureVerifier {
+func NewVerifier(userQuerier UserDBQuerier, logger *logger.SugarLogger) *SignatureVerifier {
 	return &SignatureVerifier{
 		userDBQuerier: userQuerier,
+		logger:        logger,
 	}
 }
 
@@ -23,13 +25,19 @@ func NewVerifier(userQuerier UserDBQuerier) *SignatureVerifier {
 
 type SignatureVerifier struct {
 	userDBQuerier UserDBQuerier
+	logger        *logger.SugarLogger
 }
 
 func (sv *SignatureVerifier) Verify(userID string, signature, body []byte) error {
 	cert, err := sv.userDBQuerier.GetCertificate(userID)
 	if err != nil {
+		sv.logger.Debugf("Error during GetCertificate: userID: %s, error: %s", userID, err)
 		return err
 	}
 	verifier := crypto.Verifier{Certificate: cert}
-	return verifier.Verify(body, signature)
+	if err = verifier.Verify(body, signature); err != nil {
+		sv.logger.Debugf("Failed to verify signature: userID: %s, error: %s", userID, err)
+		return err
+	}
+	return err
 }

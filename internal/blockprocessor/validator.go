@@ -23,7 +23,7 @@ type validator struct {
 func newValidator(conf *Config) *validator {
 	idQuerier := identity.NewQuerier(conf.DB)
 	txSigValidator := &txSigValidator{
-		sigVerifier: cryptoservice.NewVerifier(idQuerier),
+		sigVerifier: cryptoservice.NewVerifier(idQuerier, conf.Logger),
 		logger:      conf.Logger,
 	}
 

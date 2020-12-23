@@ -24,7 +24,7 @@ type ledgerRequestHandler struct {
 func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &ledgerRequestHandler{
 		db:          db,
-		sigVerifier: cryptoservice.NewVerifier(db),
+		sigVerifier: cryptoservice.NewVerifier(db, logger),
 		router:      mux.NewRouter(),
 		logger:      logger,
 	}

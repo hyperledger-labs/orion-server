@@ -25,7 +25,7 @@ type provenanceRequestHandler struct {
 func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &provenanceRequestHandler{
 		db:          db,
-		sigVerifier: cryptoservice.NewVerifier(db),
+		sigVerifier: cryptoservice.NewVerifier(db, logger),
 		router:      mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,

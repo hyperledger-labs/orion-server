@@ -27,7 +27,7 @@ type configRequestHandler struct {
 func NewConfigRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &configRequestHandler{
 		db:          db,
-		sigVerifier: cryptoservice.NewVerifier(db),
+		sigVerifier: cryptoservice.NewVerifier(db, logger),
 		router:      mux.NewRouter(),
 		txHandler: &txHandler{
 			db: db,
