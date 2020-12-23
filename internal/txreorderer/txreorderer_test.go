@@ -10,7 +10,7 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
-func TestTxReorderer(t *testing.T) {
+func newTxReordererForTest(t *testing.T, maxTxCountPerBatch uint32, blockTimeout time.Duration) *TxReorderer {
 	c := &logger.Config{
 		Level:         "debug",
 		OutputPath:    []string{"stdout"},
@@ -20,17 +20,20 @@ func TestTxReorderer(t *testing.T) {
 	logger, err := logger.New(c)
 	require.NoError(t, err)
 
-	b := New(&Config{
+	r := New(&Config{
 		TxQueue:            queue.New(10),
 		TxBatchQueue:       queue.New(10),
-		MaxTxCountPerBatch: 1,
-		BatchTimeout:       50 * time.Millisecond,
+		MaxTxCountPerBatch: maxTxCountPerBatch,
+		BatchTimeout:       blockTimeout,
 		Logger:             logger,
 	})
-	go b.Start()
-	b.WaitTillStart()
-	defer b.Stop()
+	go r.Start()
+	r.WaitTillStart()
 
+	return r
+}
+
+func TestTxReorderer(t *testing.T) {
 	dataTx1 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user1",
@@ -150,12 +153,14 @@ func TestTxReorderer(t *testing.T) {
 	tests := []struct {
 		name               string
 		maxTxCountPerBatch uint32
+		timeout            time.Duration
 		txs                []interface{}
 		expectedTxBatches  []interface{}
 	}{
 		{
-			name:               "mix of data and admin transactions",
+			name:               "tx count reached",
 			maxTxCountPerBatch: 2,
+			timeout:            50 * time.Second,
 			txs: []interface{}{
 				dataTx1,
 				userAdminTx,
@@ -207,25 +212,66 @@ func TestTxReorderer(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:               "batch timeout reached",
+			maxTxCountPerBatch: 1000,
+			timeout:            500 * time.Millisecond,
+			txs: []interface{}{
+				dataTx1,
+				userAdminTx,
+				dataTx2,
+				dataTx3,
+				dataTx4,
+				dataTx5,
+			},
+			expectedTxBatches: []interface{}{
+				&types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: []*types.DataTxEnvelope{
+							dataTx1,
+						},
+					},
+				},
+				&types.Block_UserAdministrationTxEnvelope{
+					UserAdministrationTxEnvelope: userAdminTx,
+				},
+				&types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: []*types.DataTxEnvelope{
+							dataTx2,
+							dataTx3,
+							dataTx4,
+							dataTx5,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
-		b.maxTxCountPerBatch = tt.maxTxCountPerBatch
-		for _, tx := range tt.txs {
-			b.txQueue.Enqueue(tx)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			r := newTxReordererForTest(t, tt.maxTxCountPerBatch, tt.timeout)
+			defer r.Stop()
 
-		hasBatchSizeMatched := func() bool {
-			if len(tt.expectedTxBatches) == b.txBatchQueue.Size() {
-				return true
+			r.maxTxCountPerBatch = tt.maxTxCountPerBatch
+			for _, tx := range tt.txs {
+				r.txQueue.Enqueue(tx)
 			}
-			return false
-		}
-		require.Eventually(t, hasBatchSizeMatched, 2*time.Second, 100*time.Millisecond)
 
-		for _, expectedTxBatch := range tt.expectedTxBatches {
-			txBatch := b.txBatchQueue.Dequeue()
-			require.Equal(t, expectedTxBatch, txBatch)
-		}
+			hasBatchSizeMatched := func() bool {
+				if len(tt.expectedTxBatches) == r.txBatchQueue.Size() {
+					return true
+				}
+				return false
+			}
+			require.Eventually(t, hasBatchSizeMatched, 2*time.Second, 100*time.Millisecond)
+
+			for _, expectedTxBatch := range tt.expectedTxBatches {
+				txBatch := r.txBatchQueue.Dequeue()
+				require.Equal(t, expectedTxBatch, txBatch)
+			}
+		})
 	}
 }

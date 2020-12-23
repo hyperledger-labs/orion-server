@@ -1,5 +1,7 @@
 package queue
 
+import "time"
+
 // Queue is queue data structure implemented
 // using go channels
 type Queue struct {
@@ -22,6 +24,21 @@ func (q *Queue) Enqueue(entry interface{}) {
 // the head of the queue
 func (q *Queue) Dequeue() interface{} {
 	return <-q.entries
+}
+
+// DequeueWithWaitLimit waits for the specified duration to dequeue
+// an entry from the queue. If the queue has been empty for the
+// specified duration, it will return nil
+func (q *Queue) DequeueWithWaitLimit(d time.Duration) interface{} {
+	ticker := time.NewTicker(d)
+	defer ticker.Stop()
+
+	select {
+	case entry := <-q.entries:
+		return entry
+	case <-ticker.C:
+		return nil
+	}
 }
 
 // Size returns the size of the queue

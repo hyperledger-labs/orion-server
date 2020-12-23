@@ -40,12 +40,30 @@ func TestTransactionQueue(t *testing.T) {
 	require.False(t, q.IsFull())
 	require.True(t, q.IsEmpty())
 
+	q.Enqueue(txs[0])
+	require.False(t, q.IsEmpty())
+	require.Equal(t, txs[0], q.DequeueWithWaitLimit(1*time.Second).(*types.UserAdministrationTxEnvelope))
+
 	blockedDequeue := func() bool {
 		q.Dequeue()
 		return true
 	}
-	require.Never(t, blockedDequeue, 1*time.Second, 100*time.Second)
+	require.Never(t, blockedDequeue, 1*time.Second, 100*time.Millisecond)
+
+	blockedDequeueWithWaitLimit := func() bool {
+		q.DequeueWithWaitLimit(100 * time.Millisecond)
+		return true
+	}
+	require.Eventually(t, blockedDequeueWithWaitLimit, 1*time.Second, 100*time.Millisecond)
 
 	q.Close()
 	require.Nil(t, q.Dequeue())
+
+	blockedDequeueWithWaitLimit = func() bool {
+		tx := q.DequeueWithWaitLimit(1000 * time.Second)
+		return tx == nil
+	}
+	// though we have set the wait limit to 1000 seconds, the function should return
+	// immediately as the queue is closed
+	require.Eventually(t, blockedDequeueWithWaitLimit, 1*time.Second, 100*time.Millisecond)
 }
