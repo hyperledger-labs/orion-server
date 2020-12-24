@@ -1199,6 +1199,7 @@ func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
 		valInfo      []*types.ValidationInfo
 		query        func(s *provenance.Store) (*provenance.TxIDLocation, error)
 		expectedData *provenance.TxIDLocation
+		expectedErr  string
 	}{
 		{
 			name: "invalid txID",
@@ -1234,6 +1235,37 @@ func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
 				TxIndex:  1,
 			},
 		},
+		{
+			name: "non-existing txID",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx2",
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				},
+			},
+			query: func(s *provenance.Store) (*provenance.TxIDLocation, error) {
+				return s.GetTxIDLocation("tx-not-there")
+			},
+			expectedErr: "TxID not found: tx-not-there",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1263,8 +1295,12 @@ func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
 			require.NoError(t, env.committer.commitToProvenanceStore(2, provenanceData))
 
 			actualData, err := tt.query(env.committer.provenanceStore)
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedData, actualData)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedData, actualData)
+			} else {
+				require.Equal(t,tt.expectedErr, err.Error())
+			}
 		})
 	}
 }

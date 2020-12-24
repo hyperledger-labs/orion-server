@@ -1016,8 +1016,9 @@ func TestGetTxIDLocation(t *testing.T) {
 	setup(t, env.s)
 
 	tests := []struct {
-		txID     string
-		expected *TxIDLocation
+		txID        string
+		expected    *TxIDLocation
+		expectedErr string
 	}{
 		{
 			txID: "tx2",
@@ -1033,13 +1034,22 @@ func TestGetTxIDLocation(t *testing.T) {
 				TxIndex:  2,
 			},
 		},
+		{
+			txID:        "tx-not-found",
+			expected:    nil,
+			expectedErr: "TxID not found: tx-not-found",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.txID, func(t *testing.T) {
 			loc, err := env.s.GetTxIDLocation(tt.txID)
-			require.NoError(t, err)
-			require.Equal(t, tt.expected, loc)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, tt.expected, loc)
+			} else {
+				require.Equal(t, tt.expectedErr, err.Error())
+			}
 		})
 	}
 }

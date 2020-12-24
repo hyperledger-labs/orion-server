@@ -1,6 +1,6 @@
 module github.ibm.com/blockchaindb/server
 
-go 1.14
+go 1.15
 
 require (
 	github.com/cayleygraph/cayley v0.7.7

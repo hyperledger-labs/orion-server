@@ -3,6 +3,7 @@ package provenance
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/cayleygraph/cayley"
@@ -32,6 +33,14 @@ const (
 	// denotes that the previous version of the value
 	PREVIOUS = "p"
 )
+
+type NotFoundErr struct {
+	ErrMsg string
+}
+
+func (e *NotFoundErr) Error() string {
+	return e.ErrMsg
+}
 
 // TxDataForProvenance holds the transaction data that is
 // needed for the provenance store
@@ -299,10 +308,23 @@ func (s *Store) GetTxIDLocation(txID string) (*TxIDLocation, error) {
 
 	vertex, err := p.Iterate(context.Background()).FirstValue(s.cayleyGraph.QuadStore)
 	if err != nil {
-		return nil, err
+		s.logger.Errorf("cayley iteration error: %s", err)
+		return nil, errors.Wrap(err, "cayley iteration")
 	}
 
-	return vertexToTxIDLocation(vertex)
+	if vertex == nil {
+		s.logger.Debugf("TxID not found: %s", txID)
+		return nil, &NotFoundErr{ErrMsg: fmt.Sprintf("TxID not found: %s", txID)}
+	}
+
+	var loc *TxIDLocation
+	loc, err = vertexToTxIDLocation(vertex)
+	if err != nil {
+		s.logger.Errorf("vertex to TxID translation error: %s", err)
+		return nil, errors.Wrap(err, "vertex to TxID translation")
+	}
+
+	return loc, nil
 }
 
 func (s *Store) getValuesRecursively(dbName, key string, version *types.Version, predicate string, limit int) ([]*types.ValueWithMetadata, error) {

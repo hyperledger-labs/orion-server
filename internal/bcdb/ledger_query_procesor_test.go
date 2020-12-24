@@ -685,7 +685,7 @@ func TestGetTxReceipt(t *testing.T) {
 			txIndex:     0,
 			user:        "testUser",
 			isError:     true,
-			errorMsg:    "unexpected end of JSON input",
+			errorMsg:    "TxID not found: Tx15key20",
 		},
 		{
 			name:        "Getting receipt for Tx9key7 - no user exist",

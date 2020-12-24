@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/internal/bcdb/mocks"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -560,10 +561,10 @@ func TestTxReceiptQuery(t *testing.T) {
 			dbMockFactory: func(response *types.GetTxReceiptResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, errors.Errorf("tx not found"))
+				db.On("GetTxReceipt", submittingUserName, "tx1").Return(response, &provenance.NotFoundErr{ErrMsg: "tx not found"})
 				return db
 			},
-			expectedStatusCode: http.StatusInternalServerError,
+			expectedStatusCode: http.StatusNotFound,
 			expectedErr:        "error while processing 'GET /ledger/tx/receipt/tx1' because tx not found",
 		},
 	}
