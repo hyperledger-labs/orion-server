@@ -129,6 +129,7 @@ func TestKeyLoader(t *testing.T) {
 
 		keyLoader := KeyLoader{}
 		pKey, err := keyLoader.Load(privatePem)
+		require.NoError(t, err)
 		R, S, err := ecdsa.Sign(rand.Reader, pKey.(*ecdsa.PrivateKey), []byte{0})
 		require.NoError(t, err)
 		require.NotNil(t, R)
@@ -150,6 +151,7 @@ func TestKeyLoader(t *testing.T) {
 		require.NotNil(t, privatePem)
 		keyLoader := KeyLoader{}
 		pKey, err := keyLoader.Load(privatePem)
+		require.NoError(t, err)
 		R, S, err := ecdsa.Sign(rand.Reader, pKey.(*ecdsa.PrivateKey), []byte{0})
 		require.NoError(t, err)
 		require.NotNil(t, R)

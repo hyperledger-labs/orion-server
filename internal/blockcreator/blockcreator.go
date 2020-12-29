@@ -87,24 +87,24 @@ func (b *BlockCreator) Start() {
 				},
 			}
 
-			switch txBatch.(type) {
+			switch batch := txBatch.(type) {
 			case *types.Block_DataTxEnvelopes:
-				block.Payload = txBatch.(*types.Block_DataTxEnvelopes)
+				block.Payload = batch
 				b.logger.Debugf("created block %d with %d data transactions\n",
 					blkNum,
-					len(txBatch.(*types.Block_DataTxEnvelopes).DataTxEnvelopes.Envelopes),
+					len(batch.DataTxEnvelopes.Envelopes),
 				)
 
 			case *types.Block_UserAdministrationTxEnvelope:
-				block.Payload = txBatch.(*types.Block_UserAdministrationTxEnvelope)
+				block.Payload = batch
 				b.logger.Debugf("created block %d with an user administrative transaction", blkNum)
 
 			case *types.Block_ConfigTxEnvelope:
-				block.Payload = txBatch.(*types.Block_ConfigTxEnvelope)
+				block.Payload = batch
 				b.logger.Debugf("created block %d with a cluster config administrative transaction", blkNum)
 
 			case *types.Block_DBAdministrationTxEnvelope:
-				block.Payload = txBatch.(*types.Block_DBAdministrationTxEnvelope)
+				block.Payload = batch
 				b.logger.Debugf("created block %d with a DB administrative transaction", blkNum)
 			}
 

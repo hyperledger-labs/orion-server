@@ -184,7 +184,8 @@ func TestOpenStore(t *testing.T) {
 		assertStore(t, storeDir, s)
 
 		q := quad.Make("subject", "predicate", "object", "")
-		s.cayleyGraph.AddQuad(q)
+		err = s.cayleyGraph.AddQuad(q)
+		require.NoError(t, err)
 
 		// close and reopen the store
 		require.NoError(t, s.Close())
@@ -204,6 +205,7 @@ func TestOpenStore(t *testing.T) {
 		}
 		p := cayley.StartPath(s.cayleyGraph)
 		quadValues, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph.QuadStore)
+		require.NoError(t, err)
 		require.Len(t, quadValues, 4)
 		require.ElementsMatch(t, expectedNodes, quadValues)
 	})

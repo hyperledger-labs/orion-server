@@ -268,7 +268,9 @@ func TestWrite(t *testing.T) {
 		contentFilePath := "./testdata/contentfile"
 		contentFile, err := OpenFile(contentFilePath, 0644)
 		require.NoError(t, err)
-		contentFile.Write([]byte("hello"))
+		l, err := contentFile.Write([]byte("hello"))
+		require.NoError(t, err)
+		require.Equal(t, len([]byte("hello")), l)
 
 		emptyFilePath := "./testdata/emptyfile"
 		emptyFile, err := OpenFile(emptyFilePath, 0644)
@@ -329,7 +331,9 @@ func TestTruncate(t *testing.T) {
 		contentFilePath := "./testdata/contentfile"
 		contentFile, err := OpenFile(contentFilePath, 0644)
 		require.NoError(t, err)
-		contentFile.Write([]byte("helloworld"))
+		l, err := contentFile.Write([]byte("helloworld"))
+		require.NoError(t, err)
+		require.Equal(t, len([]byte("helloworld")), l)
 
 		cleanup = func() {
 			contentFile.Close()

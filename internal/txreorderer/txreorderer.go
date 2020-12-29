@@ -78,9 +78,9 @@ func (r *TxReorderer) Start() {
 				continue
 			}
 
-			switch tx.(type) {
+			switch env := tx.(type) {
 			case *types.DataTxEnvelope:
-				r.pendingDataTxs.Envelopes = append(r.pendingDataTxs.Envelopes, tx.(*types.DataTxEnvelope))
+				r.pendingDataTxs.Envelopes = append(r.pendingDataTxs.Envelopes, env)
 
 				if uint32(len(r.pendingDataTxs.Envelopes)) == r.maxTxCountPerBatch {
 					r.enqueueAndResetPendingDataTxBatch()
@@ -93,7 +93,7 @@ func (r *TxReorderer) Start() {
 				r.logger.Debug("enqueueing user administrative transaction")
 				r.txBatchQueue.Enqueue(
 					&types.Block_UserAdministrationTxEnvelope{
-						UserAdministrationTxEnvelope: tx.(*types.UserAdministrationTxEnvelope),
+						UserAdministrationTxEnvelope: env,
 					},
 				)
 				ticker.Reset(r.batchTimeout)
@@ -104,7 +104,7 @@ func (r *TxReorderer) Start() {
 				r.logger.Debug("enqueueing db administrative transaction")
 				r.txBatchQueue.Enqueue(
 					&types.Block_DBAdministrationTxEnvelope{
-						DBAdministrationTxEnvelope: tx.(*types.DBAdministrationTxEnvelope),
+						DBAdministrationTxEnvelope: env,
 					},
 				)
 				ticker.Reset(r.batchTimeout)
@@ -115,7 +115,7 @@ func (r *TxReorderer) Start() {
 				r.logger.Debug("enqueueing cluster config transaction")
 				r.txBatchQueue.Enqueue(
 					&types.Block_ConfigTxEnvelope{
-						ConfigTxEnvelope: tx.(*types.ConfigTxEnvelope),
+						ConfigTxEnvelope: env,
 					},
 				)
 				ticker.Reset(r.batchTimeout)

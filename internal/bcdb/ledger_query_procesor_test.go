@@ -201,7 +201,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 
 	require.NoError(t, env.db.Commit(createUser, 1))
 
-	dirtyWriteKeyVersion := make(map[string]*types.Version, 0)
+	dirtyWriteKeyVersion := make(map[string]*types.Version)
 
 	for i := uint64(2); i < uint64(blocksNum); i++ {
 		key := make([]string, 0)

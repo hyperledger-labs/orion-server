@@ -154,7 +154,8 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		assertDBInstance(dbRootDir, l)
 
 		db := l.dbs[worldstate.DefaultDBName]
-		db.file.Put([]byte("key1"), []byte("value1"), &opt.WriteOptions{Sync: true})
+		err = db.file.Put([]byte("key1"), []byte("value1"), &opt.WriteOptions{Sync: true})
+		require.NoError(t, err)
 
 		// close and reopen the store
 		require.NoError(t, l.Close())

@@ -101,7 +101,8 @@ func TestCreateDB(t *testing.T) {
 		verifyDBExistance(t, l, dbName, true)
 
 		db := l.dbs[dbName]
-		db.file.Put([]byte("key1"), []byte("value1"), &opt.WriteOptions{Sync: true})
+		err := db.file.Put([]byte("key1"), []byte("value1"), &opt.WriteOptions{Sync: true})
+		require.NoError(t, err)
 
 		require.NoError(t, l.create(dbName))
 

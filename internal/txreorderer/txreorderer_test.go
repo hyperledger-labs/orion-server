@@ -261,10 +261,7 @@ func TestTxReorderer(t *testing.T) {
 			}
 
 			hasBatchSizeMatched := func() bool {
-				if len(tt.expectedTxBatches) == r.txBatchQueue.Size() {
-					return true
-				}
-				return false
+				return len(tt.expectedTxBatches) == r.txBatchQueue.Size()
 			}
 			require.Eventually(t, hasBatchSizeMatched, 2*time.Second, 100*time.Millisecond)
 

@@ -14,11 +14,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/config"
-	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
+	"github.ibm.com/blockchaindb/server/pkg/server/mock"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -71,6 +71,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	require.NoError(t, pemPrivKeyFile.Close())
 
 	pemAdminCert, pemAdminKey, err := testutils.IssueCertificate("BCDB Admin", "127.0.0.1", keyPair)
+	require.NoError(t, err)
 	pemAdminCertFile, err := os.Create(path.Join(tempDir, "admin.pem"))
 	require.NoError(t, err)
 	_, err = pemAdminCertFile.Write(pemAdminCert)
@@ -256,6 +257,7 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 
 	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "testUser"}
 	querySig, err := cryptoservice.SignQuery(env.adminSigner, query)
+	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		user, err := env.client.GetUser(&types.GetUserQueryEnvelope{
 			Payload:   query,

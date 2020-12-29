@@ -132,7 +132,8 @@ func GenerateTestClientCrypto(t *testing.T, names []string) string {
 
 	clientRootCACertFile, err := os.Create(path.Join(tempDir, "clientRootCACert.pem"))
 	require.NoError(t, err)
-	clientRootCACertFile.Write(rootCAPemCert)
+	_, err = clientRootCACertFile.Write(rootCAPemCert)
+	require.NoError(t, err)
 	clientRootCACertFile.Close()
 
 	for _, name := range names {
@@ -145,13 +146,17 @@ func GenerateTestClientCrypto(t *testing.T, names []string) string {
 
 		pemCertFile, err := os.Create(path.Join(tempDir, name+".pem"))
 		require.NoError(t, err)
-		pemCertFile.Write(pemCert)
-		pemCertFile.Close()
+		_, err = pemCertFile.Write(pemCert)
+		require.NoError(t, err)
+		err = pemCertFile.Close()
+		require.NoError(t, err)
 
 		pemPrivKeyFile, err := os.Create(path.Join(tempDir, name+".key"))
 		require.NoError(t, err)
-		pemPrivKeyFile.Write(privKey)
-		pemPrivKeyFile.Close()
+		_, err = pemPrivKeyFile.Write(privKey)
+		require.NoError(t, err)
+		err = pemPrivKeyFile.Close()
+		require.NoError(t, err)
 	}
 
 	return tempDir
@@ -221,5 +226,6 @@ func VerifyPayloadSignature(t *testing.T, rawCert []byte, payload interface{}, s
 	require.NoError(t, err)
 	payloadBytes, err := json.Marshal(payload)
 	require.NoError(t, err)
-	ver.Verify(payloadBytes, sig)
+	err = ver.Verify(payloadBytes, sig)
+	require.NoError(t, err)
 }

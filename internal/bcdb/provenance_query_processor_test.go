@@ -42,6 +42,7 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 			Logger:   logger,
 		},
 	)
+	require.NoError(t, err)
 
 	cleanup := func(t *testing.T) {
 		if err := provenanceStore.Close(); err != nil {

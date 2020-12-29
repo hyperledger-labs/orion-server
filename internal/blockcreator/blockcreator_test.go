@@ -300,10 +300,7 @@ func TestBatchCreator(t *testing.T) {
 		}
 
 		hasBlockCountMatched := func() bool {
-			if len(expectedBlocks) == testEnv.creator.blockQueue.Size() {
-				return true
-			}
-			return false
+			return len(expectedBlocks) == testEnv.creator.blockQueue.Size()
 		}
 		require.Eventually(t, hasBlockCountMatched, 2*time.Second, 1000*time.Millisecond)
 

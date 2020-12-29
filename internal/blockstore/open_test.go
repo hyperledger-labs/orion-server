@@ -286,7 +286,8 @@ func TestRecovery(t *testing.T) {
 
 		block1 := createSampleUserTxBlock(1, nil, nil)
 		require.NoError(t, env.s.AddSkipListLinks(block1))
-		env.s.Commit(block1)
+		err := env.s.Commit(block1)
+		require.NoError(t, err)
 
 		block1BaseHeaderHash, err := env.s.GetBaseHeaderHash(1)
 		require.NoError(t, err)
@@ -324,7 +325,8 @@ func TestRecovery(t *testing.T) {
 
 		block1 := createSampleUserTxBlock(1, nil, nil)
 		require.NoError(t, env.s.AddSkipListLinks(block1))
-		env.s.Commit(block1)
+		err := env.s.Commit(block1)
+		require.NoError(t, err)
 		block1Offset := env.s.currentOffset
 
 		block1BaseHeaderHash, err := env.s.GetBaseHeaderHash(1)

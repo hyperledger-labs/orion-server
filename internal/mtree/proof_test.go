@@ -88,6 +88,7 @@ func TestNodeProof(t *testing.T) {
 					viBytes, err := json.Marshal(vi)
 					require.NoError(t, err)
 					txHash, err := crypto.ComputeSHA256Hash(append(txBytes, viBytes...))
+					require.NoError(t, err)
 
 					var rootHash []byte
 					for i, h := range intermediateHashes {
