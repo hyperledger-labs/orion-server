@@ -104,7 +104,6 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 	case constants.GetPath:
 		startBlockNum, endBlockNum, err := getStartAndEndBlockNum(params)
 		if err != nil {
-			fmt.Println(err, startBlockNum, endBlockNum)
 			SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
@@ -243,6 +242,12 @@ func getStartAndEndBlockNum(params map[string]string) (uint64, uint64, error) {
 	endBlockNum, err := getUintParam("endId", params)
 	if err != nil {
 		return 0, 0, err
+	}
+
+	if endBlockNum < startBlockNum {
+		return 0, 0, &ResponseErr{
+			ErrMsg: fmt.Sprintf("query error: startId=%d > endId=%d", startBlockNum, endBlockNum),
+		}
 	}
 
 	return startBlockNum, endBlockNum, nil

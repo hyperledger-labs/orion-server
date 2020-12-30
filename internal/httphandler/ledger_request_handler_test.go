@@ -299,6 +299,30 @@ func TestPathQuery(t *testing.T) {
 			expectedStatusCode: http.StatusBadRequest,
 			expectedErr:        "query error - bad or missing start/end block number",
 		},
+		{
+			name:             "endId < startId",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerPath(10, 1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+					UserID:           submittingUserName,
+					StartBlockNumber: 10,
+					EndBlockNumber:   1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "query error: startId=10 > endId=1",
+		},
 	}
 
 	logger, err := createLogger("debug")
