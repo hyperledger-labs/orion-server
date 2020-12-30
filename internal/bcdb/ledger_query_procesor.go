@@ -3,12 +3,12 @@ package bcdb
 import (
 	"fmt"
 
-	"github.ibm.com/blockchaindb/server/internal/provenance"
-
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/mtree"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
@@ -55,7 +55,7 @@ func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*
 	}
 
 	if !hasAccess {
-		return nil, &PermissionErr{fmt.Sprintf("user %s doesn't has permision to access ledger", userId)}
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
 	}
 	data, err := p.blockStore.GetHeader(blockNum)
 	if err != nil {
@@ -90,16 +90,17 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 	}
 
 	if !hasAccess {
-		return nil, &PermissionErr{fmt.Sprintf("user %s doesn't has permision to access ledger", userId)}
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
 	}
 
 	endBlock, err := p.blockStore.GetHeader(endBlockIdx)
 	if err != nil {
-		return nil, err
-	}
-
-	if endBlock == nil {
-		return nil, errors.Errorf("can't find path in blocks skip list between %d %d, end block not exist", endBlockIdx, startBlockIdx)
+		switch err.(type)  {
+		case *interrors.NotFoundErr:
+			return nil, errors.Wrapf(err, "can't find path in blocks skip list between %d %d", endBlockIdx, startBlockIdx)
+		default:
+			return nil, err
+		}
 	}
 
 	headers, err := p.findPath(endBlock, startBlockIdx)
@@ -129,7 +130,7 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 	}
 
 	if !hasAccess {
-		return nil, &PermissionErr{fmt.Sprintf("user %s doesn't has permision to access ledger", userId)}
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
 	}
 	block, err := p.blockStore.Get(blockNum)
 	if err != nil {
@@ -163,7 +164,7 @@ func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.
 	}
 
 	if !hasAccess {
-		return nil, &PermissionErr{fmt.Sprintf("user %s doesn't has permision to access ledger", userId)}
+		return nil, &interrors.PermissionErr{fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
 	}
 	txLoc, err := p.provenanceStore.GetTxIDLocation(txId)
 	if err != nil {

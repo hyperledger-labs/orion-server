@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
+	"github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -64,7 +65,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 		var status int
 
 		switch err.(type) {
-		case *bcdb.PermissionErr:
+		case *errors.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError

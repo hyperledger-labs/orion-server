@@ -232,7 +232,7 @@ func TestCommitAndQuery(t *testing.T) {
 		require.Nil(t, block)
 
 		blockHeader, err := env.s.GetHeader(10)
-		require.NoError(t, err)
+		require.EqualError(t, err,"block not found: 10")
 		require.Nil(t, blockHeader)
 
 		blockHash, err := env.s.GetHash(10)

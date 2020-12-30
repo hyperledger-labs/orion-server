@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
+	"github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -69,7 +70,7 @@ func (q *worldstateQueryProcessor) getDBStatus(dbName string) (*types.GetDBStatu
 // getState return the state associated with a given key
 func (q *worldstateQueryProcessor) getData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
 	if worldstate.IsSystemDB(dbName) {
-		return nil, &PermissionErr{
+		return nil, &errors.PermissionErr{
 			ErrMsg: "no user can directly read from a system database [" + dbName + "]. " +
 				"To read from a system database, use /config, /user, /db rest endpoints instead of /data",
 		}
@@ -80,7 +81,7 @@ func (q *worldstateQueryProcessor) getData(dbName, querierUserID, key string) (*
 		return nil, err
 	}
 	if !hasPerm {
-		return nil, &PermissionErr{
+		return nil, &errors.PermissionErr{
 			ErrMsg: "the user [" + querierUserID + "] has no permission to read from database [" + dbName + "]",
 		}
 	}
@@ -93,7 +94,7 @@ func (q *worldstateQueryProcessor) getData(dbName, querierUserID, key string) (*
 	acl := metadata.GetAccessControl()
 	if acl != nil {
 		if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
-			return nil, &PermissionErr{
+			return nil, &errors.PermissionErr{
 				ErrMsg: "the user [" + querierUserID + "] has no permission to read key [" + key + "] from database [" + dbName + "]",
 			}
 		}
@@ -128,7 +129,7 @@ func (q *worldstateQueryProcessor) getUser(querierUserID, targetUserID string) (
 	acl := metadata.GetAccessControl()
 	if acl != nil {
 		if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
-			return nil, &PermissionErr{
+			return nil, &errors.PermissionErr{
 				ErrMsg: "the user [" + querierUserID + "] has no permission to read info of user [" + targetUserID + "]",
 			}
 		}
@@ -202,12 +203,4 @@ func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeC
 	}
 
 	return c, nil
-}
-
-type PermissionErr struct {
-	ErrMsg string
-}
-
-func (e *PermissionErr) Error() string {
-	return e.ErrMsg
 }

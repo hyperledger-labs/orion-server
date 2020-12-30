@@ -5,6 +5,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
+	"github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
@@ -62,10 +63,12 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 		var status int
 
 		switch err.(type) {
-		case *bcdb.PermissionErr:
+		case *errors.PermissionErr:
 			status = http.StatusForbidden
+		case *errors.NotFoundErr:
+			status = http.StatusNotFound
 		default:
-			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
+			status = http.StatusInternalServerError
 		}
 
 		SendHTTPResponse(
@@ -92,7 +95,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 		var status int
 
 		switch err.(type) {
-		case *bcdb.PermissionErr:
+		case *errors.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError
@@ -122,7 +125,7 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 		var status int
 
 		switch err.(type) {
-		case *bcdb.PermissionErr:
+		case *errors.PermissionErr:
 			status = http.StatusForbidden
 		default:
 			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
@@ -152,7 +155,7 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 		var status int
 
 		switch err.(type) {
-		case *bcdb.PermissionErr:
+		case *errors.PermissionErr:
 			status = http.StatusForbidden
 		case *provenance.NotFoundErr:
 			status = http.StatusNotFound

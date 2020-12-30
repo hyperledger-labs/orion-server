@@ -590,7 +590,7 @@ func assertHashDoesNotExist(t *testing.T, s *Store, blockNum uint64) {
 
 func assertHeaderDoesNotExist(t *testing.T, s *Store, blockNum uint64) {
 	header, err := s.GetHeader(blockNum)
-	require.NoError(t, err)
+	require.EqualError(t, err, fmt.Sprintf("block not found: %d", blockNum))
 	require.Nil(t, header)
 
 	header, err = s.GetHeaderByHash(nil)

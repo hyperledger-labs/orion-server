@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/internal/bcdb/mocks"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -91,7 +92,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
 				db.On("GetData", dbName, submittingUserName, "foo").
-					Return(nil, &bcdb.PermissionErr{ErrMsg: "access forbidden"})
+					Return(nil, &interrors.PermissionErr{ErrMsg: "access forbidden"})
 				return db
 			},
 			expectedStatusCode: http.StatusForbidden,

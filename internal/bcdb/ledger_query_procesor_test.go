@@ -372,14 +372,16 @@ func TestGetBlock(t *testing.T) {
 			blockNumber:   21,
 			expectedBlock: nil,
 			user:          "testUser",
-			isError:       false,
+			isError:       true,
+			errorMsg:      "block not found: 21",
 		},
 		{
 			name:          "Getting block 515 - not exist",
 			blockNumber:   515,
 			expectedBlock: nil,
 			user:          "testUser",
-			isError:       false,
+			isError:       true,
+			errorMsg:      "block not found: 515",
 		},
 		{
 			name:          "Getting block 10 - wrong user",
@@ -387,7 +389,7 @@ func TestGetBlock(t *testing.T) {
 			expectedBlock: nil,
 			user:          "userNotExist",
 			isError:       true,
-			errorMsg:      "user userNotExist doesn't has permision to access ledger",
+			errorMsg:      "user userNotExist doesn't has permission to access ledger",
 		},
 	}
 
@@ -476,7 +478,7 @@ func TestGetPath(t *testing.T) {
 			expectedBlocks: nil,
 			user:           "userNotExist",
 			isError:        true,
-			errorMsg:       "user userNotExist doesn't has permision to access ledger",
+			errorMsg:       "user userNotExist doesn't has permission to access ledger",
 		},
 		{
 			name:           "path 2 17 wrong direction",
@@ -494,7 +496,7 @@ func TestGetPath(t *testing.T) {
 			expectedBlocks: nil,
 			user:           "testUser",
 			isError:        true,
-			errorMsg:       "can't find path in blocks skip list between 117 2, end block not exist",
+			errorMsg:       "can't find path in blocks skip list between 117 2: block not found: 117",
 		},
 	}
 
@@ -589,14 +591,14 @@ func TestGetProof(t *testing.T) {
 			blockNumber: 40,
 			user:        "userNotExist",
 			isError:     true,
-			errorMsg:    "user userNotExist doesn't has permision to access ledger",
+			errorMsg:    "user userNotExist doesn't has permission to access ledger",
 		},
 		{
 			name:        "Getting block 77 - wrong user",
 			blockNumber: 77,
 			user:        "userNotExist",
 			isError:     true,
-			errorMsg:    "user userNotExist doesn't has permision to access ledger",
+			errorMsg:    "user userNotExist doesn't has permission to access ledger",
 		},
 	}
 
@@ -694,7 +696,7 @@ func TestGetTxReceipt(t *testing.T) {
 			txIndex:     0,
 			user:        "nonExistUser",
 			isError:     true,
-			errorMsg:    "user nonExistUser doesn't has permision to access ledger",
+			errorMsg:    "user nonExistUser doesn't has permission to access ledger",
 		},
 	}
 	for _, tt := range testCases {

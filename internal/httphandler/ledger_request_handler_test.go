@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"net/http"
 	"net/http/httptest"
 	"path"
@@ -100,11 +101,11 @@ func TestBlockQuery(t *testing.T) {
 			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(nil, errors.New("no such block"))
+				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(nil, &interrors.NotFoundErr{Message: "block not found: 1"})
 				return db
 			},
-			expectedStatusCode: http.StatusInternalServerError, // TODO deal with 404 not found, it's not a 5xx
-			expectedErr:        "error while processing 'GET /ledger/block/1' because no such block",
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        "error while processing 'GET /ledger/block/1' because block not found: 1",
 		},
 	}
 

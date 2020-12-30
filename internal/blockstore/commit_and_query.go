@@ -3,6 +3,7 @@ package blockstore
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/fileops"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -340,7 +342,7 @@ func (s *Store) GetHeader(blockNumber uint64) (*types.BlockHeader, error) {
 	defer s.mu.RUnlock()
 	val, err := s.blockHeaderDB.Get(constructHeaderBytesKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
-		return nil, nil
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block not found: %d", blockNumber)}
 	}
 
 	if err != nil {
@@ -362,7 +364,7 @@ func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
 	val, err := s.blockHeaderDB.Get(constructHeaderHashKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
-	}
+	} //TODO
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "can't access block's %d hash", blockNumber)
@@ -377,7 +379,7 @@ func (s *Store) GetBaseHeaderHash(blockNumber uint64) ([]byte, error) {
 	val, err := s.blockHeaderDB.Get(constructHeaderBaseHashKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
-	}
+	} //TODO
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "can't access block's %d header base hash", blockNumber)
@@ -392,7 +394,7 @@ func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 	blockNumBytes, err := s.blockHeaderDB.Get(constructHeaderHashIndexKey(blockHash), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
-	}
+	} //TODO
 
 	if err != nil {
 		return nil, errors.Wrap(err, "can't access block's number by hash")
@@ -401,7 +403,7 @@ func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 	headerVal, err := s.blockHeaderDB.Get(append(headerBytesNs, blockNumBytes...), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
-	}
+	} //TODO
 
 	if err != nil {
 		return nil, errors.Wrap(err, "can't access block's header by number")
@@ -436,7 +438,7 @@ func (s *Store) GetValidationInfo(txID string) (*types.ValidationInfo, error) {
 
 	if err == leveldb.ErrNotFound {
 		return nil, nil
-	}
+	} //TODO
 
 	valInfo := &types.ValidationInfo{}
 	if err := proto.Unmarshal(valInfoSerialized, valInfo); err != nil {
@@ -450,7 +452,7 @@ func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 	val, err := s.blockIndexDB.Get(encodeOrderPreservingVarUint64(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, nil
-	}
+	} //TODO
 
 	blockLocation := &BlockLocation{}
 	if err := proto.Unmarshal(val, blockLocation); err != nil {
