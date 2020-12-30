@@ -55,7 +55,7 @@ func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*
 	}
 
 	if !hasAccess {
-		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
 	}
 	data, err := p.blockStore.GetHeader(blockNum)
 	if err != nil {
@@ -90,14 +90,15 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 	}
 
 	if !hasAccess {
-		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
 	}
 
 	endBlock, err := p.blockStore.GetHeader(endBlockIdx)
 	if err != nil {
-		switch err.(type)  {
+		switch e := err.(type)  {
 		case *interrors.NotFoundErr:
-			return nil, errors.Wrapf(err, "can't find path in blocks skip list between %d %d", endBlockIdx, startBlockIdx)
+			e.Message = fmt.Sprintf("can't find path in blocks skip list between %d %d: %s", endBlockIdx, startBlockIdx, e.Message)
+			return nil, e
 		default:
 			return nil, err
 		}
@@ -130,7 +131,7 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 	}
 
 	if !hasAccess {
-		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
 	}
 	block, err := p.blockStore.Get(blockNum)
 	if err != nil {
@@ -164,7 +165,7 @@ func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.
 	}
 
 	if !hasAccess {
-		return nil, &interrors.PermissionErr{fmt.Sprintf("user %s doesn't has permission to access ledger", userId)}
+		return nil, &interrors.PermissionErr{fmt.Sprintf("user %s has no permission to access the ledger", userId)}
 	}
 	txLoc, err := p.provenanceStore.GetTxIDLocation(txId)
 	if err != nil {

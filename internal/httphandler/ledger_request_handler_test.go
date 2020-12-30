@@ -252,6 +252,32 @@ func TestPathQuery(t *testing.T) {
 			expectedErr:        "error while processing 'GET /ledger/path?start=1&end=2' because can't find path in blocks skip list between 2 1",
 		},
 		{
+			name:             "end block not found",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerPath(1, 10), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
+					UserID:           submittingUserName,
+					StartBlockNumber: 1,
+					EndBlockNumber:   10,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetLedgerPathResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetLedgerPath", submittingUserName, uint64(1), uint64(10)).Return(response, &interrors.NotFoundErr{Message: "can't find path in blocks skip list between 10 1: block not found: 10"})
+				return db
+			},
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        "error while processing 'GET /ledger/path?start=1&end=10' because can't find path in blocks skip list between 10 1: block not found: 10",
+		},
+		{
 			name:             "wrong url, endId not exist",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
