@@ -26,12 +26,12 @@ func newTestEnv(t *testing.T) *testEnv {
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
 	}
-	logger, err := logger.New(lc)
+	lggr, err := logger.New(lc)
 	require.NoError(t, err)
 
 	c := &Config{
 		StoreDir: storeDir,
-		Logger:   logger,
+		Logger:   lggr,
 	}
 
 	store, err := Open(c)
@@ -1048,7 +1048,7 @@ func TestGetTxIDLocation(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.expected, loc)
 			} else {
-				require.Equal(t, tt.expectedErr, err.Error())
+				require.EqualError(t, err, tt.expectedErr)
 			}
 		})
 	}

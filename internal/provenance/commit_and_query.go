@@ -10,6 +10,7 @@ import (
 	"github.com/cayleygraph/cayley/graph"
 	"github.com/cayleygraph/quad"
 	"github.com/pkg/errors"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
@@ -33,14 +34,6 @@ const (
 	// denotes that the previous version of the value
 	PREVIOUS = "p"
 )
-
-type NotFoundErr struct {
-	ErrMsg string
-}
-
-func (e *NotFoundErr) Error() string {
-	return e.ErrMsg
-}
 
 // TxDataForProvenance holds the transaction data that is
 // needed for the provenance store
@@ -314,7 +307,7 @@ func (s *Store) GetTxIDLocation(txID string) (*TxIDLocation, error) {
 
 	if vertex == nil {
 		s.logger.Debugf("TxID not found: %s", txID)
-		return nil, &NotFoundErr{ErrMsg: fmt.Sprintf("TxID not found: %s", txID)}
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("TxID not found: %s", txID)}
 	}
 
 	var loc *TxIDLocation

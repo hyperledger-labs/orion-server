@@ -6,7 +6,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/internal/errors"
-	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -157,7 +156,7 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 		switch err.(type) {
 		case *errors.PermissionErr:
 			status = http.StatusForbidden
-		case *provenance.NotFoundErr:
+		case *errors.NotFoundErr:
 			status = http.StatusNotFound
 		default:
 			status = http.StatusInternalServerError
