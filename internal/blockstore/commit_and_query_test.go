@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -198,6 +199,7 @@ func TestCommitAndQuery(t *testing.T) {
 
 		block, err := env.s.Get(10)
 		require.EqualError(t, err, "block store is empty")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 		require.Nil(t, block)
 
 		b := &types.Block{
@@ -229,10 +231,12 @@ func TestCommitAndQuery(t *testing.T) {
 
 		block, err = env.s.Get(10)
 		require.EqualError(t, err, "requested block number [10] cannot be greater than the last committed block number [1]")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 		require.Nil(t, block)
 
 		blockHeader, err := env.s.GetHeader(10)
-		require.EqualError(t, err,"block not found: 10")
+		require.EqualError(t, err, "block not found: 10")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 		require.Nil(t, blockHeader)
 
 		blockHash, err := env.s.GetHash(10)

@@ -1,12 +1,17 @@
 package mtree
 
-import "github.com/pkg/errors"
+import (
+	"fmt"
+
+	"github.com/pkg/errors"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
+)
 
 // Proof calculate intermediate hashes between leaf with given index and root (caller node)
 func (n *Node) Proof(leafIndex int) ([][]byte, error) {
 	path, err := n.findPath(leafIndex)
 	if err != nil {
-		return nil, errors.Wrapf(err, "")
+		return nil, err
 	}
 	return computeProofFromPath(path), nil
 }
@@ -19,11 +24,15 @@ func (n *Node) findPath(leafIndex int) ([]*Node, error) {
 		if n.leafRange.endIndex == n.leafRange.startIndex && n.leafRange.endIndex == leafIndex {
 			return []*Node{n}, nil
 		} else {
-			return nil, errors.Errorf("node with index %d is not part of merkle tree (%d, %d)", leafIndex, n.leafRange.startIndex, n.leafRange.endIndex)
+			return nil, &interrors.NotFoundErr{
+				Message: fmt.Sprintf("node with index %d is not part of merkle tree (%d, %d)", leafIndex, n.leafRange.startIndex, n.leafRange.endIndex),
+			}
 		}
 	}
 	if n.leafRange.startIndex > leafIndex || n.leafRange.endIndex < leafIndex {
-		return nil, errors.Errorf("node with index %d is not part of merkle tree (%d, %d)", leafIndex, n.leafRange.startIndex, n.leafRange.endIndex)
+		return nil, &interrors.NotFoundErr{
+			Message: fmt.Sprintf("node with index %d is not part of merkle tree (%d, %d)", leafIndex, n.leafRange.startIndex, n.leafRange.endIndex),
+		}
 	}
 
 	var subPath []*Node

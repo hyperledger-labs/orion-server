@@ -5,18 +5,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 func TestNodeProof(t *testing.T) {
 	tests := []struct {
-		name    string
-		block   *types.Block
-		idx     int
-		pathLen int
-		root    []byte
-		wantErr bool
+		name        string
+		block       *types.Block
+		idx         int
+		pathLen     int
+		root        []byte
+		expectedErr string
 	}{
 		{
 			name:    "Data block full tree",
@@ -49,11 +50,11 @@ func TestNodeProof(t *testing.T) {
 			pathLen: 7,
 		},
 		{
-			name:    "Data block half tree plus two index out of bounds",
-			block:   generateDataBlock(t, 34),
-			idx:     34,
-			pathLen: 0,
-			wantErr: true,
+			name:        "Data block half tree plus two index out of bounds",
+			block:       generateDataBlock(t, 34),
+			idx:         34,
+			pathLen:     0,
+			expectedErr: "node with index 34 is not part of merkle tree (0, 33)",
 		},
 		{
 			name:    "Config block, no intermediate hashes",
@@ -74,8 +75,9 @@ func TestNodeProof(t *testing.T) {
 			require.NoError(t, err)
 			txs := getTxs(tt.block)
 			intermediateHashes, err := root.Proof(tt.idx)
-			if tt.wantErr {
-				require.Error(t, err)
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				require.IsType(t, &interrors.NotFoundErr{}, err)
 			} else {
 				require.NoError(t, err)
 				require.Len(t, intermediateHashes, tt.pathLen)

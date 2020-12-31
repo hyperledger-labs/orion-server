@@ -8,13 +8,13 @@ import (
 	"os"
 	"testing"
 
-	"github.ibm.com/blockchaindb/server/internal/provenance"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/mtree"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -532,8 +532,7 @@ func TestGetProof(t *testing.T) {
 		expectedRoot []byte
 		expectedTx   *types.DataTxEnvelope
 		user         string
-		isError      bool
-		errorMsg     string
+		expectedErr  error
 	}{
 		{
 			name:         "Getting block 5, tx 2 - correct",
@@ -542,7 +541,6 @@ func TestGetProof(t *testing.T) {
 			expectedRoot: env.blocks[4].TxMerkelTreeRootHash,
 			expectedTx:   env.blockTx[4].Envelopes[2],
 			user:         "testUser",
-			isError:      false,
 		},
 		{
 			name:         "Getting block 17, tx 5 - correct",
@@ -551,7 +549,6 @@ func TestGetProof(t *testing.T) {
 			expectedRoot: env.blocks[16].TxMerkelTreeRootHash,
 			expectedTx:   env.blockTx[16].Envelopes[5],
 			user:         "testUser",
-			isError:      false,
 		},
 		{
 			name:         "Getting block 45, tx 0 - correct",
@@ -560,7 +557,6 @@ func TestGetProof(t *testing.T) {
 			expectedRoot: env.blocks[44].TxMerkelTreeRootHash,
 			expectedTx:   env.blockTx[44].Envelopes[0],
 			user:         "testUser",
-			isError:      false,
 		},
 		{
 			name:         "Getting block 98, tx 90 - correct",
@@ -569,43 +565,38 @@ func TestGetProof(t *testing.T) {
 			expectedRoot: env.blocks[97].TxMerkelTreeRootHash,
 			expectedTx:   env.blockTx[97].Envelopes[90],
 			user:         "testUser",
-			isError:      false,
 		},
 		{
 			name:        "Getting block 88, tx 100 - tx not exist",
 			blockNumber: 88,
 			txIndex:     100,
 			user:        "testUser",
-			isError:     true,
-			errorMsg:    ": node with index 100 is not part of merkle tree (0, 87)",
+			expectedErr: &interrors.NotFoundErr{Message: "node with index 100 is not part of merkle tree (0, 87)"},
 		},
 		{
 			name:        "Getting block 515 - not exist",
 			blockNumber: 515,
 			user:        "testUser",
-			isError:     true,
-			errorMsg:    "requested block number [515] cannot be greater than the last committed block number [99]",
+			expectedErr: &interrors.NotFoundErr{Message: "requested block number [515] cannot be greater than the last committed block number [99]"},
 		},
 		{
 			name:        "Getting block 40 - wrong user",
 			blockNumber: 40,
 			user:        "userNotExist",
-			isError:     true,
-			errorMsg:    "user userNotExist has no permission to access the ledger",
+			expectedErr: &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
 		},
 		{
 			name:        "Getting block 77 - wrong user",
 			blockNumber: 77,
 			user:        "userNotExist",
-			isError:     true,
-			errorMsg:    "user userNotExist has no permission to access the ledger",
+			expectedErr: &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			proof, err := env.p.getProof(testCase.user, testCase.blockNumber, testCase.txIndex)
-			if !testCase.isError {
+			if testCase.expectedErr == nil {
 				require.NoError(t, err)
 				txBytes, err := json.Marshal(testCase.expectedTx)
 				require.NoError(t, err)
@@ -627,7 +618,8 @@ func TestGetProof(t *testing.T) {
 				require.Equal(t, testCase.expectedRoot, currRoot)
 			} else {
 				require.Error(t, err)
-				require.Contains(t, testCase.errorMsg, err.Error())
+				require.EqualError(t, err, testCase.expectedErr.Error())
+				require.IsType(t, testCase.expectedErr, err)
 			}
 		})
 	}

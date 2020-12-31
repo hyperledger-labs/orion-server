@@ -574,7 +574,7 @@ func assertBlockMetadataDoesNotExist(t *testing.T, s *Store, blockNum uint64, tx
 
 func assertIndexDoesNotExist(t *testing.T, s *Store, blockNum uint64) {
 	location, err := s.getLocation(blockNum)
-	require.NoError(t, err)
+	require.EqualError(t, err, fmt.Sprintf("block not found: %d", blockNum))
 	require.Nil(t, location)
 }
 

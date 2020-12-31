@@ -296,13 +296,12 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 	if blockNumber > s.lastCommittedBlockNum {
 		switch {
 		case s.lastCommittedBlockNum == 0:
-			return nil, errors.New("block store is empty")
+			return nil, &interrors.NotFoundErr{Message: "block store is empty"}
 		default:
-			return nil, errors.Errorf(
-				"requested block number [%d] cannot be greater than the last committed block number [%d]",
-				blockNumber,
-				s.lastCommittedBlockNum,
-			)
+			return nil, &interrors.NotFoundErr{
+				Message: fmt.Sprintf("requested block number [%d] cannot be greater than the last committed block number [%d]",
+					blockNumber, s.lastCommittedBlockNum),
+			}
 		}
 	}
 
@@ -451,8 +450,8 @@ func (s *Store) GetValidationInfo(txID string) (*types.ValidationInfo, error) {
 func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 	val, err := s.blockIndexDB.Get(encodeOrderPreservingVarUint64(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
-		return nil, nil
-	} //TODO
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block not found: %d", blockNumber)}
+	}
 
 	blockLocation := &BlockLocation{}
 	if err := proto.Unmarshal(val, blockLocation); err != nil {

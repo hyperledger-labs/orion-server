@@ -128,8 +128,10 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 		switch err.(type) {
 		case *errors.PermissionErr:
 			status = http.StatusForbidden
+		case *errors.NotFoundErr:
+			status = http.StatusNotFound
 		default:
-			status = http.StatusInternalServerError // TODO deal with 404 not found, it's not a 5xx
+			status = http.StatusInternalServerError
 		}
 
 		SendHTTPResponse(

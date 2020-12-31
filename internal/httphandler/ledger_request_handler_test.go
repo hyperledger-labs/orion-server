@@ -451,11 +451,11 @@ func TestProofQuery(t *testing.T) {
 			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetTxProof", submittingUserName, uint64(2), uint64(2)).Return(response, errors.Errorf("node with index 2 is not part of merkle tree (1, 1)"))
+				db.On("GetTxProof", submittingUserName, uint64(2), uint64(2)).Return(response, &interrors.NotFoundErr{Message: "block not found: 2"})
 				return db
 			},
-			expectedStatusCode: http.StatusInternalServerError,
-			expectedErr:        "error while processing 'GET /ledger/proof/2?idx=2' because node with index 2 is not part of merkle tree (1, 1)",
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        "error while processing 'GET /ledger/proof/2?idx=2' because block not found: 2",
 		},
 		{
 			name:             "wrong url, idx not exist",
