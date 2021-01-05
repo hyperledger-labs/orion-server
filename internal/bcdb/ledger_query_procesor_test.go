@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	interrors "github.ibm.com/blockchaindb/server/internal/errors"
@@ -336,67 +337,59 @@ func TestGetBlock(t *testing.T) {
 		blockNumber   uint64
 		expectedBlock *types.BlockHeader
 		user          string
-		isError       bool
-		errorMsg      string
+		expectedErr   error
 	}{
 		{
 			name:          "Getting block 5 - correct",
 			blockNumber:   5,
 			expectedBlock: env.blocks[4],
 			user:          "testUser",
-			isError:       false,
 		},
 		{
 			name:          "Getting block 17 - correct",
 			blockNumber:   17,
 			expectedBlock: env.blocks[16],
 			user:          "testUser",
-			isError:       false,
 		},
 		{
 			name:          "Getting block 12 - correct",
 			blockNumber:   12,
 			expectedBlock: env.blocks[11],
 			user:          "testUser",
-			isError:       false,
 		},
 		{
 			name:          "Getting block 9 - correct",
 			blockNumber:   9,
 			expectedBlock: env.blocks[8],
 			user:          "testUser",
-			isError:       false,
 		},
 		{
 			name:          "Getting block 21 - not exist",
 			blockNumber:   21,
 			expectedBlock: nil,
 			user:          "testUser",
-			isError:       true,
-			errorMsg:      "block not found: 21",
+			expectedErr:   &interrors.NotFoundErr{Message: "block not found: 21"},
 		},
 		{
 			name:          "Getting block 515 - not exist",
 			blockNumber:   515,
 			expectedBlock: nil,
 			user:          "testUser",
-			isError:       true,
-			errorMsg:      "block not found: 515",
+			expectedErr:   &interrors.NotFoundErr{Message: "block not found: 515"},
 		},
 		{
 			name:          "Getting block 10 - wrong user",
 			blockNumber:   10,
 			expectedBlock: nil,
 			user:          "userNotExist",
-			isError:       true,
-			errorMsg:      "user userNotExist has no permission to access the ledger",
+			expectedErr:   &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			res, err := env.p.getBlockHeader(testCase.user, testCase.blockNumber)
-			if !testCase.isError {
+			if testCase.expectedErr == nil {
 				require.NoError(t, err)
 				if testCase.expectedBlock != nil {
 					require.True(t, proto.Equal(testCase.expectedBlock, res.GetPayload().GetBlockHeader()))
@@ -405,7 +398,8 @@ func TestGetBlock(t *testing.T) {
 				}
 			} else {
 				require.Error(t, err)
-				require.Contains(t, testCase.errorMsg, err.Error())
+				require.EqualError(t, err, testCase.expectedErr.Error())
+				require.IsType(t, testCase.expectedErr, err)
 			}
 		})
 	}
@@ -423,8 +417,7 @@ func TestGetPath(t *testing.T) {
 		endNumber      uint64
 		expectedBlocks []*types.BlockHeader
 		user           string
-		isError        bool
-		errorMsg       string
+		expectedErr    error
 	}{
 		{
 			name:           "path 2 1",
@@ -432,8 +425,6 @@ func TestGetPath(t *testing.T) {
 			endNumber:      2,
 			expectedBlocks: []*types.BlockHeader{env.blocks[1], env.blocks[0]},
 			user:           "testUser",
-			isError:        false,
-			errorMsg:       "",
 		},
 		{
 			name:           "path 4 1",
@@ -441,8 +432,6 @@ func TestGetPath(t *testing.T) {
 			endNumber:      4,
 			expectedBlocks: []*types.BlockHeader{env.blocks[3], env.blocks[2], env.blocks[0]},
 			user:           "testUser",
-			isError:        false,
-			errorMsg:       "",
 		},
 		{
 			name:           "path 17 1",
@@ -450,8 +439,6 @@ func TestGetPath(t *testing.T) {
 			endNumber:      17,
 			expectedBlocks: []*types.BlockHeader{env.blocks[16], env.blocks[0]},
 			user:           "testUser",
-			isError:        false,
-			errorMsg:       "",
 		},
 		{
 			name:           "path 17 2",
@@ -459,8 +446,6 @@ func TestGetPath(t *testing.T) {
 			endNumber:      17,
 			expectedBlocks: []*types.BlockHeader{env.blocks[16], env.blocks[8], env.blocks[4], env.blocks[2], env.blocks[1]},
 			user:           "testUser",
-			isError:        false,
-			errorMsg:       "",
 		},
 		{
 			name:           "path 90 6",
@@ -468,8 +453,6 @@ func TestGetPath(t *testing.T) {
 			endNumber:      90,
 			expectedBlocks: []*types.BlockHeader{env.blocks[89], env.blocks[88], env.blocks[80], env.blocks[64], env.blocks[32], env.blocks[16], env.blocks[8], env.blocks[6], env.blocks[5]},
 			user:           "testUser",
-			isError:        false,
-			errorMsg:       "",
 		},
 		{
 			name:           "path 17 2 wrong user",
@@ -477,8 +460,7 @@ func TestGetPath(t *testing.T) {
 			endNumber:      17,
 			expectedBlocks: nil,
 			user:           "userNotExist",
-			isError:        true,
-			errorMsg:       "user userNotExist has no permission to access the ledger",
+			expectedErr:    &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
 		},
 		{
 			name:           "path 2 17 wrong direction",
@@ -486,8 +468,7 @@ func TestGetPath(t *testing.T) {
 			endNumber:      2,
 			expectedBlocks: nil,
 			user:           "testUser",
-			isError:        true,
-			errorMsg:       "can't find path from smaller block 2 to bigger 17",
+			expectedErr:    errors.New("can't find path from smaller block 2 to bigger 17"),
 		},
 		{
 			name:           "path 2 117 end block not in ledger",
@@ -495,18 +476,18 @@ func TestGetPath(t *testing.T) {
 			endNumber:      117,
 			expectedBlocks: nil,
 			user:           "testUser",
-			isError:        true,
-			errorMsg:       "can't find path in blocks skip list between 117 2: block not found: 117",
+			expectedErr:    &interrors.NotFoundErr{Message: "can't find path in blocks skip list between 117 2: block not found: 117"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			path, err := env.p.getPath(testCase.user, testCase.startNumber, testCase.endNumber)
-			if testCase.isError {
+			if testCase.expectedErr != nil {
 				require.Error(t, err)
 				require.Nil(t, path)
-				require.Contains(t, err.Error(), testCase.errorMsg)
+				require.EqualError(t, err, testCase.expectedErr.Error())
+				require.IsType(t, testCase.expectedErr, err)
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, path)
@@ -637,8 +618,7 @@ func TestGetTxReceipt(t *testing.T) {
 		blockNumber uint64
 		txIndex     uint64
 		user        string
-		isError     bool
-		errorMsg    string
+		expectedErr error
 	}{
 		{
 			name:        "Getting receipt for Tx5key3 - correct",
@@ -646,7 +626,6 @@ func TestGetTxReceipt(t *testing.T) {
 			blockNumber: 5,
 			txIndex:     3,
 			user:        "testUser",
-			isError:     false,
 		},
 		{
 			name:        "Getting receipt for Tx15key13 - correct",
@@ -654,7 +633,6 @@ func TestGetTxReceipt(t *testing.T) {
 			blockNumber: 15,
 			txIndex:     13,
 			user:        "testUser",
-			isError:     false,
 		},
 		{
 			name:        "Getting receipt for Tx9key7 - correct",
@@ -662,7 +640,6 @@ func TestGetTxReceipt(t *testing.T) {
 			blockNumber: 9,
 			txIndex:     7,
 			user:        "testUser",
-			isError:     false,
 		},
 		{
 			name:        "Getting receipt for Tx19key17 - correct",
@@ -670,7 +647,6 @@ func TestGetTxReceipt(t *testing.T) {
 			blockNumber: 19,
 			txIndex:     17,
 			user:        "testUser",
-			isError:     false,
 		},
 		{
 			name:        "Getting receipt for Tx15key20 - no tx exist",
@@ -678,8 +654,7 @@ func TestGetTxReceipt(t *testing.T) {
 			blockNumber: 0,
 			txIndex:     0,
 			user:        "testUser",
-			isError:     true,
-			errorMsg:    "TxID not found: Tx15key20",
+			expectedErr: &interrors.NotFoundErr{Message: "TxID not found: Tx15key20"},
 		},
 		{
 			name:        "Getting receipt for Tx9key7 - no user exist",
@@ -687,20 +662,20 @@ func TestGetTxReceipt(t *testing.T) {
 			blockNumber: 0,
 			txIndex:     0,
 			user:        "nonExistUser",
-			isError:     true,
-			errorMsg:    "user nonExistUser has no permission to access the ledger",
+			expectedErr: &interrors.PermissionErr{ErrMsg: "user nonExistUser has no permission to access the ledger"},
 		},
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			receipt, err := env.p.getTxReceipt(tt.user, tt.txId)
-			if !tt.isError {
+			if tt.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, tt.txIndex, receipt.GetPayload().GetReceipt().GetTxIndex())
 				require.True(t, proto.Equal(env.blocks[tt.blockNumber-1], receipt.GetPayload().GetReceipt().GetHeader()))
 			} else {
 				require.Error(t, err)
-				require.Contains(t, tt.errorMsg, err.Error())
+				require.EqualError(t, err, tt.expectedErr.Error())
+				require.IsType(t, tt.expectedErr, err)
 			}
 		})
 	}

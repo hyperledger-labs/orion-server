@@ -240,11 +240,13 @@ func TestCommitAndQuery(t *testing.T) {
 		require.Nil(t, blockHeader)
 
 		blockHash, err := env.s.GetHash(10)
-		require.NoError(t, err)
+		require.EqualError(t, err, "block hash not found: 10")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 		require.Nil(t, blockHash)
 
 		blockHeader, err = env.s.GetHeaderByHash([]byte{0})
-		require.NoError(t, err)
+		require.EqualError(t, err, "block number by hash not found: 00")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 		require.Nil(t, blockHeader)
 	})
 }
@@ -408,7 +410,8 @@ func TestTxValidationInfo(t *testing.T) {
 		require.False(t, exist)
 
 		valInfo, err := env.s.GetValidationInfo("tx1")
-		require.NoError(t, err)
+		require.EqualError(t, err, "txID not found: tx1")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 		require.Nil(t, valInfo)
 	})
 }

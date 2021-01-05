@@ -3,6 +3,7 @@ package blockstore
 import (
 	"encoding/binary"
 	"fmt"
+	"github.ibm.com/blockchaindb/server/internal/errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -486,12 +487,16 @@ func TestRecovery(t *testing.T) {
 		require.NoError(t, err)
 
 		block1BaseHeaderHash, err := env.s.GetBaseHeaderHash(1)
-		require.NoError(t, err)
+		require.EqualError(t, err, "block header base hash not found: 1")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 		block1HeaderHash, err := env.s.GetHash(1)
-		require.NoError(t, err)
+		require.EqualError(t, err, "block hash not found: 1")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 
 		block2 := createSampleUserTxBlock(2, block1BaseHeaderHash, block1HeaderHash)
-		require.NoError(t, env.s.AddSkipListLinks(block2))
+		err = env.s.AddSkipListLinks(block2)
+		require.EqualError(t, err, "block hash not found: 1")
+		require.IsType(t, &errors.NotFoundErr{}, err)
 
 		b, err = proto.Marshal(block2)
 		require.NoError(t, err)
@@ -575,32 +580,37 @@ func assertBlockMetadataDoesNotExist(t *testing.T, s *Store, blockNum uint64, tx
 func assertIndexDoesNotExist(t *testing.T, s *Store, blockNum uint64) {
 	location, err := s.getLocation(blockNum)
 	require.EqualError(t, err, fmt.Sprintf("block not found: %d", blockNum))
+	require.IsType(t, &errors.NotFoundErr{}, err)
 	require.Nil(t, location)
 }
 
 func assertHashDoesNotExist(t *testing.T, s *Store, blockNum uint64) {
 	baseHeaderHash, err := s.GetBaseHeaderHash(blockNum)
-	require.NoError(t, err)
+	require.EqualError(t, err, fmt.Sprintf("block header base hash not found: %d", blockNum))
+	require.IsType(t, &errors.NotFoundErr{}, err)
 	require.Nil(t, baseHeaderHash)
 
 	blockHeaderHash, err := s.GetHash(blockNum)
-	require.NoError(t, err)
+	require.EqualError(t, err, fmt.Sprintf("block hash not found: %d", blockNum))
+	require.IsType(t, &errors.NotFoundErr{}, err)
 	require.Nil(t, blockHeaderHash)
 }
 
 func assertHeaderDoesNotExist(t *testing.T, s *Store, blockNum uint64) {
 	header, err := s.GetHeader(blockNum)
 	require.EqualError(t, err, fmt.Sprintf("block not found: %d", blockNum))
+	require.IsType(t, &errors.NotFoundErr{}, err)
 	require.Nil(t, header)
 
 	header, err = s.GetHeaderByHash(nil)
-	require.NoError(t, err)
+	require.EqualError(t, err, fmt.Sprintf("block number by hash not found: "))
 	require.Nil(t, header)
 }
 
 func assertValidationInfoDoesNotExist(t *testing.T, s *Store, txID string) {
 	valInfo, err := s.GetValidationInfo(txID)
-	require.NoError(t, err)
+	require.EqualError(t, err, fmt.Sprintf("txID not found: %s", txID))
+	require.IsType(t, &errors.NotFoundErr{}, err)
 	require.Nil(t, valInfo)
 }
 

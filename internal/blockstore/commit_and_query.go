@@ -362,8 +362,8 @@ func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
 	defer s.mu.RUnlock()
 	val, err := s.blockHeaderDB.Get(constructHeaderHashKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
-		return nil, nil
-	} //TODO
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block hash not found: %d", blockNumber)}
+	}
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "can't access block's %d hash", blockNumber)
@@ -375,10 +375,13 @@ func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
 func (s *Store) GetBaseHeaderHash(blockNumber uint64) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if blockNumber == 0 {
+		return nil, nil
+	}
 	val, err := s.blockHeaderDB.Get(constructHeaderBaseHashKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
-		return nil, nil
-	} //TODO
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block header base hash not found: %d", blockNumber)}
+	}
 
 	if err != nil {
 		return nil, errors.Wrapf(err, "can't access block's %d header base hash", blockNumber)
@@ -392,8 +395,8 @@ func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 	defer s.mu.RUnlock()
 	blockNumBytes, err := s.blockHeaderDB.Get(constructHeaderHashIndexKey(blockHash), nil)
 	if err == leveldb.ErrNotFound {
-		return nil, nil
-	} //TODO
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block number by hash not found: %x", blockHash)}
+	}
 
 	if err != nil {
 		return nil, errors.Wrap(err, "can't access block's number by hash")
@@ -401,8 +404,9 @@ func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 
 	headerVal, err := s.blockHeaderDB.Get(append(headerBytesNs, blockNumBytes...), nil)
 	if err == leveldb.ErrNotFound {
-		return nil, nil
-	} //TODO
+		blockNum, _, _ := decodeOrderPreservingVarUint64(blockNumBytes)
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block not found: %d, encoded: %x", blockNum, blockNumBytes)}
+	}
 
 	if err != nil {
 		return nil, errors.Wrap(err, "can't access block's header by number")
@@ -431,13 +435,14 @@ func (s *Store) GetValidationInfo(txID string) (*types.ValidationInfo, error) {
 	defer s.mu.RUnlock()
 
 	valInfoSerialized, err := s.txValidationInfoDB.Get([]byte(txID), &opt.ReadOptions{})
-	if err != nil && err != leveldb.ErrNotFound {
-		return nil, errors.Wrapf(err, "error while fetching validation info of txID [%s ]from the block store", txID)
-	}
 
 	if err == leveldb.ErrNotFound {
-		return nil, nil
-	} //TODO
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("txID not found: %s", txID)}
+	}
+
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while fetching validation info of txID [%s] from the block store", txID)
+	}
 
 	valInfo := &types.ValidationInfo{}
 	if err := proto.Unmarshal(valInfoSerialized, valInfo); err != nil {
