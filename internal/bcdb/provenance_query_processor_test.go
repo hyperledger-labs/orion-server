@@ -256,60 +256,86 @@ func TestGetValues(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetValues("db1", "key1")
-	require.NoError(t, err)
-
-	expectedValues := []*types.ValueWithMetadata{
+	tests := []struct {
+		name             string
+		dbName           string
+		key              string
+		expectedEnvelope *types.GetHistoricalDataResponseEnvelope
+	}{
 		{
-			Value: []byte("value1"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 1,
-					TxNum:    0,
+			name:   "fetch all values of key1",
+			dbName: "db1",
+			key:    "key1",
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: []*types.ValueWithMetadata{
+						{
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Value: []byte("value3"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    1,
+								},
+							},
+						},
+						{
+							Value: []byte("value4"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 3,
+									TxNum:    0,
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		{
-			Value: []byte("value2"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    0,
-				},
-			},
-		},
-		{
-			Value: []byte("value3"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    1,
-				},
-			},
-		},
-		{
-			Value: []byte("value4"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 3,
-					TxNum:    0,
+			name:   "fetch all values of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: nil,
 				},
 			},
 		},
 	}
-	expectedEnvelope := &types.GetHistoricalDataResponseEnvelope{
-		Payload: &types.GetHistoricalDataResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
-			},
-			Values: expectedValues,
-		},
-	}
 
-	require.NotNil(t, envelope)
-	require.ElementsMatch(t, expectedEnvelope.GetPayload().GetValues(), envelope.GetPayload().GetValues())
-	require.Equal(t, expectedEnvelope.GetPayload().GetHeader(), envelope.GetPayload().GetHeader())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	for _, tt := range tests {
+		envelope, err := env.p.GetValues(tt.dbName, tt.key)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.ElementsMatch(t, tt.expectedEnvelope.GetPayload().GetValues(), envelope.GetPayload().GetValues())
+		require.Equal(t, tt.expectedEnvelope.GetPayload().GetHeader(), envelope.GetPayload().GetHeader())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetPreviousValues(t *testing.T) {
@@ -319,43 +345,75 @@ func TestGetPreviousValues(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetPreviousValues("db1", "key1", &types.Version{
-		BlockNum: 2,
-		TxNum:    1,
-	})
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetHistoricalDataResponseEnvelope{
-		Payload: &types.GetHistoricalDataResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
+	tests := []struct {
+		name             string
+		dbName           string
+		key              string
+		version          *types.Version
+		expectedEnvelope *types.GetHistoricalDataResponseEnvelope
+	}{
+		{
+			name:   "fetch the previous value of key1 at version{Blk 2, txNum 1}",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
 			},
-			Values: []*types.ValueWithMetadata{
-				{
-					Value: []byte("value2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: []*types.ValueWithMetadata{
+						{
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
-				{
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    0,
-						},
+			},
+		},
+		{
+			name:   "fetch the previous value of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
+			},
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
 					},
 				},
 			},
 		},
 	}
 
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	for _, tt := range tests {
+		envelope, err := env.p.GetPreviousValues(tt.dbName, tt.key, tt.version)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetNextValues(t *testing.T) {
@@ -365,34 +423,67 @@ func TestGetNextValues(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetNextValues("db1", "key1", &types.Version{
-		BlockNum: 2,
-		TxNum:    1,
-	})
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetHistoricalDataResponseEnvelope{
-		Payload: &types.GetHistoricalDataResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
+	tests := []struct {
+		name             string
+		dbName           string
+		key              string
+		version          *types.Version
+		expectedEnvelope *types.GetHistoricalDataResponseEnvelope
+	}{
+		{
+			name:   "fetch next value of key1 at version {Blk 2, txNum 1}",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
 			},
-			Values: []*types.ValueWithMetadata{
-				{
-					Value: []byte("value4"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 3,
-							TxNum:    0,
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: []*types.ValueWithMetadata{
+						{
+							Value: []byte("value4"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 3,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
 			},
 		},
+		{
+			name:   "fetch next value of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
+			},
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: nil,
+				},
+			},
+		},
 	}
 
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	for _, tt := range tests {
+		envelope, err := env.p.GetNextValues(tt.dbName, tt.key, tt.version)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetValueAt(t *testing.T) {
@@ -402,34 +493,67 @@ func TestGetValueAt(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetValueAt("db1", "key1", &types.Version{
-		BlockNum: 2,
-		TxNum:    1,
-	})
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetHistoricalDataResponseEnvelope{
-		Payload: &types.GetHistoricalDataResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
+	tests := []struct {
+		name             string
+		dbName           string
+		key              string
+		version          *types.Version
+		expectedEnvelope *types.GetHistoricalDataResponseEnvelope
+	}{
+		{
+			name:   "fetch value of key1 at a particular version",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
 			},
-			Values: []*types.ValueWithMetadata{
-				{
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: []*types.ValueWithMetadata{
+						{
+							Value: []byte("value3"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    1,
+								},
+							},
 						},
 					},
 				},
 			},
 		},
+		{
+			name:   "fetch value of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
+			},
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: nil,
+				},
+			},
+		},
 	}
 
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	for _, tt := range tests {
+		envelope, err := env.p.GetValueAt(tt.dbName, tt.key, tt.version)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetReaders(t *testing.T) {
@@ -439,23 +563,51 @@ func TestGetReaders(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetReaders("db1", "key1")
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetDataReadersResponseEnvelope{
-		Payload: &types.GetDataReadersResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
+	tests := []struct {
+		name             string
+		dbName           string
+		key              string
+		expectedEnvelope *types.GetDataReadersResponseEnvelope
+	}{
+		{
+			name:   "fetch readers of key1",
+			dbName: "db1",
+			key:    "key1",
+			expectedEnvelope: &types.GetDataReadersResponseEnvelope{
+				Payload: &types.GetDataReadersResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					ReadBy: map[string]uint32{
+						"user1": 1,
+						"user2": 1,
+					},
+				},
 			},
-			ReadBy: map[string]uint32{
-				"user1": 1,
-				"user2": 1,
+		},
+		{
+			name:   "fetch readers of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			expectedEnvelope: &types.GetDataReadersResponseEnvelope{
+				Payload: &types.GetDataReadersResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					ReadBy: nil,
+				},
 			},
 		},
 	}
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+
+	for _, tt := range tests {
+		envelope, err := env.p.GetReaders(tt.dbName, tt.key)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetWriters(t *testing.T) {
@@ -465,23 +617,50 @@ func TestGetWriters(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetWriters("db1", "key1")
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetDataWritersResponseEnvelope{
-		Payload: &types.GetDataWritersResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
+	tests := []struct {
+		name             string
+		dbName           string
+		key              string
+		expectedEnvelope *types.GetDataWritersResponseEnvelope
+	}{
+		{
+			name:   "fetch readers of key1",
+			dbName: "db1",
+			key:    "key1",
+			expectedEnvelope: &types.GetDataWritersResponseEnvelope{
+				Payload: &types.GetDataWritersResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					WrittenBy: map[string]uint32{
+						"user1": 2,
+						"user2": 2,
+					},
+				},
 			},
-			WrittenBy: map[string]uint32{
-				"user1": 2,
-				"user2": 2,
+		},
+		{
+			name:   "fetch readers of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			expectedEnvelope: &types.GetDataWritersResponseEnvelope{
+				Payload: &types.GetDataWritersResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					WrittenBy: nil,
+				},
 			},
 		},
 	}
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+
+	for _, tt := range tests {
+		envelope, err := env.p.GetWriters(tt.dbName, tt.key)
+		require.NoError(t, err)
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetValuesReadByUser(t *testing.T) {
@@ -491,32 +670,58 @@ func TestGetValuesReadByUser(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetValuesReadByUser("user1")
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetDataReadByResponseEnvelope{
-		Payload: &types.GetDataReadByResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
-			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    0,
+	tests := []struct {
+		name             string
+		user             string
+		expectedEnvelope *types.GetDataReadByResponseEnvelope
+	}{
+		{
+			name: "fetch values read by user1",
+			user: "user1",
+			expectedEnvelope: &types.GetDataReadByResponseEnvelope{
+				Payload: &types.GetDataReadByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
+				Signature: nil,
 			},
 		},
-		Signature: nil,
+		{
+			name: "fetch values read by user5",
+			user: "user5",
+			expectedEnvelope: &types.GetDataReadByResponseEnvelope{
+				Payload: &types.GetDataReadByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					KVs: nil,
+				},
+				Signature: nil,
+			},
+		},
 	}
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+
+	for _, tt := range tests {
+		envelope, err := env.p.GetValuesReadByUser(tt.user)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetValuesWrittenByUser(t *testing.T) {
@@ -526,58 +731,83 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetValuesWrittenByUser("user1")
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetDataWrittenByResponseEnvelope{
-		Payload: &types.GetDataWrittenByResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
-			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    0,
-						},
+	tests := []struct {
+		name             string
+		user             string
+		expectedEnvelope *types.GetDataWrittenByResponseEnvelope
+	}{
+		{
+			name: "fetch values read by user1",
+			user: "user1",
+			expectedEnvelope: &types.GetDataWrittenByResponseEnvelope{
+				Payload: &types.GetDataWrittenByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
 					},
-				},
-				{
-					Key:   "key2",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						AccessControl: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
-								"user2": true,
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
 							},
 						},
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
+						{
+							Key:   "key2",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								AccessControl: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{
+										"user1": true,
+										"user2": true,
+									},
+								},
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
+							},
 						},
-					},
-				},
-				{
-					Key:   "key1",
-					Value: []byte("value2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
+						{
+							Key:   "key1",
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
 			},
 		},
+		{
+			name: "fetch values read by user5",
+			user: "user5",
+			expectedEnvelope: &types.GetDataWrittenByResponseEnvelope{
+				Payload: &types.GetDataWrittenByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					KVs: nil,
+				},
+				Signature: nil,
+			},
+		},
 	}
 
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	for _, tt := range tests {
+		envelope, err := env.p.GetValuesWrittenByUser(tt.user)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }
 
 func TestGetTxSubmittedByUser(t *testing.T) {
@@ -587,19 +817,43 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
-	envelope, err := env.p.GetTxIDsSubmittedByUser("user2")
-	require.NoError(t, err)
-
-	expectedEnvelope := &types.GetTxIDsSubmittedByResponseEnvelope{
-		Payload: &types.GetTxIDsSubmittedByResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.p.nodeID,
+	tests := []struct {
+		name             string
+		user             string
+		expectedEnvelope *types.GetTxIDsSubmittedByResponseEnvelope
+	}{
+		{
+			name: "fetch tx submitted by user",
+			user: "user2",
+			expectedEnvelope: &types.GetTxIDsSubmittedByResponseEnvelope{
+				Payload: &types.GetTxIDsSubmittedByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					TxIDs: []string{"tx4", "tx5"},
+				},
 			},
-			TxIDs: []string{"tx4", "tx5"},
+		},
+		{
+			name: "fetch tx submitted by user - empty",
+			user: "user5",
+			expectedEnvelope: &types.GetTxIDsSubmittedByResponseEnvelope{
+				Payload: &types.GetTxIDsSubmittedByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					TxIDs: nil,
+				},
+			},
 		},
 	}
 
-	require.NotNil(t, envelope)
-	require.Equal(t, expectedEnvelope.GetPayload(), envelope.GetPayload())
-	testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	for _, tt := range tests {
+		envelope, err := env.p.GetTxIDsSubmittedByUser(tt.user)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
 }

@@ -48,6 +48,10 @@ func (p *provenanceQueryProcessor) GetValueAt(dbName, key string, version *types
 		return nil, err
 	}
 
+	if value == nil {
+		return p.composeHistoricalDataResponseEnvelope(nil)
+	}
+
 	return p.composeHistoricalDataResponseEnvelope([]*types.ValueWithMetadata{value})
 }
 
@@ -126,6 +130,10 @@ func (p *provenanceQueryProcessor) GetReaders(dbName, key string) (*types.GetDat
 		return nil, err
 	}
 
+	if len(users) == 0 {
+		users = nil
+	}
+
 	response := &types.GetDataReadersResponseEnvelope{
 		Payload: &types.GetDataReadersResponse{
 			Header: &types.ResponseHeader{
@@ -147,6 +155,10 @@ func (p *provenanceQueryProcessor) GetWriters(dbName, key string) (*types.GetDat
 	users, err := p.provenanceStore.GetWriters(dbName, key)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(users) == 0 {
+		users = nil
 	}
 
 	response := &types.GetDataWritersResponseEnvelope{

@@ -301,6 +301,16 @@ func TestGetValueAt(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "fetch non-existing key",
+			dbName: "db1",
+			key:    "key3",
+			version: &types.Version{
+				BlockNum: 1,
+				TxNum:    1,
+			},
+			expectedValue: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -406,6 +416,12 @@ func TestGetValues(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:           "fetch non-existing value",
+			dbName:         "db1",
+			key:            "key3",
+			expectedValues: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -439,6 +455,11 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 			name:          "fetch ids of tx submitted by user2",
 			userID:        "user2",
 			expectedTxIDs: []string{"tx4", "tx5"},
+		},
+		{
+			name:          "fetch non-existing transaction",
+			userID:        "user3",
+			expectedTxIDs: nil,
 		},
 	}
 
@@ -483,6 +504,12 @@ func TestGetReaders(t *testing.T) {
 				"user2": 2,
 			},
 		},
+		{
+			name:            "fetch users who have read non-existing key",
+			dbName:          "db1",
+			key:             "key3",
+			expectedReaders: make(map[string]uint32),
+		},
 	}
 
 	for _, tt := range tests {
@@ -525,6 +552,12 @@ func TestGetWriters(t *testing.T) {
 				"user1": 1,
 				"user2": 1,
 			},
+		},
+		{
+			name:            "fetch users who have written non-existing key",
+			dbName:          "db1",
+			key:             "key3",
+			expectedWriters: make(map[string]uint32),
 		},
 	}
 
@@ -613,6 +646,11 @@ func TestGetValuesReadByUser(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name:          "fetch all values read by user3",
+			userID:        "user3",
+			expectedReads: nil,
 		},
 	}
 
@@ -721,6 +759,11 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name:           "fetch all values read by user3",
+			userID:         "user3",
+			expectedWrites: nil,
 		},
 	}
 
@@ -859,6 +902,17 @@ func TestGetNextValues(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:   "next values of non-existing key",
+			dbName: "db1",
+			key:    "key3",
+			version: &types.Version{
+				BlockNum: 3,
+				TxNum:    0,
+			},
+			limit:          -1,
+			expectedValues: nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -995,6 +1049,17 @@ func TestGetPreviousValues(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name:   "previous values of non-existing key",
+			dbName: "db1",
+			key:    "key3",
+			version: &types.Version{
+				BlockNum: 3,
+				TxNum:    0,
+			},
+			limit:          -1,
+			expectedValues: nil,
 		},
 	}
 
