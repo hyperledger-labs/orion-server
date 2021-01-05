@@ -33,7 +33,7 @@ const (
 	LedgerEndpoint = "/ledger/"
 	GetBlockHeader = "/ledger/block/{blockId:[0-9]+}"
 	GetPath        = "/ledger/path"
-	GetTxProof     = "/ledger/proof/{blockId:[0-9]}"
+	GetTxProof     = "/ledger/proof/{blockId:[0-9]+}"
 	GetTxReceipt   = "/ledger/tx/receipt/{txId}"
 
 	ProvenanceEndpoint  = "/provenance/"

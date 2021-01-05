@@ -373,7 +373,7 @@ func TestProofQuery(t *testing.T) {
 		expectedErr        string
 	}{
 		{
-			name: "valid get path request",
+			name: "valid get path request, single digit",
 			expectedResponse: &types.GetTxProofResponseEnvelope{
 				Signature: []byte{0, 0, 0},
 				Payload: &types.GetTxProofResponse{
@@ -401,6 +401,39 @@ func TestProofQuery(t *testing.T) {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetTxProof", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get path request, multi digit",
+			expectedResponse: &types.GetTxProofResponseEnvelope{
+				Signature: []byte{0, 0, 0},
+				Payload: &types.GetTxProofResponse{
+					Header: &types.ResponseHeader{
+						NodeID: "testNodeID",
+					},
+					Hashes: [][]byte{[]byte("hash1"), []byte("hash2")},
+				},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxProof(22, 11), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
+					UserID:      submittingUserName,
+					BlockNumber: 22,
+					TxIndex:     11,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTxProof", submittingUserName, uint64(22), uint64(11)).Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
