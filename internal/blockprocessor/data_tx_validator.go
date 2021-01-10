@@ -24,6 +24,12 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingUpdates m
 
 	tx := txEnv.Payload
 	switch {
+	case !v.db.ValidDBName(tx.DBName):
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "the database name [" + tx.DBName + "] is not valid",
+		}, nil
+
 	case !v.db.Exist(tx.DBName):
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,

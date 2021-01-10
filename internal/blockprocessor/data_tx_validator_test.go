@@ -55,6 +55,25 @@ func TestValidateDataTx(t *testing.T) {
 		expectedResult *types.ValidationInfo
 	}{
 		{
+			name: "invalid: unallowed character in the database name",
+			setup: func(db worldstate.DB) {
+				addUserWithCorrectPrivilege(db)
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
+				UserID: "operatingUser",
+				DBName: "db1/name",
+				DataWrites: []*types.DataWrite{
+					{
+						Key: "key1",
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database name [db1/name] is not valid",
+			},
+		},
+		{
 			name: "invalid: database does not exist",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)

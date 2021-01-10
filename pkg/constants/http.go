@@ -17,11 +17,11 @@ const (
 	PostUserTx   = "/user/tx"
 
 	DataEndpoint = "/data/"
-	GetData      = "/data/{dbname}/{key}"
+	GetData      = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
 	PostDataTx   = "/data/tx"
 
 	DBEndpoint  = "/db/"
-	GetDBStatus = "/db/{dbname}"
+	GetDBStatus = "/db/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
 	PostDBTx    = "/db/tx"
 
 	ConfigEndpoint = "/config/"

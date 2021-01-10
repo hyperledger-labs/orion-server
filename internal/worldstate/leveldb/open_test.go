@@ -22,6 +22,9 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		for _, dbName := range preCreateDBs {
 			require.NotNil(t, l.dbs[dbName])
 		}
+
+		require.False(t, l.ValidDBName("db1/name"))
+		require.True(t, l.ValidDBName("db_2"))
 	}
 
 	c := &logger.Config{
@@ -172,4 +175,38 @@ func TestOpenLevelDBInstance(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, []byte("value1"), actualValue)
 	})
+}
+
+func TestValidDBName(t *testing.T) {
+	tests := []struct {
+		name           string
+		dbName         string
+		expectedResult bool
+	}{
+		{
+			name:           "valid db name",
+			dbName:         "db1DZ0-_.",
+			expectedResult: true,
+		},
+		{
+			name:           "invalid db name",
+			dbName:         "/db1DZ0/-_.",
+			expectedResult: false,
+		},
+		{
+			name:           "invalid db name",
+			dbName:         "$p",
+			expectedResult: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			env := newTestEnv(t)
+			defer env.cleanup()
+			require.Equal(t, tt.expectedResult, env.l.ValidDBName(tt.dbName))
+		})
+	}
 }

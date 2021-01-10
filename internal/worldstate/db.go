@@ -1,6 +1,8 @@
 package worldstate
 
-import "github.ibm.com/blockchaindb/server/pkg/types"
+import (
+	"github.ibm.com/blockchaindb/server/pkg/types"
+)
 
 const (
 	// UsersDBName holds all users information
@@ -19,6 +21,9 @@ const (
 	// ConfigKey holds the name of the key in the ConfigDB that
 	// stores the cluster configuration
 	ConfigKey = "config"
+	// AllowedCharsInDBName holds the regexp for allowed characters
+	// in a database name
+	AllowedCharsInDBName = `^[0-9a-zA-Z_-.]+$`
 )
 
 // DB provides method to create and access states stored in
@@ -47,6 +52,8 @@ type DB interface {
 	// Height returns the state database block height. In other
 	// words, it returns the last committed block number
 	Height() (uint64, error)
+	// ValidDBName returns true if the given dbName is valid
+	ValidDBName(dbName string) bool
 	// Close closes the DB instance
 	Close() error
 }

@@ -51,6 +51,12 @@ func (v *dbAdminTxValidator) validateCreateDBEntries(toCreateDBs []string) *type
 				ReasonIfInvalid: "the name of the database to be created cannot be empty",
 			}
 
+		case !v.db.ValidDBName(dbName):
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database name [" + dbName + "] is not valid",
+			}
+
 		case worldstate.IsSystemDB(dbName):
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -96,6 +102,12 @@ func (v *dbAdminTxValidator) validateDeleteDBEntries(toDeleteDBs []string) *type
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the name of the database to be deleted cannot be empty",
+			}
+
+		case !v.db.ValidDBName(dbName):
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database name [" + dbName + "] is not valid",
 			}
 
 		case worldstate.IsSystemDB(dbName):

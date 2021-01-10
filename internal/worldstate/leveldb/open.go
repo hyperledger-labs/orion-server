@@ -2,6 +2,7 @@ package leveldb
 
 import (
 	"path/filepath"
+	"regexp"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -19,14 +20,18 @@ var (
 	// detect the partially created store and do cleanup
 	// before creating a new levelDB instance
 	underCreationFlag = "undercreation"
+	// allowedCharsInDBName holds the regexp for allowed characters
+	// in a database name
+	allowedCharsInDBName = `^[0-9a-zA-Z_\-\.]+$`
 )
 
 // LevelDB holds information about all created database
 type LevelDB struct {
-	dbRootDir string
-	dbs       map[string]*db
-	logger    *logger.SugarLogger
-	dbsList   sync.RWMutex
+	dbRootDir   string
+	dbs         map[string]*db
+	logger      *logger.SugarLogger
+	dbsList     sync.RWMutex
+	dbNameRegex *regexp.Regexp
 }
 
 // db - a wrapper on an actual store
@@ -101,9 +106,10 @@ func openNewLevelDBInstance(c *Config) (*LevelDB, error) {
 	}
 
 	l := &LevelDB{
-		dbRootDir: c.DBRootDir,
-		dbs:       make(map[string]*db),
-		logger:    c.Logger,
+		dbRootDir:   c.DBRootDir,
+		dbs:         make(map[string]*db),
+		logger:      c.Logger,
+		dbNameRegex: regexp.MustCompile(allowedCharsInDBName),
 	}
 
 	for _, dbName := range preCreateDBs {
@@ -121,9 +127,10 @@ func openNewLevelDBInstance(c *Config) (*LevelDB, error) {
 
 func openExistingLevelDBInstance(c *Config) (*LevelDB, error) {
 	l := &LevelDB{
-		dbRootDir: c.DBRootDir,
-		dbs:       make(map[string]*db),
-		logger:    c.Logger,
+		dbRootDir:   c.DBRootDir,
+		dbs:         make(map[string]*db),
+		logger:      c.Logger,
+		dbNameRegex: regexp.MustCompile(allowedCharsInDBName),
 	}
 
 	dbNames, err := fileops.ListSubdirs(c.DBRootDir)
@@ -168,4 +175,9 @@ func (l *LevelDB) Close() error {
 	}
 
 	return nil
+}
+
+// ValidDBName returns true if the given dbName is valid
+func (l *LevelDB) ValidDBName(dbName string) bool {
+	return l.dbNameRegex.MatchString(dbName)
 }

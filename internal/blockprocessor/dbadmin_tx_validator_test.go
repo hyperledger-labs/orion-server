@@ -105,7 +105,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: createDBs list is invalid",
+			name: "invalid: createDBs list has duplicate",
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
@@ -120,7 +120,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: deleteDBs list is invalid",
+			name: "invalid: deleteDBs list has a non-existing db",
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
@@ -131,6 +131,35 @@ func TestValidateDBAdminTx(t *testing.T) {
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the database [db1] does not exist in the cluster and hence, it cannot be deleted",
+			},
+		},
+		{
+			name: "invalid: createDBs list has an invalid db name",
+			setup: func(db worldstate.DB) {
+				require.NoError(t, db.Commit(privilegedUser, 1))
+			},
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
+				&types.DBAdministrationTx{
+					UserID:    "userWithMorePrivilege",
+					CreateDBs: []string{"db1", "db1/abc"},
+				}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database name [db1/abc] is not valid",
+			},
+		},
+		{
+			name: "invalid: deleteDBs list has an invalid db name",
+			setup: func(db worldstate.DB) {
+				require.NoError(t, db.Commit(privilegedUser, 1))
+			},
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
+				UserID:    "userWithMorePrivilege",
+				DeleteDBs: []string{"db1/abc/def", "db1"},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database name [db1/abc/def] is not valid",
 			},
 		},
 		{
