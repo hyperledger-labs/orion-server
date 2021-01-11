@@ -12,7 +12,6 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
-	backend "github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -38,12 +37,13 @@ func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
 }
 
 type txHandler struct {
-	db backend.DB
+	db bcdb.DB
 }
 
 // HandleTransaction handles transaction submission
 func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}) {
-	if err := t.db.SubmitTransaction(tx); err != nil {
+	// for now, all users' transactions are async.
+	if _, err := t.db.SubmitTransaction(tx, 0); err != nil {
 		if _, ok := err.(*bcdb.DuplicateTxIDError); ok {
 			SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
 		} else {

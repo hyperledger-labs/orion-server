@@ -263,11 +263,11 @@ func TestUsersRequestHandler_AddUser(t *testing.T) {
 			createMockAndInstrument: func(t *testing.T, txEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", userID).Return(aliceCert, nil)
-				db.On("SubmitTransaction", mock.Anything).Run(func(args mock.Arguments) {
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 					tx, ok := args[0].(*types.UserAdministrationTxEnvelope)
 					require.True(t, ok)
 					require.Equal(t, txEnv, tx)
-				}).Return(nil)
+				}).Return(nil, nil)
 				return db
 			},
 			expectedCode: http.StatusOK,
@@ -359,7 +359,7 @@ func TestUsersRequestHandler_AddUser(t *testing.T) {
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", userID).Return(aliceCert, nil)
-				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).Return(nil, errors.New("oops, submission failed"))
 
 				return db
 			},

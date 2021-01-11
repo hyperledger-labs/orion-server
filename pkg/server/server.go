@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"sync"
-	"time"
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/config"
@@ -13,6 +11,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/httphandler"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 // BCDBHTTPServer holds the database and http server objects
@@ -75,31 +74,16 @@ func (s *BCDBHTTPServer) Start() error {
 	}
 	if blockHeight == 0 {
 		s.logger.Infof("Bootstrapping DB for the first time")
-		if err := s.db.BootstrapDB(s.conf); err != nil {
+		resp, err := s.db.BootstrapDB(s.conf)
+		if err != nil {
 			return errors.Wrap(err, "error while preparing and committing config transaction")
 		}
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		// Need to make sure bootstrap is complete before moving forward and allow anyone
-		// to start server
-		// TODO: (bartem) Properly design transaction submission mechanism that will allow to block
-		// until transaction is committed to the ledger, rather than doing polling as it is
-		// done below:
-		go func() {
-			defer wg.Done()
-			for {
-				if ready, err := s.db.IsReady(); err != nil {
-					// Failing to have DB ready, there is nothing to continue
-					// better to panic and user to resolve the issue
-					s.logger.Panicf("Server cannot start because, %s", err)
-				} else if ready {
-					s.logger.Debugf("Server is ready to serve requests")
-					return
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-		}() // TODO: (bartem) this go routine has to be externalized into proper re-try abstraction
-		wg.Wait()
+
+		txReceipt := resp.GetPayload().GetReceipt()
+		valInfo := txReceipt.GetHeader().GetValidationInfo()[txReceipt.TxIndex]
+		if valInfo.Flag != types.Flag_VALID {
+			return errors.Errorf("config transaction was not committed due to invalidation [" + valInfo.ReasonIfInvalid + "]")
+		}
 	}
 
 	s.logger.Infof("Starting the server on %s", s.listen.Addr().String())

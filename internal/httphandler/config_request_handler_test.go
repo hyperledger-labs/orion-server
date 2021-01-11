@@ -257,10 +257,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
-				db.On("SubmitTransaction", mock.Anything).Run(func(args mock.Arguments) {
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 					config := args[0].(*types.ConfigTxEnvelope)
 					require.Equal(t, configTx, config)
-				}).Return(nil)
+				}).Return(nil, nil)
 
 				return db
 			},
@@ -353,7 +353,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
-				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).Return(nil, errors.New("oops, submission failed"))
 
 				return db
 			},

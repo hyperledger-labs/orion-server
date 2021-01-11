@@ -165,3 +165,13 @@ message GetTxReceiptResponseEnvelope {
   GetTxReceiptResponse payload = 1;
   bytes signature = 2;
 }
+
+message TxResponse {
+  ResponseHeader header = 1;
+  TxReceipt receipt = 2;
+}
+
+message TxResponseEnvelope {
+  TxResponse payload = 1;
+  bytes signature = 2;
+}

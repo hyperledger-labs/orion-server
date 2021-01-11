@@ -15,3 +15,11 @@ type PermissionErr struct {
 func (e *PermissionErr) Error() string {
 	return e.ErrMsg
 }
+
+type TimeoutErr struct {
+	ErrMsg string
+}
+
+func (t *TimeoutErr) Error() string {
+	return t.ErrMsg
+}

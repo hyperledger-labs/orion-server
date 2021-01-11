@@ -287,12 +287,12 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", userID).Return(aliceCert, nil)
-				db.On("SubmitTransaction", mock.Anything).
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).
 					Run(func(args mock.Arguments) {
 						tx := args[0].(*types.DataTxEnvelope)
 						require.Equal(t, dataTxEnv, tx)
 					}).
-					Return(nil)
+					Return(nil, nil)
 				return db
 			},
 			expectedCode: http.StatusOK,
@@ -384,7 +384,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", userID).Return(aliceCert, nil)
-				db.On("SubmitTransaction", mock.Anything).Return(errors.New("oops, submission failed"))
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).Return(nil, errors.New("oops, submission failed"))
 
 				return db
 			},

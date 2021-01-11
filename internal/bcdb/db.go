@@ -4,6 +4,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io/ioutil"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -92,16 +93,15 @@ type DB interface {
 	// and transaction index inside the block
 	GetTxReceipt(userId string, txID string) (*types.GetTxReceiptResponseEnvelope, error)
 
-	// SubmitTransaction submits transaction to the database
-	SubmitTransaction(tx interface{}) error
+	// SubmitTransaction submits transaction to the database with a timeout. If the timeout is
+	// set to 0, the submission would be treated as async while a non-zero timeout would be
+	// treated as a sync submission. When a timeout occurs with the sync submission, a
+	// timeout error will be returned
+	SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponseEnvelope, error)
 
 	// BootstrapDB given bootstrap configuration initialize database by
 	// creating required system tables to include database meta data
-	BootstrapDB(conf *config.Configurations) error
-
-	// IsReady returns true once instance of the DB is properly initiated, meaning
-	// all system tables was created successfully
-	IsReady() (bool, error)
+	BootstrapDB(conf *config.Configurations) (*types.TxResponseEnvelope, error)
 
 	// IsDBExists returns true if database with given name is exists otherwise false
 	IsDBExists(name string) bool
@@ -202,6 +202,8 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	txProcessor, err := newTransactionProcessor(
 		&txProcessorConfig{
+			nodeID:             conf.Node.Identity.ID,
+			signer:             signer,
 			db:                 levelDB,
 			blockStore:         blockStore,
 			provenanceStore:    provenanceStore,
@@ -230,37 +232,17 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 }
 
 // BootstrapDB bootstraps DB with system tables
-func (d *db) BootstrapDB(conf *config.Configurations) error {
+func (d *db) BootstrapDB(conf *config.Configurations) (*types.TxResponseEnvelope, error) {
 	configTx, err := prepareConfigTx(conf)
 	if err != nil {
-		return errors.Wrap(err, "failed to prepare and commit a configuration transaction")
+		return nil, errors.Wrap(err, "failed to prepare and commit a configuration transaction")
 	}
 
-	if err := d.txProcessor.submitTransaction(configTx); err != nil {
-		return errors.Wrap(err, "error while committing configuration transaction")
-	}
-	return nil
-}
-
-// IsReady returns true once instance of the DB is properly initiated, meaning
-// all system tables was created successfully
-func (d *db) IsReady() (bool, error) {
-	height, err := d.LedgerHeight()
+	resp, err := d.SubmitTransaction(configTx, 30*time.Second)
 	if err != nil {
-		return false, err
+		return nil, errors.Wrap(err, "error while committing configuration transaction")
 	}
-
-	dbHeight, err := d.Height()
-	if err != nil {
-		return false, err
-	}
-
-	for _, sysDB := range worldstate.SystemDBs() {
-		if !d.IsDBExists(sysDB) {
-			return false, nil
-		}
-	}
-	return height > 0 && dbHeight > 0, nil
+	return resp, nil
 }
 
 // LedgerHeight returns ledger height
@@ -302,9 +284,12 @@ func (d *db) GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, err
 	return d.worldstateQueryProcessor.getDBStatus(dbName)
 }
 
-// SubmitTransaction submits transaction
-func (d *db) SubmitTransaction(tx interface{}) error {
-	return d.txProcessor.submitTransaction(tx)
+// SubmitTransaction submits transaction to the database with a timeout. If the timeout is
+// set to 0, the submission would be treated as async while a non-zero timeout would be
+// treated as a sync submission. When a timeout occurs with the sync submission, a
+// timeout error will be returned
+func (d *db) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponseEnvelope, error) {
+	return d.txProcessor.submitTransaction(tx, timeout)
 }
 
 // GetData returns value for provided key

@@ -4,6 +4,7 @@ package mocks
 
 import config "github.ibm.com/blockchaindb/server/config"
 import mock "github.com/stretchr/testify/mock"
+import time "time"
 import types "github.ibm.com/blockchaindb/server/pkg/types"
 import x509 "crypto/x509"
 
@@ -13,17 +14,26 @@ type DB struct {
 }
 
 // BootstrapDB provides a mock function with given fields: conf
-func (_m *DB) BootstrapDB(conf *config.Configurations) error {
+func (_m *DB) BootstrapDB(conf *config.Configurations) (*types.TxResponseEnvelope, error) {
 	ret := _m.Called(conf)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(*config.Configurations) error); ok {
+	var r0 *types.TxResponseEnvelope
+	if rf, ok := ret.Get(0).(func(*config.Configurations) *types.TxResponseEnvelope); ok {
 		r0 = rf(conf)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.TxResponseEnvelope)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(*config.Configurations) error); ok {
+		r1 = rf(conf)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }
 
 // Close provides a mock function with given fields:
@@ -61,13 +71,13 @@ func (_m *DB) DoesUserExist(userID string) (bool, error) {
 	return r0, r1
 }
 
-// GetBlockHeader provides a mock function with given fields: userId, blockNum
-func (_m *DB) GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
-	ret := _m.Called(userId, blockNum)
+// GetBlockHeader provides a mock function with given fields: userID, blockNum
+func (_m *DB) GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
+	ret := _m.Called(userID, blockNum)
 
 	var r0 *types.GetBlockResponseEnvelope
 	if rf, ok := ret.Get(0).(func(string, uint64) *types.GetBlockResponseEnvelope); ok {
-		r0 = rf(userId, blockNum)
+		r0 = rf(userID, blockNum)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetBlockResponseEnvelope)
@@ -76,7 +86,7 @@ func (_m *DB) GetBlockHeader(userId string, blockNum uint64) (*types.GetBlockRes
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(string, uint64) error); ok {
-		r1 = rf(userId, blockNum)
+		r1 = rf(userID, blockNum)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -176,13 +186,13 @@ func (_m *DB) GetData(dbName string, querierUserID string, key string) (*types.G
 	return r0, r1
 }
 
-// GetLedgerPath provides a mock function with given fields: userId, start, end
-func (_m *DB) GetLedgerPath(userId string, start uint64, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
-	ret := _m.Called(userId, start, end)
+// GetLedgerPath provides a mock function with given fields: userID, start, end
+func (_m *DB) GetLedgerPath(userID string, start uint64, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
+	ret := _m.Called(userID, start, end)
 
 	var r0 *types.GetLedgerPathResponseEnvelope
 	if rf, ok := ret.Get(0).(func(string, uint64, uint64) *types.GetLedgerPathResponseEnvelope); ok {
-		r0 = rf(userId, start, end)
+		r0 = rf(userID, start, end)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetLedgerPathResponseEnvelope)
@@ -191,7 +201,7 @@ func (_m *DB) GetLedgerPath(userId string, start uint64, end uint64) (*types.Get
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(string, uint64, uint64) error); ok {
-		r1 = rf(userId, start, end)
+		r1 = rf(userID, start, end)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -314,13 +324,13 @@ func (_m *DB) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedBy
 	return r0, r1
 }
 
-// GetTxProof provides a mock function with given fields: userId, blockNum, txIdx
-func (_m *DB) GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
-	ret := _m.Called(userId, blockNum, txIdx)
+// GetTxProof provides a mock function with given fields: userID, blockNum, txIdx
+func (_m *DB) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
+	ret := _m.Called(userID, blockNum, txIdx)
 
 	var r0 *types.GetTxProofResponseEnvelope
 	if rf, ok := ret.Get(0).(func(string, uint64, uint64) *types.GetTxProofResponseEnvelope); ok {
-		r0 = rf(userId, blockNum, txIdx)
+		r0 = rf(userID, blockNum, txIdx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetTxProofResponseEnvelope)
@@ -329,7 +339,7 @@ func (_m *DB) GetTxProof(userId string, blockNum uint64, txIdx uint64) (*types.G
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(string, uint64, uint64) error); ok {
-		r1 = rf(userId, blockNum, txIdx)
+		r1 = rf(userID, blockNum, txIdx)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -533,27 +543,6 @@ func (_m *DB) IsDBExists(name string) bool {
 	return r0
 }
 
-// IsReady provides a mock function with given fields:
-func (_m *DB) IsReady() (bool, error) {
-	ret := _m.Called()
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func() bool); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
 // LedgerHeight provides a mock function with given fields:
 func (_m *DB) LedgerHeight() (uint64, error) {
 	ret := _m.Called()
@@ -575,16 +564,25 @@ func (_m *DB) LedgerHeight() (uint64, error) {
 	return r0, r1
 }
 
-// SubmitTransaction provides a mock function with given fields: tx
-func (_m *DB) SubmitTransaction(tx interface{}) error {
-	ret := _m.Called(tx)
+// SubmitTransaction provides a mock function with given fields: tx, timeout
+func (_m *DB) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponseEnvelope, error) {
+	ret := _m.Called(tx, timeout)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(interface{}) error); ok {
-		r0 = rf(tx)
+	var r0 *types.TxResponseEnvelope
+	if rf, ok := ret.Get(0).(func(interface{}, time.Duration) *types.TxResponseEnvelope); ok {
+		r0 = rf(tx, timeout)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.TxResponseEnvelope)
+		}
 	}
 
-	return r0
+	var r1 error
+	if rf, ok := ret.Get(1).(func(interface{}, time.Duration) error); ok {
+		r1 = rf(tx, timeout)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
 }

@@ -3,12 +3,15 @@ package bcdb
 import (
 	"bytes"
 	"crypto/x509"
+	"encoding/json"
 	"io/ioutil"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
@@ -93,7 +96,12 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 
+	nodeID := "test-node-id1"
+	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
+	_, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
+
 	txProcConf := &txProcessorConfig{
+		nodeID:             nodeID,
 		db:                 db,
 		blockStore:         blockStore,
 		provenanceStore:    provenanceStore,
@@ -102,6 +110,7 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		blockQueueLength:   100,
 		maxTxCountPerBatch: 1,
 		batchTimeout:       50 * time.Millisecond,
+		signer:             nodeSigner,
 		logger:             logger,
 	}
 	txProcessor, err := newTransactionProcessor(txProcConf)
@@ -145,7 +154,36 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Configurations, dbName string) {
 	configTx, err := prepareConfigTx(conf)
 	require.NoError(t, err)
-	require.NoError(t, env.txProcessor.submitTransaction(configTx))
+	resp, err := env.txProcessor.submitTransaction(configTx, 5*time.Second)
+	require.NoError(t, err)
+
+	txHash, err := calculateTxHash(configTx, &types.ValidationInfo{Flag: types.Flag_VALID})
+	require.NoError(t, err)
+	txMerkelRootHash, err := crypto.ConcatenateHashes(txHash, nil)
+	require.NoError(t, err)
+
+	expectedRespPayload := &types.TxResponse{
+		Header: &types.ResponseHeader{
+			NodeID: env.txProcessor.nodeID,
+		},
+		Receipt: &types.TxReceipt{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number:                1,
+					LastCommittedBlockNum: 0,
+				},
+				TxMerkelTreeRootHash: txMerkelRootHash,
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
+					},
+				},
+			},
+			TxIndex: 0,
+		},
+	}
+	require.True(t, proto.Equal(expectedRespPayload, resp.GetPayload()))
+	require.True(t, env.txProcessor.pendingTxs.isEmpty())
 
 	user := &types.User{
 		ID:          env.userID,
@@ -178,16 +216,9 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 		},
 	}
 	require.NoError(t, env.db.Commit(createUser, 2))
-	genesisCommitted := func() bool {
-		height, _ := env.blockStore.Height()
-		return height > uint64(0)
-	}
-	require.Eventually(t, genesisCommitted, time.Second*2, time.Millisecond*100)
-
-	noPendingTxs := func() bool {
-		return env.txProcessor.pendingTxs.isEmpty()
-	}
-	require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
+	height, err := env.blockStore.Height()
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), height)
 }
 
 func TestTransactionProcessor(t *testing.T) {
@@ -196,7 +227,7 @@ func TestTransactionProcessor(t *testing.T) {
 	conf := testConfiguration(t)
 	defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
-	t.Run("commit a data transaction", func(t *testing.T) {
+	t.Run("commit a data transaction asynchronously", func(t *testing.T) {
 		t.Parallel()
 		env := newTxProcessorTestEnv(t)
 		defer env.cleanup()
@@ -216,7 +247,9 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		})
 
-		require.NoError(t, env.txProcessor.submitTransaction(tx))
+		resp, err := env.txProcessor.submitTransaction(tx, 0)
+		require.NoError(t, err)
+		require.Nil(t, resp)
 
 		assertTestKey1InDB := func() bool {
 			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
@@ -289,6 +322,99 @@ func TestTransactionProcessor(t *testing.T) {
 		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
 	})
 
+	t.Run("commit a data transaction synchronously", func(t *testing.T) {
+		t.Parallel()
+		env := newTxProcessorTestEnv(t)
+		defer env.cleanup()
+
+		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+
+		tx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
+			UserID:    "testUser",
+			DBName:    worldstate.DefaultDBName,
+			TxID:      "tx1",
+			DataReads: []*types.DataRead{},
+			DataWrites: []*types.DataWrite{
+				{
+					Key:   "test-key1",
+					Value: []byte("test-value1"),
+				},
+			},
+		})
+
+		resp, err := env.txProcessor.submitTransaction(tx, 5*time.Second)
+		require.NoError(t, err)
+		require.True(t, env.txProcessor.pendingTxs.isEmpty())
+
+		height, err := env.blockStore.Height()
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), height)
+
+		genesisHash, err := env.blockStore.GetHash(1)
+		require.NoError(t, err)
+		require.NotNil(t, genesisHash)
+		genesisHashBase, err := env.blockStore.GetBaseHeaderHash(1)
+		require.NoError(t, err)
+		require.NotNil(t, genesisHashBase)
+
+		expectedBlockHeader := &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                 2,
+				PreviousBaseHeaderHash: genesisHashBase,
+				LastCommittedBlockHash: genesisHash,
+				LastCommittedBlockNum:  1,
+			},
+			SkipchainHashes: [][]byte{genesisHash},
+			ValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		}
+
+		expectedBlock := &types.Block{
+			Header: expectedBlockHeader,
+			Payload: &types.Block_DataTxEnvelopes{
+				DataTxEnvelopes: &types.DataTxEnvelopes{
+					Envelopes: []*types.DataTxEnvelope{
+						tx,
+					},
+				},
+			},
+		}
+
+		root, err := mtree.BuildTreeForBlockTx(expectedBlock)
+		require.NoError(t, err)
+		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+		block, err := env.blockStore.Get(2)
+		require.NoError(t, err)
+		require.True(t, proto.Equal(expectedBlock, block))
+
+		expectedRespPayload := &types.TxResponse{
+			Header: &types.ResponseHeader{
+				NodeID: env.txProcessor.nodeID,
+			},
+			Receipt: &types.TxReceipt{
+				Header:  expectedBlockHeader,
+				TxIndex: 0,
+			},
+		}
+		require.True(t, proto.Equal(expectedRespPayload, resp.GetPayload()))
+
+		val, metadata, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
+		require.NoError(t, err)
+		require.Equal(t, []byte("test-value1"), val)
+		require.True(t, proto.Equal(
+			&types.Metadata{
+				Version: &types.Version{
+					BlockNum: 2,
+					TxNum:    0,
+				},
+			},
+			metadata,
+		))
+	})
+
 	t.Run("duplicate txID with the already committed transaction", func(t *testing.T) {
 		t.Parallel()
 		env := newTxProcessorTestEnv(t)
@@ -302,7 +428,9 @@ func TestTransactionProcessor(t *testing.T) {
 			TxID:   "tx1",
 		})
 
-		require.NoError(t, env.txProcessor.submitTransaction(dataTx))
+		resp, err := env.txProcessor.submitTransaction(dataTx, 0)
+		require.NoError(t, err)
+		require.Nil(t, resp)
 		noPendingTxs := func() bool {
 			return env.txProcessor.pendingTxs.isEmpty()
 		}
@@ -312,7 +440,9 @@ func TestTransactionProcessor(t *testing.T) {
 			UserID: "testUser",
 			TxID:   "tx1",
 		})
-		require.EqualError(t, env.txProcessor.submitTransaction(userTx), "the transaction has a duplicate txID [tx1]")
+		resp, err = env.txProcessor.submitTransaction(userTx, 0)
+		require.EqualError(t, err, "the transaction has a duplicate txID [tx1]")
+		require.Nil(t, resp)
 	})
 
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
@@ -335,9 +465,18 @@ func TestTransactionProcessor(t *testing.T) {
 			TxID:   "tx2",
 		})
 
-		require.NoError(t, env.txProcessor.submitTransaction(dbTx))
-		require.EqualError(t, env.txProcessor.submitTransaction(configTx), "the transaction has a duplicate txID [tx1]")
-		require.NoError(t, env.txProcessor.submitTransaction(userTx))
+		resp, err := env.txProcessor.submitTransaction(dbTx, 0)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
+		resp, err = env.txProcessor.submitTransaction(configTx, 0)
+		require.EqualError(t, err, "the transaction has a duplicate txID [tx1]")
+		require.Nil(t, resp)
+
+		resp, err = env.txProcessor.submitTransaction(userTx, 0)
+		require.NoError(t, err)
+		require.Nil(t, resp)
+
 		noPendingTxs := func() bool {
 			return env.txProcessor.pendingTxs.isEmpty()
 		}
@@ -351,23 +490,86 @@ func TestTransactionProcessor(t *testing.T) {
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
-		require.EqualError(t, env.txProcessor.submitTransaction([]byte("hello")), "unexpected transaction type")
+		resp, err := env.txProcessor.submitTransaction([]byte("hello"), 0)
+		require.EqualError(t, err, "unexpected transaction type")
+		require.Nil(t, resp)
 	})
 }
 
 func TestPendingTxs(t *testing.T) {
-	pendingTxs := &pendingTxs{
-		txIDs: make(map[string]bool),
-	}
+	t.Run("async tx", func(t *testing.T) {
+		pendingTxs := &pendingTxs{
+			txs: make(map[string]*promise),
+		}
 
-	require.True(t, pendingTxs.isEmpty())
-	pendingTxs.add("tx1")
-	require.True(t, pendingTxs.has("tx1"))
-	require.False(t, pendingTxs.has("tx2"))
-	pendingTxs.add("tx2")
-	require.True(t, pendingTxs.has("tx2"))
-	pendingTxs.remove([]string{"tx1", "tx2"})
-	require.True(t, pendingTxs.isEmpty())
+		var p *promise
+		require.True(t, pendingTxs.isEmpty())
+		pendingTxs.add("tx1", p)
+		require.True(t, pendingTxs.has("tx1"))
+		require.False(t, pendingTxs.has("tx2"))
+		pendingTxs.add("tx2", p)
+		require.True(t, pendingTxs.has("tx2"))
+		pendingTxs.removeAndSendReceipt([]string{"tx1", "tx2"}, nil)
+		require.True(t, pendingTxs.isEmpty())
+	})
+
+	t.Run("sync tx", func(t *testing.T) {
+		pendingTxs := &pendingTxs{
+			txs: make(map[string]*promise),
+		}
+
+		p := &promise{
+			receipt: make(chan *types.TxReceipt),
+			timeout: 5 * time.Second,
+		}
+		pendingTxs.add("tx3", p)
+
+		blockHeader := &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                5,
+				LastCommittedBlockNum: 1,
+			},
+		}
+		expectedReceipt := &types.TxReceipt{
+			Header:  blockHeader,
+			TxIndex: 0,
+		}
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			actualReceipt, err := p.wait()
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedReceipt, actualReceipt))
+		}()
+
+		pendingTxs.removeAndSendReceipt([]string{"tx3"}, blockHeader)
+		wg.Wait()
+	})
+
+	t.Run("sync tx with timeout", func(t *testing.T) {
+		pendingTxs := &pendingTxs{
+			txs: make(map[string]*promise),
+		}
+
+		p := &promise{
+			receipt: make(chan *types.TxReceipt),
+			timeout: 1 * time.Millisecond,
+		}
+		pendingTxs.add("tx3", p)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			receipt, err := p.wait()
+			require.EqualError(t, err, "timeout has occurred while waiting for the transaction receipt")
+			require.Nil(t, receipt)
+		}()
+
+		wg.Wait()
+		require.False(t, pendingTxs.isEmpty())
+	})
 }
 
 func testConfiguration(t *testing.T) *config.Configurations {
@@ -410,4 +612,17 @@ func testConfiguration(t *testing.T) *config.Configurations {
 			CertificatePath: "./testdata/rootca.cert",
 		},
 	}
+}
+
+func calculateTxHash(msg proto.Message, valInfo proto.Message) ([]byte, error) {
+	payloadBytes, err := json.Marshal(msg)
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't serialize msg to json %v", msg)
+	}
+	valBytes, err := json.Marshal(valInfo)
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't validationInfo msg to json %v", msg)
+	}
+	finalBytes := append(payloadBytes, valBytes...)
+	return crypto.ComputeSHA256Hash(finalBytes)
 }

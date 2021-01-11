@@ -10,10 +10,12 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/blockcreator"
 	"github.ibm.com/blockchaindb/server/internal/blockprocessor"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
+	internalerror "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/txreorderer"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -23,6 +25,8 @@ const (
 )
 
 type transactionProcessor struct {
+	nodeID         string
+	signer         crypto.Signer
 	txQueue        *queue.Queue
 	txBatchQueue   *queue.Queue
 	blockQueue     *queue.Queue
@@ -36,6 +40,8 @@ type transactionProcessor struct {
 }
 
 type txProcessorConfig struct {
+	nodeID             string
+	signer             crypto.Signer
 	db                 worldstate.DB
 	blockStore         *blockstore.Store
 	provenanceStore    *provenance.Store
@@ -50,6 +56,8 @@ type txProcessorConfig struct {
 func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, error) {
 	p := &transactionProcessor{}
 
+	p.nodeID = conf.nodeID
+	p.signer = conf.signer
 	p.logger = conf.logger
 	p.txQueue = queue.New(conf.txQueueLength)
 	p.txBatchQueue = queue.New(conf.txBatchQueueLength)
@@ -97,7 +105,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	p.blockProcessor.WaitTillStart()
 
 	p.pendingTxs = &pendingTxs{
-		txIDs: make(map[string]bool),
+		txs: make(map[string]*promise),
 	}
 	p.blockStore = conf.blockStore
 
@@ -105,7 +113,10 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 }
 
 // submitTransaction enqueue the transaction to the transaction queue
-func (t *transactionProcessor) submitTransaction(tx interface{}) error {
+// If the timeout is set to 0, the submission would be treated as async while
+// a non-zero timeout would be treated as a sync submission. When a timeout
+// occurs with the sync submission, a timeout error will be returned
+func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponseEnvelope, error) {
 	var txID string
 	switch tx.(type) {
 	case *types.DataTxEnvelope:
@@ -117,36 +128,63 @@ func (t *transactionProcessor) submitTransaction(tx interface{}) error {
 	case *types.ConfigTxEnvelope:
 		txID = tx.(*types.ConfigTxEnvelope).Payload.TxID
 	default:
-		return errors.Errorf("unexpected transaction type")
+		return nil, errors.Errorf("unexpected transaction type")
 	}
 
 	t.Lock()
-	defer t.Unlock()
-
 	duplicate, err := t.isTxIDDuplicate(txID)
 	if err != nil {
-		return err
+		t.Unlock()
+		return nil, err
 	}
 	if duplicate {
-		return &DuplicateTxIDError{txID}
+		t.Unlock()
+		return nil, &DuplicateTxIDError{txID}
 	}
 
 	if t.txQueue.IsFull() {
-		return fmt.Errorf("transaction queue is full. It means the server load is high. Try after sometime")
+		t.Unlock()
+		return nil, fmt.Errorf("transaction queue is full. It means the server load is high. Try after sometime")
 	}
 
 	jsonBytes, err := json.MarshalIndent(tx, "", "\t")
 	if err != nil {
-		return fmt.Errorf("failed to marshal transaction: %v", err)
+		t.Unlock()
+		return nil, fmt.Errorf("failed to marshal transaction: %v", err)
 	}
 	t.logger.Debugf("enqueuing transaction %s\n", string(jsonBytes))
 
 	t.txQueue.Enqueue(tx)
 	t.logger.Debug("transaction is enqueued for re-ordering")
 
-	t.pendingTxs.add(txID)
+	var p *promise
+	if timeout > 0 {
+		p = &promise{
+			receipt: make(chan *types.TxReceipt),
+			timeout: timeout,
+		}
+	}
 
-	return nil
+	// TODO: add limit on the number of pending sync tx
+	t.pendingTxs.add(txID, p)
+	t.Unlock()
+
+	receipt, err := p.wait()
+	if err != nil {
+		return nil, err
+	}
+	if receipt == nil {
+		return nil, nil
+	}
+
+	return &types.TxResponseEnvelope{
+		Payload: &types.TxResponse{
+			Header: &types.ResponseHeader{
+				NodeID: t.nodeID,
+			},
+			Receipt: receipt,
+		},
+	}, nil
 }
 
 func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) error {
@@ -177,7 +215,7 @@ func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) err
 		return errors.Errorf("unexpected transaction envelope in the block")
 	}
 
-	t.pendingTxs.remove(txIDs)
+	t.pendingTxs.removeAndSendReceipt(txIDs, block.Header)
 
 	return nil
 }
@@ -206,23 +244,30 @@ func (t *transactionProcessor) close() error {
 }
 
 type pendingTxs struct {
-	txIDs map[string]bool
+	txs map[string]*promise
 	sync.RWMutex
 }
 
-func (p *pendingTxs) add(txID string) {
+func (p *pendingTxs) add(txID string, subMethod *promise) {
 	p.Lock()
 	defer p.Unlock()
 
-	p.txIDs[txID] = true
+	p.txs[txID] = subMethod
 }
 
-func (p *pendingTxs) remove(txIDs []string) {
+func (p *pendingTxs) removeAndSendReceipt(txIDs []string, blockHeader *types.BlockHeader) {
 	p.Lock()
 	defer p.Unlock()
 
-	for _, txID := range txIDs {
-		delete(p.txIDs, txID)
+	for txIndex, txID := range txIDs {
+		p.txs[txID].done(
+			&types.TxReceipt{
+				Header:  blockHeader,
+				TxIndex: uint64(txIndex),
+			},
+		)
+
+		delete(p.txs, txID)
 	}
 }
 
@@ -230,12 +275,54 @@ func (p *pendingTxs) has(txID string) bool {
 	p.RLock()
 	defer p.RUnlock()
 
-	return p.txIDs[txID]
+	_, ok := p.txs[txID]
+	return ok
 }
 
 func (p *pendingTxs) isEmpty() bool {
 	p.RLock()
 	defer p.RUnlock()
 
-	return len(p.txIDs) == 0
+	return len(p.txs) == 0
+}
+
+type promise struct {
+	receipt chan *types.TxReceipt
+	timeout time.Duration
+}
+
+func (s *promise) wait() (*types.TxReceipt, error) {
+	if s == nil {
+		return nil, nil
+	}
+
+	ticker := time.NewTicker(s.timeout)
+	select {
+	case <-ticker.C:
+		s.close()
+		return nil, &internalerror.TimeoutErr{
+			ErrMsg: "timeout has occurred while waiting for the transaction receipt",
+		}
+	case r := <-s.receipt:
+		ticker.Stop()
+		s.close()
+		return r, nil
+	}
+}
+
+func (s *promise) done(r *types.TxReceipt) {
+	if s == nil {
+		return
+	}
+
+	s.receipt <- r
+}
+
+func (s *promise) close() {
+	if s == nil {
+		return
+	}
+
+	close(s.receipt)
+	s = nil
 }
