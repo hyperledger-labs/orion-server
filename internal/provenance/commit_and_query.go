@@ -27,6 +27,10 @@ const (
 	// READS edge from txID to value
 	// denotes that the txID read the value
 	READS = "r"
+	// DELETES edge from txID to the value
+	// denotes that the txID deleted the value
+	// including the key
+	DELETES = "d"
 	// NEXT edge from one value to another
 	// denotes that the next version of the value
 	NEXT = "n"
@@ -44,6 +48,7 @@ type TxDataForProvenance struct {
 	TxID               string
 	Reads              []*KeyWithVersion
 	Writes             []*types.KVWithMetadata
+	Deletes            map[string]*types.Version
 	OldVersionOfWrites map[string]*types.Version
 }
 
@@ -64,15 +69,17 @@ type TxIDLocation struct {
 //  1. userID--(submitted)-->txID
 //  2. blockNum--(includes)->txID
 //  3. txID--(reads)-->value
-//  4. key--(version)-->value
-//  5. value<--(previous)--value
-//  6. value--(next)-->value
+//  4. txID--(write)-->value
+//  5. txID--(delete)-->value
+//  6. key--(version)-->value
+//  7. value<--(previous)--value
+//  8. value--(next)-->value
 func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	cayleyTx := graph.NewTransaction()
-	values := make(map[string]string)
+	commitSet := make(map[string]string)
 
 	for index, tx := range txsData {
 		loc, err := json.Marshal(&TxIDLocation{blockNum, index})
@@ -91,66 +98,115 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 		s.logger.Debugf("userID[%s]---(submitted)--->txID[%s]", tx.UserID, tx.TxID)
 		cayleyTx.AddQuad(quad.Make(tx.UserID, SUBMITTED, tx.TxID, ""))
 
-		for _, read := range tx.Reads {
-			value, err := s.getValueVertex(tx.DBName, read.Key, read.Version)
-			if err != nil {
-				return err
-			}
-
-			s.logger.Debugf("txID[%s]---(reads)--->value[%s]", tx.TxID, quad.NativeOf(value))
-			cayleyTx.AddQuad(quad.Make(tx.TxID, READS, value, ""))
+		if err := s.addReads(tx, cayleyTx); err != nil {
+			return err
 		}
 
-		for _, write := range tx.Writes {
-			actualKey := write.Key
-			write.Key = constructCompositeKey(tx.DBName, write.Key)
-			newValue, err := json.Marshal(write)
-			if err != nil {
-				return err
-			}
+		if err := s.addWrites(tx, cayleyTx, commitSet); err != nil {
+			return err
+		}
 
-			newVersion, err := json.Marshal(write.Metadata.Version)
-			if err != nil {
-				return err
-			}
-			s.logger.Debugf("key[%s]---(version[%s])--->value[%s]", write.Key, string(newVersion), string(newValue))
-			cayleyTx.AddQuad(quad.Make(write.Key, string(newVersion), string(newValue), ""))
-
-			s.logger.Debugf("txID[%s]---(writes)--->value[%s]", tx.TxID, string(newValue))
-			cayleyTx.AddQuad(quad.Make(tx.TxID, WRITES, string(newValue), ""))
-
-			oldVersion, ok := tx.OldVersionOfWrites[actualKey]
-			if !ok {
-				values[actualKey] = string(newValue)
-				continue
-			}
-
-			oldValue, err := s.getValueVertex(tx.DBName, actualKey, oldVersion)
-			if err != nil {
-				return err
-			}
-
-			if oldValue == nil {
-				oldValueStr, ok := values[actualKey]
-				if !ok {
-					s.logger.Debugf("key [%s] version [%d,%d] for which oldValue is not found", actualKey, oldVersion.BlockNum, oldVersion.TxNum)
-					return errors.Errorf("error while finding the previous version of the key[%s]", write.Key)
-				}
-
-				oldValue = quad.String(oldValueStr)
-			}
-
-			s.logger.Debugf("oldValue[%s]<---(previous)---newValue[%s]", quad.NativeOf(oldValue), string(newValue))
-			cayleyTx.AddQuad(quad.Make(string(newValue), PREVIOUS, oldValue, ""))
-
-			s.logger.Debugf("oldValue[%s]---(next)--->newValue[%s]", quad.NativeOf(oldValue), string(newValue))
-			cayleyTx.AddQuad(quad.Make(oldValue, NEXT, string(newValue), ""))
-
-			values[actualKey] = string(newValue)
+		if err := s.addDeletes(tx, cayleyTx); err != nil {
+			return err
 		}
 	}
 
 	return s.cayleyGraph.ApplyTransaction(cayleyTx)
+}
+
+func (s *Store) addReads(tx *TxDataForProvenance, cayleyTx *graph.Transaction) error {
+	for _, read := range tx.Reads {
+		value, err := s.getValueVertex(tx.DBName, read.Key, read.Version)
+		if err != nil {
+			return err
+		}
+
+		s.logger.Debugf("txID[%s]---(reads)--->value[%s]", tx.TxID, quad.NativeOf(value))
+		cayleyTx.AddQuad(quad.Make(tx.TxID, READS, value, ""))
+	}
+
+	return nil
+}
+
+func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, commitSet map[string]string) error {
+	for _, write := range tx.Writes {
+		actualKey := write.Key
+		write.Key = constructCompositeKey(tx.DBName, write.Key)
+		newValue, err := json.Marshal(write)
+		if err != nil {
+			return err
+		}
+
+		newVersion, err := json.Marshal(write.Metadata.Version)
+		if err != nil {
+			return err
+		}
+		s.logger.Debugf("key[%s]---(version[%s])--->value[%s]", write.Key, string(newVersion), string(newValue))
+		cayleyTx.AddQuad(quad.Make(write.Key, string(newVersion), string(newValue), ""))
+
+		s.logger.Debugf("txID[%s]---(writes)--->value[%s]", tx.TxID, string(newValue))
+		cayleyTx.AddQuad(quad.Make(tx.TxID, WRITES, string(newValue), ""))
+
+		oldVersion, ok := tx.OldVersionOfWrites[actualKey]
+		if !ok {
+			// old version would not have been passed if it was deleted
+			s.logger.Debug("fetching last deleted version of key [" + actualKey + "] from db [" + tx.DBName + "]")
+			lastVer, err := s.getLastDeletedVersion(tx.DBName, write.Key)
+			if err != nil {
+				return err
+			}
+			if lastVer == nil {
+				commitSet[actualKey] = string(newValue)
+				s.logger.Debug("previous version of key [" + actualKey + "] does not exist in db [" + tx.DBName + "]")
+				continue
+			}
+
+			oldVersion = lastVer
+		}
+
+		oldValue, err := s.getValueVertex(tx.DBName, actualKey, oldVersion)
+		if err != nil {
+			return err
+		}
+
+		if oldValue == nil {
+			oldValueStr, ok := commitSet[actualKey]
+			if !ok {
+				s.logger.Debugf("key [%s] version [%d,%d] for which oldValue is not found", actualKey, oldVersion.BlockNum, oldVersion.TxNum)
+				return errors.Errorf("error while finding the previous version of the key[%s]", write.Key)
+			}
+
+			oldValue = quad.String(oldValueStr)
+		}
+
+		s.logger.Debugf("oldValue[%s]<---(previous)---newValue[%s]", quad.NativeOf(oldValue), string(newValue))
+		cayleyTx.AddQuad(quad.Make(string(newValue), PREVIOUS, oldValue, ""))
+
+		s.logger.Debugf("oldValue[%s]---(next)--->newValue[%s]", quad.NativeOf(oldValue), string(newValue))
+		cayleyTx.AddQuad(quad.Make(oldValue, NEXT, string(newValue), ""))
+
+		commitSet[actualKey] = string(newValue)
+	}
+
+	return nil
+}
+
+func (s *Store) addDeletes(tx *TxDataForProvenance, cayleyTx *graph.Transaction) error {
+	for k, v := range tx.Deletes {
+		s.logger.Debugf("fetch value of key [%s] at version (%d, %d)", k, v.BlockNum, v.TxNum)
+		value, err := s.getValueVertex(tx.DBName, k, v)
+		if err != nil {
+			return err
+		}
+
+		if value == nil {
+			// no such value exist and the delete of non-existing value is a non-op
+			continue
+		}
+		s.logger.Debugf("txID[%s]---(deletes)--->value[%s]", tx.TxID, quad.NativeOf(value))
+		cayleyTx.AddQuad(quad.Make(tx.TxID, DELETES, value, ""))
+	}
+	return nil
 }
 
 // GetValues returns all values associated with a given key
@@ -162,7 +218,7 @@ func (s *Store) GetValues(dbName, key string) ([]*types.ValueWithMetadata, error
 	cKey := constructCompositeKey(dbName, key)
 	p := cayley.StartPath(s.cayleyGraph, quad.String(cKey)).Out()
 
-	valueVertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph.QuadStore)
+	valueVertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph)
 	if err != nil {
 		return nil, err
 	}
@@ -232,6 +288,41 @@ func (s *Store) GetValuesWrittenByUser(userID string) ([]*types.KVWithMetadata, 
 	return s.outEdgesFrom(txIDs, WRITES)
 }
 
+// GetValuesDeletedByUser returns all values deleted by a given user
+func (s *Store) GetValuesDeletedByUser(userID string) ([]*types.KVWithMetadata, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	txIDs, err := s.GetTxIDsSubmittedByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.outEdgesFrom(txIDs, DELETES)
+}
+
+// GetDeletedValues returns all deleted values associated with a given key present in the
+// given database name
+func (s *Store) GetDeletedValues(dbName, key string) ([]*types.ValueWithMetadata, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	return s.getDeletedValuesWithoutLock(dbName, key)
+}
+
+func (s *Store) getDeletedValuesWithoutLock(dbName, key string) ([]*types.ValueWithMetadata, error) {
+	s.logger.Debugf("fetch all historical deleted values associated with the key [%s] in db [%s]", key, dbName)
+	cKey := constructCompositeKey(dbName, key)
+	p := cayley.StartPath(s.cayleyGraph, quad.String(cKey)).Out().Tag("deleted_value").In(quad.String(DELETES)).Back("deleted_value")
+
+	valueVertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph)
+	if err != nil {
+		return nil, err
+	}
+
+	return verticesToValues(valueVertices)
+}
+
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
 func (s *Store) GetReaders(dbName, key string) (map[string]uint32, error) {
 	s.mutex.RLock()
@@ -279,7 +370,7 @@ func (s *Store) GetTxIDsSubmittedByUser(userID string) ([]string, error) {
 
 	p := cayley.StartPath(s.cayleyGraph, quad.String(userID)).Out(quad.String(SUBMITTED))
 
-	vertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph.QuadStore)
+	vertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +390,7 @@ func (s *Store) GetTxIDLocation(txID string) (*TxIDLocation, error) {
 
 	p := cayley.StartPath(s.cayleyGraph, quad.String(txID)).In(quad.String(INCLUDES))
 
-	vertex, err := p.Iterate(context.Background()).FirstValue(s.cayleyGraph.QuadStore)
+	vertex, err := p.Iterate(context.Background()).FirstValue(s.cayleyGraph)
 	if err != nil {
 		s.logger.Errorf("cayley iteration error: %s", err)
 		return nil, errors.Wrap(err, "cayley iteration")
@@ -320,6 +411,27 @@ func (s *Store) GetTxIDLocation(txID string) (*TxIDLocation, error) {
 	return loc, nil
 }
 
+func (s *Store) getLastDeletedVersion(dbName, key string) (*types.Version, error) {
+	valuesWithMetadata, err := s.getDeletedValuesWithoutLock(dbName, key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error finding the last deleted version")
+	}
+
+	lastVer := &types.Version{}
+	for _, val := range valuesWithMetadata {
+		if lastVer.BlockNum > val.Metadata.Version.BlockNum {
+			continue
+		}
+		lastVer.BlockNum = val.Metadata.Version.BlockNum
+		lastVer.TxNum = val.Metadata.Version.TxNum
+	}
+
+	if lastVer.BlockNum == 0 {
+		return nil, nil
+	}
+	return lastVer, nil
+}
+
 func (s *Store) getValuesRecursively(dbName, key string, version *types.Version, predicate string, limit int) ([]*types.ValueWithMetadata, error) {
 	valueVertex, err := s.getValueVertex(dbName, key, version)
 	if err != nil {
@@ -327,7 +439,7 @@ func (s *Store) getValuesRecursively(dbName, key string, version *types.Version,
 	}
 
 	p := cayley.StartPath(s.cayleyGraph, valueVertex).FollowRecursive(quad.String(predicate), limit, nil)
-	valueVertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph.QuadStore)
+	valueVertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +456,7 @@ func (s *Store) getValueVertex(dbName, key string, version *types.Version) (quad
 	predicate := string(ver)
 
 	p := cayley.StartPath(s.cayleyGraph, quad.String(cKey)).Out(quad.String(predicate))
-	return p.Iterate(context.Background()).FirstValue(s.cayleyGraph.QuadStore)
+	return p.Iterate(context.Background()).FirstValue(s.cayleyGraph)
 }
 
 func (s *Store) outEdgesFrom(verticies []string, predicate string) ([]*types.KVWithMetadata, error) {
@@ -357,7 +469,7 @@ func (s *Store) outEdgesFrom(verticies []string, predicate string) ([]*types.KVW
 		s.logger.Debugf("finding all out edges from vertex [%s] with predicate [%s]", vertex, predicate)
 		path := cayley.StartPath(s.cayleyGraph, quad.String(vertex)).Out(quad.String(predicate))
 
-		vertices, err := path.Iterate(context.Background()).AllValues(s.cayleyGraph.QuadStore)
+		vertices, err := path.Iterate(context.Background()).AllValues(s.cayleyGraph)
 		if err != nil {
 			return nil, err
 		}

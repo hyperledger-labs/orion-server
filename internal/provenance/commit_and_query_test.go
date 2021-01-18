@@ -240,9 +240,73 @@ func setup(t *testing.T, s *Store) {
 		},
 	}
 
+	block4TxsData := []*TxDataForProvenance{
+		{
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx50",
+			Deletes: map[string]*types.Version{
+				"key1": {
+					BlockNum: 3,
+					TxNum:    0,
+				},
+				"key3": {
+					BlockNum: 1,
+					TxNum:    1,
+				},
+			},
+		},
+	}
+
+	block5TxsData := []*TxDataForProvenance{
+		{
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx6",
+			Writes: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+			OldVersionOfWrites: map[string]*types.Version{
+				"key1": {
+					BlockNum: 3,
+					TxNum:    0,
+				},
+			},
+		},
+	}
+
+	block6TxsData := []*TxDataForProvenance{
+		{
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx50",
+			Deletes: map[string]*types.Version{
+				"key1": {
+					BlockNum: 4,
+					TxNum:    0,
+				},
+			},
+		},
+	}
+
 	require.NoError(t, s.Commit(1, block1TxsData))
 	require.NoError(t, s.Commit(2, block2TxsData))
 	require.NoError(t, s.Commit(3, block3TxsData))
+	require.NoError(t, s.Commit(4, block4TxsData))
+	require.NoError(t, s.Commit(5, block5TxsData))
+	require.NoError(t, s.Commit(6, block6TxsData))
 }
 
 func TestGetValueAt(t *testing.T) {
@@ -377,6 +441,15 @@ func TestGetValues(t *testing.T) {
 						},
 					},
 				},
+				{
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -454,7 +527,7 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 		{
 			name:          "fetch ids of tx submitted by user2",
 			userID:        "user2",
-			expectedTxIDs: []string{"tx4", "tx5"},
+			expectedTxIDs: []string{"tx4", "tx5", "tx50", "tx6"},
 		},
 		{
 			name:          "fetch non-existing transaction",
@@ -541,7 +614,7 @@ func TestGetWriters(t *testing.T) {
 			key:    "key1",
 			expectedWriters: map[string]uint32{
 				"user1": 2,
-				"user2": 2,
+				"user2": 3,
 			},
 		},
 		{
@@ -743,6 +816,16 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 					},
 				},
 				{
+					Key:   "key1",
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
+				{
 					Key:   "key2",
 					Value: []byte("value2"),
 					Metadata: &types.Metadata{
@@ -829,6 +912,15 @@ func TestGetNextValues(t *testing.T) {
 						},
 					},
 				},
+				{
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -859,6 +951,15 @@ func TestGetNextValues(t *testing.T) {
 						},
 					},
 				},
+				{
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
 			},
 		},
 		{
@@ -867,6 +968,27 @@ func TestGetNextValues(t *testing.T) {
 			key:    "key1",
 			version: &types.Version{
 				BlockNum: 3,
+				TxNum:    0,
+			},
+			limit: -1,
+			expectedValues: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:   "all next values of key1, value5",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 4,
 				TxNum:    0,
 			},
 			limit:          -1,
@@ -1051,6 +1173,36 @@ func TestGetPreviousValues(t *testing.T) {
 			},
 		},
 		{
+			name:   "previous 2 values of key1, value5",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 4,
+				TxNum:    0,
+			},
+			limit: 2,
+			expectedValues: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value3"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    1,
+						},
+					},
+				},
+				{
+					Value: []byte("value4"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 3,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
 			name:   "previous values of non-existing key",
 			dbName: "db1",
 			key:    "key3",
@@ -1069,6 +1221,123 @@ func TestGetPreviousValues(t *testing.T) {
 			values, err := env.s.GetPreviousValues(tt.dbName, tt.key, tt.version, tt.limit)
 			require.NoError(t, err)
 			require.ElementsMatch(t, tt.expectedValues, values)
+		})
+	}
+}
+
+func TestGetDeletedValues(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	setup(t, env.s)
+
+	tests := []struct {
+		name           string
+		dbName         string
+		key            string
+		expectedValues []*types.ValueWithMetadata
+	}{
+		{
+			name:   "fetch all deleted values of key1",
+			dbName: "db1",
+			key:    "key1",
+			expectedValues: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value4"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 3,
+							TxNum:    0,
+						},
+					},
+				},
+				{
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:           "fetch all deleted values of key2",
+			dbName:         "db1",
+			key:            "key2",
+			expectedValues: nil,
+		},
+		{
+			name:           "fetch non-existing value",
+			dbName:         "db1",
+			key:            "key3",
+			expectedValues: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			value, err := env.s.GetDeletedValues(tt.dbName, tt.key)
+			require.NoError(t, err)
+			require.ElementsMatch(t, tt.expectedValues, value)
+		})
+	}
+}
+
+func TestGetValuesDeletedByUser(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	setup(t, env.s)
+
+	tests := []struct {
+		name           string
+		userID         string
+		expectedWrites []*types.KVWithMetadata
+	}{
+		{
+			name:   "fetch all values deleted by user2",
+			userID: "user2",
+			expectedWrites: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value4"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 3,
+							TxNum:    0,
+						},
+					},
+				},
+				{
+					Key:   "key1",
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
+			name:           "fetch all values deleted by user3",
+			userID:         "user3",
+			expectedWrites: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			kvs, err := env.s.GetValuesDeletedByUser(tt.userID)
+			require.NoError(t, err)
+			require.ElementsMatch(t, tt.expectedWrites, kvs)
 		})
 	}
 }
