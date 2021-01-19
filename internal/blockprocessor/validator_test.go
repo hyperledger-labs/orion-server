@@ -1,7 +1,6 @@
 package blockprocessor
 
 import (
-	"encoding/pem"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -76,9 +75,12 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 func TestValidateGenesisBlock(t *testing.T) {
 	t.Parallel()
 
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
-	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"admin1", "node1"})
+	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin1")
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+
+	//TODO test when admin and node cert are not signed by correct CA
 
 	t.Run("genesis block with invalid config tx", func(t *testing.T) {
 		t.Parallel()
@@ -88,6 +90,104 @@ func TestValidateGenesisBlock(t *testing.T) {
 			genesisBlock  *types.Block
 			expectedError string
 		}{
+			{
+				name: "root CA cert is missing",
+				genesisBlock: &types.Block{
+					Header: &types.BlockHeader{
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
+					},
+					Payload: &types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: &types.ConfigTxEnvelope{
+							Payload: &types.ConfigTx{
+								NewConfig: &types.ClusterConfig{
+									Nodes: []*types.NodeConfig{
+										{
+											ID:          "node1",
+											Address:     "127.0.0.1",
+											Certificate: nodeCert.Raw,
+										},
+									},
+									Admins: []*types.Admin{
+										{
+											ID:          "admin1",
+											Certificate: adminCert.Raw,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				expectedError: "genesis block cannot be invalid: reason for invalidation [CA config is empty. At least one root CA is required]",
+			},
+			{
+				name: "root CA cert is invalid",
+				genesisBlock: &types.Block{
+					Header: &types.BlockHeader{
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
+					},
+					Payload: &types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: &types.ConfigTxEnvelope{
+							Payload: &types.ConfigTx{
+								NewConfig: &types.ClusterConfig{
+									Nodes: []*types.NodeConfig{
+										{
+											ID:          "node1",
+											Address:     "127.0.0.1",
+											Certificate: nodeCert.Raw,
+										},
+									},
+									Admins: []*types.Admin{
+										{
+											ID:          "admin1",
+											Certificate: adminCert.Raw,
+										},
+									},
+									RootCACertificate: []byte("bad-certificate"),
+								},
+							},
+						},
+					},
+				},
+				expectedError: "genesis block cannot be invalid: reason for invalidation [CA certificate collection cannot be created: asn1: structure error: tags don't match (16 vs {class:1 tag:2 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2]",
+			},
+			{
+				name: "root CA cert is not from a CA",
+				genesisBlock: &types.Block{
+					Header: &types.BlockHeader{
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
+					},
+					Payload: &types.Block_ConfigTxEnvelope{
+						ConfigTxEnvelope: &types.ConfigTxEnvelope{
+							Payload: &types.ConfigTx{
+								NewConfig: &types.ClusterConfig{
+									Nodes: []*types.NodeConfig{
+										{
+											ID:          "node1",
+											Address:     "127.0.0.1",
+											Certificate: nodeCert.Raw,
+										},
+									},
+									Admins: []*types.Admin{
+										{
+											ID:          "admin1",
+											Certificate: adminCert.Raw,
+										},
+									},
+									RootCACertificate: adminCert.Raw,
+								},
+							},
+						},
+					},
+				},
+				expectedError: "genesis block cannot be invalid: reason for invalidation [CA certificate collection cannot be created: certificate is missing the CA property, SN:",
+			},
 			{
 				name: "node certificate is invalid",
 				genesisBlock: &types.Block{
@@ -110,9 +210,10 @@ func TestValidateGenesisBlock(t *testing.T) {
 									Admins: []*types.Admin{
 										{
 											ID:          "admin1",
-											Certificate: dcCert.Bytes,
+											Certificate: adminCert.Raw,
 										},
 									},
+									RootCACertificate: caCert.Raw,
 								},
 							},
 						},
@@ -136,7 +237,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 										{
 											ID:          "node1",
 											Address:     "127.0.0.1",
-											Certificate: dcCert.Bytes,
+											Certificate: nodeCert.Raw,
 										},
 									},
 									Admins: []*types.Admin{
@@ -145,6 +246,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 											Certificate: []byte("random"),
 										},
 									},
+									RootCACertificate: caCert.Raw,
 								},
 							},
 						},
@@ -185,15 +287,16 @@ func TestValidateGenesisBlock(t *testing.T) {
 								{
 									ID:          "node1",
 									Address:     "127.0.0.1",
-									Certificate: dcCert.Bytes,
+									Certificate: nodeCert.Raw,
 								},
 							},
 							Admins: []*types.Admin{
 								{
 									ID:          "admin1",
-									Certificate: dcCert.Bytes,
+									Certificate: adminCert.Raw,
 								},
 							},
+							RootCACertificate: caCert.Raw,
 						},
 					},
 				},
@@ -398,6 +501,8 @@ func TestValidateUserBlock(t *testing.T) {
 
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser"})
 	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	require.True(t, caCert.IsCA)
 
 	adminUser := &types.User{
 		ID:          "adminUser",
@@ -526,7 +631,7 @@ func TestValidateUserBlock(t *testing.T) {
 
 			env := newValidatorTestEnv(t)
 			defer env.cleanup()
-
+			setupClusterConfigCA(t, env, caCert)
 			tt.setup(env.db)
 
 			results, err := env.validator.validateBlock(tt.block)
@@ -661,12 +766,11 @@ func TestValidateDBBlock(t *testing.T) {
 func TestValidateConfigBlock(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser"})
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "admin1", "node1"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
-
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
-	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
+	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin1")
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
 
 	setup := func(db worldstate.DB) {
 		adminUser := &types.User{
@@ -720,15 +824,16 @@ func TestValidateConfigBlock(t *testing.T) {
 									{
 										ID:          "node1",
 										Address:     "127.0.0.1",
-										Certificate: dcCert.Bytes,
+										Certificate: nodeCert.Raw,
 									},
 								},
 								Admins: []*types.Admin{
 									{
 										ID:          "admin1",
-										Certificate: dcCert.Bytes,
+										Certificate: adminCert.Raw,
 									},
 								},
+								RootCACertificate: caCert.Raw,
 							},
 						}),
 				},
@@ -758,15 +863,16 @@ func TestValidateConfigBlock(t *testing.T) {
 									{
 										ID:          "node1",
 										Address:     "127.0.0.1",
-										Certificate: dcCert.Bytes,
+										Certificate: nodeCert.Raw,
 									},
 								},
 								Admins: []*types.Admin{
 									{
 										ID:          "admin1",
-										Certificate: dcCert.Bytes,
+										Certificate: adminCert.Raw,
 									},
 								},
+								RootCACertificate: caCert.Raw,
 							},
 						}),
 				},

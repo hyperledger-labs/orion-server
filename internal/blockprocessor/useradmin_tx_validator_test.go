@@ -1,8 +1,7 @@
 package blockprocessor
 
 import (
-	"encoding/pem"
-	"io/ioutil"
+	"crypto/x509"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -16,13 +15,11 @@ import (
 func TestValidateUsedAdminTx(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser"})
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser", "user1"})
 	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
 	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
-
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
-	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
+	user1Cert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
 
 	nonAdminUser := &types.User{
 		ID:          "nonAdminUser",
@@ -274,7 +271,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 						{
 							User: &types.User{
 								ID:          "user1",
-								Certificate: dcCert.Bytes,
+								Certificate: user1Cert.Raw,
 							},
 						},
 					},
@@ -401,7 +398,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 
 			env := newValidatorTestEnv(t)
 			defer env.cleanup()
-
+			setupClusterConfigCA(t, env, caCert)
 			tt.setup(env.db)
 
 			result, err := env.validator.userAdminTxValidator.validate(tt.txEnv)
@@ -414,9 +411,13 @@ func TestValidateUsedAdminTx(t *testing.T) {
 func TestValidateEntryFieldsInWrites(t *testing.T) {
 	t.Parallel()
 
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
-	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
+	userID := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+
+	untrustedCryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	untrustedAliceCert, _ := testutils.LoadTestClientCrypto(t, untrustedCryptoDir, "alice")
 
 	tests := []struct {
 		name           string
@@ -488,7 +489,22 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the user [user1] in the write list has an invalid certificate: Error = asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+				ReasonIfInvalid: "the user [user1] in the write list has an invalid certificate: Error = error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+			},
+		},
+		{
+			name: "invalid: user certificate is not from trusted CA",
+			userWrites: []*types.UserWrite{
+				{
+					User: &types.User{
+						ID:          userID,
+						Certificate: untrustedAliceCert.Raw,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the user [alice] in the write list has an invalid certificate: Error = error verifying certificate against trusted certificate authority (CA): x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"Clients RootCA\")",
 			},
 		},
 		{
@@ -496,8 +512,8 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID:          "user1",
-						Certificate: dcCert.Bytes,
+						ID:          userID,
+						Certificate: aliceCert.Raw,
 					},
 				},
 			},
@@ -510,13 +526,13 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						ID: userID,
 						Privilege: &types.Privilege{
 							DBPermission: map[string]types.Privilege_Access{
 								"bdb": types.Privilege_Read,
 							},
 						},
-						Certificate: dcCert.Bytes,
+						Certificate: aliceCert.Raw,
 					},
 				},
 			},
@@ -541,8 +557,10 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 
 			env := newValidatorTestEnv(t)
 			defer env.cleanup()
+			setupClusterConfigCA(t, env, caCert)
 
-			result := env.validator.userAdminTxValidator.validateFieldsInUserWrites(tt.userWrites)
+			result, err := env.validator.userAdminTxValidator.validateFieldsInUserWrites(tt.userWrites)
+			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}
@@ -1264,6 +1282,29 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}
+}
+
+func setupClusterConfigCA(t *testing.T, env *validatorTestEnv, rootCACert *x509.Certificate) {
+	config := &types.ClusterConfig{
+		RootCACertificate: rootCACert.Raw,
+	}
+	configSerialized, err := proto.Marshal(config)
+	require.NoError(t, err)
+	newConfig := []*worldstate.DBUpdates{
+		{
+			DBName: worldstate.ConfigDBName,
+			Writes: []*worldstate.KVWithMetadata{
+				{
+					Key:   worldstate.ConfigKey,
+					Value: configSerialized,
+				},
+			},
+		},
+	}
+	require.NoError(t, env.db.Commit(newConfig, 1))
+	configR, _, err := env.db.GetConfig()
+	require.NoError(t, err)
+	require.NotNil(t, configR)
 }
 
 func constructUserForTest(t *testing.T, userID string, certRaw []byte, version *types.Version, acl *types.AccessControl) *worldstate.KVWithMetadata {

@@ -1,10 +1,9 @@
 package blockprocessor
 
 import (
-	"crypto/x509"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/server/internal/certificateauthority"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -36,7 +35,11 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 		}, nil
 	}
 
-	if r := v.validateFieldsInUserWrites(tx.UserWrites); r.Flag != types.Flag_VALID {
+	r, err := v.validateFieldsInUserWrites(tx.UserWrites)
+	if err != nil {
+		return nil, errors.WithMessagef(err, "error while validating fields in user writes")
+	}
+	if r.Flag != types.Flag_VALID {
 		return r, nil
 	}
 
@@ -48,7 +51,7 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 		return r, nil
 	}
 
-	r, err := v.validateACLOnUserReads(tx.UserID, tx.UserReads)
+	r, err = v.validateACLOnUserReads(tx.UserID, tx.UserReads)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while validating ACL on reads")
 	}
@@ -75,26 +78,38 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 	return v.mvccValidation(tx.UserReads)
 }
 
-func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.UserWrite) *types.ValidationInfo {
+func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.UserWrite) (*types.ValidationInfo, error) {
+	config, _, err := v.db.GetConfig()
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get config")
+	}
+	if config == nil {
+		return nil, errors.New("config is nil")
+	}
+	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{config.RootCACertificate}, [][]byte{})
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot build CA certificate collection")
+	}
+
 	for _, w := range userWrites {
 		switch {
 		case w == nil:
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an empty entry in the write list",
-			}
+			}, nil
 
 		case w.User == nil:
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an empty user entry in the write list",
-			}
+			}, nil
 
 		case w.User.ID == "":
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an user in the write list with an empty ID. A valid userID must be an non-empty string",
-			}
+			}, nil
 
 		default:
 			if w.User.Privilege != nil {
@@ -106,23 +121,23 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 					return &types.ValidationInfo{
 						Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 						ReasonIfInvalid: "the database [" + dbName + "] present in the db permission list does not exist in the cluster",
-					}
+					}, nil
 				}
 			}
 
-			if _, err := x509.ParseCertificate(w.User.Certificate); err != nil {
+			err = caCertCollection.VerifyLeafCert(w.User.Certificate)
+			if err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 					ReasonIfInvalid: "the user [" + w.User.ID + "] in the write list has an invalid certificate: Error = " + err.Error(),
-				}
+				}, nil
 			}
 		}
-		// TODO: check who issued the certificate
 	}
 
 	return &types.ValidationInfo{
 		Flag: types.Flag_VALID,
-	}
+	}, nil
 }
 
 func validateFieldsInUserDeletes(userDeletes []*types.UserDelete) *types.ValidationInfo {

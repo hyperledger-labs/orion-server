@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -38,6 +37,7 @@ type testEnv struct {
 	userID              string
 	userCert            *x509.Certificate
 	userSigner          crypto.Signer
+	genesisBlock        *types.Block
 	cleanup             func(bool)
 }
 
@@ -96,8 +96,11 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser"})
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "node1", "admin1"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
+	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin1")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
 
 	b := New(&Config{
 		BlockQueue:      queue.New(10),
@@ -107,6 +110,35 @@ func newTestEnv(t *testing.T) *testEnv {
 		Logger:          logger,
 	})
 
+	genesisBlock := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number: 1,
+			},
+		},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					NewConfig: &types.ClusterConfig{
+						Nodes: []*types.NodeConfig{
+							{
+								ID:          "node1",
+								Address:     "127.0.0.1",
+								Certificate: nodeCert.Raw,
+							},
+						},
+						Admins: []*types.Admin{
+							{
+								ID:          "admin1",
+								Certificate: adminCert.Raw,
+							},
+						},
+						RootCACertificate: caCert.Raw,
+					},
+				},
+			},
+		},
+	}
 	go b.Start()
 	b.WaitTillStart()
 
@@ -141,48 +173,13 @@ func newTestEnv(t *testing.T) *testEnv {
 		userID:         "testUser",
 		userCert:       userCert,
 		userSigner:     userSigner,
+		genesisBlock:   genesisBlock,
 		cleanup:        cleanup,
 	}
 }
 
 func setup(t *testing.T, env *testEnv) {
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
-	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
-
-	configBlock := &types.Block{
-		Header: &types.BlockHeader{
-			BaseHeader: &types.BlockHeaderBase{
-				Number: 1,
-			},
-		},
-		Payload: &types.Block_ConfigTxEnvelope{
-			ConfigTxEnvelope: &types.ConfigTxEnvelope{
-				Payload: &types.ConfigTx{
-					UserID:               "adminUser",
-					ReadOldConfigVersion: nil,
-					NewConfig: &types.ClusterConfig{
-						Nodes: []*types.NodeConfig{
-							{
-								ID:          "node1",
-								Address:     "127.0.0.1",
-								Certificate: dcCert.Bytes,
-							},
-						},
-						Admins: []*types.Admin{
-							{
-								ID:          "admin1",
-								Certificate: dcCert.Bytes,
-							},
-						},
-					},
-				},
-				Signature: nil,
-			},
-		},
-	}
-
-	env.blockProcessor.blockQueue.Enqueue(configBlock)
+	env.blockProcessor.blockQueue.Enqueue(env.genesisBlock)
 	assertConfigHasCommitted := func() bool {
 		exist, err := env.blockProcessor.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
 		if err != nil || !exist {

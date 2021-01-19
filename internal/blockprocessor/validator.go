@@ -68,11 +68,16 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 		// do a regular validation but we still needs to validate the entries
 		configTx := block.GetConfigTxEnvelope().Payload
 
-		if r := validateNodeConfig(configTx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
+		r, caCertCollection := validateCAConfig(configTx.NewConfig)
+		if r.Flag != types.Flag_VALID {
 			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
 		}
 
-		if r := validateAdminConfig(configTx.NewConfig.Admins); r.Flag != types.Flag_VALID {
+		if r := validateNodeConfig(configTx.NewConfig.Nodes, caCertCollection); r.Flag != types.Flag_VALID {
+			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
+		}
+
+		if r := validateAdminConfig(configTx.NewConfig.Admins, caCertCollection); r.Flag != types.Flag_VALID {
 			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
 		}
 

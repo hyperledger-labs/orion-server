@@ -1,11 +1,12 @@
 package blockprocessor
 
 import (
-	"crypto/x509"
+	"fmt"
 	"net"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/server/internal/certificateauthority"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -44,18 +45,54 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		}, nil
 	}
 
-	if r := validateNodeConfig(tx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
+	r, caCertCollection := validateCAConfig(tx.NewConfig)
+	if r.Flag != types.Flag_VALID {
 		return r, nil
 	}
 
-	if r := validateAdminConfig(tx.NewConfig.Admins); r.Flag != types.Flag_VALID {
+	if r := validateNodeConfig(tx.NewConfig.Nodes, caCertCollection); r.Flag != types.Flag_VALID {
+		return r, nil
+	}
+
+	if r := validateAdminConfig(tx.NewConfig.Admins, caCertCollection); r.Flag != types.Flag_VALID {
 		return r, nil
 	}
 
 	return v.mvccValidation(tx.ReadOldConfigVersion)
 }
 
-func validateNodeConfig(nodes []*types.NodeConfig) *types.ValidationInfo {
+//TODO change the input to CAConfig (which will include multiple certificate) once we implement support for multiple
+// CAs in: https://github.ibm.com/blockchaindb/server/issues/358
+func validateCAConfig(config *types.ClusterConfig) (*types.ValidationInfo, *certificateauthority.CACertCollection) {
+	if len(config.RootCACertificate) == 0 {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "CA config is empty. At least one root CA is required",
+		}, nil
+	}
+
+	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{config.RootCACertificate}, [][]byte{})
+	if err != nil {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: fmt.Sprintf("CA certificate collection cannot be created: %s", err.Error()),
+		}, nil
+	}
+
+	err = caCertCollection.VerifyCollection()
+	if err != nil {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: fmt.Sprintf("CA certificate collection is invalid: %s", err.Error()),
+		}, nil
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}, caCertCollection
+}
+
+func validateNodeConfig(nodes []*types.NodeConfig, caCertCollection *certificateauthority.CACertCollection) *types.ValidationInfo {
 	if len(nodes) == 0 {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -94,10 +131,10 @@ func validateNodeConfig(nodes []*types.NodeConfig) *types.ValidationInfo {
 
 		default:
 			// TODO: should the certificate be unique as well?
-			if _, err := x509.ParseCertificate(n.Certificate); err != nil {
+			if err := caCertCollection.VerifyLeafCert(n.Certificate); err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-					ReasonIfInvalid: "the node [" + n.ID + "] has an invalid certificate: Error = " + err.Error(),
+					ReasonIfInvalid: "the node [" + n.ID + "] has an invalid certificate: " + err.Error(),
 				}
 			}
 		}
@@ -116,7 +153,7 @@ func validateNodeConfig(nodes []*types.NodeConfig) *types.ValidationInfo {
 	}
 }
 
-func validateAdminConfig(admins []*types.Admin) *types.ValidationInfo {
+func validateAdminConfig(admins []*types.Admin, caCertCollection *certificateauthority.CACertCollection) *types.ValidationInfo {
 	if len(admins) == 0 {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -140,7 +177,7 @@ func validateAdminConfig(admins []*types.Admin) *types.ValidationInfo {
 				ReasonIfInvalid: "there is an admin in the admin config with an empty ID. A valid adminID must be an non-empty string",
 			}
 		default:
-			if _, err := x509.ParseCertificate(a.Certificate); err != nil {
+			if err := caCertCollection.VerifyLeafCert(a.Certificate); err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 					ReasonIfInvalid: "the admin [" + a.ID + "] has an invalid certificate: " + err.Error(),

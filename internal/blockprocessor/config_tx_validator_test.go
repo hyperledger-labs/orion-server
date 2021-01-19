@@ -1,12 +1,12 @@
 package blockprocessor
 
 import (
-	"encoding/pem"
-	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/server/internal/certificateauthority"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
@@ -17,13 +17,12 @@ func TestValidateConfigTx(t *testing.T) {
 	t.Parallel()
 
 	userID := "adminUser"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser"})
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser", "node"})
 	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
 	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
-
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
-	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node")
+	caCert, caKey := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	require.NotNil(t, caKey)
 
 	setup := func(db worldstate.DB) {
 		nonAdminUser := &types.User{
@@ -99,10 +98,21 @@ func TestValidateConfigTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: node config is empty",
+			name: "invalid: CA config is empty",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserID:    "adminUser",
 				NewConfig: &types.ClusterConfig{},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "CA config is empty. At least one root CA is required",
+			},
+		},
+		{
+			name: "invalid: node config is empty",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserID:    "adminUser",
+				NewConfig: &types.ClusterConfig{RootCACertificate: caCert.Raw},
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -118,9 +128,10 @@ func TestValidateConfigTx(t *testing.T) {
 						{
 							ID:          "node1",
 							Address:     "127.0.0.1",
-							Certificate: dcCert.Bytes,
+							Certificate: nodeCert.Raw,
 						},
 					},
+					RootCACertificate: caCert.Raw,
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -141,15 +152,16 @@ func TestValidateConfigTx(t *testing.T) {
 						{
 							ID:          "node1",
 							Address:     "127.0.0.1",
-							Certificate: dcCert.Bytes,
+							Certificate: nodeCert.Raw,
 						},
 					},
 					Admins: []*types.Admin{
 						{
 							ID:          "admin1",
-							Certificate: dcCert.Bytes,
+							Certificate: adminCert.Raw,
 						},
 					},
+					RootCACertificate: caCert.Raw,
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -167,15 +179,16 @@ func TestValidateConfigTx(t *testing.T) {
 						{
 							ID:          "node1",
 							Address:     "127.0.0.1",
-							Certificate: dcCert.Bytes,
+							Certificate: nodeCert.Raw,
 						},
 					},
 					Admins: []*types.Admin{
 						{
 							ID:          "admin1",
-							Certificate: dcCert.Bytes,
+							Certificate: adminCert.Raw,
 						},
 					},
+					RootCACertificate: caCert.Raw,
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -201,12 +214,90 @@ func TestValidateConfigTx(t *testing.T) {
 	}
 }
 
+func TestValidateCAConfig(t *testing.T) {
+	t.Parallel()
+
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"node"})
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+
+	//TODO add additional test cases once we implement: https://github.ibm.com/blockchaindb/server/issues/358
+	tests := []struct {
+		name           string
+		caCert         []byte
+		expectedResult *types.ValidationInfo
+	}{
+		{
+			name:   "invalid: empty CA cert",
+			caCert: nil,
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "CA config is empty. At least one root CA is required",
+			},
+		},
+		{
+			name:   "invalid: bad certificate",
+			caCert: []byte("bad-certificate"),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "CA certificate collection cannot be created: asn1: structure error: tags don't match (16 vs {class:1 tag:2 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+			},
+		},
+		{
+			name:   "invalid: not a CA certificate",
+			caCert: nodeCert.Raw,
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "CA certificate collection cannot be created: certificate is missing the CA property, SN:",
+			},
+		},
+		{
+			name:   "valid CA",
+			caCert: caCert.Raw,
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			config := &types.ClusterConfig{RootCACertificate: tt.caCert}
+			result, caCertCollection := validateCAConfig(config)
+
+			matchValidationInfo := func() bool {
+				if result.Flag != tt.expectedResult.Flag {
+					return false
+				}
+				if result.ReasonIfInvalid == tt.expectedResult.ReasonIfInvalid {
+					return true
+				}
+				if strings.HasPrefix(result.ReasonIfInvalid, tt.expectedResult.ReasonIfInvalid) {
+					return true
+				}
+				return false
+			}
+			require.Condition(t, matchValidationInfo)
+
+			if tt.expectedResult.Flag == types.Flag_VALID {
+				require.NotNil(t, caCertCollection)
+			} else {
+				require.Nil(t, caCertCollection)
+			}
+		})
+	}
+}
+
 func TestValidateNodeConfig(t *testing.T) {
 	t.Parallel()
 
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"node"})
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{caCert.Raw}, nil)
 	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
 
 	tests := []struct {
 		name           string
@@ -280,7 +371,7 @@ func TestValidateNodeConfig(t *testing.T) {
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [node1] has an invalid certificate: Error = asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+				ReasonIfInvalid: "the node [node1] has an invalid certificate: error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
 			},
 		},
 		{
@@ -289,12 +380,12 @@ func TestValidateNodeConfig(t *testing.T) {
 				{
 					ID:          "node1",
 					Address:     "127.0.0.1",
-					Certificate: dcCert.Bytes,
+					Certificate: nodeCert.Raw,
 				},
 				{
 					ID:          "node1",
 					Address:     "127.0.0.1",
-					Certificate: dcCert.Bytes,
+					Certificate: nodeCert.Raw,
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -308,7 +399,7 @@ func TestValidateNodeConfig(t *testing.T) {
 				{
 					ID:          "node1",
 					Address:     "127.0.0.1",
-					Certificate: dcCert.Bytes,
+					Certificate: nodeCert.Raw,
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -322,7 +413,7 @@ func TestValidateNodeConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := validateNodeConfig(tt.nodes)
+			result := validateNodeConfig(tt.nodes, caCertCollection)
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}
@@ -331,9 +422,11 @@ func TestValidateNodeConfig(t *testing.T) {
 func TestValidateAdminConfig(t *testing.T) {
 	t.Parallel()
 
-	cert, err := ioutil.ReadFile("./testdata/sample.cert")
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"admin"})
+	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin")
+	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{caCert.Raw}, nil)
 	require.NoError(t, err)
-	dcCert, _ := pem.Decode(cert)
 
 	tests := []struct {
 		name           string
@@ -375,7 +468,7 @@ func TestValidateAdminConfig(t *testing.T) {
 			admins: []*types.Admin{
 				{
 					ID:          "admin1",
-					Certificate: dcCert.Bytes,
+					Certificate: adminCert.Raw,
 				},
 				{
 					ID:          "admin2",
@@ -384,7 +477,7 @@ func TestValidateAdminConfig(t *testing.T) {
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the admin [admin2] has an invalid certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+				ReasonIfInvalid: "the admin [admin2] has an invalid certificate: error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
 			},
 		},
 		{
@@ -392,11 +485,11 @@ func TestValidateAdminConfig(t *testing.T) {
 			admins: []*types.Admin{
 				{
 					ID:          "admin1",
-					Certificate: dcCert.Bytes,
+					Certificate: adminCert.Raw,
 				},
 				{
 					ID:          "admin1",
-					Certificate: dcCert.Bytes,
+					Certificate: adminCert.Raw,
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -409,11 +502,11 @@ func TestValidateAdminConfig(t *testing.T) {
 			admins: []*types.Admin{
 				{
 					ID:          "admin1",
-					Certificate: dcCert.Bytes,
+					Certificate: adminCert.Raw,
 				},
 				{
 					ID:          "admin2",
-					Certificate: dcCert.Bytes,
+					Certificate: adminCert.Raw,
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -427,7 +520,7 @@ func TestValidateAdminConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := validateAdminConfig(tt.admins)
+			result := validateAdminConfig(tt.admins, caCertCollection)
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}

@@ -23,6 +23,8 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
+const RootCAFileName = "rootCA"
+
 func IssueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certificate) ([]byte, []byte, error) {
 	ca, err := x509.ParseCertificate(rootCAKeyPair.Certificate[0])
 	if err != nil {
@@ -119,7 +121,7 @@ func getTestdataCert(t *testing.T, pathToCert string) *x509.Certificate {
 }
 
 func GenerateTestClientCrypto(t *testing.T, names []string) string {
-	tempDir, err := ioutil.TempDir("/tmp", "handlersUnitTest")
+	tempDir, err := ioutil.TempDir("/tmp", "UnitTestCrypto")
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		os.RemoveAll(tempDir)
@@ -130,11 +132,17 @@ func GenerateTestClientCrypto(t *testing.T, names []string) string {
 	require.NotNil(t, rootCAPemCert)
 	require.NotNil(t, caPrivKey)
 
-	clientRootCACertFile, err := os.Create(path.Join(tempDir, "clientRootCACert.pem"))
+	rootCACertFile, err := os.Create(path.Join(tempDir, RootCAFileName+".pem"))
 	require.NoError(t, err)
-	_, err = clientRootCACertFile.Write(rootCAPemCert)
+	_, err = rootCACertFile.Write(rootCAPemCert)
 	require.NoError(t, err)
-	clientRootCACertFile.Close()
+	rootCACertFile.Close()
+
+	rootCAKeyFile, err := os.Create(path.Join(tempDir, RootCAFileName+".key"))
+	require.NoError(t, err)
+	_, err = rootCAKeyFile.Write(caPrivKey)
+	require.NoError(t, err)
+	rootCAKeyFile.Close()
 
 	for _, name := range names {
 		keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
@@ -169,6 +177,20 @@ func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate
 	require.NoError(t, err)
 
 	return cert, signer
+}
+
+func LoadTestClientCA(t *testing.T, tempDir, name string) (cert *x509.Certificate, key []byte) {
+	cert = getTestdataCert(t, path.Join(tempDir, name+".pem"))
+	require.True(t, cert.IsCA)
+
+	keyPEMBlock, err := ioutil.ReadFile(path.Join(tempDir, name+".key"))
+	require.NoError(t, err)
+
+	keyLoader := crypto.KeyLoader{}
+	_, err = keyLoader.Load(keyPEMBlock)
+	require.NoError(t, err)
+
+	return cert, keyPEMBlock
 }
 
 func SignatureFromTx(t *testing.T, signer crypto.Signer, tx interface{}) []byte {
