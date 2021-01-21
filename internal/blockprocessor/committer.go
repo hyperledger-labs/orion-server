@@ -89,7 +89,7 @@ func (c *committer) commitToStateDB(blockNum uint64, dbsUpdates []*worldstate.DB
 func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worldstate.DBUpdates, []*provenance.TxDataForProvenance, error) {
 	var dbsUpdates []*worldstate.DBUpdates
 	var provenanceData []*provenance.TxDataForProvenance
-	dbWriteKeyVersion := make(map[string]*types.Version)
+	dirtyWriteKeyVersion := make(map[string]*types.Version)
 	blockValidationInfo := block.Header.ValidationInfo
 
 	c.logger.Debugf("committing to the state changes from the block number %d", block.GetHeader().GetBaseHeader().GetNumber())
@@ -116,7 +116,9 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 
 			tx := txsEnvelopes[txNum].Payload
 
-			pData, err := constructProvenanceEntriesForDataTx(c.db, tx, version, dbWriteKeyVersion)
+			// we pass the dirty write-set to the provenance entries constructor so that the
+			// old version can be recorded to add previous value link in the provenance store
+			pData, err := constructProvenanceEntriesForDataTx(c.db, tx, version, dirtyWriteKeyVersion)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -127,8 +129,13 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 				constructDBEntriesForDataTx(tx, version),
 			)
 
+			// after constructing entries for each transaction, we update the
+			// dirty write set which holds the to be committed version of the key.
+			// when more than one transaction in a block performs write to the
+			// same key (through blind writes), the existing value in the dirty
+			// set would get updated to reflect the new version
 			for _, w := range dbsUpdates[len(dbsUpdates)-1].Writes {
-				dbWriteKeyVersion[w.Key] = w.Metadata.Version
+				dirtyWriteKeyVersion[w.Key] = w.Metadata.Version
 			}
 		}
 		c.logger.Debugf("constructed %d, updates for data transactions, block number %d",
@@ -289,6 +296,7 @@ func constructProvenanceEntriesForDataTx(
 		DBName:             tx.DBName,
 		UserID:             tx.UserID,
 		TxID:               tx.TxID,
+		Deletes:            make(map[string]*types.Version),
 		OldVersionOfWrites: make(map[string]*types.Version),
 	}
 
@@ -311,20 +319,54 @@ func constructProvenanceEntriesForDataTx(
 		}
 		txData.Writes = append(txData.Writes, kv)
 
-		version, ok := dirtyWriteKeyVersion[write.Key]
-		if !ok {
-			var err error
-			version, err = db.GetVersion(tx.DBName, write.Key)
-			if err != nil {
-				return nil, err
-			}
-			if version == nil {
-				continue
-			}
+		// Given that two or more transaction within a
+		// block can do blind write to a key, we need
+		// to ensure that the old version is the one
+		// written by the last transaction and not the
+		// one present in the worldstate
+		v, err := getVersion(tx.DBName, write.Key, dirtyWriteKeyVersion, db)
+		if err != nil {
+			return nil, err
+		}
+		if v == nil {
+			continue
 		}
 
-		txData.OldVersionOfWrites[write.Key] = version
+		txData.OldVersionOfWrites[write.Key] = v
+	}
+
+	// we assume a block to delete a key only once. If more than
+	// one transaction in a block deletes the same key, only the
+	// first valid transaction gets committed while others get
+	// invalidated. A bug towards thiis would be fixed in the
+	// issue #362
+	for _, d := range tx.DataDeletes {
+		// as there can be a blind delete with previous transaction
+		// in the same block writing the value, we need to first
+		// consider the dirty set before fetching the version from
+		// the worldstate
+		v, err := getVersion(tx.DBName, d.Key, dirtyWriteKeyVersion, db)
+		if err != nil {
+			return nil, err
+		}
+
+		// for a delete to be valid, the value must exist and hence, the version will
+		// never be nil
+		txData.Deletes[d.Key] = v
 	}
 
 	return txData, nil
+}
+
+func getVersion(
+	dbName, key string,
+	dirtyWriteKeyVersion map[string]*types.Version,
+	db worldstate.DB,
+) (*types.Version, error) {
+	version, ok := dirtyWriteKeyVersion[key]
+	if ok {
+		return version, nil
+	}
+
+	return db.GetVersion(dbName, key)
 }

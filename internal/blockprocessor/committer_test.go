@@ -1109,6 +1109,134 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			},
 		},
 		{
+			name: "delete key0",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key0",
+							},
+						},
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetDeletedValues(
+					worldstate.DefaultDBName,
+					"key0",
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value0"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "blind write and blind delete key0",
+			txs: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx1",
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key0",
+								Value: []byte("value1"),
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx2",
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key0",
+							},
+						},
+					},
+				},
+				{
+					Payload: &types.DataTx{
+						DBName: worldstate.DefaultDBName,
+						UserID: "user1",
+						TxID:   "tx3",
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key0",
+								Value: []byte("value2"),
+							},
+						},
+					},
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetValues(
+					worldstate.DefaultDBName,
+					"key0",
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value0"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+				{
+					Value: []byte("value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    0,
+						},
+					},
+				},
+				{
+					Value: []byte("value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    2,
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "invalid tx",
 			txs: []*types.DataTxEnvelope{
 				{
@@ -1299,7 +1427,7 @@ func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedData, actualData)
 			} else {
-				require.Equal(t,tt.expectedErr, err.Error())
+				require.Equal(t, tt.expectedErr, err.Error())
 			}
 		})
 	}
@@ -1363,6 +1491,7 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 						},
 					},
 				},
+				Deletes:            make(map[string]*types.Version),
 				OldVersionOfWrites: make(map[string]*types.Version),
 			},
 		},
@@ -1464,6 +1593,7 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 						},
 					},
 				},
+				Deletes: make(map[string]*types.Version),
 				OldVersionOfWrites: map[string]*types.Version{
 					"key1": {
 						BlockNum: 4,
