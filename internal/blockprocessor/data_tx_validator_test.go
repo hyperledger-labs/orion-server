@@ -51,7 +51,8 @@ func TestValidateDataTx(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		txEnv          *types.DataTxEnvelope
-		pendingUpdates map[string]bool
+		pendingWrites  map[string]bool
+		pendingDeletes map[string]bool
 		expectedResult *types.ValidationInfo
 	}{
 		{
@@ -389,7 +390,7 @@ func TestValidateDataTx(t *testing.T) {
 					},
 				},
 			}),
-			pendingUpdates: map[string]bool{
+			pendingWrites: map[string]bool{
 				"key1": true,
 			},
 			expectedResult: &types.ValidationInfo{
@@ -493,7 +494,7 @@ func TestValidateDataTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.validate(tt.txEnv, tt.pendingUpdates)
+			result, err := env.validator.dataTxValidator.validate(tt.txEnv, tt.pendingWrites, tt.pendingDeletes)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
@@ -625,6 +626,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		dataDeletes    []*types.DataDelete
+		pendingDeletes map[string]bool
 		expectedResult *types.ValidationInfo
 	}{
 		{
@@ -639,6 +641,22 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 			},
 		},
 		{
+			name:  "invalid: entry to be deleted is already deleted by some previous transaction",
+			setup: func(db worldstate.DB) {},
+			dataDeletes: []*types.DataDelete{
+				{
+					Key: "key1",
+				},
+			},
+			pendingDeletes: map[string]bool{
+				"key1": true,
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "the key [key1] is already deleted by some previous transaction in the block",
+			},
+		},
+		{
 			name:  "invalid: entry to be deleted does not exist",
 			setup: func(db worldstate.DB) {},
 			dataDeletes: []*types.DataDelete{
@@ -646,6 +664,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
+			pendingDeletes: map[string]bool{},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the key [key1] does not exist in the database and hence, it cannot be deleted",
@@ -678,6 +697,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
+			pendingDeletes: map[string]bool{},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -691,10 +711,9 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 
 			env := newValidatorTestEnv(t)
 			defer env.cleanup()
-
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.validateFieldsInDataDeletes(worldstate.DefaultDBName, tt.dataDeletes)
+			result, err := env.validator.dataTxValidator.validateFieldsInDataDeletes(worldstate.DefaultDBName, tt.dataDeletes, tt.pendingDeletes)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
@@ -1266,11 +1285,12 @@ func TestMVCCOnDataTx(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		dataReads      []*types.DataRead
-		pendingUpdates map[string]bool
+		pendingWrites  map[string]bool
+		pendingDeletes map[string]bool
 		expectedResult *types.ValidationInfo
 	}{
 		{
-			name:  "invalid: conflict within the block",
+			name:  "invalid: conflict writes within the block",
 			setup: func(db worldstate.DB) {},
 			dataReads: []*types.DataRead{
 				{
@@ -1278,7 +1298,24 @@ func TestMVCCOnDataTx(t *testing.T) {
 					Version: version1,
 				},
 			},
-			pendingUpdates: map[string]bool{
+			pendingWrites: map[string]bool{
+				"key1": true,
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [" + worldstate.DefaultDBName + "]",
+			},
+		},
+		{
+			name:  "invalid: conflict deletes within the block",
+			setup: func(db worldstate.DB) {},
+			dataReads: []*types.DataRead{
+				{
+					Key:     "key1",
+					Version: version1,
+				},
+			},
+			pendingDeletes: map[string]bool{
 				"key1": true,
 			},
 			expectedResult: &types.ValidationInfo{
@@ -1395,7 +1432,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.mvccValidation(worldstate.DefaultDBName, tt.dataReads, tt.pendingUpdates)
+			result, err := env.validator.dataTxValidator.mvccValidation(worldstate.DefaultDBName, tt.dataReads, tt.pendingWrites, tt.pendingDeletes)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})

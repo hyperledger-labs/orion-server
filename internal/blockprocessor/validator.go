@@ -92,10 +92,11 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	case *types.Block_DataTxEnvelopes:
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
 		valInfo := make([]*types.ValidationInfo, len(dataTxEnvs))
-		pendingUpdates := make(map[string]bool)
+		pendingWrites := make(map[string]bool)
+		pendingDeletes := make(map[string]bool)
 
 		for txNum, txEnv := range dataTxEnvs {
-			valRes, err := v.dataTxValidator.validate(txEnv, pendingUpdates)
+			valRes, err := v.dataTxValidator.validate(txEnv, pendingWrites, pendingDeletes)
 			if err != nil {
 				return nil, errors.WithMessage(err, "error while validating data transaction")
 			}
@@ -107,11 +108,11 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 			}
 
 			for _, w := range txEnv.Payload.DataWrites {
-				pendingUpdates[w.Key] = true
+				pendingWrites[w.Key] = true
 			}
 
 			for _, d := range txEnv.Payload.DataDeletes {
-				pendingUpdates[d.Key] = true
+				pendingDeletes[d.Key] = true
 			}
 		}
 

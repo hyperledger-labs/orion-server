@@ -16,7 +16,11 @@ type dataTxValidator struct {
 	logger          *logger.SugarLogger
 }
 
-func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingUpdates map[string]bool) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) validate(
+	txEnv *types.DataTxEnvelope,
+	pendingWrites map[string]bool,
+	pendingDeletes map[string]bool,
+) (*types.ValidationInfo, error) {
 	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
 	if err != nil || valInfo.Flag != types.Flag_VALID {
 		return valInfo, err
@@ -64,7 +68,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingUpdates m
 		return r, nil
 	}
 
-	r, err = v.validateFieldsInDataDeletes(tx.DBName, tx.DataDeletes)
+	r, err = v.validateFieldsInDataDeletes(tx.DBName, tx.DataDeletes, pendingDeletes)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +105,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingUpdates m
 		return r, nil
 	}
 
-	return v.mvccValidation(tx.DBName, tx.DataReads, pendingUpdates)
+	return v.mvccValidation(tx.DBName, tx.DataReads, pendingWrites, pendingDeletes)
 }
 
 func (v *dataTxValidator) validateFieldsInDataWrites(DataWrites []*types.DataWrite) (*types.ValidationInfo, error) {
@@ -157,12 +161,27 @@ func (v *dataTxValidator) validateFieldsInDataWrites(DataWrites []*types.DataWri
 	}, nil
 }
 
-func (v *dataTxValidator) validateFieldsInDataDeletes(dbName string, dataDeletes []*types.DataDelete) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) validateFieldsInDataDeletes(
+	dbName string,
+	dataDeletes []*types.DataDelete,
+	pendingDeletes map[string]bool,
+) (*types.ValidationInfo, error) {
 	for _, d := range dataDeletes {
 		if d == nil {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an empty entry in the delete list",
+			}, nil
+		}
+
+		// as we collect the commits for a batch of transaction, we need to check whether the
+		// key is already deleted by some other previous transaction in the block. Only if it
+		// is not deleted by any previous transaction, we need to check whether the key exist
+		// in the worldstate.
+		if pendingDeletes[d.Key] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "the key [" + d.Key + "] is already deleted by some previous transaction in the block",
 			}, nil
 		}
 
@@ -289,9 +308,9 @@ func (v *dataTxValidator) validateACLOnDataDeletes(userID, dbName string, delete
 	}, nil
 }
 
-func (v *dataTxValidator) mvccValidation(dbName string, reads []*types.DataRead, pendingUpdates map[string]bool) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) mvccValidation(dbName string, reads []*types.DataRead, pendingWrites map[string]bool, pendingDeletes map[string]bool) (*types.ValidationInfo, error) {
 	for _, r := range reads {
-		if pendingUpdates[r.Key] {
+		if pendingWrites[r.Key] || pendingDeletes[r.Key] {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
 				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [" + r.Key + "] in database [" + dbName + "]",
