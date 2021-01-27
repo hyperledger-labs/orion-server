@@ -28,20 +28,18 @@ import (
 )
 
 type txProcessorTestEnv struct {
-	serverDir      string
+	dbPath         string
 	db             *leveldb.LevelDB
 	blockStore     *blockstore.Store
 	blockStorePath string
 	txProcessor    *transactionProcessor
-	nodeID         string
 	userID         string
 	userCert       *x509.Certificate
 	userSigner     crypto.Signer
-	cryptoDir      string
 	cleanup        func()
 }
 
-func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
+func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 	dir, err := ioutil.TempDir("/tmp", "transactionProcessor")
 	require.NoError(t, err)
 
@@ -96,10 +94,11 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 		t.Fatalf("error while creating provenancestore, %v", err)
 	}
 
-	nodeID := "test-node-id1"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", nodeID, "admin"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
-	_, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoDir, nodeID)
+
+	nodeID := "bdb-node-1"
+	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
+	_, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
 
 	txProcConf := &txProcessorConfig{
 		nodeID:             nodeID,
@@ -140,16 +139,14 @@ func newTxProcessorTestEnv(t *testing.T) *txProcessorTestEnv {
 	}
 
 	return &txProcessorTestEnv{
-		serverDir:      dir,
+		dbPath:         dbPath,
 		db:             db,
 		blockStorePath: blockStorePath,
 		blockStore:     blockStore,
 		txProcessor:    txProcessor,
-		nodeID:         nodeID,
 		userID:         "testUser",
 		userCert:       userCert,
 		userSigner:     userSigner,
-		cryptoDir:      cryptoDir,
 		cleanup:        cleanup,
 	}
 }
@@ -227,13 +224,14 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 func TestTransactionProcessor(t *testing.T) {
 	t.Parallel()
 
+	cryptoDir, conf := testConfiguration(t)
+	require.NotEqual(t, "", cryptoDir)
+	defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
+
 	t.Run("commit a data transaction asynchronously", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t)
+		env := newTxProcessorTestEnv(t, cryptoDir)
 		defer env.cleanup()
-
-		conf := testConfiguration(t, env)
-		defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
@@ -327,11 +325,8 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("commit a data transaction synchronously", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t)
+		env := newTxProcessorTestEnv(t, cryptoDir)
 		defer env.cleanup()
-
-		conf := testConfiguration(t, env)
-		defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
@@ -423,11 +418,8 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with the already committed transaction", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t)
+		env := newTxProcessorTestEnv(t, cryptoDir)
 		defer env.cleanup()
-
-		conf := testConfiguration(t, env)
-		defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
@@ -456,11 +448,8 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t)
+		env := newTxProcessorTestEnv(t, cryptoDir)
 		defer env.cleanup()
-
-		conf := testConfiguration(t, env)
-		defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
@@ -497,11 +486,8 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t)
+		env := newTxProcessorTestEnv(t, cryptoDir)
 		defer env.cleanup()
-
-		conf := testConfiguration(t, env)
-		defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
@@ -587,13 +573,18 @@ func TestPendingTxs(t *testing.T) {
 	})
 }
 
-func testConfiguration(t *testing.T, env *txProcessorTestEnv) *config.Configurations {
-	return &config.Configurations{
+func testConfiguration(t *testing.T) (string, *config.Configurations) {
+	ledgerDir, err := ioutil.TempDir("/tmp", "server")
+	require.NoError(t, err)
+
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "bdb-node-1", "admin"})
+
+	return cryptoDir, &config.Configurations{
 		Node: config.NodeConf{
 			Identity: config.IdentityConf{
-				ID:              env.nodeID,
-				CertificatePath: path.Join(env.cryptoDir, env.nodeID+".pem"),
-				KeyPath:         path.Join(env.cryptoDir, env.nodeID+".key"),
+				ID:              "bdb-node-1",
+				CertificatePath: path.Join(cryptoDir, "bdb-node-1.pem"),
+				KeyPath:         path.Join(cryptoDir, "bdb-node-1.key"),
 			},
 			Network: config.NetworkConf{
 				Address: "127.0.0.1",
@@ -601,7 +592,7 @@ func testConfiguration(t *testing.T, env *txProcessorTestEnv) *config.Configurat
 			},
 			Database: config.DatabaseConf{
 				Name:            "leveldb",
-				LedgerDirectory: env.serverDir,
+				LedgerDirectory: ledgerDir,
 			},
 			QueueLength: config.QueueLengthConf{
 				Transaction:               1000,
@@ -618,10 +609,10 @@ func testConfiguration(t *testing.T, env *txProcessorTestEnv) *config.Configurat
 		},
 		Admin: config.AdminConf{
 			ID:              "admin",
-			CertificatePath: path.Join(env.cryptoDir, "admin.pem"),
+			CertificatePath: path.Join(cryptoDir, "admin.pem"),
 		},
 		RootCA: config.RootCAConf{
-			CertificatePath: path.Join(env.cryptoDir, testutils.RootCAFileName+".pem"),
+			CertificatePath: path.Join(cryptoDir, testutils.RootCAFileName+".pem"),
 		},
 	}
 }
