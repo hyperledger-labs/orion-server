@@ -66,7 +66,7 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 	}
 }
 
-func setupProvenanceStore(t *testing.T, p *provenance.Store) {
+func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 	block1TxsData := []*provenance.TxDataForProvenance{
 		{
 			IsValid: true,
@@ -109,6 +109,10 @@ func setupProvenanceStore(t *testing.T, p *provenance.Store) {
 					},
 				},
 			},
+		},
+		{
+			IsValid: false,
+			TxID:    "tx10",
 		},
 	}
 
@@ -244,10 +248,75 @@ func setupProvenanceStore(t *testing.T, p *provenance.Store) {
 		},
 	}
 
-	require.NoError(t, p.Commit(1, block1TxsData))
-	require.NoError(t, p.Commit(2, block2TxsData))
-	require.NoError(t, p.Commit(3, block3TxsData))
+	block4TxsData := []*provenance.TxDataForProvenance{
+		{
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx50",
+			Deletes: map[string]*types.Version{
+				"key1": {
+					BlockNum: 3,
+					TxNum:    0,
+				},
+				"key3": {
+					BlockNum: 1,
+					TxNum:    1,
+				},
+			},
+		},
+	}
+
+	block5TxsData := []*provenance.TxDataForProvenance{
+		{
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx6",
+			Writes: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value5"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+			OldVersionOfWrites: map[string]*types.Version{
+				"key1": {
+					BlockNum: 3,
+					TxNum:    0,
+				},
+			},
+		},
+	}
+
+	block6TxsData := []*provenance.TxDataForProvenance{
+		{
+			IsValid: true,
+			DBName:  "db1",
+			UserID:  "user2",
+			TxID:    "tx50",
+			Deletes: map[string]*types.Version{
+				"key1": {
+					BlockNum: 4,
+					TxNum:    0,
+				},
+			},
+		},
+	}
+
+	require.NoError(t, s.Commit(1, block1TxsData))
+	require.NoError(t, s.Commit(2, block2TxsData))
+	require.NoError(t, s.Commit(3, block3TxsData))
+	require.NoError(t, s.Commit(4, block4TxsData))
+	require.NoError(t, s.Commit(5, block5TxsData))
+	require.NoError(t, s.Commit(6, block6TxsData))
 }
+
 
 func TestGetValues(t *testing.T) {
 	t.Parallel()
@@ -308,6 +377,15 @@ func TestGetValues(t *testing.T) {
 								},
 							},
 						},
+						{
+							Value: []byte("value5"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
+							},
+						},
 					},
 				},
 			},
@@ -329,6 +407,77 @@ func TestGetValues(t *testing.T) {
 
 	for _, tt := range tests {
 		envelope, err := env.p.GetValues(tt.dbName, tt.key)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.ElementsMatch(t, tt.expectedEnvelope.GetPayload().GetValues(), envelope.GetPayload().GetValues())
+		require.Equal(t, tt.expectedEnvelope.GetPayload().GetHeader(), envelope.GetPayload().GetHeader())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
+}
+
+func TestGetDeletedValues(t *testing.T) {
+	t.Parallel()
+	env := newProvenanceQueryProcessorTestEnv(t)
+	defer env.cleanup(t)
+
+	setupProvenanceStore(t, env.p.provenanceStore)
+
+	tests := []struct {
+		name             string
+		dbName           string
+		key              string
+		expectedEnvelope *types.GetHistoricalDataResponseEnvelope
+	}{
+		{
+			name:   "fetch all deleted values of key1",
+			dbName: "db1",
+			key:    "key1",
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: []*types.ValueWithMetadata{
+						{
+							Value: []byte("value4"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 3,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Value: []byte("value5"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:   "fetch all deleted values of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			expectedEnvelope: &types.GetHistoricalDataResponseEnvelope{
+				Payload: &types.GetHistoricalDataResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					Values: nil,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		envelope, err := env.p.GetDeletedValues(tt.dbName, tt.key)
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
@@ -449,6 +598,15 @@ func TestGetNextValues(t *testing.T) {
 							Metadata: &types.Metadata{
 								Version: &types.Version{
 									BlockNum: 3,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Value: []byte("value5"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
 									TxNum:    0,
 								},
 							},
@@ -634,7 +792,7 @@ func TestGetWriters(t *testing.T) {
 					},
 					WrittenBy: map[string]uint32{
 						"user1": 2,
-						"user2": 2,
+						"user2": 3,
 					},
 				},
 			},
@@ -810,6 +968,76 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 	}
 }
 
+func TestGetValuesDeletedByUser(t *testing.T) {
+	t.Parallel()
+	env := newProvenanceQueryProcessorTestEnv(t)
+	defer env.cleanup(t)
+
+	setupProvenanceStore(t, env.p.provenanceStore)
+
+	tests := []struct {
+		name             string
+		user             string
+		expectedEnvelope *types.GetDataDeletedByResponseEnvelope
+	}{
+		{
+			name: "fetch values deleted by user1",
+			user: "user2",
+			expectedEnvelope: &types.GetDataDeletedByResponseEnvelope{
+				Payload: &types.GetDataDeletedByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value4"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 3,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Key:   "key1",
+							Value: []byte("value5"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "fetch values deleted by user5",
+			user: "user5",
+			expectedEnvelope: &types.GetDataDeletedByResponseEnvelope{
+				Payload: &types.GetDataDeletedByResponse{
+					Header: &types.ResponseHeader{
+						NodeID: env.p.nodeID,
+					},
+					KVs: nil,
+				},
+				Signature: nil,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		envelope, err := env.p.GetValuesDeletedByUser(tt.user)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
+		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+	}
+}
+
 func TestGetTxSubmittedByUser(t *testing.T) {
 	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
@@ -830,7 +1058,7 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 					Header: &types.ResponseHeader{
 						NodeID: env.p.nodeID,
 					},
-					TxIDs: []string{"tx4", "tx5"},
+					TxIDs: []string{"tx4", "tx5",  "tx50", "tx6"},
 				},
 			},
 		},

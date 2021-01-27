@@ -77,6 +77,15 @@ func (p *provenanceQueryProcessor) GetNextValues(dbName, key string, version *ty
 	return p.composeHistoricalDataResponseEnvelope(values)
 }
 
+func (p *provenanceQueryProcessor) GetDeletedValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	values, err := p.provenanceStore.GetDeletedValues(dbName, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.composeHistoricalDataResponseEnvelope(values)
+}
+
 // GetValuesReadByUser returns all values read by a given user
 func (p *provenanceQueryProcessor) GetValuesReadByUser(userID string) (*types.GetDataReadByResponseEnvelope, error) {
 	kvs, err := p.provenanceStore.GetValuesReadByUser(userID)
@@ -109,6 +118,28 @@ func (p *provenanceQueryProcessor) GetValuesWrittenByUser(userID string) (*types
 
 	response := &types.GetDataWrittenByResponseEnvelope{
 		Payload: &types.GetDataWrittenByResponse{
+			Header: &types.ResponseHeader{
+				NodeID: p.nodeID,
+			},
+			KVs: kvs,
+		},
+	}
+
+	response.Signature, err = cryptoservice.SignQueryResponse(p.signer, response.Payload)
+	if err != nil {
+		return nil, err
+	}
+	return response, nil
+}
+
+func (p *provenanceQueryProcessor) GetValuesDeletedByUser(userID string) (*types.GetDataDeletedByResponseEnvelope, error) {
+	kvs, err := p.provenanceStore.GetValuesDeletedByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &types.GetDataDeletedByResponseEnvelope{
+		Payload: &types.GetDataDeletedByResponse{
 			Header: &types.ResponseHeader{
 				NodeID: p.nodeID,
 			},

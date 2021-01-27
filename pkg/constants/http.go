@@ -42,6 +42,7 @@ const (
 	GetDataWriters      = "/provenance/data/writers/{dbname}/{key}"
 	GetDataReadBy       = "/provenance/data/read/{userId}"
 	GetDataWrittenBy    = "/provenance/data/written/{userId}"
+	GetDataDeletedBy    = "/provenance/data/deleted/{userId}"
 	GetTxIDsSubmittedBy = "/provenance/data/tx/{userId}"
 )
 
@@ -91,6 +92,12 @@ func URLForGetHistoricalData(dbName, key string) string {
 	return ProvenanceEndpoint + path.Join("data", "history", dbName, key)
 }
 
+// URLForGetHistoricalDeletedData returns url for GET request to
+// retrieve all deleted values associated with a given key on a database
+func URLForGetHistoricalDeletedData(dbName, key string) string {
+	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) + "?onlydeletes=true"
+}
+
 // URLForGetHistoricalDataAt returns url for GET request to
 // retrieve a value at a particular version for a given key on a database
 func URLForGetHistoricalDataAt(dbName, key string, version *types.Version) string {
@@ -136,6 +143,12 @@ func URLForGetDataReadBy(userID string) string {
 // retrieve all data written by a given user
 func URLForGetDataWrittenBy(userID string) string {
 	return ProvenanceEndpoint + path.Join("data", "written", userID)
+}
+
+// URLForGetDataDeletedBy returns url for GET request to
+// retrieve all data written by a given user
+func URLForGetDataDeletedBy(userID string) string {
+	return ProvenanceEndpoint + path.Join("data", "deleted", userID)
 }
 
 // URLForGetTxIDsSubmittedBy returns url for GET request to

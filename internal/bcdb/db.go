@@ -63,6 +63,9 @@ type DB interface {
 	// GetValues returns all values associated with a given key
 	GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error)
 
+	// GetDeletedValues returns all deleted values associated with a given key
+	GetDeletedValues(dbname, key string) (*types.GetHistoricalDataResponseEnvelope, error)
+
 	// GetValueAt returns the value of a given key at a particular version
 	GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
 
@@ -79,6 +82,9 @@ type DB interface {
 
 	// GetValuesReadByUser returns all values read by a given user
 	GetValuesWrittenByUser(userID string) (*types.GetDataWrittenByResponseEnvelope, error)
+
+	// GetValuesDeletedByUser returns all values deleted by a given user
+	GetValuesDeletedByUser(userID string) (*types.GetDataDeletedByResponseEnvelope, error)
 
 	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
 	GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error)
@@ -322,6 +328,11 @@ func (d *db) GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnve
 	return d.provenanceQueryProcessor.GetValues(dbName, key)
 }
 
+// GetDeletedValues returns all deleted values associated with a given key
+func (d *db) GetDeletedValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetDeletedValues(dbName, key)
+}
+
 // GetValueAt returns the value of a given key at a particular version
 func (d *db) GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
 	return d.provenanceQueryProcessor.GetValueAt(dbName, key, version)
@@ -344,9 +355,14 @@ func (d *db) GetValuesReadByUser(userID string) (*types.GetDataReadByResponseEnv
 	return d.provenanceQueryProcessor.GetValuesReadByUser(userID)
 }
 
-// GetValuesReadByUser returns all values read by a given user
+// GetValuesWrittenByUser returns all values written by a given user
 func (d *db) GetValuesWrittenByUser(userID string) (*types.GetDataWrittenByResponseEnvelope, error) {
 	return d.provenanceQueryProcessor.GetValuesWrittenByUser(userID)
+}
+
+// GetValuesDeletedByUser returns all values deleted by a given user
+func (d *db) GetValuesDeletedByUser(userID string) (*types.GetDataDeletedByResponseEnvelope, error) {
+	return d.provenanceQueryProcessor.GetValuesDeletedByUser(userID)
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency

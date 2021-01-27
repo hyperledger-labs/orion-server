@@ -96,6 +96,7 @@ message GetHistoricalDataQuery {
   string key = 3;
   Version version = 4;
   string direction = 5;
+  bool onlyDeletes = 6;
 }
 
 message GetHistoricalDataQueryEnvelope {
@@ -138,6 +139,16 @@ message GetDataReadByQueryEnvelope {
 message GetDataWrittenByQuery {
   string userID = 1;
   string target_userID = 2;
+}
+
+message GetDataDeletedByQuery {
+  string userID = 1;
+  string target_userID = 2;
+}
+
+message GetDataDeletedByQueryEnvelope {
+  GetDataDeletedByQuery payload = 1;
+  bytes signature = 2;
 }
 
 message GetDataWrittenByQueryEnvelope {

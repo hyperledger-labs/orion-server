@@ -76,6 +76,29 @@ func TestGetHistoricalData(t *testing.T) {
 			expectedResponse:   genericResponse,
 		},
 		{
+			name: "valid: GetDeletedValues",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetHistoricalDeletedData(dbName, key),
+				&types.GetHistoricalDataQuery{
+					UserID:      submittingUserName,
+					DBName:      dbName,
+					Key:         key,
+					OnlyDeletes: true,
+				},
+				aliceSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDeletedValues", dbName, key).Return(genericResponse, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   genericResponse,
+		},
+		{
 			name: "valid: GetValueAt",
 			request: constructRequestForTestCase(
 				t,
@@ -452,6 +475,75 @@ func TestGetDataWrittenBy(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			assertTestCase(t, tt, &types.GetDataWrittenByResponseEnvelope{})
+		})
+	}
+}
+
+func TestGetDataDeletedBy(t *testing.T) {
+	t.Parallel()
+
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	targetUserID := "user1"
+	genericResponse := &types.GetDataDeletedByResponseEnvelope{
+		Payload: &types.GetDataDeletedByResponse{
+			Header: &types.ResponseHeader{
+				NodeID: "testNodeID",
+			},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value1"),
+				},
+			},
+		},
+	}
+
+	url := constants.URLForGetDataDeletedBy(targetUserID)
+	req := constructRequestForTestCase(
+		t,
+		url,
+		&types.GetDataDeletedByQuery{
+			UserID:       submittingUserName,
+			TargetUserID: targetUserID,
+		},
+		aliceSigner,
+		submittingUserName,
+	)
+
+	testCases := []testCase{
+		{
+			name:    "valid",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesDeletedByUser", targetUserID).Return(genericResponse, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   genericResponse,
+		},
+		{
+			name:    "internal server error",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesDeletedByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
+				return db
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			assertTestCase(t, tt, &types.GetDataDeletedByResponseEnvelope{})
 		})
 	}
 }

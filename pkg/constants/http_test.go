@@ -86,6 +86,13 @@ func TestURLConstruction(t *testing.T) {
 			expectedURL: "/provenance/data/history/db1/key1",
 		},
 		{
+			name: "URLForGetHistoricalDeletedData",
+			execute: func() string {
+				return URLForGetHistoricalDeletedData("db1", "key1")
+			},
+			expectedURL: "/provenance/data/history/db1/key1?onlydeletes=true",
+		},
+		{
 			name: "URLForGetHistoricalDataAt",
 			execute: func() string {
 				return URLForGetHistoricalDataAt("db2", "key2", &types.Version{

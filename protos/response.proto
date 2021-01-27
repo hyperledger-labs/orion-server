@@ -146,6 +146,15 @@ message GetDataWrittenByResponseEnvelope {
   bytes signature = 2;
 }
 
+message GetDataDeletedByResponse {
+  ResponseHeader header = 1;
+  repeated KVWithMetadata KVs = 2;
+}
+message GetDataDeletedByResponseEnvelope {
+  GetDataDeletedByResponse payload = 1;
+  bytes signature = 2;
+}
+
 message GetTxIDsSubmittedByResponse {
   ResponseHeader header = 1;
   repeated string txIDs = 2;

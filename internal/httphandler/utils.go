@@ -137,12 +137,20 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			return nil, true
 		}
 
+		v, isOnlyDeletesSet := params["onlydeletes"]
+		if isOnlyDeletesSet && v != "true" {
+			SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{
+				ErrMsg: "the onlydeletes parameters must be set only to 'true'",
+			})
+			return nil, true
+		}
 		payload = &types.GetHistoricalDataQuery{
-			UserID:    querierUserID,
-			DBName:    params["dbname"],
-			Key:       params["key"],
-			Version:   version,
-			Direction: params["direction"],
+			UserID:      querierUserID,
+			DBName:      params["dbname"],
+			Key:         params["key"],
+			Version:     version,
+			Direction:   params["direction"],
+			OnlyDeletes: isOnlyDeletesSet,
 		}
 	case constants.GetDataReaders:
 		payload = &types.GetDataReadersQuery{
@@ -163,6 +171,11 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 	case constants.GetDataWrittenBy:
 		payload = &types.GetDataWrittenByQuery{
+			UserID:       querierUserID,
+			TargetUserID: params["userId"],
+		}
+	case constants.GetDataDeletedBy:
+		payload = &types.GetDataDeletedByQuery{
 			UserID:       querierUserID,
 			TargetUserID: params["userId"],
 		}

@@ -186,6 +186,29 @@ func (_m *DB) GetData(dbName string, querierUserID string, key string) (*types.G
 	return r0, r1
 }
 
+// GetDeletedValues provides a mock function with given fields: dbname, key
+func (_m *DB) GetDeletedValues(dbname string, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	ret := _m.Called(dbname, key)
+
+	var r0 *types.GetHistoricalDataResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string, string) *types.GetHistoricalDataResponseEnvelope); ok {
+		r0 = rf(dbname, key)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetHistoricalDataResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(dbname, key)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetLedgerPath provides a mock function with given fields: userID, start, end
 func (_m *DB) GetLedgerPath(userID string, start uint64, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
 	ret := _m.Called(userID, start, end)
@@ -432,6 +455,29 @@ func (_m *DB) GetValues(dbName string, key string) (*types.GetHistoricalDataResp
 	var r1 error
 	if rf, ok := ret.Get(1).(func(string, string) error); ok {
 		r1 = rf(dbName, key)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// GetValuesDeletedByUser provides a mock function with given fields: userID
+func (_m *DB) GetValuesDeletedByUser(userID string) (*types.GetDataDeletedByResponseEnvelope, error) {
+	ret := _m.Called(userID)
+
+	var r0 *types.GetDataDeletedByResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string) *types.GetDataDeletedByResponseEnvelope); ok {
+		r0 = rf(userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetDataDeletedByResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(userID)
 	} else {
 		r1 = ret.Error(1)
 	}

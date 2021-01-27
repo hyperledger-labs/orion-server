@@ -40,11 +40,13 @@ func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Ha
 	}
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(matcher...)
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(matcher[:4]...)
+	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries("onlydeletes", "{onlydeletes:true}")
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetDataReaders, handler.getDataReaders).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetDataWriters, handler.getDataWriters).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetDataReadBy, handler.getDataReadByUser).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetDataWrittenBy, handler.getDataWrittenByUser).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetDataDeletedBy, handler.getDataDeletedByUser).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetTxIDsSubmittedBy, handler.getTxIDsSubmittedBy).Methods(http.MethodGet)
 
 	return handler
@@ -65,6 +67,8 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 	var err error
 
 	switch {
+	case query.OnlyDeletes:
+		response, err = p.db.GetDeletedValues(query.DBName, query.Key)
 	case query.Version == nil:
 		response, err = p.db.GetValues(query.DBName, query.Key)
 	case query.Direction == "":
@@ -143,6 +147,22 @@ func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r
 	query := payload.(*types.GetDataWrittenByQuery)
 
 	response, err := p.db.GetValuesWrittenByUser(query.TargetUserID)
+	if err != nil {
+		processInternalError(w, r, err)
+		return
+	}
+
+	SendHTTPResponse(w, http.StatusOK, response)
+}
+
+func (p *provenanceRequestHandler) getDataDeletedByUser(w http.ResponseWriter, r *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetDataDeletedBy, p.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetDataDeletedByQuery)
+
+	response, err := p.db.GetValuesDeletedByUser(query.TargetUserID)
 	if err != nil {
 		processInternalError(w, r, err)
 		return

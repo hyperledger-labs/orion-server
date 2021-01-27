@@ -24,6 +24,7 @@ func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	case *types.GetDataWritersQuery:
 	case *types.GetDataReadByQuery:
 	case *types.GetDataWrittenByQuery:
+	case *types.GetDataDeletedByQuery:
 	case *types.GetTxIDsSubmittedByQuery:
 
 	default:
@@ -63,6 +64,7 @@ func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]b
 	case *types.GetDataWritersResponse:
 	case *types.GetDataReadByResponse:
 	case *types.GetDataWrittenByResponse:
+	case *types.GetDataDeletedByResponse:
 	case *types.GetTxIDsSubmittedByResponse:
 
 	default:
