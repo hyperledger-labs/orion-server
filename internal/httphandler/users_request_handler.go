@@ -79,41 +79,47 @@ func (u *usersRequestHandler) getUser(response http.ResponseWriter, request *htt
 }
 
 func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, request *http.Request) {
+	timeout, err := validateAndParseTxPostHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		return
+	}
+
 	d := json.NewDecoder(request.Body)
 	d.DisallowUnknownFields()
 
 	txEnv := &types.UserAdministrationTxEnvelope{}
 	if err := d.Decode(txEnv); err != nil {
 		u.logger.Errorf(err.Error())
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{err.Error()})
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
 		u.logger.Errorf(fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload))
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserID == "" {
 		u.logger.Errorf(fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload))
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
 		u.logger.Errorf(fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload))
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(u.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &types.HttpResponseErr{err.Error()})
+		SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
-	u.txHandler.handleTransaction(response, txEnv)
+	u.txHandler.handleTransaction(response, txEnv, timeout)
 }

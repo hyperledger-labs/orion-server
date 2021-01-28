@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
+
+	interrors "github.ibm.com/blockchaindb/server/internal/errors"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -242,7 +245,9 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 	type testCase struct {
 		name                    string
 		txEnvFactory            func() *types.ConfigTxEnvelope
-		createMockAndInstrument func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB
+		txRespFactory           func() *types.TxResponseEnvelope
+		createMockAndInstrument func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB
+		timeoutStr              string
 		expectedCode            int
 		expectedErr             string
 	}
@@ -256,24 +261,97 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return correctTxRespEnv
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
 				db.On("SubmitTransaction", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
 					config := args[0].(*types.ConfigTxEnvelope)
 					require.Equal(t, configTx, config)
-				}).Return(nil, nil)
+					require.Equal(t, timeout, args[1].(time.Duration))
+				}).Return(txRespEnv, nil)
 
 				return db
 			},
+			timeoutStr:   "1s",
 			expectedCode: http.StatusOK,
+		},
+		{
+			name: "transaction timeout",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{
+					Payload:   configTx,
+					Signature: sigAdmin,
+				}
+			},
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).
+					Run(func(args mock.Arguments) {
+						tx := args[0].(*types.ConfigTxEnvelope)
+						require.Equal(t, configTx, tx)
+						require.Equal(t, timeout, args[1].(time.Duration))
+					}).
+					Return(txRespEnv, &interrors.TimeoutErr{ErrMsg: "Timeout error"})
+				return db
+			},
+			timeoutStr:   "1s",
+			expectedCode: http.StatusAccepted,
+			expectedErr:  "Transaction processing timeout",
+		},
+		{
+			name: "transaction timeout invalid",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{
+					Payload:   configTx,
+					Signature: sigAdmin,
+				}
+			},
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			timeoutStr:   "asdf",
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "time: invalid duration \"asdf\"",
+		},
+		{
+			name: "transaction timeout negative",
+			txEnvFactory: func() *types.ConfigTxEnvelope {
+				return &types.ConfigTxEnvelope{
+					Payload:   configTx,
+					Signature: sigAdmin,
+				}
+			},
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			timeoutStr:   "-2s",
+			expectedCode: http.StatusBadRequest,
+			expectedErr:  "timeout can't be negative \"-2s\"",
 		},
 		{
 			name: "submit configuration with missing payload",
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				return &types.ConfigTxEnvelope{Payload: nil, Signature: sigAdmin}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -288,7 +366,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 				tx.UserID = ""
 				return &types.ConfigTxEnvelope{Payload: tx, Signature: sigAdmin}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -300,7 +381,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				return &types.ConfigTxEnvelope{Payload: configTx, Signature: nil}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -315,7 +399,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: []byte("bad-sig"),
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
 
@@ -335,7 +422,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", "not-admin").Return(nil, errors.New("no such user"))
 
@@ -352,7 +442,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope) bcdb.DB {
+			txRespFactory: func() *types.TxResponseEnvelope {
+				return nil
+			},
+			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
 				db.On("SubmitTransaction", mock.Anything, mock.Anything).Return(nil, errors.New("oops, submission failed"))
@@ -371,6 +464,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			txEnv := tt.txEnvFactory()
+			txResp := tt.txRespFactory()
 			txBytes, err := json.Marshal(txEnv)
 			require.NoError(t, err)
 
@@ -384,11 +478,30 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			rr := httptest.NewRecorder()
 			require.NotNil(t, rr)
 
-			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, txEnv), logger)
+			var timeout time.Duration
+			timeout = 0
+			if len(tt.timeoutStr) != 0 {
+				req.Header.Set(constants.TimeoutHeader, tt.timeoutStr)
+				timeout, err = time.ParseDuration(tt.timeoutStr)
+				if err != nil {
+					timeout = 0
+				}
+				if timeout < 0 {
+					timeout = 0
+				}
+			}
+
+			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, txEnv, txResp, timeout), logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)
-			if tt.expectedCode != http.StatusOK {
+			if tt.expectedCode == http.StatusOK {
+				resp := &types.TxResponseEnvelope{}
+				err := json.NewDecoder(rr.Body).Decode(resp)
+				require.NoError(t, err)
+				require.Equal(t, txResp, resp)
+
+			} else {
 				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)
 				require.NoError(t, err)

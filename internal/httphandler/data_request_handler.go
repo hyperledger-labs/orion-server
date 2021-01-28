@@ -84,37 +84,43 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 }
 
 func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, request *http.Request) {
+	timeout, err := validateAndParseTxPostHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		return
+	}
+
 	requestData := json.NewDecoder(request.Body)
 	requestData.DisallowUnknownFields()
 
 	txEnv := &types.DataTxEnvelope{}
 	if err := requestData.Decode(txEnv); err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{err.Error()})
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserID == "" {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(d.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &types.HttpResponseErr{err.Error()})
+		SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
-	d.txHandler.handleTransaction(response, txEnv)
+	d.txHandler.handleTransaction(response, txEnv, timeout)
 }

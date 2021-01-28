@@ -11,6 +11,7 @@ import (
 const (
 	UserHeader      = "UserID"
 	SignatureHeader = "Signature"
+	TimeoutHeader   = "TxTimeout"
 
 	UserEndpoint = "/user/"
 	GetUser      = "/user/{userid}"

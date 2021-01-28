@@ -8,8 +8,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
-	"github.com/golang/protobuf/ptypes/empty"
+	internalerror "github.ibm.com/blockchaindb/server/internal/errors"
+
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
@@ -32,17 +34,21 @@ type txHandler struct {
 }
 
 // HandleTransaction handles transaction submission
-func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}) {
-	// for now, all users' transactions are async.
-	if _, err := t.db.SubmitTransaction(tx, 0); err != nil {
-		if _, ok := err.(*bcdb.DuplicateTxIDError); ok {
+func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}, timeout time.Duration) {
+	// If timeout == 0, tx is async, otherwise it is synchronous.
+	resp, err := t.db.SubmitTransaction(tx, timeout)
+	if err != nil {
+		switch err.(type) {
+		case *internalerror.DuplicateTxIDError:
 			SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
-		} else {
+		case *internalerror.TimeoutErr:
+			SendHTTPResponse(w, http.StatusAccepted, &types.HttpResponseErr{ErrMsg: "Transaction processing timeout"})
+		default:
 			SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 		}
+		return
 	}
-
-	SendHTTPResponse(w, http.StatusOK, empty.Empty{})
+	SendHTTPResponse(w, http.StatusOK, resp)
 }
 
 func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string, signVerifier *cryptoservice.SignatureVerifier) (interface{}, bool) {
@@ -221,6 +227,23 @@ func validateAndParseHeader(h *http.Header) (string, []byte, error) {
 	}
 
 	return userID, signatureBytes, nil
+}
+
+func validateAndParseTxPostHeader(h *http.Header) (time.Duration, error) {
+	timeoutStr := h.Get(constants.TimeoutHeader)
+	if len(timeoutStr) == 0 {
+		return 0, nil
+	}
+
+	timeout, err := time.ParseDuration(timeoutStr)
+	if err != nil {
+		return 0, err
+	}
+
+	if timeout < 0 {
+		return 0, errors.New("timeout can't be negative " + strconv.Quote(timeoutStr))
+	}
+	return timeout, nil
 }
 
 func getBlockNumAndTxIndex(params map[string]string) (uint64, uint64, error) {

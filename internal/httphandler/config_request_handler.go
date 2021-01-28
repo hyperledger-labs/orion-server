@@ -57,7 +57,7 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 		SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
-			&types.HttpResponseErr{"error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
+			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
 		)
 		return
 	}
@@ -86,12 +86,18 @@ func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *
 }
 
 func (c *configRequestHandler) configTransaction(response http.ResponseWriter, request *http.Request) {
+	timeout, err := validateAndParseTxPostHeader(&request.Header)
+	if err != nil {
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		return
+	}
+
 	d := json.NewDecoder(request.Body)
 	d.DisallowUnknownFields()
 
 	txEnv := &types.ConfigTxEnvelope{}
 	if err := d.Decode(txEnv); err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{err.Error()})
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
@@ -118,5 +124,5 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 		return
 	}
 
-	c.txHandler.handleTransaction(response, txEnv)
+	c.txHandler.handleTransaction(response, txEnv, timeout)
 }

@@ -525,7 +525,7 @@ func TestFailureAndRecovery(t *testing.T) {
 func TestBlockCommitListener(t *testing.T) {
 	t.Run("listener is involved successfully", func(t *testing.T) {
 		env := newTestEnv(t)
-		defer env.cleanup(false)
+		defer env.cleanup(true)
 
 		setup(t, env)
 		block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))

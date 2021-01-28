@@ -3,10 +3,11 @@ package httphandler
 import (
 	"encoding/json"
 	"errors"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.ibm.com/blockchaindb/server/pkg/logger"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
@@ -104,4 +105,24 @@ func TestVerifyRequestSignature(t *testing.T) {
 		require.EqualError(t, err, "failure during json.Marshal: json: unsupported type: chan struct {}")
 		require.Equal(t, http.StatusInternalServerError, code)
 	})
+}
+
+var correctTxRespEnv *types.TxResponseEnvelope
+
+func init() {
+	correctTxRespEnv = &types.TxResponseEnvelope{
+		Payload: &types.TxResponse{
+			Header: &types.ResponseHeader{
+				NodeID: "node1",
+			},
+			Receipt: &types.TxReceipt{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 1,
+					},
+				},
+				TxIndex: 1,
+			},
+		},
+	}
 }

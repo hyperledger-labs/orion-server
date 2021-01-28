@@ -139,7 +139,7 @@ func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Du
 	}
 	if duplicate {
 		t.Unlock()
-		return nil, &DuplicateTxIDError{txID}
+		return nil, &internalerror.DuplicateTxIDError{TxID: txID}
 	}
 
 	if t.txQueue.IsFull() {
@@ -170,11 +170,9 @@ func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Du
 	t.Unlock()
 
 	receipt, err := p.wait()
+
 	if err != nil {
 		return nil, err
-	}
-	if receipt == nil {
-		return nil, nil
 	}
 
 	return &types.TxResponseEnvelope{
