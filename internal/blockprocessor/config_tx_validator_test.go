@@ -111,8 +111,12 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: node config is empty",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID:    "adminUser",
-				NewConfig: &types.ClusterConfig{RootCACertificate: caCert.Raw},
+				UserID: "adminUser",
+				NewConfig: &types.ClusterConfig{
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
+				},
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -131,7 +135,9 @@ func TestValidateConfigTx(t *testing.T) {
 							Certificate: nodeCert.Raw,
 						},
 					},
-					RootCACertificate: caCert.Raw,
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -161,7 +167,9 @@ func TestValidateConfigTx(t *testing.T) {
 							Certificate: adminCert.Raw,
 						},
 					},
-					RootCACertificate: caCert.Raw,
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -188,7 +196,9 @@ func TestValidateConfigTx(t *testing.T) {
 							Certificate: adminCert.Raw,
 						},
 					},
-					RootCACertificate: caCert.Raw,
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -224,36 +234,44 @@ func TestValidateCAConfig(t *testing.T) {
 	//TODO add additional test cases once we implement: https://github.ibm.com/blockchaindb/server/issues/358
 	tests := []struct {
 		name           string
-		caCert         []byte
+		caConfig       *types.CAConfig
 		expectedResult *types.ValidationInfo
 	}{
 		{
-			name:   "invalid: empty CA cert",
-			caCert: nil,
+			name:     "invalid: empty CA config",
+			caConfig: nil,
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "CA config is empty. At least one root CA is required",
 			},
 		},
 		{
-			name:   "invalid: bad certificate",
-			caCert: []byte("bad-certificate"),
+			name:     "invalid: empty CA config roots",
+			caConfig: &types.CAConfig{},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "CA config Roots is empty. At least one root CA is required",
+			},
+		},
+		{
+			name:     "invalid: bad root certificate",
+			caConfig: &types.CAConfig{Roots: [][]byte{[]byte("bad-certificate")}},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "CA certificate collection cannot be created: asn1: structure error: tags don't match (16 vs {class:1 tag:2 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
 			},
 		},
 		{
-			name:   "invalid: not a CA certificate",
-			caCert: nodeCert.Raw,
+			name:     "invalid: not a CA certificate",
+			caConfig: &types.CAConfig{Roots: [][]byte{nodeCert.Raw}},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "CA certificate collection cannot be created: certificate is missing the CA property, SN:",
 			},
 		},
 		{
-			name:   "valid CA",
-			caCert: caCert.Raw,
+			name:     "valid root CA",
+			caConfig: &types.CAConfig{Roots: [][]byte{caCert.Raw}},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -264,8 +282,8 @@ func TestValidateCAConfig(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			config := &types.ClusterConfig{RootCACertificate: tt.caCert}
-			result, caCertCollection := validateCAConfig(config)
+
+			result, caCertCollection := validateCAConfig(tt.caConfig)
 
 			matchValidationInfo := func() bool {
 				if result.Flag != tt.expectedResult.Flag {
@@ -279,7 +297,7 @@ func TestValidateCAConfig(t *testing.T) {
 				}
 				return false
 			}
-			require.Condition(t, matchValidationInfo)
+			require.Condition(t, matchValidationInfo, "result: %v, didn't match expected: %v", result, tt.expectedResult)
 
 			if tt.expectedResult.Flag == types.Flag_VALID {
 				require.NotNil(t, caCertCollection)

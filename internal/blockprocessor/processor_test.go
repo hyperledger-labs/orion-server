@@ -133,7 +133,9 @@ func newTestEnv(t *testing.T) *testEnv {
 								Certificate: adminCert.Raw,
 							},
 						},
-						RootCACertificate: caCert.Raw,
+						CertAuthConfig: &types.CAConfig{
+							Roots: [][]byte{caCert.Raw},
+						},
 					},
 				},
 			},

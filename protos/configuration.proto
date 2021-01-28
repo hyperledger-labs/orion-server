@@ -11,7 +11,7 @@ package types;
 message ClusterConfig {
   repeated NodeConfig nodes = 1;
   repeated Admin admins = 2;
-  bytes rootCA_certificate = 3;
+  CAConfig cert_auth_config = 3;
 }
 
 // NodeConfig holds the information about a
@@ -30,6 +30,11 @@ message NodeConfig {
 message Admin {
   string ID = 1;
   bytes certificate = 2;
+}
+
+message CAConfig {
+  repeated bytes roots = 1;
+  repeated bytes intermediates = 2;
 }
 
 // Database configuration. Stores default read/write ACLs

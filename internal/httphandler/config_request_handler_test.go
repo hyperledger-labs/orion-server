@@ -72,7 +72,9 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 						},
 					},
 					Config: &types.ClusterConfig{
-						RootCACertificate: []byte{0, 0, 0},
+						CertAuthConfig: &types.CAConfig{
+							Roots: [][]byte{{0, 0, 0}},
+						},
 						Nodes: []*types.NodeConfig{
 							{
 								ID:          "testNodeId",

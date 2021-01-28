@@ -18,7 +18,7 @@ type Configurations struct {
 	Node      NodeConf
 	Consensus ConsensusConf
 	Admin     AdminConf
-	RootCA    RootCAConf
+	CAConfig  CAConfiguration
 }
 
 // NodeConf holds the identity information of the
@@ -80,11 +80,10 @@ type AdminConf struct {
 	CertificatePath string
 }
 
-// RootCAConf holds the path to the
-// x509 certificate of the certificate authority
-// who issues all certificates
-type RootCAConf struct {
-	CertificatePath string
+// CAConfiguration holds the path to the x509 certificates of the certificate authorities who issues all certificates.
+type CAConfiguration struct {
+	RootCACertsPath         []string
+	IntermediateCACertsPath []string
 }
 
 // Read reads configurations from the config file and returns the config

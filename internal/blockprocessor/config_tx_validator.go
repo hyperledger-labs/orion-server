@@ -45,7 +45,7 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		}, nil
 	}
 
-	r, caCertCollection := validateCAConfig(tx.NewConfig)
+	r, caCertCollection := validateCAConfig(tx.NewConfig.CertAuthConfig)
 	if r.Flag != types.Flag_VALID {
 		return r, nil
 	}
@@ -61,17 +61,21 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 	return v.mvccValidation(tx.ReadOldConfigVersion)
 }
 
-//TODO change the input to CAConfig (which will include multiple certificate) once we implement support for multiple
-// CAs in: https://github.ibm.com/blockchaindb/server/issues/358
-func validateCAConfig(config *types.ClusterConfig) (*types.ValidationInfo, *certificateauthority.CACertCollection) {
-	if len(config.RootCACertificate) == 0 {
+func validateCAConfig(caConfig *types.CAConfig) (*types.ValidationInfo, *certificateauthority.CACertCollection) {
+	if caConfig == nil {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 			ReasonIfInvalid: "CA config is empty. At least one root CA is required",
 		}, nil
 	}
+	if len(caConfig.Roots) == 0 {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "CA config Roots is empty. At least one root CA is required",
+		}, nil
+	}
 
-	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{config.RootCACertificate}, [][]byte{})
+	caCertCollection, err := certificateauthority.NewCACertCollection(caConfig.Roots, caConfig.Intermediates)
 	if err != nil {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,

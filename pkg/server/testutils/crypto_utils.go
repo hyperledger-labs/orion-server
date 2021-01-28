@@ -24,6 +24,7 @@ import (
 )
 
 const RootCAFileName = "rootCA"
+const IntermediateCAFileName = "intermediateCA"
 
 func IssueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certificate) ([]byte, []byte, error) {
 	ca, err := x509.ParseCertificate(rootCAKeyPair.Certificate[0])
@@ -90,6 +91,42 @@ func GenerateRootCA(subjectCN string, host string) ([]byte, []byte, error) {
 	return certPem, keyPem, nil
 }
 
+func GenerateIntermediateCA(subjectCN string, host string, rootCAKeyPair tls.Certificate) ([]byte, []byte, error) {
+	ca, err := x509.ParseCertificate(rootCAKeyPair.Certificate[0])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, nil, err
+	}
+	pubKey := privKey.Public()
+
+	ip := net.ParseIP(host)
+	template, err := CertTemplate(subjectCN, []net.IP{ip})
+	if err != nil {
+		return nil, nil, err
+	}
+	template.KeyUsage |= x509.KeyUsageCertSign
+	template.IsCA = true
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, template, ca, pubKey, rootCAKeyPair.PrivateKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	keyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	caPvtPemByte := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
+
+	return certPem, caPvtPemByte, nil
+}
+
 func CertTemplate(subjectCN string, ips []net.IP) (*x509.Certificate, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	SN, err := rand.Int(rand.Reader, serialNumberLimit)
@@ -120,7 +157,12 @@ func getTestdataCert(t *testing.T, pathToCert string) *x509.Certificate {
 	return cert
 }
 
-func GenerateTestClientCrypto(t *testing.T, names []string) string {
+func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA... bool) string {
+	withInterCA := false
+	if len(withIntermediateCA) >0 {
+		withInterCA = withIntermediateCA[0]
+	}
+
 	tempDir, err := ioutil.TempDir("/tmp", "UnitTestCrypto")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -144,11 +186,33 @@ func GenerateTestClientCrypto(t *testing.T, names []string) string {
 	require.NoError(t, err)
 	rootCAKeyFile.Close()
 
-	for _, name := range names {
-		keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
+	rootCAkeyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
+	require.NoError(t, err)
+	require.NotNil(t, rootCAkeyPair)
+
+	var keyPair tls.Certificate
+	if withInterCA {
+		intermediateCAPemCert, intermediateCAPrivKey, err := GenerateIntermediateCA("Clients IntermediateCA", "127.0.0.1", rootCAkeyPair)
+		intermediateCACertFile, err := os.Create(path.Join(tempDir, IntermediateCAFileName+".pem"))
+		require.NoError(t, err)
+		_, err = intermediateCACertFile.Write(intermediateCAPemCert)
+		require.NoError(t, err)
+		intermediateCACertFile.Close()
+
+		intermediateCAKeyFile, err := os.Create(path.Join(tempDir, IntermediateCAFileName+".key"))
+		require.NoError(t, err)
+		_, err = intermediateCAKeyFile.Write(intermediateCAPrivKey)
+		require.NoError(t, err)
+		intermediateCAKeyFile.Close()
+
+		keyPair, err = tls.X509KeyPair(intermediateCAPemCert, intermediateCAPrivKey)
 		require.NoError(t, err)
 		require.NotNil(t, keyPair)
+	} else {
+		keyPair = rootCAkeyPair
+	}
 
+	for _, name := range names {
 		pemCert, privKey, err := IssueCertificate("BCDB Client "+name, "127.0.0.1", keyPair)
 		require.NoError(t, err)
 

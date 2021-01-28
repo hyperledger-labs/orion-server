@@ -176,7 +176,9 @@ func generateConfigBlock(t *testing.T) *types.Block {
 								Certificate: []byte("cert1"),
 							},
 						},
-						RootCACertificate: []byte("cert"),
+						CertAuthConfig: &types.CAConfig{
+							Roots: [][]byte{[]byte("cert")},
+						},
 					},
 				},
 				Signature: []byte("signature"),

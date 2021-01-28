@@ -44,8 +44,8 @@ func TestConfig(t *testing.T) {
 				ID:              "admin",
 				CertificatePath: "./testdata/admin.cert",
 			},
-			RootCA: RootCAConf{
-				CertificatePath: "./testdata/rootca.cert",
+			CAConfig: CAConfiguration{
+				RootCACertsPath: []string{"./testdata/rootca.cert"},
 			},
 		}
 

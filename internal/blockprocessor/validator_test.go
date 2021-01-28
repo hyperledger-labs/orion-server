@@ -91,7 +91,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 			expectedError string
 		}{
 			{
-				name: "root CA cert is missing",
+				name: "root CA config is missing",
 				genesisBlock: &types.Block{
 					Header: &types.BlockHeader{
 						BaseHeader: &types.BlockHeaderBase{
@@ -147,7 +147,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 											Certificate: adminCert.Raw,
 										},
 									},
-									RootCACertificate: []byte("bad-certificate"),
+									CertAuthConfig: &types.CAConfig{
+										Roots: [][]byte{[]byte("bad-certificate")},
+									},
 								},
 							},
 						},
@@ -180,7 +182,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 											Certificate: adminCert.Raw,
 										},
 									},
-									RootCACertificate: adminCert.Raw,
+									CertAuthConfig: &types.CAConfig{
+										Roots: [][]byte{adminCert.Raw},
+									},
 								},
 							},
 						},
@@ -213,7 +217,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 											Certificate: adminCert.Raw,
 										},
 									},
-									RootCACertificate: caCert.Raw,
+									CertAuthConfig: &types.CAConfig{
+										Roots: [][]byte{caCert.Raw},
+									},
 								},
 							},
 						},
@@ -246,7 +252,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 											Certificate: []byte("random"),
 										},
 									},
-									RootCACertificate: caCert.Raw,
+									CertAuthConfig: &types.CAConfig{
+										Roots: [][]byte{caCert.Raw},
+									},
 								},
 							},
 						},
@@ -296,7 +304,9 @@ func TestValidateGenesisBlock(t *testing.T) {
 									Certificate: adminCert.Raw,
 								},
 							},
-							RootCACertificate: caCert.Raw,
+							CertAuthConfig: &types.CAConfig{
+								Roots: [][]byte{caCert.Raw},
+							},
 						},
 					},
 				},
@@ -833,7 +843,9 @@ func TestValidateConfigBlock(t *testing.T) {
 										Certificate: adminCert.Raw,
 									},
 								},
-								RootCACertificate: caCert.Raw,
+								CertAuthConfig: &types.CAConfig{
+									Roots: [][]byte{caCert.Raw},
+								},
 							},
 						}),
 				},
@@ -872,7 +884,9 @@ func TestValidateConfigBlock(t *testing.T) {
 										Certificate: adminCert.Raw,
 									},
 								},
-								RootCACertificate: caCert.Raw,
+								CertAuthConfig: &types.CAConfig{
+									Roots: [][]byte{caCert.Raw},
+								},
 							},
 						}),
 				},

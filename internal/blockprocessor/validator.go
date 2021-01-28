@@ -68,7 +68,7 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 		// do a regular validation but we still needs to validate the entries
 		configTx := block.GetConfigTxEnvelope().Payload
 
-		r, caCertCollection := validateCAConfig(configTx.NewConfig)
+		r, caCertCollection := validateCAConfig(configTx.NewConfig.CertAuthConfig)
 		if r.Flag != types.Flag_VALID {
 			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
 		}

@@ -61,8 +61,14 @@ func (c *CACertCollection) VerifyLeafCert(asn1Data []byte) error {
 
 // VerifyCollection verifies each CA certificate in the collection, to make sure each one is part of a valid chain.
 func (c *CACertCollection) VerifyCollection() error {
+	//Make sure each root CA is self-signed
+	for _, rootCert := range c.roots {
+		if err := rootCert.CheckSignatureFrom(rootCert); err != nil {
+			return errors.Wrapf(err, "root CA certificate is not self-signed, SN: %v", rootCert.SerialNumber)
+		}
+	}
+	//Make sure there is a valid chain from each certificate to a root.
 	allCerts := append(c.roots, c.intermediates...)
-
 	for _, cert := range allCerts {
 		_, err := cert.Verify(c.opts)
 		if err != nil {

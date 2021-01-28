@@ -86,7 +86,7 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 	if config == nil {
 		return nil, errors.New("config is nil")
 	}
-	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{config.RootCACertificate}, [][]byte{})
+	caCertCollection, err := certificateauthority.NewCACertCollection(config.CertAuthConfig.Roots, config.CertAuthConfig.Intermediates)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot build CA certificate collection")
 	}

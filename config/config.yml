@@ -55,9 +55,16 @@ admin:
   # to the x509 certificate of the cluster admin
   certificatePath: ./testdata/admin.cert
 
-rootca:
-  # rootca.certificatePath denotes the path
-  # to the x509 certificate of the root certificate
-  # authority who has issued all certificates used
-  # in the cluster
-  certificatePath: ./testdata/rootca.cert
+caconfig:
+  # caconfig.rootCACertsPath denotes the paths
+  # to the x509 certificates of the root certificate
+  # authorities that issued all the certificates used
+  # in the cluster, e.g.:
+  #   rootCACertsPath: ./testdata/rootcaA.cert, ./testdata/rootcaB.cert
+  rootCACertsPath: ./testdata/rootca.cert
+
+  # caconfig.intermediateCACertsPath denotes the paths
+  # to the x509 certificates of the intermediate certificate
+  # authorities that issued all the certificates used
+  # in the cluster, e.g.:
+  #   intermediateCACertsPath: ./testdata/midcaA.cert, ./testdata/midcaB.cert

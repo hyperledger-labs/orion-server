@@ -1286,7 +1286,9 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 
 func setupClusterConfigCA(t *testing.T, env *validatorTestEnv, rootCACert *x509.Certificate) {
 	config := &types.ClusterConfig{
-		RootCACertificate: rootCACert.Raw,
+		CertAuthConfig: &types.CAConfig{
+			Roots: [][]byte{rootCACert.Raw},
+		},
 	}
 	configSerialized, err := proto.Marshal(config)
 	require.NoError(t, err)

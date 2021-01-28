@@ -769,8 +769,10 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 					Port:        0,
 				},
 			},
-			Admins:            admins,
-			RootCACertificate: []byte("root-ca"),
+			Admins: admins,
+			CertAuthConfig: &types.CAConfig{
+				Roots: [][]byte{[]byte("root-ca")},
+			},
 		}
 
 		configBlock := &types.Block{

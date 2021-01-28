@@ -169,7 +169,9 @@ func TestBatchCreator(t *testing.T) {
 						ID: "admin1",
 					},
 				},
-				RootCACertificate: []byte("root-ca"),
+				CertAuthConfig: &types.CAConfig{
+					Roots: [][]byte{[]byte("root-ca")},
+				},
 			},
 		},
 	}

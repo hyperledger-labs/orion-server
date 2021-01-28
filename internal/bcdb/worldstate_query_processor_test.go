@@ -663,7 +663,9 @@ func TestGetConfig(t *testing.T) {
 					Certificate: []byte("cert"),
 				},
 			},
-			RootCACertificate: []byte("cert"),
+			CertAuthConfig: &types.CAConfig{
+				Roots: [][]byte{[]byte("cert")},
+			},
 		}
 
 		config, err := proto.Marshal(clusterConfig)
@@ -762,7 +764,9 @@ func TestGetConfig(t *testing.T) {
 					Certificate: []byte("cert"),
 				},
 			},
-			RootCACertificate: []byte("cert"),
+			CertAuthConfig: &types.CAConfig{
+				Roots: [][]byte{[]byte("cert")},
+			},
 		}
 
 		config, err := proto.Marshal(clusterConfig)

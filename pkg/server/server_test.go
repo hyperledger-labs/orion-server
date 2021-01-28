@@ -114,8 +114,8 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 			ID:              "admin",
 			CertificatePath: path.Join(tempDir, "admin.pem"),
 		},
-		RootCA: config.RootCAConf{
-			CertificatePath: path.Join(tempDir, "serverRootCACert.pem"),
+		CAConfig: config.CAConfiguration{
+			RootCACertsPath: []string{path.Join(tempDir, "serverRootCACert.pem")},
 		},
 		Consensus: config.ConsensusConf{
 			Algorithm:                   "solo",

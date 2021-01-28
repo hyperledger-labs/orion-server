@@ -611,8 +611,8 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 			ID:              "admin",
 			CertificatePath: path.Join(cryptoDir, "admin.pem"),
 		},
-		RootCA: config.RootCAConf{
-			CertificatePath: path.Join(cryptoDir, testutils.RootCAFileName+".pem"),
+		CAConfig: config.CAConfiguration{
+			RootCACertsPath: []string{path.Join(cryptoDir, testutils.RootCAFileName+".pem")},
 		},
 	}
 }

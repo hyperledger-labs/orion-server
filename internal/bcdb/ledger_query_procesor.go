@@ -95,7 +95,7 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 
 	endBlock, err := p.blockStore.GetHeader(endBlockIdx)
 	if err != nil {
-		switch e := err.(type)  {
+		switch e := err.(type) {
 		case *interrors.NotFoundErr:
 			e.Message = fmt.Sprintf("can't find path in blocks skip list between %d %d: %s", endBlockIdx, startBlockIdx, e.Message)
 			return nil, e

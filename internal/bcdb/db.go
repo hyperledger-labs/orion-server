@@ -422,7 +422,7 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 				Certificate: certs.adminCert,
 			},
 		},
-		RootCACertificate: certs.rootCACert,
+		CertAuthConfig: certs.caCerts,
 	}
 
 	return &types.ConfigTxEnvelope{
@@ -438,32 +438,45 @@ type certsInGenesisConfig struct {
 	nodeCert   []byte
 	adminCert  []byte
 	rootCACert []byte
+	caCerts    *types.CAConfig
 }
 
 func readCerts(conf *config.Configurations) (*certsInGenesisConfig, error) {
+	certsInGen := &certsInGenesisConfig{caCerts: &types.CAConfig{}}
+
 	nodeCert, err := ioutil.ReadFile(conf.Node.Identity.CertificatePath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while reading node certificate %s", conf.Node.Identity.CertificatePath)
 	}
 	nodePemCert, _ := pem.Decode(nodeCert)
+	certsInGen.nodeCert = nodePemCert.Bytes
 
 	adminCert, err := ioutil.ReadFile(conf.Admin.CertificatePath)
 	if err != nil {
 		return nil, errors.Wrapf(err, "error while reading admin certificate %s", conf.Admin.CertificatePath)
 	}
 	adminPemCert, _ := pem.Decode(adminCert)
+	certsInGen.adminCert = adminPemCert.Bytes
 
-	rootCACert, err := ioutil.ReadFile(conf.RootCA.CertificatePath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error while reading rootCA certificate %s", conf.RootCA.CertificatePath)
+	for _, certPath := range conf.CAConfig.RootCACertsPath {
+		rootCACert, err := ioutil.ReadFile(certPath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while reading root CA certificate %s", certPath)
+		}
+		caPemCert, _ := pem.Decode(rootCACert)
+		certsInGen.caCerts.Roots = append(certsInGen.caCerts.Roots, caPemCert.Bytes)
 	}
-	rootCAPemCert, _ := pem.Decode(rootCACert)
 
-	return &certsInGenesisConfig{
-		nodeCert:   nodePemCert.Bytes,
-		adminCert:  adminPemCert.Bytes,
-		rootCACert: rootCAPemCert.Bytes,
-	}, nil
+	for _, certPath := range conf.CAConfig.IntermediateCACertsPath {
+		caCert, err := ioutil.ReadFile(certPath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while reading intermediate CA certificate %s", certPath)
+		}
+		caPemCert, _ := pem.Decode(caCert)
+		certsInGen.caCerts.Intermediates = append(certsInGen.caCerts.Intermediates, caPemCert.Bytes)
+	}
+
+	return certsInGen, nil
 }
 
 func createLedgerDir(dir string) error {
