@@ -42,13 +42,13 @@ func TestSendHTTPResponse(t *testing.T) {
 		t.Parallel()
 
 		w := httptest.NewRecorder()
-		err := &ResponseErr{
+		err := &types.HttpResponseErr{
 			ErrMsg: "user does not have a read permission",
 		}
 		SendHTTPResponse(w, http.StatusForbidden, err)
 
 		require.Equal(t, http.StatusForbidden, w.Code)
-		actualErr := &ResponseErr{}
+		actualErr := &types.HttpResponseErr{}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), actualErr))
 		require.Equal(t, err, actualErr)
 	})

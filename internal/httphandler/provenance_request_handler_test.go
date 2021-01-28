@@ -624,7 +624,7 @@ func assertTestCase(t *testing.T, tt testCase, responseType interface{}) {
 
 	require.Equal(t, tt.expectedStatusCode, rr.Code)
 	if tt.expectedStatusCode != http.StatusOK {
-		respErr := &ResponseErr{}
+		respErr := &types.HttpResponseErr{}
 		err := json.NewDecoder(rr.Body).Decode(respErr)
 		require.NoError(t, err)
 		require.Equal(t, tt.expectedErr, respErr.ErrMsg)

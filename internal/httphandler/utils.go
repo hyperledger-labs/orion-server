@@ -17,15 +17,6 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
-// ResponseErr holds the error response
-type ResponseErr struct {
-	ErrMsg string `json:"error,omitempty"`
-}
-
-func (e *ResponseErr) Error() string {
-	return e.ErrMsg
-}
-
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
 func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
@@ -45,9 +36,9 @@ func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}) {
 	// for now, all users' transactions are async.
 	if _, err := t.db.SubmitTransaction(tx, 0); err != nil {
 		if _, ok := err.(*bcdb.DuplicateTxIDError); ok {
-			SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+			SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		} else {
-			SendHTTPResponse(w, http.StatusInternalServerError, &ResponseErr{ErrMsg: err.Error()})
+			SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 		}
 	}
 
@@ -57,7 +48,7 @@ func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}) {
 func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string, signVerifier *cryptoservice.SignatureVerifier) (interface{}, bool) {
 	querierUserID, signature, err := validateAndParseHeader(&r.Header)
 	if err != nil {
-		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{ErrMsg: err.Error()})
+		SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return nil, true
 	}
 
@@ -139,7 +130,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 
 		v, isOnlyDeletesSet := params["onlydeletes"]
 		if isOnlyDeletesSet && v != "true" {
-			SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{
+			SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
 				ErrMsg: "the onlydeletes parameters must be set only to 'true'",
 			})
 			return nil, true
@@ -203,12 +194,12 @@ func VerifyRequestSignature(
 ) (error, int) {
 	requestBytes, err := json.Marshal(requestPayload)
 	if err != nil {
-		return &ResponseErr{ErrMsg: "failure during json.Marshal: " + err.Error()}, http.StatusInternalServerError
+		return &types.HttpResponseErr{ErrMsg: "failure during json.Marshal: " + err.Error()}, http.StatusInternalServerError
 	}
 
 	err = sigVerifier.Verify(user, signature, requestBytes)
 	if err != nil {
-		return &ResponseErr{ErrMsg: "signature verification failed"}, http.StatusUnauthorized
+		return &types.HttpResponseErr{ErrMsg: "signature verification failed"}, http.StatusUnauthorized
 	}
 
 	return nil, http.StatusOK
@@ -258,7 +249,7 @@ func getStartAndEndBlockNum(params map[string]string) (uint64, uint64, error) {
 	}
 
 	if endBlockNum < startBlockNum {
-		return 0, 0, &ResponseErr{
+		return 0, 0, &types.HttpResponseErr{
 			ErrMsg: fmt.Sprintf("query error: startId=%d > endId=%d", startBlockNum, endBlockNum),
 		}
 	}
@@ -287,16 +278,16 @@ func getVersion(params map[string]string) (*types.Version, error) {
 	}, nil
 }
 
-func getUintParam(key string, params map[string]string) (uint64, *ResponseErr) {
+func getUintParam(key string, params map[string]string) (uint64, *types.HttpResponseErr) {
 	valStr, ok := params[key]
 	if !ok {
-		return 0, &ResponseErr{
+		return 0, &types.HttpResponseErr{
 			ErrMsg: "query error - bad or missing literal: " + key,
 		}
 	}
 	val, err := strconv.ParseUint(valStr, 10, 64)
 	if err != nil {
-		return 0, &ResponseErr{
+		return 0, &types.HttpResponseErr{
 			ErrMsg: "query error - bad or missing literal: " + key + " " + err.Error(),
 		}
 	}

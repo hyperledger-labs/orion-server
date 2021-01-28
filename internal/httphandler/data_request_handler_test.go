@@ -219,7 +219,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
 			if tt.expectedStatusCode != http.StatusOK {
-				respErr := &ResponseErr{}
+				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
@@ -419,7 +419,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 
 			require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode != http.StatusOK {
-				respErr := &ResponseErr{}
+				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedErr, respErr.ErrMsg)

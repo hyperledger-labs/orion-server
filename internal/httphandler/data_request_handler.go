@@ -54,7 +54,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 	query := payload.(*types.GetDataQuery)
 
 	if !d.db.IsDBExists(query.DBName) {
-		SendHTTPResponse(response, http.StatusBadRequest, &ResponseErr{
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "error db '" + query.DBName + "' doesn't exist",
 		})
 		return
@@ -74,7 +74,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 		SendHTTPResponse(
 			response,
 			status,
-			&ResponseErr{
+			&types.HttpResponseErr{
 				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
@@ -89,30 +89,30 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 
 	txEnv := &types.DataTxEnvelope{}
 	if err := requestData.Decode(txEnv); err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &ResponseErr{err.Error()})
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&ResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserID == "" {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&ResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&ResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(d.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &ResponseErr{err.Error()})
+		SendHTTPResponse(response, code, &types.HttpResponseErr{err.Error()})
 		return
 	}
 

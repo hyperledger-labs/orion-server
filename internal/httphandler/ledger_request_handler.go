@@ -73,7 +73,7 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 		SendHTTPResponse(
 			response,
 			status,
-			&ResponseErr{
+			&types.HttpResponseErr{
 				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
@@ -105,7 +105,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 		SendHTTPResponse(
 			response,
 			status,
-			&ResponseErr{
+			&types.HttpResponseErr{
 				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
@@ -137,7 +137,7 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 		SendHTTPResponse(
 			response,
 			status,
-			&ResponseErr{
+			&types.HttpResponseErr{
 				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
@@ -169,7 +169,7 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 		SendHTTPResponse(
 			response,
 			status,
-			&ResponseErr{
+			&types.HttpResponseErr{
 				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			})
 		return
@@ -179,14 +179,14 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 }
 
 func (p *ledgerRequestHandler) invalidPathQuery(response http.ResponseWriter, request *http.Request) {
-	err := &ResponseErr{
+	err := &types.HttpResponseErr{
 		ErrMsg: "query error - bad or missing start/end block number",
 	}
 	SendHTTPResponse(response, http.StatusBadRequest, err)
 }
 
 func (p *ledgerRequestHandler) invalidTxProof(response http.ResponseWriter, request *http.Request) {
-	err := &ResponseErr{
+	err := &types.HttpResponseErr{
 		ErrMsg: "query error - bad or missing tx index",
 	}
 	SendHTTPResponse(response, http.StatusBadRequest, err)

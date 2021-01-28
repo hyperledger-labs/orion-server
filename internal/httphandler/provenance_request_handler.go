@@ -78,7 +78,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 	case query.Direction == "next":
 		response, err = p.db.GetNextValues(query.DBName, query.Key, query.Version)
 	default:
-		SendHTTPResponse(w, http.StatusBadRequest, &ResponseErr{
+		SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "direction must be either [previous] or [next]",
 		})
 	}
@@ -191,7 +191,7 @@ func processInternalError(w http.ResponseWriter, r *http.Request, err error) {
 	SendHTTPResponse(
 		w,
 		http.StatusInternalServerError,
-		&ResponseErr{
+		&types.HttpResponseErr{
 			ErrMsg: "error while processing '" + r.Method + " " + r.URL.String() + "' because " + err.Error(),
 		},
 	)

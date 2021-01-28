@@ -189,7 +189,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
 			if tt.expectedStatusCode != http.StatusOK {
-				respErr := &ResponseErr{}
+				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
@@ -387,7 +387,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 
 			require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode != http.StatusOK {
-				respErr := &ResponseErr{}
+				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
@@ -554,7 +554,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
 			if tt.expectedStatusCode != http.StatusOK {
-				respErr := &ResponseErr{}
+				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedErr, respErr.ErrMsg)

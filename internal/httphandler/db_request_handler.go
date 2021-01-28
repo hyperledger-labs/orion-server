@@ -57,7 +57,7 @@ func (d *dbRequestHandler) dbStatus(response http.ResponseWriter, request *http.
 		SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
-			&ResponseErr{
+			&types.HttpResponseErr{
 				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
 			},
 		)
@@ -73,30 +73,30 @@ func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *
 
 	txEnv := &types.DBAdministrationTxEnvelope{}
 	if err := dbRequestBody.Decode(txEnv); err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &ResponseErr{err.Error()})
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&ResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserID == "" {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&ResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&ResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(d.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &ResponseErr{err.Error()})
+		SendHTTPResponse(response, code, &types.HttpResponseErr{err.Error()})
 		return
 	}
 
