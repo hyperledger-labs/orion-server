@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/cayleygraph/cayley"
@@ -409,6 +410,41 @@ func (s *Store) GetTxIDLocation(txID string) (*TxIDLocation, error) {
 	}
 
 	return loc, nil
+}
+
+// GetMostRecentValueAtOrBelow returns the most recent value hold by the given key at or below a given version
+func (s *Store) GetMostRecentValueAtOrBelow(dbName, key string, version *types.Version) (*types.ValueWithMetadata, error) {
+	values, err := s.GetValues(dbName, key)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	// sort the values based on the version (descending order)
+	sort.Slice(values[:], func(i, j int) bool {
+		// if block number is the same, then we need to compare the transaction number. Note that
+		// the transaction number cannot be the same (as the transaction can commit only one value per key)
+		return (values[i].Metadata.Version.BlockNum > values[j].Metadata.Version.BlockNum) ||
+			((values[i].Metadata.Version.BlockNum == values[j].Metadata.Version.BlockNum) &&
+				values[i].Metadata.Version.TxNum > values[j].Metadata.Version.TxNum)
+	})
+
+	for _, v := range values {
+		valVersion := v.Metadata.Version
+		if valVersion.BlockNum > version.BlockNum {
+			continue
+		}
+
+		if ((valVersion.BlockNum == version.BlockNum) && (valVersion.TxNum <= version.TxNum)) ||
+			valVersion.BlockNum < version.BlockNum {
+			return v, nil
+		}
+	}
+
+	return nil, nil
 }
 
 func (s *Store) getLastDeletedVersion(dbName, key string) (*types.Version, error) {

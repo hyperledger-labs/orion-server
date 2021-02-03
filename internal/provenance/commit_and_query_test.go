@@ -1387,3 +1387,153 @@ func TestGetTxIDLocation(t *testing.T) {
 		})
 	}
 }
+
+func TestGetMostRecentValueAtOrBelow(t *testing.T) {
+	t.Parallel()
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	setup(t, env.s)
+
+	tests := []struct {
+		name          string
+		dbName        string
+		key           string
+		version       *types.Version
+		expectedValue *types.ValueWithMetadata
+	}{
+		{
+			name:   "value with exact version present in the beginning",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 1,
+				TxNum:    0,
+			},
+			expectedValue: &types.ValueWithMetadata{
+				Value: []byte("value1"),
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 1,
+						TxNum:    0,
+					},
+				},
+			},
+		},
+		{
+			name:   "value with exact version present in the middle",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
+			},
+			expectedValue: &types.ValueWithMetadata{
+				Value: []byte("value3"),
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+				},
+			},
+		},
+		{
+			name:   "value with exact version present in the end",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 4,
+				TxNum:    0,
+			},
+			expectedValue: &types.ValueWithMetadata{
+				Value: []byte("value5"),
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 4,
+						TxNum:    0,
+					},
+				},
+			},
+		},
+		{
+			name:   "value with lesser version present in the beginning",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+			expectedValue: &types.ValueWithMetadata{
+				Value: []byte("value1"),
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 1,
+						TxNum:    0,
+					},
+				},
+			},
+		},
+		{
+			name:   "value with lesser version present in the middle",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    10,
+			},
+			expectedValue: &types.ValueWithMetadata{
+				Value: []byte("value3"),
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+				},
+			},
+		},
+		{
+			name:   "value with lesser version present in the end",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 6,
+				TxNum:    3,
+			},
+			expectedValue: &types.ValueWithMetadata{
+				Value: []byte("value5"),
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 4,
+						TxNum:    0,
+					},
+				},
+			},
+		},
+		{
+			name:   "fetching non-existing value",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 0,
+				TxNum:    0,
+			},
+			expectedValue: nil,
+		},
+		{
+			name:          "fetch non-existing key",
+			dbName:        "db1",
+			key:           "key3",
+			expectedValue: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			value, err := env.s.GetMostRecentValueAtOrBelow(tt.dbName, tt.key, tt.version)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedValue, value)
+		})
+	}
+}
