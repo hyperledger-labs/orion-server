@@ -154,8 +154,6 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	t.Parallel()
 	env := newServerTestEnv(t)
 
-	addDBRWPermissionToAdmin(t, env, worldstate.DefaultDBName)
-
 	dataQuery := &types.GetDataQuery{
 		DBName: worldstate.DefaultDBName,
 		UserID: "admin",
@@ -307,8 +305,6 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 		},
 	}
 
-	addDBRWPermissionToAdmin(t, env, "testDB")
-
 	// Post transaction into new database
 	_, err = env.client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
@@ -407,56 +403,4 @@ func TestServerWithFailureScenarios(t *testing.T) {
 			require.Contains(t, err.Error(), tt.expectedError)
 		})
 	}
-}
-
-func addDBRWPermissionToAdmin(t *testing.T, env *serverTestEnv, dbName string) {
-	queryUser := &types.GetUserQuery{UserID: "admin", TargetUserID: "admin"}
-	queryUserSig, err := cryptoservice.SignQuery(env.adminSigner, queryUser)
-	require.NoError(t, err)
-
-	adminUserRec, err := env.client.GetUser(&types.GetUserQueryEnvelope{
-		Payload:   queryUser,
-		Signature: queryUserSig,
-	})
-	require.NoError(t, err)
-	require.NotNil(t, adminUserRec)
-	require.NotNil(t, adminUserRec.GetPayload())
-	require.NotNil(t, adminUserRec.GetPayload().GetUser())
-
-	if adminUserRec.GetPayload().GetUser().GetPrivilege().DBPermission == nil {
-		adminUserRec.GetPayload().GetUser().GetPrivilege().DBPermission = map[string]types.Privilege_Access{
-			dbName: types.Privilege_ReadWrite,
-		}
-	}
-
-	userTx := &types.UserAdministrationTx{
-		TxID:   uuid.New().String(),
-		UserID: "admin",
-		UserWrites: []*types.UserWrite{
-			{
-				User: adminUserRec.GetPayload().GetUser(),
-				ACL:  adminUserRec.GetPayload().GetMetadata().GetAccessControl(),
-			},
-		},
-		UserReads: []*types.UserRead{
-			{
-				UserID:  adminUserRec.GetPayload().GetUser().GetID(),
-				Version: adminUserRec.GetPayload().GetMetadata().GetVersion(),
-			},
-		},
-	}
-	_, err = env.client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
-		Payload:   userTx,
-		Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
-	})
-	require.NoError(t, err)
-
-	require.Eventually(t, func() bool {
-		rec, err := env.client.GetUser(&types.GetUserQueryEnvelope{
-			Payload:   queryUser,
-			Signature: queryUserSig,
-		})
-		acl, ok := rec.GetPayload().GetUser().GetPrivilege().GetDBPermission()[dbName]
-		return err == nil && ok && acl == types.Privilege_ReadWrite
-	}, time.Minute, 100*time.Millisecond)
 }

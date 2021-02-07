@@ -20,9 +20,7 @@ func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 				DBPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
 				},
-				DBAdministration:      false,
-				ClusterAdministration: false,
-				UserAdministration:    false,
+				Admin: false,
 			},
 		}
 	}
@@ -188,9 +186,7 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 			ID:          adminID,
 			Certificate: cert,
 			Privilege: &types.Privilege{
-				DBAdministration:      true,
-				ClusterAdministration: true,
-				UserAdministration:    true,
+				Admin: true,
 			},
 		}
 

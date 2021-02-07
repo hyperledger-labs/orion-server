@@ -518,7 +518,7 @@ func TestValidateUserBlock(t *testing.T) {
 		ID:          "adminUser",
 		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
-			UserAdministration: true,
+			Admin: true,
 		},
 	}
 	adminUserSerialized, err := proto.Marshal(adminUser)
@@ -662,7 +662,7 @@ func TestValidateDBBlock(t *testing.T) {
 			ID:          "userWithMorePrivilege",
 			Certificate: adminCert.Raw,
 			Privilege: &types.Privilege{
-				DBAdministration: true,
+				Admin: true,
 			},
 		}
 		userWithMorePrivilegeSerialized, err := proto.Marshal(userWithMorePrivilege)
@@ -787,7 +787,7 @@ func TestValidateConfigBlock(t *testing.T) {
 			ID:          "adminUser",
 			Certificate: userCert.Raw,
 			Privilege: &types.Privilege{
-				ClusterAdministration: true,
+				Admin: true,
 			},
 		}
 		adminUserSerialized, err := proto.Marshal(adminUser)

@@ -356,7 +356,7 @@ func TestGetUser(t *testing.T) {
 				DBPermission: map[string]types.Privilege_Access{
 					"db1": types.Privilege_ReadWrite,
 				},
-				DBAdministration: true,
+				Admin: true,
 			},
 		}
 		targetUserSerialized, err := proto.Marshal(targetUser)
@@ -564,7 +564,7 @@ func TestGetUser(t *testing.T) {
 				DBPermission: map[string]types.Privilege_Access{
 					"db1": types.Privilege_ReadWrite,
 				},
-				DBAdministration: true,
+				Admin: true,
 			},
 		}
 		targetUserSerialized, err := proto.Marshal(targetUser)

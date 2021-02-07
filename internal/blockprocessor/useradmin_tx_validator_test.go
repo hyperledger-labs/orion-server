@@ -32,7 +32,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		ID:          "adminUser",
 		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
-			UserAdministration: true,
+			Admin: true,
 		},
 	}
 	adminUserSerialized, err := proto.Marshal(adminUser)
@@ -459,6 +459,23 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: the user is marked as admin",
+			userWrites: []*types.UserWrite{
+				{
+					User: &types.User{
+						ID: "user1",
+						Privilege: &types.Privilege{
+							Admin: true,
+						},
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the user [user1] is marked as admin user. Only via a cluster configuration transaction, the [user1] can be added as admin",
+			},
+		},
+		{
 			name: "invalid: db present in the premission list does not exist",
 			userWrites: []*types.UserWrite{
 				{
@@ -860,6 +877,15 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 		BlockNum: 2,
 		TxNum:    1,
 	}
+	adminEntry := constructUserForTest(t, "admin", nil, sampleVersion, nil)
+	admUsr := &types.User{}
+	require.NoError(t, proto.Unmarshal(adminEntry.Value, admUsr))
+	admUsr.Privilege = &types.Privilege{
+		Admin: true,
+	}
+	userSerialized, err := proto.Marshal(admUsr)
+	require.NoError(t, err)
+	adminEntry.Value = userSerialized
 
 	tests := []struct {
 		name           string
@@ -868,6 +894,33 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 		userWrites     []*types.UserWrite
 		expectedResult *types.ValidationInfo
 	}{
+		{
+			name:          "invalid: targetUser is an admin",
+			operatingUser: "operatingUser",
+			setup: func(db worldstate.DB) {
+				newUsers := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							adminEntry,
+						},
+					},
+				}
+				require.NoError(t, db.Commit(newUsers, 1))
+			},
+			userWrites: []*types.UserWrite{
+				{
+					User: &types.User{
+						ID: "admin",
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the user [admin] is an admin user. Only via a cluster configuration transaction, the [admin] can be modified",
+			},
+		},
 		{
 			name:          "invalid: operatingUser does not have write permission on user2",
 			operatingUser: "operatingUser",
@@ -995,6 +1048,15 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 		BlockNum: 2,
 		TxNum:    1,
 	}
+	adminEntry := constructUserForTest(t, "admin", nil, sampleVersion, nil)
+	admUsr := &types.User{}
+	require.NoError(t, proto.Unmarshal(adminEntry.Value, admUsr))
+	admUsr.Privilege = &types.Privilege{
+		Admin: true,
+	}
+	userSerialized, err := proto.Marshal(admUsr)
+	require.NoError(t, err)
+	adminEntry.Value = userSerialized
 
 	tests := []struct {
 		name           string
@@ -1003,6 +1065,31 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 		userDeletes    []*types.UserDelete
 		expectedResult *types.ValidationInfo
 	}{
+		{
+			name:          "invalid: targetUser is an admin",
+			operatingUser: "operatingUser",
+			setup: func(db worldstate.DB) {
+				newUsers := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							adminEntry,
+						},
+					},
+				}
+				require.NoError(t, db.Commit(newUsers, 1))
+			},
+			userDeletes: []*types.UserDelete{
+				{
+					UserID: "admin",
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the user [admin] is an admin user. Only via a cluster configuration transaction, the [admin] can be deleted",
+			},
+		},
 		{
 			name:          "invalid: operatingUser does not have write permission on user2",
 			operatingUser: "operatingUser",

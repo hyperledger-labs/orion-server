@@ -1637,9 +1637,7 @@ func constructAdminEntryForTest(userID string) *types.User {
 		ID:          userID,
 		Certificate: []byte("certificate~" + userID),
 		Privilege: &types.Privilege{
-			DBAdministration:      true,
-			ClusterAdministration: true,
-			UserAdministration:    true,
+			Admin: true,
 		},
 	}
 }

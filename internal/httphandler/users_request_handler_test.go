@@ -238,9 +238,7 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 						DBPermission: map[string]types.Privilege_Access{
 							"testDB": types.Privilege_ReadWrite,
 						},
-						UserAdministration:    true,
-						DBAdministration:      true,
-						ClusterAdministration: true,
+						Admin: true,
 					},
 				},
 			},

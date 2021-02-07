@@ -120,15 +120,13 @@ func TestQuerier(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                                   string
-		user                                   *types.User
-		userID                                 string
-		expectedReadPermissionOnDBs            []string
-		expectedReadWritePermissionOnDBs       []string
-		expectedNoPermissionOnDBs              []string
-		expectedDBAdministrativePrivilege      bool
-		expectedClusterAdministrativePrivilege bool
-		expectedUserAdministrativePrivilege    bool
+		name                             string
+		user                             *types.User
+		userID                           string
+		expectedReadPermissionOnDBs      []string
+		expectedReadWritePermissionOnDBs []string
+		expectedNoPermissionOnDBs        []string
+		expectedAdministrativePrivilege  bool
 	}{
 		{
 			name: "less privilege",
@@ -142,18 +140,14 @@ func TestQuerier(t *testing.T) {
 						"db3": types.Privilege_ReadWrite,
 						"db4": types.Privilege_ReadWrite,
 					},
-					DBAdministration:      false,
-					ClusterAdministration: false,
-					UserAdministration:    false,
+					Admin: false,
 				},
 			},
-			userID:                                 "userWithLessPrivilege",
-			expectedReadPermissionOnDBs:            []string{"db1", "db2", "db3", "db4"},
-			expectedReadWritePermissionOnDBs:       []string{"db3", "db4"},
-			expectedNoPermissionOnDBs:              []string{"db5", "db6"},
-			expectedDBAdministrativePrivilege:      false,
-			expectedClusterAdministrativePrivilege: false,
-			expectedUserAdministrativePrivilege:    false,
+			userID:                           "userWithLessPrivilege",
+			expectedReadPermissionOnDBs:      []string{"db1", "db2", "db3", "db4"},
+			expectedReadWritePermissionOnDBs: []string{"db3", "db4"},
+			expectedNoPermissionOnDBs:        []string{"db5", "db6"},
+			expectedAdministrativePrivilege:  false,
 		},
 		{
 			name: "more privilege",
@@ -161,25 +155,14 @@ func TestQuerier(t *testing.T) {
 				ID:          "userWithMorePrivilege",
 				Certificate: certRaw,
 				Privilege: &types.Privilege{
-					DBPermission: map[string]types.Privilege_Access{
-						"db1": types.Privilege_ReadWrite,
-						"db2": types.Privilege_ReadWrite,
-						"db3": types.Privilege_ReadWrite,
-						"db4": types.Privilege_ReadWrite,
-						"db5": types.Privilege_ReadWrite,
-					},
-					DBAdministration:      true,
-					ClusterAdministration: true,
-					UserAdministration:    true,
+					Admin: true,
 				},
 			},
-			userID:                                 "userWithMorePrivilege",
-			expectedReadPermissionOnDBs:            []string{"db1", "db2", "db3", "db4", "db5"},
-			expectedReadWritePermissionOnDBs:       []string{"db1", "db2", "db3", "db4", "db5"},
-			expectedNoPermissionOnDBs:              []string{"db6"},
-			expectedDBAdministrativePrivilege:      true,
-			expectedClusterAdministrativePrivilege: true,
-			expectedUserAdministrativePrivilege:    true,
+			userID:                           "userWithMorePrivilege",
+			expectedReadPermissionOnDBs:      []string{"db1", "db2", "db3", "db4", "db5"},
+			expectedReadWritePermissionOnDBs: []string{"db1", "db2", "db3", "db4", "db5"},
+			expectedNoPermissionOnDBs:        nil,
+			expectedAdministrativePrivilege:  true,
 		},
 		{
 			name: "no privilege",
@@ -188,13 +171,11 @@ func TestQuerier(t *testing.T) {
 				Certificate: certRaw,
 				Privilege:   nil,
 			},
-			userID:                                 "no Privilege",
-			expectedReadPermissionOnDBs:            nil,
-			expectedReadWritePermissionOnDBs:       nil,
-			expectedNoPermissionOnDBs:              []string{"db1", "db2", "db3", "db4", "db5", "db6"},
-			expectedDBAdministrativePrivilege:      false,
-			expectedClusterAdministrativePrivilege: false,
-			expectedUserAdministrativePrivilege:    false,
+			userID:                           "no Privilege",
+			expectedReadPermissionOnDBs:      nil,
+			expectedReadWritePermissionOnDBs: nil,
+			expectedNoPermissionOnDBs:        []string{"db1", "db2", "db3", "db4", "db5", "db6"},
+			expectedAdministrativePrivilege:  false,
 		},
 	}
 
@@ -248,17 +229,9 @@ func TestQuerier(t *testing.T) {
 			})
 
 			t.Run("Check Admin Privileges", func(t *testing.T) {
-				perm, err := env.q.HasDBAdministrationPrivilege(tt.userID)
+				perm, err := env.q.HasAdministrationPrivilege(tt.userID)
 				require.NoError(t, err)
-				require.Equal(t, tt.expectedDBAdministrativePrivilege, perm)
-
-				perm, err = env.q.HasClusterAdministrationPrivilege(tt.userID)
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedClusterAdministrativePrivilege, perm)
-
-				perm, err = env.q.HasUserAdministrationPrivilege(tt.userID)
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedUserAdministrativePrivilege, perm)
+				require.Equal(t, tt.expectedAdministrativePrivilege, perm)
 			})
 
 			t.Run("GetAccessControl()", func(t *testing.T) {
@@ -310,9 +283,7 @@ func TestQuerier(t *testing.T) {
 				DBPermission: map[string]types.Privilege_Access{
 					"db1": types.Privilege_Read,
 				},
-				DBAdministration:      false,
-				ClusterAdministration: false,
-				UserAdministration:    false,
+				Admin: false,
 			},
 		}
 		setup(env.db, user)
@@ -373,19 +344,7 @@ func TestQuerierNonExistingUser(t *testing.T) {
 	})
 
 	t.Run("HasDBAdministrationPrivilege returns UserNotFoundErr", func(t *testing.T) {
-		perm, err := env.q.HasDBAdministrationPrivilege("nouser")
-		require.EqualError(t, err, "the user [nouser] does not exist")
-		require.False(t, perm)
-	})
-
-	t.Run("HasClusterAdministrationPrivilege returns UserNotFoundErr", func(t *testing.T) {
-		perm, err := env.q.HasClusterAdministrationPrivilege("nouser")
-		require.EqualError(t, err, "the user [nouser] does not exist")
-		require.False(t, perm)
-	})
-
-	t.Run("HasUserAdministrationPrivilege returns UserNotFoundErr", func(t *testing.T) {
-		perm, err := env.q.HasUserAdministrationPrivilege("nouser")
+		perm, err := env.q.HasAdministrationPrivilege("nouser")
 		require.EqualError(t, err, "the user [nouser] does not exist")
 		require.False(t, perm)
 	})

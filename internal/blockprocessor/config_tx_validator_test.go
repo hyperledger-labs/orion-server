@@ -36,7 +36,7 @@ func TestValidateConfigTx(t *testing.T) {
 			ID:          userID,
 			Certificate: adminCert.Raw,
 			Privilege: &types.Privilege{
-				ClusterAdministration: true,
+				Admin: true,
 			},
 		}
 		adminUserSerialized, err := proto.Marshal(adminUser)

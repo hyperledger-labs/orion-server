@@ -59,6 +59,7 @@ func (q *Querier) GetUser(userID string) (*types.User, *types.Metadata, error) {
 	return user, meta, nil
 }
 
+// GetAccessControl returns the ACL defined on the userID
 func (q *Querier) GetAccessControl(userID string) (*types.AccessControl, error) {
 	_, metadata, err := q.GetUser(userID)
 	if err != nil {
@@ -71,6 +72,7 @@ func (q *Querier) GetAccessControl(userID string) (*types.AccessControl, error) 
 //TODO keep a cache of user and parsed certificates to avoid going to the DB and parsing the certificate
 // on every TX. Provide a mechanism to invalidate the cache when the user database changes.
 
+// GetCertificate returns the current certificate associated with a given userID
 func (q *Querier) GetCertificate(userID string) (*x509.Certificate, error) {
 	user, _, err := q.GetUser(userID)
 	if err != nil {
@@ -85,6 +87,7 @@ func (q *Querier) GetCertificate(userID string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
+// GetVersion returns the current version of a given userID
 func (q *Querier) GetVersion(userID string) (*types.Version, error) {
 	_, metadata, err := q.GetUser(userID)
 	if err != nil {
@@ -97,75 +100,27 @@ func (q *Querier) GetVersion(userID string) (*types.Version, error) {
 // HasReadAccessOnDataDB returns true if the given userID has read access on the given
 // dbName. Otherwise, it returns false
 func (q *Querier) HasReadAccessOnDataDB(userID, dbName string) (bool, error) {
-	user, _, err := q.GetUser(userID)
-	if err != nil {
-		return false, err
-	}
-
-	dbPermission := user.GetPrivilege().GetDBPermission()
-	if dbPermission == nil {
-		return false, err
-	}
-
-	_, ok := dbPermission[dbName]
-	return ok, nil
+	return q.hasPrivilege(userID, dbName, types.Privilege_Read)
 }
 
 // HasReadWriteAccess returns true if the given userID has read-write access on the given
 // dbName. Otherwise, it returns false
 func (q *Querier) HasReadWriteAccess(userID, dbName string) (bool, error) {
+	return q.hasPrivilege(userID, dbName, types.Privilege_ReadWrite)
+}
+
+// HasAdministrationPrivilege returns true if the given userID has privilege to perform
+// administrative tasks
+func (q *Querier) HasAdministrationPrivilege(userID string) (bool, error) {
 	user, _, err := q.GetUser(userID)
 	if err != nil {
 		return false, err
 	}
 
-	dbPermission := user.GetPrivilege().GetDBPermission()
-	if dbPermission == nil {
-		return false, err
-	}
-
-	access, ok := dbPermission[dbName]
-	if !ok {
-		return false, nil
-	}
-
-	return access == types.Privilege_ReadWrite, nil
+	return user.GetPrivilege().GetAdmin(), nil
 }
 
-// HasDBAdministrationPrivilege returns true if the given userID has privilege to perform
-// database administrative tasks such as creation and deletion of databases
-func (q *Querier) HasDBAdministrationPrivilege(userID string) (bool, error) {
-	user, _, err := q.GetUser(userID)
-	if err != nil {
-		return false, err
-	}
-
-	return user.GetPrivilege().GetDBAdministration(), nil
-}
-
-// HasUserAdministrationPrivilege returns true if the given userID has privilege to perform
-// user administrative tasks such as creation, updation, and deletion of users
-func (q *Querier) HasUserAdministrationPrivilege(userID string) (bool, error) {
-	user, _, err := q.GetUser(userID)
-	if err != nil {
-		return false, err
-	}
-
-	return user.GetPrivilege().GetUserAdministration(), nil
-}
-
-// HasClusterAdministrationPrivilege returns true if the given userID has privilege to perform
-// cluster administrative tasks such as addition, removal, and updation of node or cluster
-// configuration
-func (q *Querier) HasClusterAdministrationPrivilege(userID string) (bool, error) {
-	user, _, err := q.GetUser(userID)
-	if err != nil {
-		return false, err
-	}
-
-	return user.GetPrivilege().GetClusterAdministration(), nil
-}
-
+// HasReadAccessOnTargetUser returns true if the srcUser can read the targetUser
 func (q *Querier) HasReadAccessOnTargetUser(srcUser, targetUser string) (bool, error) {
 	acl, err := q.GetAccessControl(targetUser)
 	if err != nil {
@@ -177,6 +132,7 @@ func (q *Querier) HasReadAccessOnTargetUser(srcUser, targetUser string) (bool, e
 		acl.ReadWriteUsers[srcUser], nil
 }
 
+// HasReadWriteAccessOnTargetUser returns true if the srcUser can read & write the targetUser
 func (q *Querier) HasReadWriteAccessOnTargetUser(srcUser, targetUser string) (bool, error) {
 	acl, err := q.GetAccessControl(targetUser)
 	if err != nil {
@@ -193,6 +149,30 @@ func (q *Querier) HasLedgerAccess(userID string) (bool, error) {
 	return q.DoesUserExist(userID)
 }
 
+func (q *Querier) hasPrivilege(userID, dbName string, privilege types.Privilege_Access) (bool, error) {
+	user, _, err := q.GetUser(userID)
+	if err != nil {
+		return false, err
+	}
+
+	if user.GetPrivilege() != nil && user.Privilege.Admin {
+		return true, nil
+	}
+
+	dbPermission := user.GetPrivilege().GetDBPermission()
+	if dbPermission == nil {
+		return false, err
+	}
+
+	p, ok := dbPermission[dbName]
+	if !ok {
+		return false, nil
+	}
+
+	return p >= privilege, nil
+}
+
+// UserNotFoundErr denotes that the userID does not exist in the worldstate
 type UserNotFoundErr struct {
 	userID string
 }

@@ -22,7 +22,7 @@ func (v *dbAdminTxValidator) validate(txEnv *types.DBAdministrationTxEnvelope) (
 	}
 
 	tx := txEnv.Payload
-	hasPerm, err := v.identityQuerier.HasDBAdministrationPrivilege(tx.UserID)
+	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserID)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "error while checking database administrative privilege for user [%s]", tx.UserID)
 	}

@@ -49,7 +49,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 		ID:          "userWithMorePrivilege",
 		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
-			DBAdministration: true,
+			Admin: true,
 		},
 	}
 	userWithMorePrivilegeSerialized, err := proto.Marshal(userWithMorePrivilege)

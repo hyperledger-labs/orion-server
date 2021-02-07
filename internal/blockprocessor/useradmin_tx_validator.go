@@ -24,7 +24,7 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 	}
 
 	tx := txEnv.Payload
-	hasPerm, err := v.identityQuerier.HasUserAdministrationPrivilege(tx.UserID)
+	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserID)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "error while checking user administrative privilege for user [%s]", tx.UserID)
 	}
@@ -113,6 +113,13 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 
 		default:
 			if w.User.Privilege != nil {
+				if w.User.Privilege.Admin {
+					return &types.ValidationInfo{
+						Flag:            types.Flag_INVALID_NO_PERMISSION,
+						ReasonIfInvalid: "the user [" + w.User.ID + "] is marked as admin user. Only via a cluster configuration transaction, the [" + w.User.ID + "] can be added as admin",
+					}, nil
+				}
+
 				dbPerm := w.User.Privilege.DBPermission
 				for dbName := range dbPerm {
 					if v.db.Exist(dbName) {
@@ -230,13 +237,24 @@ func (v *userAdminTxValidator) validateACLOnUserWrites(operatingUser string, wri
 	for _, w := range writes {
 		targetUser := w.User.ID
 
-		hasPerm, err := v.identityQuerier.HasReadWriteAccessOnTargetUser(operatingUser, targetUser)
+		admin, err := v.identityQuerier.HasAdministrationPrivilege(targetUser)
 		if err != nil {
 			if _, ok := err.(*identity.UserNotFoundErr); !ok {
 				return nil, err
 			}
 
 			continue
+		}
+		if admin {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the user [" + targetUser + "] is an admin user. Only via a cluster configuration transaction, the [" + targetUser + "] can be modified",
+			}, nil
+		}
+
+		hasPerm, err := v.identityQuerier.HasReadWriteAccessOnTargetUser(operatingUser, targetUser)
+		if err != nil {
+			return nil, err
 		}
 
 		if !hasPerm {
@@ -256,7 +274,7 @@ func (v *userAdminTxValidator) validateACLOnUserDeletes(operatingUser string, de
 	for _, d := range deletes {
 		targetUser := d.UserID
 
-		hasPerm, err := v.identityQuerier.HasReadWriteAccessOnTargetUser(operatingUser, targetUser)
+		admin, err := v.identityQuerier.HasAdministrationPrivilege(targetUser)
 		if err != nil {
 			if _, ok := err.(*identity.UserNotFoundErr); !ok {
 				return nil, err
@@ -266,6 +284,18 @@ func (v *userAdminTxValidator) validateACLOnUserDeletes(operatingUser string, de
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the user [" + targetUser + "] present in the delete list does not exist",
 			}, nil
+		}
+
+		if admin {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the user [" + targetUser + "] is an admin user. Only via a cluster configuration transaction, the [" + targetUser + "] can be deleted",
+			}, nil
+		}
+
+		hasPerm, err := v.identityQuerier.HasReadWriteAccessOnTargetUser(operatingUser, targetUser)
+		if err != nil {
+			return nil, err
 		}
 
 		if !hasPerm {

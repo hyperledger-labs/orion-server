@@ -69,9 +69,7 @@ func ConstructDBEntriesForClusterAdmins(oldAdmins, newAdmins []*types.Admin, ver
 			ID:          admin.ID,
 			Certificate: admin.Certificate,
 			Privilege: &types.Privilege{
-				DBAdministration:      true,
-				ClusterAdministration: true,
-				UserAdministration:    true,
+				Admin: true,
 			},
 		}
 

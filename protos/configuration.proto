@@ -64,7 +64,11 @@ message Privilege {
       ReadWrite = 1;
   }
   map<string, Access> DB_permission = 1;
-  bool DB_administration = 2;
-  bool cluster_administration = 4;
-  bool user_administration = 3;
+  // admin has privileges to submit a user administration transaction,
+  // cluster configuration transaction, and database administration
+  // transaction. Further, admin has permission to read-write states
+  // from any database provided that the state has no ACL defined. If
+  // a state has a read and write ACL, the admin can read or write to
+  // the state only if the admin is listed in the read or write ACL list.
+  bool admin = 2;
 }

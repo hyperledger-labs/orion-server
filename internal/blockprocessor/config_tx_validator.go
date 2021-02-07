@@ -27,7 +27,7 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 	}
 
 	tx := txEnv.Payload
-	hasPerm, err := v.identityQuerier.HasClusterAdministrationPrivilege(tx.UserID)
+	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserID)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "error while checking cluster administrative privilege for user [%s]", tx.UserID)
 	}
