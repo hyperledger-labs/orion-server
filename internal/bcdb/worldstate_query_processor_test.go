@@ -26,7 +26,7 @@ type worldstateQueryProcessorTestEnv struct {
 func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorTestEnv {
 	nodeID := "test-node-id1"
 	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
-	nodeCert, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
 
 	path, err := ioutil.TempDir("/tmp", "queryProcessor")
 	require.NoError(t, err)
@@ -65,7 +65,6 @@ func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorT
 
 	qProcConfig := &worldstateQueryProcessorConfig{
 		nodeID:          nodeID,
-		signer:          nodeSigner,
 		db:              db,
 		blockStore:      nil,
 		identityQuerier: identity.NewQuerier(db),
@@ -118,10 +117,10 @@ func TestGetDBStatus(t *testing.T) {
 		for _, testCase := range testCases {
 			status, err := env.q.getDBStatus(testCase.dbName)
 			require.NoError(t, err)
-			require.NotNil(t, status.Payload)
-			require.Equal(t, testCase.isExist, status.Payload.Exist)
-			require.NotNil(t, status.Payload.Header)
-			require.Equal(t, "test-node-id1", string(status.Payload.Header.NodeID))
+			require.NotNil(t, status)
+			require.Equal(t, testCase.isExist, status.Exist)
+			require.NotNil(t, status.Header)
+			require.Equal(t, "test-node-id1", string(status.Header.NodeID))
 		}
 	})
 }
@@ -243,13 +242,13 @@ func TestGetData(t *testing.T) {
 		}
 
 		for _, testCase := range testCases {
-			val, err := env.q.getData("test-db", "testUser", testCase.key)
+			payload, err := env.q.getData("test-db", "testUser", testCase.key)
 			require.NoError(t, err)
-			require.NotNil(t, val.Payload)
-			require.Equal(t, testCase.expectedValue, val.Payload.Value)
-			require.True(t, proto.Equal(testCase.expectedMetadata, val.Payload.Metadata))
-			require.NotNil(t, val.Payload.Header)
-			require.Equal(t, "test-node-id1", string(val.Payload.Header.NodeID))
+			require.NotNil(t, payload)
+			require.Equal(t, testCase.expectedValue, payload.Value)
+			require.True(t, proto.Equal(testCase.expectedMetadata, payload.Metadata))
+			require.NotNil(t, payload.Header)
+			require.Equal(t, "test-node-id1", string(payload.Header.NodeID))
 		}
 	})
 
@@ -541,10 +540,9 @@ func TestGetUser(t *testing.T) {
 
 				tt.setup(env.db)
 
-				response, err := env.q.getUser(tt.querierUserID, tt.targetUserID)
+				payload, err := env.q.getUser(tt.querierUserID, tt.targetUserID)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(tt.expectedRespose.Payload, response.Payload))
-				testutils.VerifyPayloadSignature(t, env.cert.Raw, response.Payload, response.Signature)
+				require.True(t, proto.Equal(tt.expectedRespose.Payload, payload))
 			})
 		}
 	})
@@ -695,18 +693,14 @@ func TestGetConfig(t *testing.T) {
 		configEnvelope, err := env.q.getConfig()
 		require.NoError(t, err)
 
-		payload := &types.GetConfigResponse{
+		expectedConfig := &types.GetConfigResponse{
 			Header: &types.ResponseHeader{
 				NodeID: env.q.nodeID,
 			},
 			Config:   clusterConfig,
 			Metadata: metadata,
 		}
-		expectedConfigEnvelope := &types.GetConfigResponseEnvelope{
-			Payload: payload,
-		}
-		require.True(t, proto.Equal(expectedConfigEnvelope.Payload, configEnvelope.Payload))
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, configEnvelope.Payload, configEnvelope.Signature)
+		require.True(t, proto.Equal(expectedConfig, configEnvelope))
 	})
 
 	t.Run("getConfig returns err", func(t *testing.T) {
@@ -735,6 +729,7 @@ func TestGetConfig(t *testing.T) {
 		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
 		configEnvelope, err := env.q.getConfig()
+		require.Error(t, err)
 		require.Contains(t, err.Error(), "error while unmarshaling committed cluster configuration")
 		require.Nil(t, configEnvelope)
 	})
@@ -796,31 +791,23 @@ func TestGetConfig(t *testing.T) {
 		singleNodeConfigEnvelope, err := env.q.getNodeConfig("node1")
 		require.NoError(t, err)
 
-		expectedSingleNodeConfigEnvelope := &types.GetNodeConfigResponseEnvelope{
-			Payload: &types.GetNodeConfigResponse{
-				Header: &types.ResponseHeader{
-					NodeID: env.q.nodeID,
-				},
-				NodeConfig: clusterConfig.Nodes[0],
+		expectedSingleNodeConfig := &types.GetNodeConfigResponse{
+			Header: &types.ResponseHeader{
+				NodeID: env.q.nodeID,
 			},
-			Signature: nil,
+			NodeConfig: clusterConfig.Nodes[0],
 		}
-		require.True(t, proto.Equal(expectedSingleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Payload))
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, singleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Signature)
+		require.True(t, proto.Equal(expectedSingleNodeConfig, singleNodeConfigEnvelope))
 
 		singleNodeConfigEnvelope, err = env.q.getNodeConfig("node3")
 		require.NoError(t, err)
 
-		expectedSingleNodeConfigEnvelope = &types.GetNodeConfigResponseEnvelope{
-			Payload: &types.GetNodeConfigResponse{
-				Header: &types.ResponseHeader{
-					NodeID: env.q.nodeID,
-				},
-				NodeConfig: nil,
+		expectedSingleNodeConfig = &types.GetNodeConfigResponse{
+			Header: &types.ResponseHeader{
+				NodeID: env.q.nodeID,
 			},
-			Signature: nil,
+			NodeConfig: nil,
 		}
-		require.True(t, proto.Equal(expectedSingleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Payload))
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, singleNodeConfigEnvelope.Payload, singleNodeConfigEnvelope.Signature)
+		require.True(t, proto.Equal(expectedSingleNodeConfig, singleNodeConfigEnvelope))
 	})
 }

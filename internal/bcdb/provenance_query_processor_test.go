@@ -22,7 +22,7 @@ type provenanceQueryProcessorTestEnv struct {
 func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorTestEnv {
 	nodeID := "test-node-id1"
 	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
-	nodeCert, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
+	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
 
 	path, err := ioutil.TempDir("/tmp", "provenanceQueryProcessor")
 	require.NoError(t, err)
@@ -57,7 +57,6 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 		p: newProvenanceQueryProcessor(
 			&provenanceQueryProcessorConfig{
 				nodeID:          nodeID,
-				signer:          nodeSigner,
 				provenanceStore: provenanceStore,
 				logger:          logger,
 			}),
@@ -317,7 +316,6 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 	require.NoError(t, s.Commit(6, block6TxsData))
 }
 
-
 func TestGetValues(t *testing.T) {
 	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
@@ -406,13 +404,12 @@ func TestGetValues(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetValues(tt.dbName, tt.key)
+		payload, err := env.p.GetValues(tt.dbName, tt.key)
 		require.NoError(t, err)
 
-		require.NotNil(t, envelope)
-		require.ElementsMatch(t, tt.expectedEnvelope.GetPayload().GetValues(), envelope.GetPayload().GetValues())
-		require.Equal(t, tt.expectedEnvelope.GetPayload().GetHeader(), envelope.GetPayload().GetHeader())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.NotNil(t, payload)
+		require.ElementsMatch(t, tt.expectedEnvelope.GetPayload().GetValues(), payload.GetValues())
+		require.Equal(t, tt.expectedEnvelope.GetPayload().GetHeader(), payload.GetHeader())
 	}
 }
 
@@ -477,13 +474,12 @@ func TestGetDeletedValues(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetDeletedValues(tt.dbName, tt.key)
+		payload, err := env.p.GetDeletedValues(tt.dbName, tt.key)
 		require.NoError(t, err)
 
-		require.NotNil(t, envelope)
-		require.ElementsMatch(t, tt.expectedEnvelope.GetPayload().GetValues(), envelope.GetPayload().GetValues())
-		require.Equal(t, tt.expectedEnvelope.GetPayload().GetHeader(), envelope.GetPayload().GetHeader())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.NotNil(t, payload)
+		require.ElementsMatch(t, tt.expectedEnvelope.GetPayload().GetValues(), payload.GetValues())
+		require.Equal(t, tt.expectedEnvelope.GetPayload().GetHeader(), payload.GetHeader())
 	}
 }
 
@@ -556,12 +552,11 @@ func TestGetPreviousValues(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetPreviousValues(tt.dbName, tt.key, tt.version)
+		payload, err := env.p.GetPreviousValues(tt.dbName, tt.key, tt.version)
 		require.NoError(t, err)
 
-		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.NotNil(t, payload)
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), payload)
 	}
 }
 
@@ -639,8 +634,7 @@ func TestGetNextValues(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }
 
@@ -709,8 +703,7 @@ func TestGetValueAt(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }
 
@@ -763,8 +756,7 @@ func TestGetReaders(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }
 
@@ -816,8 +808,7 @@ func TestGetWriters(t *testing.T) {
 		envelope, err := env.p.GetWriters(tt.dbName, tt.key)
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }
 
@@ -877,8 +868,7 @@ func TestGetValuesReadByUser(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }
 
@@ -963,8 +953,7 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }
 
@@ -1033,8 +1022,7 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }
 
@@ -1058,7 +1046,7 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 					Header: &types.ResponseHeader{
 						NodeID: env.p.nodeID,
 					},
-					TxIDs: []string{"tx4", "tx5",  "tx50", "tx6"},
+					TxIDs: []string{"tx4", "tx5", "tx50", "tx6"},
 				},
 			},
 		},
@@ -1081,7 +1069,6 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope.GetPayload())
-		testutils.VerifyPayloadSignature(t, env.cert.Raw, envelope.GetPayload(), envelope.GetSignature())
+		require.Equal(t, tt.expectedEnvelope.GetPayload(), envelope)
 	}
 }

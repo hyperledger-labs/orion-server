@@ -97,8 +97,6 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 
 	nodeID := "bdb-node-1"
-	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
-	_, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
 
 	txProcConf := &txProcessorConfig{
 		nodeID:             nodeID,
@@ -110,7 +108,6 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 		blockQueueLength:   100,
 		maxTxCountPerBatch: 1,
 		batchTimeout:       50 * time.Millisecond,
-		signer:             nodeSigner,
 		logger:             logger,
 	}
 	txProcessor, err := newTransactionProcessor(txProcConf)

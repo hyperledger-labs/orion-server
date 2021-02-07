@@ -77,7 +77,7 @@ func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *
 		SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
-			&types.HttpResponseErr{"error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
+			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
 		)
 		return
 	}
@@ -103,19 +103,19 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 
 	if txEnv.Payload == nil {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserID == "" {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 

@@ -15,7 +15,6 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/txreorderer"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -26,7 +25,6 @@ const (
 
 type transactionProcessor struct {
 	nodeID         string
-	signer         crypto.Signer
 	txQueue        *queue.Queue
 	txBatchQueue   *queue.Queue
 	blockQueue     *queue.Queue
@@ -41,7 +39,6 @@ type transactionProcessor struct {
 
 type txProcessorConfig struct {
 	nodeID             string
-	signer             crypto.Signer
 	db                 worldstate.DB
 	blockStore         *blockstore.Store
 	provenanceStore    *provenance.Store
@@ -57,7 +54,6 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	p := &transactionProcessor{}
 
 	p.nodeID = conf.nodeID
-	p.signer = conf.signer
 	p.logger = conf.logger
 	p.txQueue = queue.New(conf.txQueueLength)
 	p.txBatchQueue = queue.New(conf.txBatchQueueLength)

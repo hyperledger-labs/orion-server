@@ -34,8 +34,6 @@ type ledgerProcessorTestEnv struct {
 
 func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 	nodeID := "test-node-id1"
-	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
-	_, nodeSigner := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
 
 	path, err := ioutil.TempDir("/tmp", "ledgerQueryProcessor")
 	require.NoError(t, err)
@@ -108,7 +106,6 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 
 	conf := &ledgerQueryProcessorConfig{
 		nodeID:          nodeID,
-		signer:          nodeSigner,
 		db:              db,
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,
@@ -333,68 +330,68 @@ func TestGetBlock(t *testing.T) {
 	setup(t, env, 20)
 
 	testCases := []struct {
-		name          string
-		blockNumber   uint64
-		expectedBlock *types.BlockHeader
-		user          string
-		expectedErr   error
+		name                string
+		blockNumber         uint64
+		expectedBlockHeader *types.BlockHeader
+		user                string
+		expectedErr         error
 	}{
 		{
-			name:          "Getting block 5 - correct",
-			blockNumber:   5,
-			expectedBlock: env.blocks[4],
-			user:          "testUser",
+			name:                "Getting block 5 - correct",
+			blockNumber:         5,
+			expectedBlockHeader: env.blocks[4],
+			user:                "testUser",
 		},
 		{
-			name:          "Getting block 17 - correct",
-			blockNumber:   17,
-			expectedBlock: env.blocks[16],
-			user:          "testUser",
+			name:                "Getting block 17 - correct",
+			blockNumber:         17,
+			expectedBlockHeader: env.blocks[16],
+			user:                "testUser",
 		},
 		{
-			name:          "Getting block 12 - correct",
-			blockNumber:   12,
-			expectedBlock: env.blocks[11],
-			user:          "testUser",
+			name:                "Getting block 12 - correct",
+			blockNumber:         12,
+			expectedBlockHeader: env.blocks[11],
+			user:                "testUser",
 		},
 		{
-			name:          "Getting block 9 - correct",
-			blockNumber:   9,
-			expectedBlock: env.blocks[8],
-			user:          "testUser",
+			name:                "Getting block 9 - correct",
+			blockNumber:         9,
+			expectedBlockHeader: env.blocks[8],
+			user:                "testUser",
 		},
 		{
-			name:          "Getting block 21 - not exist",
-			blockNumber:   21,
-			expectedBlock: nil,
-			user:          "testUser",
-			expectedErr:   &interrors.NotFoundErr{Message: "block not found: 21"},
+			name:                "Getting block 21 - not exist",
+			blockNumber:         21,
+			expectedBlockHeader: nil,
+			user:                "testUser",
+			expectedErr:         &interrors.NotFoundErr{Message: "block not found: 21"},
 		},
 		{
-			name:          "Getting block 515 - not exist",
-			blockNumber:   515,
-			expectedBlock: nil,
-			user:          "testUser",
-			expectedErr:   &interrors.NotFoundErr{Message: "block not found: 515"},
+			name:                "Getting block 515 - not exist",
+			blockNumber:         515,
+			expectedBlockHeader: nil,
+			user:                "testUser",
+			expectedErr:         &interrors.NotFoundErr{Message: "block not found: 515"},
 		},
 		{
-			name:          "Getting block 10 - wrong user",
-			blockNumber:   10,
-			expectedBlock: nil,
-			user:          "userNotExist",
-			expectedErr:   &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
+			name:                "Getting block 10 - wrong user",
+			blockNumber:         10,
+			expectedBlockHeader: nil,
+			user:                "userNotExist",
+			expectedErr:         &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			res, err := env.p.getBlockHeader(testCase.user, testCase.blockNumber)
+			payload, err := env.p.getBlockHeader(testCase.user, testCase.blockNumber)
 			if testCase.expectedErr == nil {
 				require.NoError(t, err)
-				if testCase.expectedBlock != nil {
-					require.True(t, proto.Equal(testCase.expectedBlock, res.GetPayload().GetBlockHeader()))
+				if testCase.expectedBlockHeader != nil {
+					require.True(t, proto.Equal(testCase.expectedBlockHeader, payload.GetBlockHeader()))
 				} else {
-					require.Nil(t, res.GetPayload().GetBlockHeader())
+					require.Nil(t, payload.GetBlockHeader())
 				}
 			} else {
 				require.Error(t, err)
@@ -482,18 +479,18 @@ func TestGetPath(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			path, err := env.p.getPath(testCase.user, testCase.startNumber, testCase.endNumber)
+			payload, err := env.p.getPath(testCase.user, testCase.startNumber, testCase.endNumber)
 			if testCase.expectedErr != nil {
 				require.Error(t, err)
-				require.Nil(t, path)
+				require.Nil(t, payload)
 				require.EqualError(t, err, testCase.expectedErr.Error())
 				require.IsType(t, testCase.expectedErr, err)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, path)
-				require.Equal(t, len(testCase.expectedBlocks), len(path.GetPayload().GetBlockHeaders()))
+				require.NotNil(t, payload)
+				require.Equal(t, len(testCase.expectedBlocks), len(payload.GetBlockHeaders()))
 				for idx, expectedBlock := range testCase.expectedBlocks {
-					require.True(t, proto.Equal(expectedBlock, path.GetPayload().GetBlockHeaders()[idx]))
+					require.True(t, proto.Equal(expectedBlock, payload.GetBlockHeaders()[idx]))
 				}
 			}
 		})
@@ -576,7 +573,7 @@ func TestGetProof(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			proof, err := env.p.getProof(testCase.user, testCase.blockNumber, testCase.txIndex)
+			payload, err := env.p.getProof(testCase.user, testCase.blockNumber, testCase.txIndex)
 			if testCase.expectedErr == nil {
 				require.NoError(t, err)
 				txBytes, err := json.Marshal(testCase.expectedTx)
@@ -587,7 +584,7 @@ func TestGetProof(t *testing.T) {
 				txHash, err := crypto.ComputeSHA256Hash(txBytes)
 				require.NoError(t, err)
 				var currRoot []byte
-				for i, h := range proof.Payload.Hashes {
+				for i, h := range payload.Hashes {
 					if i == 0 {
 						require.Equal(t, txHash, h)
 						currRoot = txHash
@@ -670,8 +667,8 @@ func TestGetTxReceipt(t *testing.T) {
 			receipt, err := env.p.getTxReceipt(tt.user, tt.txId)
 			if tt.expectedErr == nil {
 				require.NoError(t, err)
-				require.Equal(t, tt.txIndex, receipt.GetPayload().GetReceipt().GetTxIndex())
-				require.True(t, proto.Equal(env.blocks[tt.blockNumber-1], receipt.GetPayload().GetReceipt().GetHeader()))
+				require.Equal(t, tt.txIndex, receipt.GetReceipt().GetTxIndex())
+				require.True(t, proto.Equal(env.blocks[tt.blockNumber-1], receipt.GetReceipt().GetHeader()))
 			} else {
 				require.Error(t, err)
 				require.EqualError(t, err, tt.expectedErr.Error())

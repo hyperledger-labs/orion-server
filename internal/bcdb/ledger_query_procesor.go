@@ -10,15 +10,12 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/mtree"
 	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type ledgerQueryProcessor struct {
 	nodeID          string
-	signer          crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
@@ -28,7 +25,6 @@ type ledgerQueryProcessor struct {
 
 type ledgerQueryProcessorConfig struct {
 	nodeID          string
-	signer          crypto.Signer
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
@@ -39,7 +35,6 @@ type ledgerQueryProcessorConfig struct {
 func newLedgerQueryProcessor(conf *ledgerQueryProcessorConfig) *ledgerQueryProcessor {
 	return &ledgerQueryProcessor{
 		nodeID:          conf.nodeID,
-		signer:          conf.signer,
 		db:              conf.db,
 		blockStore:      conf.blockStore,
 		provenanceStore: conf.provenanceStore,
@@ -48,7 +43,7 @@ func newLedgerQueryProcessor(conf *ledgerQueryProcessorConfig) *ledgerQueryProce
 	}
 }
 
-func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
+func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*types.GetBlockResponse, error) {
 	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
 	if err != nil {
 		return nil, err
@@ -62,24 +57,15 @@ func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*
 		return nil, err
 	}
 
-	result := &types.GetBlockResponseEnvelope{
-		Payload: &types.GetBlockResponse{
-			Header: &types.ResponseHeader{
-				NodeID: p.nodeID,
-			},
-			BlockHeader: data,
+	return &types.GetBlockResponse{
+		Header: &types.ResponseHeader{
+			NodeID: p.nodeID,
 		},
-		Signature: nil,
-	}
-
-	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
-		return nil, err
-	}
-
-	return result, nil
+		BlockHeader: data,
+	}, nil
 }
 
-func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx uint64) (*types.GetLedgerPathResponseEnvelope, error) {
+func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx uint64) (*types.GetLedgerPathResponse, error) {
 	if endBlockIdx < startBlockIdx {
 		return nil, errors.Errorf("can't find path from smaller block %d to bigger %d", endBlockIdx, startBlockIdx)
 	}
@@ -108,23 +94,15 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 	if err != nil {
 		return nil, err
 	}
-	result := &types.GetLedgerPathResponseEnvelope{
-		Payload: &types.GetLedgerPathResponse{
-			Header: &types.ResponseHeader{
-				NodeID: p.nodeID,
-			},
-			BlockHeaders: headers,
+	return &types.GetLedgerPathResponse{
+		Header: &types.ResponseHeader{
+			NodeID: p.nodeID,
 		},
-		Signature: nil,
-	}
-
-	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
-		return nil, err
-	}
-	return result, nil
+		BlockHeaders: headers,
+	}, nil
 }
 
-func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
+func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponse, error) {
 	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
 	if err != nil {
 		return nil, err
@@ -142,30 +120,22 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 	if err != nil {
 		return nil, err
 	}
-	result := &types.GetTxProofResponseEnvelope{
-		Payload: &types.GetTxProofResponse{
-			Header: &types.ResponseHeader{
-				NodeID: p.nodeID,
-			},
-			Hashes: path,
+	return &types.GetTxProofResponse{
+		Header: &types.ResponseHeader{
+			NodeID: p.nodeID,
 		},
-		Signature: nil,
-	}
-
-	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
-		return nil, err
-	}
-	return result, nil
+		Hashes: path,
+	}, nil
 }
 
-func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.GetTxReceiptResponseEnvelope, error) {
+func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.GetTxReceiptResponse, error) {
 	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
 	if err != nil {
 		return nil, err
 	}
 
 	if !hasAccess {
-		return nil, &interrors.PermissionErr{fmt.Sprintf("user %s has no permission to access the ledger", userId)}
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
 	}
 	txLoc, err := p.provenanceStore.GetTxIDLocation(txId)
 	if err != nil {
@@ -177,23 +147,15 @@ func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.
 		return nil, err
 	}
 
-	result := &types.GetTxReceiptResponseEnvelope{
-		Payload: &types.GetTxReceiptResponse{
-			Header: &types.ResponseHeader{
-				NodeID: p.nodeID,
-			},
-			Receipt: &types.TxReceipt{
-				Header:  blockHeader,
-				TxIndex: uint64(txLoc.TxIndex),
-			},
+	return &types.GetTxReceiptResponse{
+		Header: &types.ResponseHeader{
+			NodeID: p.nodeID,
 		},
-		Signature: nil,
-	}
-
-	if result.Signature, err = cryptoservice.SignQueryResponse(p.signer, result.Payload); err != nil {
-		return nil, err
-	}
-	return result, nil
+		Receipt: &types.TxReceipt{
+			Header:  blockHeader,
+			TxIndex: uint64(txLoc.TxIndex),
+		},
+	}, nil
 }
 
 func (p *ledgerQueryProcessor) calculateProof(block *types.Block, txIdx uint64) ([][]byte, error) {
