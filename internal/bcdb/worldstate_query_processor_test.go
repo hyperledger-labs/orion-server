@@ -3,7 +3,6 @@
 package bcdb
 
 import (
-	"crypto/x509"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -14,21 +13,17 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type worldstateQueryProcessorTestEnv struct {
 	db      *leveldb.LevelDB
 	q       *worldstateQueryProcessor
-	cert    *x509.Certificate
 	cleanup func(t *testing.T)
 }
 
 func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorTestEnv {
 	nodeID := "test-node-id1"
-	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
 
 	path, err := ioutil.TempDir("/tmp", "queryProcessor")
 	require.NoError(t, err)
@@ -77,7 +72,6 @@ func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorT
 	return &worldstateQueryProcessorTestEnv{
 		db:      db,
 		q:       qProc,
-		cert:    nodeCert,
 		cleanup: cleanup,
 	}
 }

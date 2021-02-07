@@ -3,7 +3,6 @@
 package bcdb
 
 import (
-	"crypto/x509"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -11,21 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type provenanceQueryProcessorTestEnv struct {
-	p       *provenanceQueryProcessor
-	cert    *x509.Certificate
+	p *provenanceQueryProcessor
+
 	cleanup func(t *testing.T)
 }
 
 func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorTestEnv {
-	nodeID := "test-node-id1"
-	cryptoPath := testutils.GenerateTestClientCrypto(t, []string{nodeID})
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoPath, nodeID)
-
 	path, err := ioutil.TempDir("/tmp", "provenanceQueryProcessor")
 	require.NoError(t, err)
 
@@ -61,7 +55,6 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 				provenanceStore: provenanceStore,
 				logger:          logger,
 			}),
-		cert:    nodeCert,
 		cleanup: cleanup,
 	}
 }
