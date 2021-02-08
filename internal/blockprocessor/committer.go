@@ -211,13 +211,16 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		}
 
 		tx := block.GetConfigTxEnvelope().GetPayload()
-		adminUpdates, configUpdates, err := constructDBEntriesForConfigTx(tx, committedConfig, version)
+		entries, err := constructDBEntriesForConfigTx(tx, committedConfig, version)
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while constructing entries for the config transaction")
 		}
-		dbsUpdates = append(dbsUpdates, configUpdates)
-		if adminUpdates != nil {
-			dbsUpdates = append(dbsUpdates, adminUpdates)
+		dbsUpdates = append(dbsUpdates, entries.configUpdates)
+		if entries.adminUpdates != nil {
+			dbsUpdates = append(dbsUpdates, entries.adminUpdates)
+		}
+		if entries.nodeUpdates != nil {
+			dbsUpdates = append(dbsUpdates, entries.nodeUpdates)
 		}
 
 		pData, err := constructProvenanceEntriesForConfigTx(tx, version)
@@ -226,7 +229,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		}
 		provenanceData = append(provenanceData, pData)
 
-		adminPData, err := identity.ConstructProvenanceEntriesForClusterAdmins(tx.UserID, tx.TxID, adminUpdates, c.db)
+		adminPData, err := identity.ConstructProvenanceEntriesForClusterAdmins(tx.UserID, tx.TxID, entries.adminUpdates, c.db)
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for admins in config transaction")
 		}
@@ -286,15 +289,26 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 	}
 }
 
-func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterConfig, version *types.Version) (*worldstate.DBUpdates, *worldstate.DBUpdates, error) {
+type dbEntriesForConfigTx struct {
+	adminUpdates  *worldstate.DBUpdates
+	nodeUpdates   *worldstate.DBUpdates
+	configUpdates *worldstate.DBUpdates
+}
+
+func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterConfig, version *types.Version) (*dbEntriesForConfigTx, error) {
 	adminUpdates, err := identity.ConstructDBEntriesForClusterAdmins(oldConfig.Admins, tx.NewConfig.Admins, version)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+
+	nodeUpdates, err := identity.ConstructDBEntriesForNodes(oldConfig.Nodes, tx.NewConfig.Nodes, version)
+	if err != nil {
+		return nil, err
 	}
 
 	newConfigSerialized, err := proto.Marshal(tx.NewConfig)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "error while marshaling new configuration")
+		return nil, errors.Wrap(err, "error while marshaling new configuration")
 	}
 
 	configUpdates := &worldstate.DBUpdates{
@@ -310,7 +324,11 @@ func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterC
 		},
 	}
 
-	return adminUpdates, configUpdates, nil
+	return &dbEntriesForConfigTx{
+		adminUpdates:  adminUpdates,
+		nodeUpdates:   nodeUpdates,
+		configUpdates: configUpdates,
+	}, nil
 }
 
 func constructProvenanceEntriesForDataTx(

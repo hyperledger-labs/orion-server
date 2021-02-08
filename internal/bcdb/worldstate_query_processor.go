@@ -1,8 +1,6 @@
 package bcdb
 
 import (
-	"strings"
-
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/identity"
@@ -92,7 +90,7 @@ func (q *worldstateQueryProcessor) getData(dbName, querierUserID, key string) (*
 func (q *worldstateQueryProcessor) getUser(querierUserID, targetUserID string) (*types.GetUserResponse, error) {
 	user, metadata, err := q.identityQuerier.GetUser(targetUserID)
 	if err != nil {
-		if _, ok := err.(*identity.UserNotFoundErr); !ok {
+		if _, ok := err.(*identity.NotFoundErr); !ok {
 			return nil, err
 		}
 	}
@@ -127,17 +125,15 @@ func (q *worldstateQueryProcessor) getConfig() (*types.GetConfigResponse, error)
 }
 
 func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeConfigResponse, error) {
-	config, _, err := q.db.GetConfig()
+	nodeConfig, _, err := q.identityQuerier.GetNode(nodeID)
 	if err != nil {
-		return nil, err
+		if _, ok := err.(*identity.NotFoundErr); !ok {
+			return nil, err
+		}
 	}
 
-	c := &types.GetNodeConfigResponse{}
-
-	for _, node := range config.Nodes {
-		if strings.Compare(node.ID, nodeID) == 0 {
-			c.NodeConfig = node
-		}
+	c := &types.GetNodeConfigResponse{
+		NodeConfig: nodeConfig,
 	}
 
 	return c, nil

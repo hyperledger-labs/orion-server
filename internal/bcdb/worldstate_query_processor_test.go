@@ -664,6 +664,15 @@ func TestGetConfig(t *testing.T) {
 				},
 			},
 		}
+		dbUpdate, err := identity.ConstructDBEntriesForNodes(
+			nil,
+			clusterConfig.Nodes,
+			&types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		)
+		dbUpdates = append(dbUpdates, dbUpdate)
 		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
 		configEnvelope, err := env.q.getConfig()
@@ -759,6 +768,15 @@ func TestGetConfig(t *testing.T) {
 				},
 			},
 		}
+		dbUpdate, err := identity.ConstructDBEntriesForNodes(
+			nil,
+			clusterConfig.Nodes,
+			&types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		)
+		dbUpdates = append(dbUpdates, dbUpdate)
 		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
 		singleNodeConfigEnvelope, err := env.q.getNodeConfig("node1")

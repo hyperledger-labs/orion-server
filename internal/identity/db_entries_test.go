@@ -781,3 +781,172 @@ func TestConstructProvenanceEntriesForClusterAdmins(t *testing.T) {
 		})
 	}
 }
+
+func TestConstructDBEntriesForNodes(t *testing.T) {
+	t.Parallel()
+
+	sampleVersion := &types.Version{
+		BlockNum: 2,
+		TxNum:    2,
+	}
+
+	sampleNode := func(nodeID string, addr string, port uint32, cert []byte) []byte {
+		user := &types.NodeConfig{
+			ID:          nodeID,
+			Address:     addr,
+			Port:        port,
+			Certificate: cert,
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+		return u
+	}
+
+	var tests = []struct {
+		name                     string
+		nodesInCommittedConfigTx []*types.NodeConfig
+		nodesInNewConfigTx       []*types.NodeConfig
+		version                  *types.Version
+		expectedUpdates          *worldstate.DBUpdates
+	}{
+		{
+			name: "same set of nodes, no changes",
+			nodesInCommittedConfigTx: []*types.NodeConfig{
+				{
+					ID:          "node1",
+					Address:     "192.168.0.1",
+					Port:        6000,
+					Certificate: []byte("certificate 1"),
+				},
+				{
+					ID:          "node2",
+					Address:     "192.168.0.2",
+					Port:        6001,
+					Certificate: []byte("certificate 2"),
+				},
+			},
+			nodesInNewConfigTx: []*types.NodeConfig{
+				{
+					ID:          "node1",
+					Address:     "192.168.0.1",
+					Port:        6000,
+					Certificate: []byte("certificate 1"),
+				},
+				{
+					ID:          "node2",
+					Address:     "192.168.0.2",
+					Port:        6001,
+					Certificate: []byte("certificate 2"),
+				},
+			},
+			version:         sampleVersion,
+			expectedUpdates: nil,
+		},
+		{
+			name: "add, update, and delete nodes",
+			nodesInCommittedConfigTx: []*types.NodeConfig{
+				{
+					ID:          "node1",
+					Address:     "192.168.0.1",
+					Port:        6000,
+					Certificate: []byte("certificate 1"),
+				},
+				{
+					ID:          "node2",
+					Address:     "192.168.0.2",
+					Port:        6001,
+					Certificate: []byte("certificate 2"),
+				},
+				{
+					ID:          "node3",
+					Address:     "192.168.0.3",
+					Port:        6002,
+					Certificate: []byte("certificate 3"),
+				},
+			},
+			nodesInNewConfigTx: []*types.NodeConfig{
+				{
+					ID:          "node3",
+					Address:     "192.168.0.3",
+					Port:        6002,
+					Certificate: []byte("new certificate 3"),
+				},
+				{
+					ID:          "node4",
+					Address:     "192.168.0.4",
+					Port:        6003,
+					Certificate: []byte("certificate 4"),
+				},
+				{
+					ID:          "node5",
+					Address:     "192.168.0.5",
+					Port:        6004,
+					Certificate: []byte("certificate 5"),
+				},
+			},
+			version: sampleVersion,
+			expectedUpdates: &worldstate.DBUpdates{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(NodeNamespace) + "node3",
+						Value: sampleNode("node3", "192.168.0.3", 6002, []byte("new certificate 3")),
+						Metadata: &types.Metadata{
+							Version: sampleVersion,
+						},
+					},
+					{
+						Key:   string(NodeNamespace) + "node4",
+						Value: sampleNode("node4", "192.168.0.4", 6003, []byte("certificate 4")),
+						Metadata: &types.Metadata{
+							Version: sampleVersion,
+						},
+					},
+					{
+						Key:   string(NodeNamespace) + "node5",
+						Value: sampleNode("node5", "192.168.0.5", 6004, []byte("certificate 5")),
+						Metadata: &types.Metadata{
+							Version: sampleVersion,
+						},
+					},
+				},
+				Deletes: []string{string(NodeNamespace) + "node1", string(NodeNamespace) + "node2"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			updates, err := ConstructDBEntriesForNodes(tt.nodesInCommittedConfigTx, tt.nodesInNewConfigTx, sampleVersion)
+			require.NoError(t, err)
+			if updates == nil {
+				require.Equal(t, tt.expectedUpdates, updates)
+				return
+			}
+
+			require.Equal(t, tt.expectedUpdates.DBName, updates.DBName)
+			require.Equal(t, tt.expectedUpdates.Deletes, updates.Deletes)
+
+			expectedWrites := make(map[string]*worldstate.KVWithMetadata)
+			for _, w := range tt.expectedUpdates.Writes {
+				expectedWrites[w.Key] = w
+			}
+
+			actualWrites := make(map[string]*worldstate.KVWithMetadata)
+			for _, w := range updates.Writes {
+				actualWrites[w.Key] = w
+			}
+
+			require.Len(t, actualWrites, len(expectedWrites))
+			for key, expected := range expectedWrites {
+				actual := actualWrites[key]
+				require.Equal(t, expected.Value, actual.Value)
+				require.True(t, proto.Equal(expected.Metadata, actual.Metadata))
+			}
+		})
+	}
+}

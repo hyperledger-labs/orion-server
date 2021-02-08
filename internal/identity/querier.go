@@ -46,8 +46,8 @@ func (q *Querier) GetUser(userID string) (*types.User, *types.Metadata, error) {
 	}
 
 	if val == nil {
-		return nil, nil, &UserNotFoundErr{
-			userID: userID,
+		return nil, nil, &NotFoundErr{
+			id: userID,
 		}
 	}
 
@@ -149,6 +149,28 @@ func (q *Querier) HasLedgerAccess(userID string) (bool, error) {
 	return q.DoesUserExist(userID)
 }
 
+// GetNode returns the credentials associated with the given
+// node ID
+func (q *Querier) GetNode(nodeID string) (*types.NodeConfig, *types.Metadata, error) {
+	val, meta, err := q.db.Get(worldstate.ConfigDBName, string(NodeNamespace)+nodeID)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "error while fetching nodeID [%s]", nodeID)
+	}
+
+	if val == nil {
+		return nil, nil, &NotFoundErr{
+			id: nodeID,
+		}
+	}
+
+	node := &types.NodeConfig{}
+	if err := proto.Unmarshal(val, node); err != nil {
+		return nil, nil, errors.Wrapf(err, "error while unmarshaling persisted value of nodeID [%s]", nodeID)
+	}
+
+	return node, meta, nil
+}
+
 func (q *Querier) hasPrivilege(userID, dbName string, privilege types.Privilege_Access) (bool, error) {
 	user, _, err := q.GetUser(userID)
 	if err != nil {
@@ -172,11 +194,11 @@ func (q *Querier) hasPrivilege(userID, dbName string, privilege types.Privilege_
 	return p >= privilege, nil
 }
 
-// UserNotFoundErr denotes that the userID does not exist in the worldstate
-type UserNotFoundErr struct {
-	userID string
+// NotFoundErr denotes that the id does not exist in the worldstate
+type NotFoundErr struct {
+	id string
 }
 
-func (e *UserNotFoundErr) Error() string {
-	return fmt.Sprintf("the user [%s] does not exist", e.userID)
+func (e *NotFoundErr) Error() string {
+	return fmt.Sprintf("the user [%s] does not exist", e.id)
 }

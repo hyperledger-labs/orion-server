@@ -11,8 +11,10 @@ import (
 )
 
 var (
-	// UserNamespace holds the user information.
+	// UserNamespace holds the user identity information in the user db
 	UserNamespace = []byte{0}
+	// NodeNamespace holds the node identity information in the config db
+	NodeNamespace = []byte{0}
 )
 
 // ConstructDBEntriesForUserAdminTx constructs database entries for the transaction that manipulates
@@ -91,7 +93,7 @@ func ConstructProvenanceEntriesForUserAdminTx(
 
 		v, err := identityQuerier.GetVersion(write.User.ID)
 		if err != nil {
-			if _, ok := err.(*UserNotFoundErr); ok {
+			if _, ok := err.(*NotFoundErr); ok {
 				continue
 			}
 
@@ -207,7 +209,7 @@ func ConstructProvenanceEntriesForClusterAdmins(
 
 		version, err := identityQuerier.GetVersion(adminID)
 		if err != nil {
-			if _, ok := err.(*UserNotFoundErr); ok {
+			if _, ok := err.(*NotFoundErr); ok {
 				continue
 			}
 
@@ -229,7 +231,58 @@ func ConstructProvenanceEntriesForClusterAdmins(
 	return txData, nil
 }
 
+// ConstructDBEntriesForNodes constructs database entries for the nodes present in the clusterr
+func ConstructDBEntriesForNodes(oldNodes, newNodes []*types.NodeConfig, version *types.Version) (*worldstate.DBUpdates, error) {
+	var kvWrites []*worldstate.KVWithMetadata
+	var deletes []string
+
+	nodes := make(map[string]*types.NodeConfig)
+	for _, newNode := range newNodes {
+		nodes[newNode.ID] = newNode
+	}
+
+	for _, oldNode := range oldNodes {
+		if _, ok := nodes[oldNode.ID]; ok {
+			if proto.Equal(oldNode, nodes[oldNode.ID]) {
+				delete(nodes, oldNode.ID)
+			}
+			continue
+		}
+
+		deletes = append(deletes, string(NodeNamespace)+oldNode.ID)
+	}
+
+	for _, n := range nodes {
+		value, err := proto.Marshal(n)
+		if err != nil {
+			return nil, err
+		}
+
+		kvWrites = append(
+			kvWrites,
+			&worldstate.KVWithMetadata{
+				Key:   string(NodeNamespace) + n.ID,
+				Value: value,
+				Metadata: &types.Metadata{
+					Version: version,
+				},
+			},
+		)
+	}
+
+	if len(kvWrites) == 0 && len(deletes) == 0 {
+		return nil, nil
+	}
+
+	return &worldstate.DBUpdates{
+		DBName:  worldstate.ConfigDBName,
+		Writes:  kvWrites,
+		Deletes: deletes,
+	}, nil
+}
+
 func getUserIDFromCompositeUserKey(ckey string) string {
 	strs := strings.Split(ckey, string(UserNamespace))
 	return strs[1]
 }
+

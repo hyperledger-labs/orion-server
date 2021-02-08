@@ -213,7 +213,7 @@ func (v *userAdminTxValidator) validateACLOnUserReads(operatingUser string, read
 
 		hasPerm, err := v.identityQuerier.HasReadAccessOnTargetUser(operatingUser, targetUser)
 		if err != nil {
-			if _, ok := err.(*identity.UserNotFoundErr); !ok {
+			if _, ok := err.(*identity.NotFoundErr); !ok {
 				return nil, err
 			}
 
@@ -239,7 +239,7 @@ func (v *userAdminTxValidator) validateACLOnUserWrites(operatingUser string, wri
 
 		admin, err := v.identityQuerier.HasAdministrationPrivilege(targetUser)
 		if err != nil {
-			if _, ok := err.(*identity.UserNotFoundErr); !ok {
+			if _, ok := err.(*identity.NotFoundErr); !ok {
 				return nil, err
 			}
 
@@ -276,7 +276,7 @@ func (v *userAdminTxValidator) validateACLOnUserDeletes(operatingUser string, de
 
 		admin, err := v.identityQuerier.HasAdministrationPrivilege(targetUser)
 		if err != nil {
-			if _, ok := err.(*identity.UserNotFoundErr); !ok {
+			if _, ok := err.(*identity.NotFoundErr); !ok {
 				return nil, err
 			}
 
@@ -315,7 +315,7 @@ func (v *userAdminTxValidator) mvccValidation(userReads []*types.UserRead) (*typ
 	for _, r := range userReads {
 		committedVersion, err := v.identityQuerier.GetVersion(r.UserID)
 		if err != nil {
-			if _, ok := err.(*identity.UserNotFoundErr); !ok {
+			if _, ok := err.(*identity.NotFoundErr); !ok {
 				return nil, err
 			}
 		}

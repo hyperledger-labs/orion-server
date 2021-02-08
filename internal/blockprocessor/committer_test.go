@@ -791,7 +791,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 func TestStateDBCommitterForConfigBlock(t *testing.T) {
 	t.Parallel()
 
-	generateSampleConfigBlock := func(number uint64, adminsID []string, valInfo []*types.ValidationInfo) *types.Block {
+	generateSampleConfigBlock := func(number uint64, adminsID []string, nodeIDs []string, valInfo []*types.ValidationInfo) *types.Block {
 		var admins []*types.Admin
 		for _, id := range adminsID {
 			admins = append(admins, &types.Admin{
@@ -800,15 +800,13 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			})
 		}
 
+		var nodes []*types.NodeConfig
+		for _, id := range nodeIDs {
+			nodes = append(nodes, constructNodeEntryForTest(id))
+		}
+
 		clusterConfig := &types.ClusterConfig{
-			Nodes: []*types.NodeConfig{
-				{
-					ID:          "bdb-node-1",
-					Certificate: []byte("node-cert"),
-					Address:     "127.0.0.1",
-					Port:        0,
-				},
-			},
+			Nodes:  nodes,
 			Admins: admins,
 			CertAuthConfig: &types.CAConfig{
 				Roots: [][]byte{[]byte("root-ca")},
@@ -842,25 +840,47 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 		}
 	}
 
+	assertExpectedNodes := func(t *testing.T, q *identity.Querier, expectedNodes []*types.NodeConfig) {
+		for _, expectedNode := range expectedNodes {
+			node, _, err := q.GetNode(expectedNode.ID)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedNode, node))
+		}
+	}
+
 	tests := []struct {
 		name                        string
 		adminsInCommittedConfigTx   []string
-		expectedClusterAdminsBefore []*types.User
+		nodesInCommittedConfigTx    []string
 		adminsInNewConfigTx         []string
+		nodesInNewConfigTx          []string
+		expectedClusterAdminsBefore []*types.User
+		expectedNodesBefore         []*types.NodeConfig
 		expectedClusterAdminsAfter  []*types.User
+		expectedNodesAfter          []*types.NodeConfig
 		valInfo                     []*types.ValidationInfo
 	}{
 		{
-			name:                      "no change in the set of admins",
+			name:                      "no change in the set of admins and nodes",
 			adminsInCommittedConfigTx: []string{"admin1", "admin2"},
+			adminsInNewConfigTx:       []string{"admin1", "admin2"},
+			nodesInCommittedConfigTx:  []string{"node1", "node2"},
+			nodesInNewConfigTx:        []string{"node1", "node2"},
 			expectedClusterAdminsBefore: []*types.User{
 				constructAdminEntryForTest("admin1"),
 				constructAdminEntryForTest("admin2"),
 			},
-			adminsInNewConfigTx: []string{"admin1", "admin2"},
+			expectedNodesBefore: []*types.NodeConfig{
+				constructNodeEntryForTest("node1"),
+				constructNodeEntryForTest("node2"),
+			},
 			expectedClusterAdminsAfter: []*types.User{
 				constructAdminEntryForTest("admin1"),
 				constructAdminEntryForTest("admin2"),
+			},
+			expectedNodesAfter: []*types.NodeConfig{
+				constructNodeEntryForTest("node1"),
+				constructNodeEntryForTest("node2"),
 			},
 			valInfo: []*types.ValidationInfo{
 				{
@@ -869,18 +889,30 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			},
 		},
 		{
-			name:                      "add and delete admins",
+			name:                      "add and delete admins and nodes",
 			adminsInCommittedConfigTx: []string{"admin1", "admin2", "admin3"},
+			adminsInNewConfigTx:       []string{"admin3", "admin4", "admin5"},
+			nodesInCommittedConfigTx:  []string{"node1", "node2", "node3"},
+			nodesInNewConfigTx:        []string{"node3", "node4", "node5"},
 			expectedClusterAdminsBefore: []*types.User{
 				constructAdminEntryForTest("admin1"),
 				constructAdminEntryForTest("admin2"),
 				constructAdminEntryForTest("admin3"),
 			},
-			adminsInNewConfigTx: []string{"admin3", "admin4", "admin5"},
+			expectedNodesBefore: []*types.NodeConfig{
+				constructNodeEntryForTest("node1"),
+				constructNodeEntryForTest("node2"),
+				constructNodeEntryForTest("node3"),
+			},
 			expectedClusterAdminsAfter: []*types.User{
 				constructAdminEntryForTest("admin3"),
 				constructAdminEntryForTest("admin4"),
 				constructAdminEntryForTest("admin5"),
+			},
+			expectedNodesAfter: []*types.NodeConfig{
+				constructNodeEntryForTest("node3"),
+				constructNodeEntryForTest("node4"),
+				constructNodeEntryForTest("node5"),
 			},
 			valInfo: []*types.ValidationInfo{
 				{
@@ -909,7 +941,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+			// t.Parallel()
 
 			env := newCommitterTestEnv(t)
 			defer env.cleanup()
@@ -922,14 +954,16 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 				},
 			}
 			blockNumber = 1
-			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx, validationInfo)
+			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx, tt.nodesInCommittedConfigTx, validationInfo)
 			require.NoError(t, env.committer.commitToDBs(configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsBefore)
+			assertExpectedNodes(t, env.identityQuerier, tt.expectedNodesBefore)
 
 			blockNumber++
-			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx, tt.valInfo)
+			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx, tt.nodesInNewConfigTx, tt.valInfo)
 			require.NoError(t, env.committer.commitToDBs(configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsAfter)
+			assertExpectedNodes(t, env.identityQuerier, tt.expectedNodesAfter)
 		})
 	}
 }
@@ -2262,5 +2296,14 @@ func constructAdminEntryForTest(userID string) *types.User {
 		Privilege: &types.Privilege{
 			Admin: true,
 		},
+	}
+}
+
+func constructNodeEntryForTest(nodeID string) *types.NodeConfig {
+	return &types.NodeConfig{
+		ID:          nodeID,
+		Address:     "192.168.0.5",
+		Port:        1234,
+		Certificate: []byte("certificate~" + nodeID),
 	}
 }
