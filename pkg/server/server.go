@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -79,7 +80,19 @@ func (s *BCDBHTTPServer) Start() error {
 			return errors.Wrap(err, "error while preparing and committing config transaction")
 		}
 
-		txReceipt := resp.GetPayload().GetReceipt()
+		payload := &types.Payload{}
+		err = json.Unmarshal(resp.Payload, payload)
+		if err != nil {
+			return errors.Wrap(err, "error while preparing and committing config transaction")
+		}
+
+		receipt := &types.TxResponse{}
+		err = json.Unmarshal(payload.Response, receipt)
+		if err != nil {
+			return errors.Wrap(err, "error while preparing and committing config transaction")
+		}
+
+		txReceipt := receipt.GetReceipt()
 		valInfo := txReceipt.GetHeader().GetValidationInfo()[txReceipt.TxIndex]
 		if valInfo.Flag != types.Flag_VALID {
 			return errors.Errorf("config transaction was not committed due to invalidation [" + valInfo.ReasonIfInvalid + "]")

@@ -7,180 +7,76 @@ package types;
 import "configuration.proto";
 import "block_and_transaction.proto";
 
-message GetDBStatusResponseEnvelope {
-  GetDBStatusResponse payload = 1;
+message ResponseEnvelope {
+  bytes payload = 1;
   bytes signature = 2;
+}
 
+message Payload {
+  ResponseHeader header = 1;
+  bytes response = 2;
+}
+message ResponseHeader {
+  string nodeID = 1;
 }
 
 message GetDBStatusResponse {
-  ResponseHeader header = 1;
-  bool exist = 2;
-}
-
-message GetDataResponseEnvelope {
-  GetDataResponse payload = 1;
-  bytes signature = 2;
+  bool exist = 1;
 }
 
 message GetDataResponse {
-  ResponseHeader header = 1;
-  bytes value = 2;
-  Metadata metadata = 3;
-}
-
-message GetUserResponseEnvelope {
-  GetUserResponse payload = 1;
-  bytes signature = 2;
+  bytes value = 1;
+  Metadata metadata = 2;
 }
 
 message GetUserResponse {
-  ResponseHeader header = 1;
-  User user = 2;
-  Metadata metadata = 3;
-}
-
-message GetConfigResponseEnvelope {
-  GetConfigResponse payload = 1;
-  bytes signature = 2;
+  User user = 1;
+  Metadata metadata = 2;
 }
 
 message GetConfigResponse {
-  ResponseHeader header = 1;
-  ClusterConfig config = 2;
-  Metadata metadata = 3;
-}
-
-message GetNodeConfigResponseEnvelope {
-  GetNodeConfigResponse payload = 1;
-  bytes signature = 2;
+  ClusterConfig config = 1;
+  Metadata metadata = 2;
 }
 
 message GetNodeConfigResponse {
-  ResponseHeader header = 1;
-  NodeConfig node_config = 2;
-}
-
-message ResponseHeader {
-  string nodeID = 1;
+  NodeConfig node_config = 1;
 }
 
 //========= Part II Provenance API responses
 
 message GetBlockResponse {
-  ResponseHeader header = 1;
-  BlockHeader block_header = 2;
-}
-
-message GetBlockResponseEnvelope {
-  GetBlockResponse payload = 1;
-  bytes signature = 2;
+  BlockHeader block_header = 1;
 }
 
 message GetLedgerPathResponse {
-  ResponseHeader header = 1;
-  repeated BlockHeader block_headers = 2;
-}
-
-message GetLedgerPathResponseEnvelope {
-  GetLedgerPathResponse payload = 1;
-  bytes signature = 2;
+  repeated BlockHeader block_headers = 1;
 }
 
 message GetTxProofResponse {
-  ResponseHeader header = 1;
-  repeated bytes hashes = 2;
-}
-
-message GetTxProofResponseEnvelope {
-  GetTxProofResponse payload = 1;
-  bytes signature = 2;
+  repeated bytes hashes = 1;
 }
 
 message GetHistoricalDataResponse {
-  ResponseHeader header = 1;
-  repeated ValueWithMetadata values = 2;
-}
-
-message GetHistoricalDataResponseEnvelope {
-  GetHistoricalDataResponse payload = 1;
-  bytes signature = 2;
+  repeated ValueWithMetadata values = 1;
 }
 
 message GetDataReadersResponse {
-  ResponseHeader header = 1;
-  map<string, uint32> read_by = 2;
-}
-
-message GetDataReadersResponseEnvelope {
-  GetDataReadersResponse payload = 1;
-  bytes signature = 2;
+  map<string, uint32> read_by = 1;
 }
 
 message GetDataWritersResponse {
-  ResponseHeader header = 1;
-  map<string, uint32> written_by = 2;
+  map<string, uint32> written_by = 1;
 }
 
-message GetDataWritersResponseEnvelope {
-  GetDataWritersResponse payload = 1;
-  bytes signature = 2;
-}
-
-message GetDataReadByResponse {
-  ResponseHeader header = 1;
-  repeated KVWithMetadata KVs = 2;
-}
-
-message GetDataReadByResponseEnvelope {
-  GetDataReadByResponse payload = 1;
-  bytes signature = 2;
-}
-
-message GetDataWrittenByResponse {
-  ResponseHeader header = 1;
-  repeated KVWithMetadata KVs = 2;
-}
-message GetDataWrittenByResponseEnvelope {
-  GetDataWrittenByResponse payload = 1;
-  bytes signature = 2;
-}
-
-message GetDataDeletedByResponse {
-  ResponseHeader header = 1;
-  repeated KVWithMetadata KVs = 2;
-}
-message GetDataDeletedByResponseEnvelope {
-  GetDataDeletedByResponse payload = 1;
-  bytes signature = 2;
+message GetDataProvenanceResponse {
+  repeated KVWithMetadata KVs = 1;
 }
 
 message GetTxIDsSubmittedByResponse {
-  ResponseHeader header = 1;
-  repeated string txIDs = 2;
-}
-
-message GetTxIDsSubmittedByResponseEnvelope {
-  GetTxIDsSubmittedByResponse payload = 1;
-  bytes signature = 2;
-}
-
-message GetTxReceiptResponse {
-  ResponseHeader header = 1;
-  TxReceipt receipt = 2;
-}
-
-message GetTxReceiptResponseEnvelope {
-  GetTxReceiptResponse payload = 1;
-  bytes signature = 2;
+  repeated string txIDs = 1;
 }
 
 message TxResponse {
-  ResponseHeader header = 1;
-  TxReceipt receipt = 2;
-}
-
-message TxResponseEnvelope {
-  TxResponse payload = 1;
-  bytes signature = 2;
+  TxReceipt receipt = 1;
 }

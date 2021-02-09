@@ -160,9 +160,6 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 	require.NoError(t, err)
 
 	expectedRespPayload := &types.TxResponse{
-		Header: &types.ResponseHeader{
-			NodeID: env.txProcessor.nodeID,
-		},
 		Receipt: &types.TxReceipt{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{
@@ -179,7 +176,7 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 			TxIndex: 0,
 		},
 	}
-	require.True(t, proto.Equal(expectedRespPayload, resp.GetPayload()))
+	require.True(t, proto.Equal(expectedRespPayload, resp))
 	require.True(t, env.txProcessor.pendingTxs.isEmpty())
 
 	user := &types.User{
@@ -247,7 +244,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 		resp, err := env.txProcessor.submitTransaction(tx, 0)
 		require.NoError(t, err)
-		require.Nil(t, resp.GetPayload().GetReceipt())
+		require.Nil(t, resp.GetReceipt())
 
 		assertTestKey1InDB := func() bool {
 			val, metadata, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
@@ -389,15 +386,12 @@ func TestTransactionProcessor(t *testing.T) {
 		require.True(t, proto.Equal(expectedBlock, block))
 
 		expectedRespPayload := &types.TxResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.txProcessor.nodeID,
-			},
 			Receipt: &types.TxReceipt{
 				Header:  expectedBlockHeader,
 				TxIndex: 0,
 			},
 		}
-		require.True(t, proto.Equal(expectedRespPayload, resp.GetPayload()))
+		require.True(t, proto.Equal(expectedRespPayload, resp))
 
 		val, metadata, err := env.db.Get(worldstate.DefaultDBName, "test-key1")
 		require.NoError(t, err)
@@ -428,7 +422,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 		resp, err := env.txProcessor.submitTransaction(dataTx, 0)
 		require.NoError(t, err)
-		require.Nil(t, resp.GetPayload().GetReceipt())
+		require.Nil(t, resp.GetReceipt())
 		noPendingTxs := func() bool {
 			return env.txProcessor.pendingTxs.isEmpty()
 		}
@@ -465,7 +459,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 		resp, err := env.txProcessor.submitTransaction(dbTx, 0)
 		require.NoError(t, err)
-		require.Nil(t, resp.GetPayload().GetReceipt())
+		require.Nil(t, resp.GetReceipt())
 
 		resp, err = env.txProcessor.submitTransaction(configTx, 0)
 		require.EqualError(t, err, "the transaction has a duplicate txID [tx1]")
@@ -473,7 +467,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 		resp, err = env.txProcessor.submitTransaction(userTx, 0)
 		require.NoError(t, err)
-		require.Nil(t, resp.GetPayload().GetReceipt())
+		require.Nil(t, resp.GetReceipt())
 
 		noPendingTxs := func() bool {
 			return env.txProcessor.pendingTxs.isEmpty()

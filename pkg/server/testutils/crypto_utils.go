@@ -157,9 +157,9 @@ func getTestdataCert(t *testing.T, pathToCert string) *x509.Certificate {
 	return cert
 }
 
-func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA... bool) string {
+func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA ...bool) string {
 	withInterCA := false
-	if len(withIntermediateCA) >0 {
+	if len(withIntermediateCA) > 0 {
 		withInterCA = withIntermediateCA[0]
 	}
 
@@ -265,12 +265,6 @@ func SignatureFromTx(t *testing.T, signer crypto.Signer, tx interface{}) []byte 
 
 func SignatureFromQuery(t *testing.T, signner crypto.Signer, query interface{}) []byte {
 	sig, err := cryptoservice.SignQuery(signner, query)
-	require.NoError(t, err)
-	return sig
-}
-
-func SignatureFromQueryResponse(t *testing.T, signer crypto.Signer, queryResp interface{}) []byte {
-	sig, err := cryptoservice.SignQueryResponse(signer, queryResp)
 	require.NoError(t, err)
 	return sig
 }

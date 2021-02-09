@@ -35,7 +35,7 @@ func NewRESTClient(rawurl string) (*Client, error) {
 	return res, nil
 }
 
-func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBStatusResponseEnvelope, error) {
+func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.ResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetDBStatus(e.Payload.DBName),
 		e.Payload.UserID,
@@ -47,12 +47,12 @@ func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBSta
 
 	defer resp.Body.Close()
 
-	res := &types.GetDBStatusResponseEnvelope{}
+	res := &types.ResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
 
-func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseEnvelope, error) {
+func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.ResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetData(e.Payload.DBName, e.Payload.Key),
 		e.Payload.UserID,
@@ -64,12 +64,12 @@ func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseE
 
 	defer resp.Body.Close()
 
-	res := &types.GetDataResponseEnvelope{}
+	res := &types.ResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
 
-func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseEnvelope, error) {
+func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.ResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetUser(e.Payload.TargetUserID),
 		e.Payload.UserID,
@@ -81,12 +81,12 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 
 	defer resp.Body.Close()
 
-	res := &types.GetUserResponseEnvelope{}
+	res := &types.ResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
 
-func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigResponseEnvelope, error) {
+func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.ResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetConfig(),
 		e.Payload.UserID,
@@ -98,12 +98,12 @@ func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigRes
 
 	defer resp.Body.Close()
 
-	res := &types.GetConfigResponseEnvelope{}
+	res := &types.ResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
 
-func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*types.GetHistoricalDataResponseEnvelope, error) {
+func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*types.ResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetHistoricalData(e.Payload.DBName, e.Payload.Key),
 		e.Payload.UserID,
@@ -115,7 +115,7 @@ func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*ty
 
 	defer resp.Body.Close()
 
-	res := &types.GetHistoricalDataResponseEnvelope{}
+	res := &types.ResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }

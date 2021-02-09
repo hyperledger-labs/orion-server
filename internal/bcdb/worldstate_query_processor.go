@@ -46,9 +46,6 @@ func (q *worldstateQueryProcessor) getDBStatus(dbName string) (*types.GetDBStatu
 	// ACL is meaningless here as this call is to check whether a DB exist. Even with ACL,
 	// the user can infer the information.
 	return &types.GetDBStatusResponse{
-		Header: &types.ResponseHeader{
-			NodeID: q.nodeID,
-		},
 		Exist: q.isDBExists(dbName),
 	}, nil
 }
@@ -87,9 +84,6 @@ func (q *worldstateQueryProcessor) getData(dbName, querierUserID, key string) (*
 	}
 
 	return &types.GetDataResponse{
-		Header: &types.ResponseHeader{
-			NodeID: q.nodeID,
-		},
 		Value:    value,
 		Metadata: metadata,
 	}, nil
@@ -113,9 +107,6 @@ func (q *worldstateQueryProcessor) getUser(querierUserID, targetUserID string) (
 	}
 
 	return &types.GetUserResponse{
-		Header: &types.ResponseHeader{
-			NodeID: q.nodeID,
-		},
 		User:     user,
 		Metadata: metadata,
 	}, nil
@@ -130,9 +121,6 @@ func (q *worldstateQueryProcessor) getConfig() (*types.GetConfigResponse, error)
 	}
 
 	return &types.GetConfigResponse{
-		Header: &types.ResponseHeader{
-			NodeID: q.nodeID,
-		},
 		Config:   config,
 		Metadata: metadata,
 	}, nil
@@ -144,11 +132,7 @@ func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeC
 		return nil, err
 	}
 
-	c := &types.GetNodeConfigResponse{
-		Header: &types.ResponseHeader{
-			NodeID: q.nodeID,
-		},
-	}
+	c := &types.GetNodeConfigResponse{}
 
 	for _, node := range config.Nodes {
 		if strings.Compare(node.ID, nodeID) == 0 {

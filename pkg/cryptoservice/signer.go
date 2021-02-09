@@ -48,32 +48,6 @@ func SignTx(txSigner crypto.Signer, tx interface{}) ([]byte, error) {
 	return signPayload(txSigner, tx)
 }
 
-func SignQueryResponse(responseSigner crypto.Signer, queryResp interface{}) ([]byte, error) {
-	switch v := queryResp.(type) {
-	case *types.GetUserResponse:
-	case *types.GetDataResponse:
-	case *types.GetDBStatusResponse:
-	case *types.GetConfigResponse:
-	case *types.GetLedgerPathResponse:
-	case *types.GetBlockResponse:
-	case *types.GetNodeConfigResponse:
-	case *types.GetTxProofResponse:
-	case *types.GetTxReceiptResponse:
-	case *types.GetHistoricalDataResponse:
-	case *types.GetDataReadersResponse:
-	case *types.GetDataWritersResponse:
-	case *types.GetDataReadByResponse:
-	case *types.GetDataWrittenByResponse:
-	case *types.GetDataDeletedByResponse:
-	case *types.GetTxIDsSubmittedByResponse:
-
-	default:
-		return nil, errors.Errorf("unknown query response type: %T", v)
-	}
-
-	return signPayload(responseSigner, queryResp)
-}
-
 func signPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {

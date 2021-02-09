@@ -7,20 +7,17 @@ import (
 )
 
 type provenanceQueryProcessor struct {
-	nodeID          string
 	provenanceStore *provenance.Store
 	logger          *logger.SugarLogger
 }
 
 type provenanceQueryProcessorConfig struct {
-	nodeID          string
 	provenanceStore *provenance.Store
 	logger          *logger.SugarLogger
 }
 
 func newProvenanceQueryProcessor(conf *provenanceQueryProcessorConfig) *provenanceQueryProcessor {
 	return &provenanceQueryProcessor{
-		nodeID:          conf.nodeID,
 		provenanceStore: conf.provenanceStore,
 		logger:          conf.logger,
 	}
@@ -82,45 +79,36 @@ func (p *provenanceQueryProcessor) GetDeletedValues(dbName, key string) (*types.
 }
 
 // GetValuesReadByUser returns all values read by a given user
-func (p *provenanceQueryProcessor) GetValuesReadByUser(userID string) (*types.GetDataReadByResponse, error) {
+func (p *provenanceQueryProcessor) GetValuesReadByUser(userID string) (*types.GetDataProvenanceResponse, error) {
 	kvs, err := p.provenanceStore.GetValuesReadByUser(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.GetDataReadByResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
+	return &types.GetDataProvenanceResponse{
 		KVs: kvs,
 	}, nil
 }
 
 // GetValuesReadByUser returns all values read by a given user
-func (p *provenanceQueryProcessor) GetValuesWrittenByUser(userID string) (*types.GetDataWrittenByResponse, error) {
+func (p *provenanceQueryProcessor) GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceResponse, error) {
 	kvs, err := p.provenanceStore.GetValuesWrittenByUser(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.GetDataWrittenByResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
+	return &types.GetDataProvenanceResponse{
 		KVs: kvs,
 	}, nil
 }
 
-func (p *provenanceQueryProcessor) GetValuesDeletedByUser(userID string) (*types.GetDataDeletedByResponse, error) {
+func (p *provenanceQueryProcessor) GetValuesDeletedByUser(userID string) (*types.GetDataProvenanceResponse, error) {
 	kvs, err := p.provenanceStore.GetValuesDeletedByUser(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.GetDataDeletedByResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
+	return &types.GetDataProvenanceResponse{
 		KVs: kvs,
 	}, nil
 }
@@ -137,9 +125,6 @@ func (p *provenanceQueryProcessor) GetReaders(dbName, key string) (*types.GetDat
 	}
 
 	return &types.GetDataReadersResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
 		ReadBy: users,
 	}, nil
 }
@@ -156,9 +141,6 @@ func (p *provenanceQueryProcessor) GetWriters(dbName, key string) (*types.GetDat
 	}
 
 	return &types.GetDataWritersResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
 		WrittenBy: users,
 	}, nil
 }
@@ -171,18 +153,12 @@ func (p *provenanceQueryProcessor) GetTxIDsSubmittedByUser(userID string) (*type
 	}
 
 	return &types.GetTxIDsSubmittedByResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
 		TxIDs: txIDs,
 	}, nil
 }
 
 func (p *provenanceQueryProcessor) composeHistoricalDataResponse(values []*types.ValueWithMetadata) (*types.GetHistoricalDataResponse, error) {
 	return &types.GetHistoricalDataResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
 		Values: values,
 	}, nil
 }

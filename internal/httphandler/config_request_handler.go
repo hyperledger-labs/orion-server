@@ -120,7 +120,7 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 	}
 
 	if err, code := VerifyRequestSignature(c.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &types.HttpResponseErr{err.Error()})
+		SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 

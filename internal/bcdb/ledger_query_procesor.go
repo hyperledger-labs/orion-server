@@ -15,7 +15,6 @@ import (
 )
 
 type ledgerQueryProcessor struct {
-	nodeID          string
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
@@ -24,7 +23,6 @@ type ledgerQueryProcessor struct {
 }
 
 type ledgerQueryProcessorConfig struct {
-	nodeID          string
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
@@ -34,7 +32,6 @@ type ledgerQueryProcessorConfig struct {
 
 func newLedgerQueryProcessor(conf *ledgerQueryProcessorConfig) *ledgerQueryProcessor {
 	return &ledgerQueryProcessor{
-		nodeID:          conf.nodeID,
 		db:              conf.db,
 		blockStore:      conf.blockStore,
 		provenanceStore: conf.provenanceStore,
@@ -58,9 +55,6 @@ func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*
 	}
 
 	return &types.GetBlockResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
 		BlockHeader: data,
 	}, nil
 }
@@ -95,9 +89,6 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 		return nil, err
 	}
 	return &types.GetLedgerPathResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
 		BlockHeaders: headers,
 	}, nil
 }
@@ -121,14 +112,11 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 		return nil, err
 	}
 	return &types.GetTxProofResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
 		Hashes: path,
 	}, nil
 }
 
-func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.GetTxReceiptResponse, error) {
+func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.TxResponse, error) {
 	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
 	if err != nil {
 		return nil, err
@@ -147,10 +135,7 @@ func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.
 		return nil, err
 	}
 
-	return &types.GetTxReceiptResponse{
-		Header: &types.ResponseHeader{
-			NodeID: p.nodeID,
-		},
+	return &types.TxResponse{
 		Receipt: &types.TxReceipt{
 			Header:  blockHeader,
 			TxIndex: uint64(txLoc.TxIndex),

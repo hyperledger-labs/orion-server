@@ -19,6 +19,16 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
+
+func MarshalOrPanic(response interface{}) []byte {
+	bytes, err := json.Marshal(response)
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes
+}
+
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
 func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)

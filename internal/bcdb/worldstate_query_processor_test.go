@@ -119,8 +119,6 @@ func TestGetDBStatus(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, status)
 			require.Equal(t, testCase.isExist, status.Exist)
-			require.NotNil(t, status.Header)
-			require.Equal(t, "test-node-id1", string(status.Header.NodeID))
 		}
 	})
 }
@@ -247,8 +245,6 @@ func TestGetData(t *testing.T) {
 			require.NotNil(t, payload)
 			require.Equal(t, testCase.expectedValue, payload.Value)
 			require.True(t, proto.Equal(testCase.expectedMetadata, payload.Metadata))
-			require.NotNil(t, payload.Header)
-			require.Equal(t, "test-node-id1", string(payload.Header.NodeID))
 		}
 	})
 
@@ -397,7 +393,7 @@ func TestGetUser(t *testing.T) {
 			setup           func(db worldstate.DB)
 			querierUserID   string
 			targetUserID    string
-			expectedRespose *types.GetUserResponseEnvelope
+			expectedRespose *types.GetUserResponse
 		}{
 			{
 				name: "querierUser has read permission on targetUser",
@@ -423,14 +419,9 @@ func TestGetUser(t *testing.T) {
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
-				expectedRespose: &types.GetUserResponseEnvelope{
-					Payload: &types.GetUserResponse{
-						Header: &types.ResponseHeader{
-							NodeID: "test-node-id1",
-						},
-						User:     targetUser,
-						Metadata: targetUserMetadataReadPerm,
-					},
+				expectedRespose: &types.GetUserResponse{
+					User:     targetUser,
+					Metadata: targetUserMetadataReadPerm,
 				},
 			},
 			{
@@ -457,14 +448,9 @@ func TestGetUser(t *testing.T) {
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
-				expectedRespose: &types.GetUserResponseEnvelope{
-					Payload: &types.GetUserResponse{
-						Header: &types.ResponseHeader{
-							NodeID: "test-node-id1",
-						},
-						User:     targetUser,
-						Metadata: targetUserMetadataReadWritePerm,
-					},
+				expectedRespose: &types.GetUserResponse{
+					User:     targetUser,
+					Metadata: targetUserMetadataReadWritePerm,
 				},
 			},
 			{
@@ -491,14 +477,9 @@ func TestGetUser(t *testing.T) {
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
-				expectedRespose: &types.GetUserResponseEnvelope{
-					Payload: &types.GetUserResponse{
-						Header: &types.ResponseHeader{
-							NodeID: "test-node-id1",
-						},
-						User:     targetUser,
-						Metadata: targetUserMetadataNoACL,
-					},
+				expectedRespose: &types.GetUserResponse{
+					User:     targetUser,
+					Metadata: targetUserMetadataNoACL,
 				},
 			},
 			{
@@ -520,14 +501,9 @@ func TestGetUser(t *testing.T) {
 				},
 				querierUserID: "querierUser",
 				targetUserID:  "targetUser",
-				expectedRespose: &types.GetUserResponseEnvelope{
-					Payload: &types.GetUserResponse{
-						Header: &types.ResponseHeader{
-							NodeID: "test-node-id1",
-						},
-						User:     nil,
-						Metadata: nil,
-					},
+				expectedRespose: &types.GetUserResponse{
+					User:     nil,
+					Metadata: nil,
 				},
 			},
 		}
@@ -542,7 +518,7 @@ func TestGetUser(t *testing.T) {
 
 				payload, err := env.q.getUser(tt.querierUserID, tt.targetUserID)
 				require.NoError(t, err)
-				require.True(t, proto.Equal(tt.expectedRespose.Payload, payload))
+				require.True(t, proto.Equal(tt.expectedRespose, payload))
 			})
 		}
 	})
@@ -694,9 +670,6 @@ func TestGetConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedConfig := &types.GetConfigResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.q.nodeID,
-			},
 			Config:   clusterConfig,
 			Metadata: metadata,
 		}
@@ -792,9 +765,6 @@ func TestGetConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedSingleNodeConfig := &types.GetNodeConfigResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.q.nodeID,
-			},
 			NodeConfig: clusterConfig.Nodes[0],
 		}
 		require.True(t, proto.Equal(expectedSingleNodeConfig, singleNodeConfigEnvelope))
@@ -803,9 +773,6 @@ func TestGetConfig(t *testing.T) {
 		require.NoError(t, err)
 
 		expectedSingleNodeConfig = &types.GetNodeConfigResponse{
-			Header: &types.ResponseHeader{
-				NodeID: env.q.nodeID,
-			},
 			NodeConfig: nil,
 		}
 		require.True(t, proto.Equal(expectedSingleNodeConfig, singleNodeConfigEnvelope))

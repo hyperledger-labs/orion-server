@@ -33,8 +33,6 @@ type ledgerProcessorTestEnv struct {
 }
 
 func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
-	nodeID := "test-node-id1"
-
 	path, err := ioutil.TempDir("/tmp", "ledgerQueryProcessor")
 	require.NoError(t, err)
 
@@ -105,7 +103,6 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 	}
 
 	conf := &ledgerQueryProcessorConfig{
-		nodeID:          nodeID,
 		db:              db,
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,

@@ -2,8 +2,8 @@ package bcdb
 
 import (
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"io/ioutil"
 	"time"
 
@@ -38,77 +38,77 @@ type DB interface {
 	GetCertificate(userID string) (*x509.Certificate, error)
 
 	// GetUser retrieves user' record
-	GetUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error)
+	GetUser(querierUserID, targetUserID string) (*types.ResponseEnvelope, error)
 
 	// GetConfig returns database configuration
-	GetConfig() (*types.GetConfigResponseEnvelope, error)
+	GetConfig() (*types.ResponseEnvelope, error)
 
 	// GetNodeConfig returns single node subsection of database configuration
-	GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error)
+	GetNodeConfig(nodeID string) (*types.ResponseEnvelope, error)
 
 	// GetDBStatus returns status for database, checks whenever database was created
-	GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error)
+	GetDBStatus(dbName string) (*types.ResponseEnvelope, error)
 
 	// GetData retrieves values for given key
-	GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error)
+	GetData(dbName, querierUserID, key string) (*types.ResponseEnvelope, error)
 
 	// GetBlockHeader returns ledger block header
-	GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
+	GetBlockHeader(userID string, blockNum uint64) (*types.ResponseEnvelope, error)
 
 	// GetTxProof returns intermediate hashes to recalculate merkle tree root from tx hash
-	GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error)
+	GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.ResponseEnvelope, error)
 
 	// GetLedgerPath returns list of blocks that forms shortest path in skip list chain in ledger
-	GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
+	GetLedgerPath(userID string, start, end uint64) (*types.ResponseEnvelope, error)
 
 	// GetValues returns all values associated with a given key
-	GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetValues(dbName, key string) (*types.ResponseEnvelope, error)
 
 	// GetDeletedValues returns all deleted values associated with a given key
-	GetDeletedValues(dbname, key string) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetDeletedValues(dbname, key string) (*types.ResponseEnvelope, error)
 
 	// GetValueAt returns the value of a given key at a particular version
-	GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetValueAt(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error)
 
 	// GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 	// by the limit parameters.
-	GetPreviousValues(dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetPreviousValues(dbname, key string, version *types.Version) (*types.ResponseEnvelope, error)
 
 	// GetNextValues returns next values of a given key and a version. The number of records returned would be limited
 	// by the limit parameters.
-	GetNextValues(dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetNextValues(dbname, key string, version *types.Version) (*types.ResponseEnvelope, error)
 
 	// GetValuesReadByUser returns all values read by a given user
-	GetValuesReadByUser(userID string) (*types.GetDataReadByResponseEnvelope, error)
+	GetValuesReadByUser(userID string) (*types.ResponseEnvelope, error)
 
 	// GetValuesReadByUser returns all values read by a given user
-	GetValuesWrittenByUser(userID string) (*types.GetDataWrittenByResponseEnvelope, error)
+	GetValuesWrittenByUser(userID string) (*types.ResponseEnvelope, error)
 
 	// GetValuesDeletedByUser returns all values deleted by a given user
-	GetValuesDeletedByUser(userID string) (*types.GetDataDeletedByResponseEnvelope, error)
+	GetValuesDeletedByUser(userID string) (*types.ResponseEnvelope, error)
 
 	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-	GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error)
+	GetReaders(dbName, key string) (*types.ResponseEnvelope, error)
 
 	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-	GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error)
+	GetWriters(dbName, key string) (*types.ResponseEnvelope, error)
 
 	// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
-	GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error)
+	GetTxIDsSubmittedByUser(userID string) (*types.ResponseEnvelope, error)
 
 	// GetTxReceipt returns transaction receipt - block header of ledger block that contains the transaction
 	// and transaction index inside the block
-	GetTxReceipt(userId string, txID string) (*types.GetTxReceiptResponseEnvelope, error)
+	GetTxReceipt(userId string, txID string) (*types.ResponseEnvelope, error)
 
 	// SubmitTransaction submits transaction to the database with a timeout. If the timeout is
 	// set to 0, the submission would be treated as async while a non-zero timeout would be
 	// treated as a sync submission. When a timeout occurs with the sync submission, a
 	// timeout error will be returned
-	SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponseEnvelope, error)
+	SubmitTransaction(tx interface{}, timeout time.Duration) (*types.ResponseEnvelope, error)
 
 	// BootstrapDB given bootstrap configuration initialize database by
 	// creating required system tables to include database meta data
-	BootstrapDB(conf *config.Configurations) (*types.TxResponseEnvelope, error)
+	BootstrapDB(conf *config.Configurations) (*types.ResponseEnvelope, error)
 
 	// IsDBExists returns true if database with given name is exists otherwise false
 	IsDBExists(name string) bool
@@ -118,6 +118,7 @@ type DB interface {
 }
 
 type db struct {
+	nodeID                   string
 	worldstateQueryProcessor *worldstateQueryProcessor
 	ledgerQueryProcessor     *ledgerQueryProcessor
 	provenanceQueryProcessor *provenanceQueryProcessor
@@ -188,7 +189,6 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	)
 
 	ledgerQueryProcessorConfig := &ledgerQueryProcessorConfig{
-		nodeID:          conf.Node.Identity.ID,
 		db:              levelDB,
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,
@@ -199,7 +199,6 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	provenanceQueryProcessor := newProvenanceQueryProcessor(
 		&provenanceQueryProcessorConfig{
-			nodeID:          conf.Node.Identity.ID,
 			provenanceStore: provenanceStore,
 			logger:          logger,
 		},
@@ -224,6 +223,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	}
 
 	return &db{
+		nodeID:                   conf.Node.Identity.ID,
 		worldstateQueryProcessor: worldstateQueryProcessor,
 		ledgerQueryProcessor:     ledgerQueryProcessor,
 		provenanceQueryProcessor: provenanceQueryProcessor,
@@ -237,7 +237,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 }
 
 // BootstrapDB bootstraps DB with system tables
-func (d *db) BootstrapDB(conf *config.Configurations) (*types.TxResponseEnvelope, error) {
+func (d *db) BootstrapDB(conf *config.Configurations) (*types.ResponseEnvelope, error) {
 	configTx, err := prepareConfigTx(conf)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to prepare and commit a configuration transaction")
@@ -270,354 +270,218 @@ func (d *db) GetCertificate(userID string) (*x509.Certificate, error) {
 }
 
 // GetUser returns user's record
-func (d *db) GetUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error) {
+func (d *db) GetUser(querierUserID, targetUserID string) (*types.ResponseEnvelope, error) {
 	userResponse, err := d.worldstateQueryProcessor.getUser(querierUserID, targetUserID)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, userResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetUserResponseEnvelope{
-		Payload:   userResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(userResponse)
 }
 
 // GetNodeConfig returns single node subsection of database configuration
-func (d *db) GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error) {
+func (d *db) GetNodeConfig(nodeID string) (*types.ResponseEnvelope, error) {
 	nodeConfigResponse, err := d.worldstateQueryProcessor.getNodeConfig(nodeID)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, nodeConfigResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetNodeConfigResponseEnvelope{
-		Payload:   nodeConfigResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(nodeConfigResponse)
 }
 
 // GetConfig returns database configuration
-func (d *db) GetConfig() (*types.GetConfigResponseEnvelope, error) {
+func (d *db) GetConfig() (*types.ResponseEnvelope, error) {
 	configResponse, err := d.worldstateQueryProcessor.getConfig()
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, configResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetConfigResponseEnvelope{
-		Payload:   configResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(configResponse)
 }
 
 // GetDBStatus returns database status
-func (d *db) GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
+func (d *db) GetDBStatus(dbName string) (*types.ResponseEnvelope, error) {
 	dbStatusResponse, err := d.worldstateQueryProcessor.getDBStatus(dbName)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, dbStatusResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetDBStatusResponseEnvelope{
-		Payload:   dbStatusResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(dbStatusResponse)
 }
 
 // SubmitTransaction submits transaction to the database with a timeout. If the timeout is
 // set to 0, the submission would be treated as async while a non-zero timeout would be
 // treated as a sync submission. When a timeout occurs with the sync submission, a
 // timeout error will be returned
-func (d *db) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponseEnvelope, error) {
-	return d.txProcessor.submitTransaction(tx, timeout)
+func (d *db) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.ResponseEnvelope, error) {
+	receipt, err := d.txProcessor.submitTransaction(tx, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.signedResponseEnvelope(receipt)
 }
 
 // GetData returns value for provided key
-func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error) {
+func (d *db) GetData(dbName, querierUserID, key string) (*types.ResponseEnvelope, error) {
 	dataResponse, err := d.worldstateQueryProcessor.getData(dbName, querierUserID, key)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, dataResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetDataResponseEnvelope{
-		Payload:   dataResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(dataResponse)
 }
 
 func (d *db) IsDBExists(name string) bool {
 	return d.worldstateQueryProcessor.isDBExists(name)
 }
 
-func (d *db) GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error) {
+func (d *db) GetBlockHeader(userID string, blockNum uint64) (*types.ResponseEnvelope, error) {
 	blockHeader, err := d.ledgerQueryProcessor.getBlockHeader(userID, blockNum)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, blockHeader)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetBlockResponseEnvelope{
-		Payload:   blockHeader,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(blockHeader)
 }
 
-func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
+func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.ResponseEnvelope, error) {
 	proofResponse, err := d.ledgerQueryProcessor.getProof(userID, blockNum, txIdx)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, proofResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetTxProofResponseEnvelope{
-		Payload:   proofResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(proofResponse)
 }
 
-func (d *db) GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error) {
+func (d *db) GetLedgerPath(userID string, start, end uint64) (*types.ResponseEnvelope, error) {
 	pathResponse, err := d.ledgerQueryProcessor.getPath(userID, start, end)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, pathResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetLedgerPathResponseEnvelope{
-		Payload:   pathResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(pathResponse)
 }
 
-func (d *db) GetTxReceipt(userId string, txID string) (*types.GetTxReceiptResponseEnvelope, error) {
+func (d *db) GetTxReceipt(userId string, txID string) (*types.ResponseEnvelope, error) {
 	receiptResponse, err := d.ledgerQueryProcessor.getTxReceipt(userId, txID)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, receiptResponse)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetTxReceiptResponseEnvelope{
-		Payload:   receiptResponse,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(receiptResponse)
 }
 
 // GetValues returns all values associated with a given key
-func (d *db) GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+func (d *db) GetValues(dbName, key string) (*types.ResponseEnvelope, error) {
 	values, err := d.provenanceQueryProcessor.GetValues(dbName, key)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, values)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetHistoricalDataResponseEnvelope{
-		Payload:   values,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(values)
 }
 
 // GetDeletedValues returns all deleted values associated with a given key
-func (d *db) GetDeletedValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+func (d *db) GetDeletedValues(dbName, key string) (*types.ResponseEnvelope, error) {
 	deletedValues, err := d.provenanceQueryProcessor.GetDeletedValues(dbName, key)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, deletedValues)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetHistoricalDataResponseEnvelope{
-		Payload:   deletedValues,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(deletedValues)
 }
 
 // GetValueAt returns the value of a given key at a particular version
-func (d *db) GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+func (d *db) GetValueAt(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error) {
 	valueAt, err := d.provenanceQueryProcessor.GetValueAt(dbName, key, version)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, valueAt)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetHistoricalDataResponseEnvelope{
-		Payload:   valueAt,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(valueAt)
 }
 
 // GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
-func (d *db) GetPreviousValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+func (d *db) GetPreviousValues(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error) {
 	previousValues, err := d.provenanceQueryProcessor.GetPreviousValues(dbName, key, version)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, previousValues)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetHistoricalDataResponseEnvelope{
-		Payload:   previousValues,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(previousValues)
 }
 
 // GetNextValues returns next values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
-func (d *db) GetNextValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+func (d *db) GetNextValues(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error) {
 	nextValues, err := d.provenanceQueryProcessor.GetNextValues(dbName, key, version)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, nextValues)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetHistoricalDataResponseEnvelope{
-		Payload:   nextValues,
-		Signature: sig,
-	}, err
-
+	return d.signedResponseEnvelope(nextValues)
 }
 
 // GetValuesReadByUser returns all values read by a given user
-func (d *db) GetValuesReadByUser(userID string) (*types.GetDataReadByResponseEnvelope, error) {
+func (d *db) GetValuesReadByUser(userID string) (*types.ResponseEnvelope, error) {
 	readByUser, err := d.provenanceQueryProcessor.GetValuesReadByUser(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, readByUser)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetDataReadByResponseEnvelope{
-		Payload:   readByUser,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(readByUser)
 }
 
 // GetValuesWrittenByUser returns all values written by a given user
-func (d *db) GetValuesWrittenByUser(userID string) (*types.GetDataWrittenByResponseEnvelope, error) {
+func (d *db) GetValuesWrittenByUser(userID string) (*types.ResponseEnvelope, error) {
 	writtenByUser, err := d.provenanceQueryProcessor.GetValuesWrittenByUser(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, writtenByUser)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetDataWrittenByResponseEnvelope{
-		Payload:   writtenByUser,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(writtenByUser)
 }
 
 // GetValuesDeletedByUser returns all values deleted by a given user
-func (d *db) GetValuesDeletedByUser(userID string) (*types.GetDataDeletedByResponseEnvelope, error) {
+func (d *db) GetValuesDeletedByUser(userID string) (*types.ResponseEnvelope, error) {
 	deletedByUser, err := d.provenanceQueryProcessor.GetValuesDeletedByUser(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, deletedByUser)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetDataDeletedByResponseEnvelope{
-		Payload:   deletedByUser,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(deletedByUser)
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-func (d *db) GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error) {
+func (d *db) GetReaders(dbName, key string) (*types.ResponseEnvelope, error) {
 	readers, err := d.provenanceQueryProcessor.GetReaders(dbName, key)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, readers)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetDataReadersResponseEnvelope{
-		Payload:   readers,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(readers)
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-func (d *db) GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error) {
+func (d *db) GetWriters(dbName, key string) (*types.ResponseEnvelope, error) {
 	writers, err := d.provenanceQueryProcessor.GetWriters(dbName, key)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, writers)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetDataWritersResponseEnvelope{
-		Payload:   writers,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(writers)
 }
 
 // GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
-func (d *db) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
+func (d *db) GetTxIDsSubmittedByUser(userID string) (*types.ResponseEnvelope, error) {
 	submittedByUser, err := d.provenanceQueryProcessor.GetTxIDsSubmittedByUser(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	sig, err := cryptoservice.SignQueryResponse(d.signer, submittedByUser)
-	if err != nil {
-		return nil, err
-	}
-	return &types.GetTxIDsSubmittedByResponseEnvelope{
-		Payload:   submittedByUser,
-		Signature: sig,
-	}, err
+	return d.signedResponseEnvelope(submittedByUser)
 }
 
 // Close closes and release resources used by db
@@ -639,6 +503,34 @@ func (d *db) Close() error {
 	}
 
 	return nil
+}
+
+func (d *db) signedResponseEnvelope(response interface{}) (*types.ResponseEnvelope, error) {
+	responseBytes, err := json.Marshal(response)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := &types.Payload{
+		Header: &types.ResponseHeader{
+			NodeID: d.nodeID,
+		},
+		Response: responseBytes,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := d.signer.Sign(payloadBytes)
+	if err != nil {
+		return nil, err
+	}
+	return &types.ResponseEnvelope{
+		Payload:   payloadBytes,
+		Signature: sig,
+	}, nil
 }
 
 func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {

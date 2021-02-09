@@ -39,17 +39,19 @@ func TestGetHistoricalData(t *testing.T) {
 		BlockNum: 1,
 		TxNum:    1,
 	}
-	genericResponse := &types.GetHistoricalDataResponseEnvelope{
-		Payload: &types.GetHistoricalDataResponse{
+	genericResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Values: []*types.ValueWithMetadata{
-				{
-					Value: []byte("value1"),
+			Response: MarshalOrPanic(&types.GetHistoricalDataResponse{
+				Values: []*types.ValueWithMetadata{
+					{
+						Value: []byte("value1"),
+					},
 				},
-			},
-		},
+			}),
+		}),
 	}
 
 	testCases := []testCase{
@@ -200,7 +202,7 @@ func TestGetHistoricalData(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.GetHistoricalDataResponseEnvelope{})
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
 		})
 	}
 }
@@ -214,16 +216,18 @@ func TestGetDataReaders(t *testing.T) {
 
 	dbName := "db1"
 	key := "key1"
-	genericResponse := &types.GetDataReadersResponseEnvelope{
-		Payload: &types.GetDataReadersResponse{
+	genericResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			ReadBy: map[string]uint32{
-				"user1": 5,
-				"user2": 6,
-			},
-		},
+			Response: MarshalOrPanic(&types.GetDataReadersResponse{
+				ReadBy: map[string]uint32{
+					"user1": 5,
+					"user2": 6,
+				},
+			}),
+		}),
 	}
 	url := constants.URLForGetDataReaders(dbName, key)
 	req := constructRequestForTestCase(
@@ -268,7 +272,7 @@ func TestGetDataReaders(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.GetDataReadersResponseEnvelope{})
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
 		})
 	}
 }
@@ -282,16 +286,18 @@ func TestGetDataWriters(t *testing.T) {
 
 	dbName := "db1"
 	key := "key1"
-	genericResponse := &types.GetDataWritersResponseEnvelope{
-		Payload: &types.GetDataWritersResponse{
+	genericResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			WrittenBy: map[string]uint32{
-				"user1": 5,
-				"user2": 6,
-			},
-		},
+			Response: MarshalOrPanic(&types.GetDataWritersResponse{
+				WrittenBy: map[string]uint32{
+					"user1": 5,
+					"user2": 6,
+				},
+			}),
+		}),
 	}
 	url := constants.URLForGetDataWriters(dbName, key)
 	req := constructRequestForTestCase(
@@ -336,7 +342,7 @@ func TestGetDataWriters(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.GetDataWritersResponseEnvelope{})
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
 		})
 	}
 }
@@ -349,18 +355,20 @@ func TestGetDataReadBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.GetDataReadByResponseEnvelope{
-		Payload: &types.GetDataReadByResponse{
+	genericResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
+			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+					},
 				},
-			},
-		},
+			}),
+		}),
 	}
 
 	url := constants.URLForGetDataReadBy(targetUserID)
@@ -405,7 +413,7 @@ func TestGetDataReadBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.GetDataReadByResponseEnvelope{})
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
 		})
 	}
 }
@@ -418,18 +426,20 @@ func TestGetDataWrittenBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.GetDataWrittenByResponseEnvelope{
-		Payload: &types.GetDataWrittenByResponse{
+	genericResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
+			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+					},
 				},
-			},
-		},
+			}),
+		}),
 	}
 
 	url := constants.URLForGetDataWrittenBy(targetUserID)
@@ -474,7 +484,7 @@ func TestGetDataWrittenBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.GetDataWrittenByResponseEnvelope{})
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
 		})
 	}
 }
@@ -487,18 +497,20 @@ func TestGetDataDeletedBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.GetDataDeletedByResponseEnvelope{
-		Payload: &types.GetDataDeletedByResponse{
+	genericResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
+			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+					},
 				},
-			},
-		},
+			}),
+		}),
 	}
 
 	url := constants.URLForGetDataDeletedBy(targetUserID)
@@ -543,7 +555,7 @@ func TestGetDataDeletedBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.GetDataDeletedByResponseEnvelope{})
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
 		})
 	}
 }
@@ -556,13 +568,15 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.GetTxIDsSubmittedByResponseEnvelope{
-		Payload: &types.GetTxIDsSubmittedByResponse{
+	genericResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			TxIDs: []string{"tx1", "tx5"},
-		},
+			Response: MarshalOrPanic(&types.GetTxIDsSubmittedByResponse{
+				TxIDs: []string{"tx1", "tx5"},
+			}),
+		}),
 	}
 
 	url := constants.URLForGetTxIDsSubmittedBy(targetUserID)
@@ -607,7 +621,7 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.GetTxIDsSubmittedByResponseEnvelope{})
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
 		})
 	}
 }
@@ -660,7 +674,7 @@ func constructTestCaseForSigVerificationFailure(t *testing.T, url string, submit
 	req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte("random")))
 
 	return testCase{
-		name:    "submitting user does not eixst",
+		name:    "submitting user does not exist",
 		request: req,
 		dbMockFactory: func(response interface{}) bcdb.DB {
 			db := &mocks.DB{}

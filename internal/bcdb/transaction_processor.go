@@ -112,7 +112,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 // If the timeout is set to 0, the submission would be treated as async while
 // a non-zero timeout would be treated as a sync submission. When a timeout
 // occurs with the sync submission, a timeout error will be returned
-func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponseEnvelope, error) {
+func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Duration) (*types.TxResponse, error) {
 	var txID string
 	switch tx.(type) {
 	case *types.DataTxEnvelope:
@@ -171,13 +171,8 @@ func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
-	return &types.TxResponseEnvelope{
-		Payload: &types.TxResponse{
-			Header: &types.ResponseHeader{
-				NodeID: t.nodeID,
-			},
-			Receipt: receipt,
-		},
+	return &types.TxResponse{
+		Receipt: receipt,
 	}, nil
 }
 

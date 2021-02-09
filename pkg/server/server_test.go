@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
@@ -167,7 +168,19 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, data)
-	require.Nil(t, data.Payload.Value)
+	require.NotNil(t, data.Payload)
+
+	payload := &types.Payload{}
+	err = json.Unmarshal(data.GetPayload(), payload)
+	require.NoError(t, err)
+
+	response := &types.GetDataResponse{}
+	err = json.Unmarshal(payload.GetResponse(), response)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	require.Nil(t, response.Value)
 
 	dataTx := &types.DataTx{
 		UserID: "admin",
@@ -198,10 +211,28 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 			},
 			Signature: testutils.SignatureFromQuery(t, env.adminSigner, dataQuery),
 		})
+		if err != nil {
+			return false
+		}
 
-		return err == nil &&
-			data.GetPayload().GetValue() != nil &&
-			bytes.Equal(data.GetPayload().GetValue(), []byte("bar"))
+		if data.GetPayload() == nil {
+			return false
+		}
+
+		payload := &types.Payload{}
+		err = json.Unmarshal(data.Payload, payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		response := &types.GetDataResponse{}
+		err = json.Unmarshal(payload.Response, response)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return response.GetValue() != nil &&
+			bytes.Equal(response.GetValue(), []byte("bar"))
 	}, time.Minute, 100*time.Millisecond)
 
 	provenanceQuery := &types.GetHistoricalDataQuery{
@@ -217,8 +248,17 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 		},
 	)
 	require.NoError(t, err)
-	require.Len(t, values.GetPayload().GetValues(), 1)
-	require.Equal(t, values.GetPayload().Values[0].GetValue(), []byte("bar"))
+
+	payload = &types.Payload{}
+	err = json.Unmarshal(values.GetPayload(), payload)
+	require.NoError(t, err)
+
+	historyResponse := &types.GetHistoricalDataResponse{}
+	err = json.Unmarshal(payload.GetResponse(), historyResponse)
+	require.NoError(t, err)
+
+	require.Len(t, historyResponse.GetValues(), 1)
+	require.Equal(t, historyResponse.Values[0].GetValue(), []byte("bar"))
 }
 
 func TestServerWithUserAdminRequest(t *testing.T) {
@@ -261,9 +301,24 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 			Payload:   query,
 			Signature: querySig,
 		})
-		return err == nil &&
-			user.GetPayload().GetUser() != nil &&
-			user.GetPayload().GetUser().GetID() == "testUser"
+
+		if err != nil {
+			return false
+		}
+
+		if user.GetPayload() == nil {
+			return false
+		}
+
+		payload := &types.Payload{}
+		err = json.Unmarshal(user.GetPayload(), payload)
+		require.NoError(t, err)
+
+		response := &types.GetUserResponse{}
+		err = json.Unmarshal(payload.GetResponse(), response)
+
+		return response.GetUser() != nil &&
+			response.GetUser().GetID() == "testUser"
 	}, time.Minute, 100*time.Millisecond)
 }
 
@@ -290,7 +345,18 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 			Payload:   dbStatusQuery,
 			Signature: testutils.SignatureFromQuery(t, env.adminSigner, dbStatusQuery),
 		})
-		return err == nil && db.GetPayload().GetExist()
+		if err != nil {
+			return false
+		}
+
+		payload := &types.Payload{}
+		err = json.Unmarshal(db.GetPayload(), payload)
+		require.NoError(t, err)
+
+		response := &types.GetDBStatusResponse{}
+		err = json.Unmarshal(payload.GetResponse(), response)
+
+		return response.GetExist()
 	}, time.Minute, 100*time.Millisecond)
 
 	dataTx := &types.DataTx{
@@ -323,9 +389,19 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 			Signature: dataQuerySig,
 		})
 
-		return err == nil &&
-			data.GetPayload().GetValue() != nil &&
-			bytes.Equal(data.GetPayload().GetValue(), []byte("bar"))
+		if err != nil {
+			return false
+		}
+
+		payload := &types.Payload{}
+		err = json.Unmarshal(data.GetPayload(), payload)
+		require.NoError(t, err)
+
+		response := &types.GetDataResponse{}
+		err = json.Unmarshal(payload.GetResponse(), response)
+
+		return response.GetValue() != nil &&
+			bytes.Equal(response.GetValue(), []byte("bar"))
 	}, time.Minute, 100*time.Millisecond)
 }
 
@@ -403,4 +479,73 @@ func TestServerWithFailureScenarios(t *testing.T) {
 			require.Contains(t, err.Error(), tt.expectedError)
 		})
 	}
+}
+
+func addDBRWPermissionToAdmin(t *testing.T, env *serverTestEnv, dbName string) {
+	queryUser := &types.GetUserQuery{UserID: "admin", TargetUserID: "admin"}
+	queryUserSig, err := cryptoservice.SignQuery(env.adminSigner, queryUser)
+	require.NoError(t, err)
+
+	adminUserRec, err := env.client.GetUser(&types.GetUserQueryEnvelope{
+		Payload:   queryUser,
+		Signature: queryUserSig,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, adminUserRec)
+
+	payload := &types.Payload{}
+	err = json.Unmarshal(adminUserRec.GetPayload(), payload)
+	require.NoError(t, err)
+	require.NotNil(t, adminUserRec.GetPayload())
+
+	response := &types.GetUserResponse{}
+	err = json.Unmarshal(payload.GetResponse(), response)
+	require.NoError(t, err)
+	require.NotNil(t, response.GetUser())
+
+	if response.GetUser().GetPrivilege().DBPermission == nil {
+		response.GetUser().GetPrivilege().DBPermission = map[string]types.Privilege_Access{
+			dbName: types.Privilege_ReadWrite,
+		}
+	}
+
+	userTx := &types.UserAdministrationTx{
+		TxID:   uuid.New().String(),
+		UserID: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: response.GetUser(),
+				ACL:  response.GetMetadata().GetAccessControl(),
+			},
+		},
+		UserReads: []*types.UserRead{
+			{
+				UserID:  response.GetUser().GetID(),
+				Version: response.GetMetadata().GetVersion(),
+			},
+		},
+	}
+	_, err = env.client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+	})
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		rec, err := env.client.GetUser(&types.GetUserQueryEnvelope{
+			Payload:   queryUser,
+			Signature: queryUserSig,
+		})
+
+		payload := &types.Payload{}
+		err = json.Unmarshal(rec.GetPayload(), payload)
+		require.NoError(t, err)
+
+		response := &types.GetUserResponse{}
+		err = json.Unmarshal(payload.GetResponse(), response)
+		require.NoError(t, err)
+
+		acl, ok := response.GetUser().GetPrivilege().GetDBPermission()[dbName]
+		return err == nil && ok && acl == types.Privilege_ReadWrite
+	}, time.Minute, 100*time.Millisecond)
 }
