@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.ibm.com/blockchaindb/protos/types";
+option go_package = "github.ibm.com/blockchaindb/server/pkg/types";
 
 package types;
 
