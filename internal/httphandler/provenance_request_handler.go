@@ -33,13 +33,20 @@ func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Ha
 		logger: logger,
 	}
 
-	matcher := []string{
+	versionAndDirectionMatcher := []string{
 		"blocknumber", "{blknum:[0-9]+}",
 		"transactionnumber", "{txnum:[0-9]+}",
 		"direction", "{direction:[previous|next]+}",
 	}
-	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(matcher...)
-	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(matcher[:4]...)
+
+	mostRecentMatcher := []string{
+		"blocknumber", "{blknum:[0-9]+}",
+		"transactionnumber", "{txnum:[0-9]+}",
+		"mostrecent", "{mostrecent:true}",
+	}
+	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(versionAndDirectionMatcher...)
+	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(mostRecentMatcher...)
+	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(versionAndDirectionMatcher[:4]...)
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries("onlydeletes", "{onlydeletes:true}")
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetDataReaders, handler.getDataReaders).Methods(http.MethodGet)
@@ -71,6 +78,8 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 		response, err = p.db.GetDeletedValues(query.DBName, query.Key)
 	case query.Version == nil:
 		response, err = p.db.GetValues(query.DBName, query.Key)
+	case query.Direction == "" && query.MostRecent:
+		response, err = p.db.GetMostRecentValueAtOrBelow(query.DBName, query.Key, query.Version)
 	case query.Direction == "":
 		response, err = p.db.GetValueAt(query.DBName, query.Key, query.Version)
 	case query.Direction == "previous":

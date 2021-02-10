@@ -106,6 +106,14 @@ func URLForGetHistoricalDataAt(dbName, key string, version *types.Version) strin
 		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum)
 }
 
+// URLForGetHistoricalDataAtOrBelow returns url for GET request to
+// retrieve a most recent value at a particular version for a given key on a database
+func URLForGetHistoricalDataAtOrBelow(dbName, key string, version *types.Version) string {
+	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum) +
+		fmt.Sprintf("&mostrecent=true")
+}
+
 // URLForGetPreviousHistoricalData returns url for GET request to
 // retrieve previous values for a given key on a database from a particular version
 func URLForGetPreviousHistoricalData(dbName, key string, version *types.Version) string {

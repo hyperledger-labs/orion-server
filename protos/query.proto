@@ -97,6 +97,7 @@ message GetHistoricalDataQuery {
   Version version = 4;
   string direction = 5;
   bool onlyDeletes = 6;
+  bool mostRecent = 7;
 }
 
 message GetHistoricalDataQueryEnvelope {

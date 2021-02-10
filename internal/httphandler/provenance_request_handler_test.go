@@ -124,6 +124,30 @@ func TestGetHistoricalData(t *testing.T) {
 			expectedResponse:   genericResponse,
 		},
 		{
+			name: "valid: GetMostRecentValueAtOrBelow",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetHistoricalDataAtOrBelow(dbName, key, version),
+				&types.GetHistoricalDataQuery{
+					UserID:     submittingUserName,
+					DBName:     dbName,
+					Key:        key,
+					Version:    version,
+					MostRecent: true,
+				},
+				aliceSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetMostRecentValueAtOrBelow", dbName, key, version).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   genericResponse,
+		},
+		{
 			name: "valid: GetPreviousValues",
 			request: constructRequestForTestCase(
 				t,

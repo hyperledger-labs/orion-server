@@ -70,6 +70,9 @@ type DB interface {
 	// GetValueAt returns the value of a given key at a particular version
 	GetValueAt(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error)
 
+	// GetMostRecentValueAtOrBelow returns the most recent value of a given key at or below the given version
+	GetMostRecentValueAtOrBelow(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error)
+
 	// GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 	// by the limit parameters.
 	GetPreviousValues(dbname, key string, version *types.Version) (*types.ResponseEnvelope, error)
@@ -395,6 +398,16 @@ func (d *db) GetDeletedValues(dbName, key string) (*types.ResponseEnvelope, erro
 // GetValueAt returns the value of a given key at a particular version
 func (d *db) GetValueAt(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error) {
 	valueAt, err := d.provenanceQueryProcessor.GetValueAt(dbName, key, version)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.signedResponseEnvelope(valueAt)
+}
+
+// GetMostRecentValueAtOrBelow returns the most recent value of a given key at or below the given version
+func (d *db) GetMostRecentValueAtOrBelow(dbName, key string, version *types.Version) (*types.ResponseEnvelope, error) {
+	valueAt, err := d.provenanceQueryProcessor.GetMostRecentValueAtOrBelow(dbName, key, version)
 	if err != nil {
 		return nil, err
 	}

@@ -513,8 +513,7 @@ func TestGetPreviousValues(t *testing.T) {
 				BlockNum: 1,
 				TxNum:    1,
 			},
-			expectedPayload: &types.GetHistoricalDataResponse{
-			},
+			expectedPayload: &types.GetHistoricalDataResponse{},
 		},
 	}
 
@@ -647,6 +646,65 @@ func TestGetValueAt(t *testing.T) {
 
 	for _, tt := range tests {
 		envelope, err := env.p.GetValueAt(tt.dbName, tt.key, tt.version)
+		require.NoError(t, err)
+
+		require.NotNil(t, envelope)
+		require.Equal(t, tt.expectedPayload, envelope)
+	}
+}
+
+func TestGetMostRecentValueAtOrBelow(t *testing.T) {
+	t.Parallel()
+	env := newProvenanceQueryProcessorTestEnv(t)
+	defer env.cleanup(t)
+
+	setupProvenanceStore(t, env.p.provenanceStore)
+
+	tests := []struct {
+		name            string
+		dbName          string
+		key             string
+		version         *types.Version
+		expectedPayload *types.GetHistoricalDataResponse
+	}{
+		{
+			name:   "fetch most recent value of key1 at or below a particular version",
+			dbName: "db1",
+			key:    "key1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    5,
+			},
+			expectedPayload: &types.GetHistoricalDataResponse{
+				Values: []*types.ValueWithMetadata{
+					{
+						Value: []byte("value3"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:   "fetch value of non-existing key",
+			dbName: "db1",
+			key:    "key5",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    1,
+			},
+			expectedPayload: &types.GetHistoricalDataResponse{
+				Values: nil,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		envelope, err := env.p.GetMostRecentValueAtOrBelow(tt.dbName, tt.key, tt.version)
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)

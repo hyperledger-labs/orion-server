@@ -19,7 +19,6 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
-
 func MarshalOrPanic(response interface{}) []byte {
 	bytes, err := json.Marshal(response)
 	if err != nil {
@@ -151,6 +150,9 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			})
 			return nil, true
 		}
+
+		_, isMostRecentSet := params["mostrecent"]
+
 		payload = &types.GetHistoricalDataQuery{
 			UserID:      querierUserID,
 			DBName:      params["dbname"],
@@ -158,6 +160,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			Version:     version,
 			Direction:   params["direction"],
 			OnlyDeletes: isOnlyDeletesSet,
+			MostRecent:  isMostRecentSet,
 		}
 	case constants.GetDataReaders:
 		payload = &types.GetDataReadersQuery{

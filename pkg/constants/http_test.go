@@ -103,6 +103,16 @@ func TestURLConstruction(t *testing.T) {
 			expectedURL: "/provenance/data/history/db2/key2?blocknumber=10&transactionnumber=5",
 		},
 		{
+			name: "URLForGetHistoricalDataAtOrBelow",
+			execute: func() string {
+				return URLForGetHistoricalDataAtOrBelow("db2", "key2", &types.Version{
+					BlockNum: 10,
+					TxNum:    5,
+				})
+			},
+			expectedURL: "/provenance/data/history/db2/key2?blocknumber=10&transactionnumber=5&mostrecent=true",
+		},
+		{
 			name: "URLForPreviousGetHistoricalData",
 			execute: func() string {
 				return URLForGetPreviousHistoricalData("db3", "key3", &types.Version{

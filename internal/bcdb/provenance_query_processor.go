@@ -47,6 +47,20 @@ func (p *provenanceQueryProcessor) GetValueAt(dbName, key string, version *types
 	return p.composeHistoricalDataResponse([]*types.ValueWithMetadata{value})
 }
 
+// GetMostRecentValueAtOrBelow returns the most recent value of a given key at or below the given version
+func (p *provenanceQueryProcessor) GetMostRecentValueAtOrBelow(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	value, err := p.provenanceStore.GetMostRecentValueAtOrBelow(dbName, key, version)
+	if err != nil {
+		return nil, err
+	}
+
+	if value == nil {
+		return p.composeHistoricalDataResponse(nil)
+	}
+
+	return p.composeHistoricalDataResponse([]*types.ValueWithMetadata{value})
+}
+
 // GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
 func (p *provenanceQueryProcessor) GetPreviousValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
