@@ -498,7 +498,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 
 	tests := []struct {
 		name                string
-		setup               func(db worldstate.DB)
+		setup               func(env *committerTestEnv)
 		expectedUsersBefore []string
 		tx                  *types.UserAdministrationTx
 		valInfo             []*types.ValidationInfo
@@ -506,22 +506,60 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 	}{
 		{
 			name: "add and delete users",
-			setup: func(db worldstate.DB) {
+			setup: func(env *committerTestEnv) {
+				user1 := constructUserForTest(t, "user1", nil, sampleVersion, nil)
+				user2 := constructUserForTest(t, "user2", nil, sampleVersion, nil)
+				user3 := constructUserForTest(t, "user3", nil, sampleVersion, nil)
+				user4 := constructUserForTest(t, "user4", nil, sampleVersion, nil)
 				users := []*worldstate.DBUpdates{
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, sampleVersion, nil),
-							constructUserForTest(t, "user2", nil, sampleVersion, nil),
-							constructUserForTest(t, "user3", nil, sampleVersion, nil),
-							constructUserForTest(t, "user4", nil, sampleVersion, nil),
+							user1,
+							user2,
+							user3,
+							user4,
 						},
 					},
 				}
-				require.NoError(t, db.Commit(users, 1))
+				require.NoError(t, env.db.Commit(users, 1))
+
+				txsData := []*provenance.TxDataForProvenance{
+					{
+						IsValid: true,
+						DBName:  worldstate.UsersDBName,
+						UserID:  "user0",
+						TxID:    "tx0",
+						Writes: []*types.KVWithMetadata{
+							{
+								Key:      "user1",
+								Value:    user1.Value,
+								Metadata: user1.Metadata,
+							},
+							{
+								Key:      "user2",
+								Value:    user2.Value,
+								Metadata: user2.Metadata,
+							},
+							{
+								Key:      "user3",
+								Value:    user3.Value,
+								Metadata: user3.Metadata,
+							},
+							{
+								Key:      "user4",
+								Value:    user4.Value,
+								Metadata: user4.Metadata,
+							},
+						},
+					},
+				}
+				require.NoError(t, env.committer.provenanceStore.Commit(1, txsData))
 			},
 			expectedUsersBefore: []string{"user1", "user2", "user3", "user4"},
 			tx: &types.UserAdministrationTx{
+				UserID: "user0",
+				TxID:   "tx1",
 				UserWrites: []*types.UserWrite{
 					{
 						User: &types.User{
@@ -560,7 +598,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 		},
 		{
 			name: "tx is marked invalid",
-			setup: func(db worldstate.DB) {
+			setup: func(env *committerTestEnv) {
 				users := []*worldstate.DBUpdates{
 					{
 						DBName: worldstate.UsersDBName,
@@ -569,10 +607,12 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 						},
 					},
 				}
-				require.NoError(t, db.Commit(users, 1))
+				require.NoError(t, env.db.Commit(users, 1))
 			},
 			expectedUsersBefore: []string{"user1"},
 			tx: &types.UserAdministrationTx{
+				UserID: "user0",
+				TxID:   "tx1",
 				UserWrites: []*types.UserWrite{
 					{
 						User: &types.User{
@@ -604,7 +644,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 			env := newCommitterTestEnv(t)
 			defer env.cleanup()
 
-			tt.setup(env.db)
+			tt.setup(env)
 
 			for _, user := range tt.expectedUsersBefore {
 				exist, err := env.identityQuerier.DoesUserExist(user)
@@ -1320,41 +1360,204 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 	}
 }
 
-func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
+func TestProvenanceStoreCommitterForUserBlockWithValidTxs(t *testing.T) {
+	t.Parallel()
+
+	sampleVersion := &types.Version{
+		BlockNum: 1,
+		TxNum:    0,
+	}
+	user1 := constructUserForTest(t, "user1", []byte("rawcert-user1"), sampleVersion, nil)
+	rawUser1New := &types.User{
+		ID:          "user1",
+		Certificate: []byte("rawcert-user1-new"),
+	}
+
+	setup := func(env *committerTestEnv) {
+		data := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					user1,
+				},
+			},
+		}
+		require.NoError(t, env.committer.db.Commit(data, 1))
+
+		txsData := []*provenance.TxDataForProvenance{
+			{
+				IsValid: true,
+				DBName:  worldstate.UsersDBName,
+				UserID:  "user1",
+				TxID:    "tx0",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:      "user1",
+						Value:    user1.Value,
+						Metadata: user1.Metadata,
+					},
+				},
+			},
+		}
+		require.NoError(t, env.committer.provenanceStore.Commit(1, txsData))
+	}
+
+	tests := []struct {
+		name         string
+		tx           *types.UserAdministrationTxEnvelope
+		valInfo      *types.ValidationInfo
+		query        func(s *provenance.Store) ([]*types.ValueWithMetadata, error)
+		expectedData []*types.ValueWithMetadata
+	}{
+		{
+			name: "previous link with the already committed value of user1",
+			valInfo: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+			tx: &types.UserAdministrationTxEnvelope{
+				Payload: &types.UserAdministrationTx{
+					UserID: "user1",
+					TxID:   "tx1",
+					UserWrites: []*types.UserWrite{
+						{
+							User: rawUser1New,
+						},
+					},
+				},
+				Signature: nil,
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetPreviousValues(
+					worldstate.UsersDBName,
+					"user1",
+					&types.Version{
+						BlockNum: 2,
+						TxNum:    0,
+					},
+					-1,
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value:    user1.Value,
+					Metadata: user1.Metadata,
+				},
+			},
+		},
+		{
+			name: "delete user1",
+			tx: &types.UserAdministrationTxEnvelope{
+				Payload: &types.UserAdministrationTx{
+					UserID: "user1",
+					TxID:   "tx1",
+					UserDeletes: []*types.UserDelete{
+						{
+							UserID: "user1",
+						},
+					},
+				},
+				Signature: nil,
+			},
+			valInfo: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetDeletedValues(
+					worldstate.UsersDBName,
+					"user1",
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value:    user1.Value,
+					Metadata: user1.Metadata,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+			setup(env)
+
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: []*types.ValidationInfo{
+						tt.valInfo,
+					},
+				},
+				Payload: &types.Block_UserAdministrationTxEnvelope{
+					UserAdministrationTxEnvelope: tt.tx,
+				},
+			}
+
+			_, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToProvenanceStore(2, provenanceData))
+
+			actualData, err := tt.query(env.committer.provenanceStore)
+			require.NoError(t, err)
+			require.Len(t, actualData, len(tt.expectedData))
+			for i, expected := range tt.expectedData {
+				require.True(t, proto.Equal(expected, actualData[i]))
+			}
+		})
+	}
+}
+
+func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
 		name         string
-		txs          []*types.DataTxEnvelope
-		valInfo      []*types.ValidationInfo
+		block        *types.Block
 		query        func(s *provenance.Store) (*provenance.TxIDLocation, error)
 		expectedData *provenance.TxIDLocation
 		expectedErr  string
 	}{
 		{
-			name: "invalid txID",
-			txs: []*types.DataTxEnvelope{
-				{
-					Payload: &types.DataTx{
-						DBName: worldstate.DefaultDBName,
-						UserID: "user1",
-						TxID:   "tx1",
+			name: "invalid data tx",
+			block: &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_VALID,
+						},
+						{
+							Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+						},
 					},
 				},
-				{
-					Payload: &types.DataTx{
-						DBName: worldstate.DefaultDBName,
-						UserID: "user1",
-						TxID:   "tx2",
+				Payload: &types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: []*types.DataTxEnvelope{
+							{
+								Payload: &types.DataTx{
+									DBName: worldstate.DefaultDBName,
+									UserID: "user1",
+									TxID:   "tx1",
+								},
+							},
+							{
+								Payload: &types.DataTx{
+									DBName: worldstate.DefaultDBName,
+									UserID: "user1",
+									TxID:   "tx2",
+								},
+							},
+						},
 					},
-				},
-			},
-			valInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
-				},
-				{
-					Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
 				},
 			},
 			query: func(s *provenance.Store) (*provenance.TxIDLocation, error) {
@@ -1366,29 +1569,60 @@ func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
 			},
 		},
 		{
-			name: "non-existing txID",
-			txs: []*types.DataTxEnvelope{
-				{
-					Payload: &types.DataTx{
-						DBName: worldstate.DefaultDBName,
-						UserID: "user1",
-						TxID:   "tx1",
+			name: "invalid user admin tx",
+			block: &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+						},
 					},
 				},
-				{
-					Payload: &types.DataTx{
-						DBName: worldstate.DefaultDBName,
-						UserID: "user1",
-						TxID:   "tx2",
+				Payload: &types.Block_UserAdministrationTxEnvelope{
+					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+						Payload: &types.UserAdministrationTx{
+							UserID: "user1",
+							TxID:   "tx1",
+						},
 					},
 				},
 			},
-			valInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
+			query: func(s *provenance.Store) (*provenance.TxIDLocation, error) {
+				return s.GetTxIDLocation("tx1")
+			},
+			expectedData: &provenance.TxIDLocation{
+				BlockNum: 2,
+				TxIndex:  0,
+			},
+		},
+		{
+			name: "non-existing txID",
+			block: &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+						},
+					},
 				},
-				{
-					Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				Payload: &types.Block_DataTxEnvelopes{
+					DataTxEnvelopes: &types.DataTxEnvelopes{
+						Envelopes: []*types.DataTxEnvelope{
+							{
+								Payload: &types.DataTx{
+									DBName: worldstate.DefaultDBName,
+									UserID: "user1",
+									TxID:   "tx1",
+								},
+							},
+						},
+					},
 				},
 			},
 			query: func(s *provenance.Store) (*provenance.TxIDLocation, error) {
@@ -1406,21 +1640,7 @@ func TestProvenanceStoreCommitterForDataBlockWithInvalidTxs(t *testing.T) {
 			env := newCommitterTestEnv(t)
 			defer env.cleanup()
 
-			block := &types.Block{
-				Header: &types.BlockHeader{
-					BaseHeader: &types.BlockHeaderBase{
-						Number: 2,
-					},
-					ValidationInfo: tt.valInfo,
-				},
-				Payload: &types.Block_DataTxEnvelopes{
-					DataTxEnvelopes: &types.DataTxEnvelopes{
-						Envelopes: tt.txs,
-					},
-				},
-			}
-
-			_, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+			_, provenanceData, err := env.committer.constructDBAndProvenanceEntries(tt.block)
 			require.NoError(t, err)
 			require.NoError(t, env.committer.commitToProvenanceStore(2, provenanceData))
 

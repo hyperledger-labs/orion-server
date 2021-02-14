@@ -144,7 +144,12 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 
 	case *types.Block_UserAdministrationTxEnvelope:
 		if blockValidationInfo[userAdminTxIndex].Flag != types.Flag_VALID {
-			return nil, nil, nil
+			return nil, []*provenance.TxDataForProvenance{
+				{
+					IsValid: false,
+					TxID:    block.GetUserAdministrationTxEnvelope().GetPayload().GetTxID(),
+				},
+			}, nil
 		}
 
 		version := &types.Version{
@@ -157,8 +162,14 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while creating entries for the user admin transaction")
 		}
-
 		dbsUpdates = []*worldstate.DBUpdates{entries}
+
+		pData, err := identity.ConstructProvenanceEntriesForUserAdminTx(tx, version, c.db)
+		if err != nil {
+			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the user admin ttransaction")
+		}
+		provenanceData = append(provenanceData, pData)
+
 		c.logger.Debugf("constructed user admin update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
 
@@ -199,8 +210,8 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while constructing entries for the config transaction")
 		}
-
 		dbsUpdates = entries
+
 		c.logger.Debugf("constructed configuration update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
 	}

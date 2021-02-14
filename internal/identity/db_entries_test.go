@@ -5,6 +5,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -355,6 +356,256 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 				require.Equal(t, expected.Value, actual.Value)
 				require.True(t, proto.Equal(expected.Metadata, actual.Metadata))
 			}
+		})
+	}
+}
+
+func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
+	t.Parallel()
+
+	version := &types.Version{
+		BlockNum: 1,
+		TxNum:    1,
+	}
+	user1 := &types.User{
+		ID:          "user1",
+		Certificate: []byte("rawcert"),
+		Privilege: &types.Privilege{
+			DBPermission: map[string]types.Privilege_Access{
+				"db1": types.Privilege_Read,
+			},
+		},
+	}
+	user1Serialized, err := proto.Marshal(user1)
+	require.NoError(t, err)
+
+	user2 := &types.User{
+		ID:          "user2",
+		Certificate: []byte("rawcert"),
+		Privilege: &types.Privilege{
+			DBPermission: map[string]types.Privilege_Access{
+				"db2": types.Privilege_ReadWrite,
+			},
+		},
+	}
+	user2Serialized, err := proto.Marshal(user2)
+	require.NoError(t, err)
+
+	user2New := &types.User{
+		ID:          "user2",
+		Certificate: []byte("rawcertNew"),
+		Privilege: &types.Privilege{
+			DBPermission: map[string]types.Privilege_Access{
+				"db2": types.Privilege_ReadWrite,
+			},
+		},
+	}
+	user2NewSerialized, err := proto.Marshal(user2New)
+	require.NoError(t, err)
+
+	acl := &types.AccessControl{
+		ReadUsers: map[string]bool{
+			"user10": true,
+		},
+		ReadWriteUsers: map[string]bool{
+			"user11": true,
+		},
+	}
+
+	tests := []struct {
+		name     string
+		setup    func(db worldstate.DB)
+		tx       *types.UserAdministrationTx
+		expected *provenance.TxDataForProvenance
+	}{
+		{
+			name: "writes new users",
+			setup: func(db worldstate.DB) {
+			},
+			tx: &types.UserAdministrationTx{
+				UserID:    "admin",
+				TxID:      "tx1",
+				UserReads: nil,
+				UserWrites: []*types.UserWrite{
+					{
+						User: user1,
+						ACL:  acl,
+					},
+					{
+						User: user2,
+						ACL:  nil,
+					},
+				},
+				UserDeletes: nil,
+			},
+			expected: &provenance.TxDataForProvenance{
+				IsValid: true,
+				DBName:  worldstate.UsersDBName,
+				UserID:  "admin",
+				TxID:    "tx1",
+				Reads:   nil,
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "user1",
+						Value: user1Serialized,
+						Metadata: &types.Metadata{
+							Version:       version,
+							AccessControl: acl,
+						},
+					},
+					{
+						Key:   "user2",
+						Value: user2Serialized,
+						Metadata: &types.Metadata{
+							Version: version,
+						},
+					},
+				},
+				Deletes:            make(map[string]*types.Version),
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+		},
+		{
+			name: "delete existing users",
+			setup: func(db worldstate.DB) {
+				dbUpdates := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key:   string(UserNamespace) + "user1",
+								Value: user1Serialized,
+								Metadata: &types.Metadata{
+									Version: version,
+								},
+							},
+							{
+								Key:   string(UserNamespace) + "user2",
+								Value: user2Serialized,
+								Metadata: &types.Metadata{
+									Version: version,
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(dbUpdates, 1))
+			},
+			tx: &types.UserAdministrationTx{
+				UserID:    "admin",
+				TxID:      "tx1",
+				UserReads: nil,
+				UserDeletes: []*types.UserDelete{
+					{
+						UserID: "user1",
+					},
+					{
+						UserID: "user2",
+					},
+				},
+			},
+			expected: &provenance.TxDataForProvenance{
+				IsValid: true,
+				DBName:  worldstate.UsersDBName,
+				UserID:  "admin",
+				TxID:    "tx1",
+				Reads:   nil,
+				Deletes: map[string]*types.Version{
+					"user1": version,
+					"user2": version,
+				},
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+		},
+		{
+			name: "read users and write existing users",
+			setup: func(db worldstate.DB) {
+				dbUpdates := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key:   string(UserNamespace) + "user2",
+								Value: user2NewSerialized,
+								Metadata: &types.Metadata{
+									Version: version,
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(dbUpdates, 1))
+			},
+			tx: &types.UserAdministrationTx{
+				UserID: "admin",
+				TxID:   "tx1",
+				UserReads: []*types.UserRead{
+					{
+						UserID:  "user1",
+						Version: version,
+					},
+				},
+				UserWrites: []*types.UserWrite{
+					{
+						User: user2New,
+					},
+				},
+			},
+			expected: &provenance.TxDataForProvenance{
+				IsValid: true,
+				DBName:  worldstate.UsersDBName,
+				UserID:  "admin",
+				TxID:    "tx1",
+				Reads: []*provenance.KeyWithVersion{
+					{
+						Key:     "user1",
+						Version: version,
+					},
+				},
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "user2",
+						Value: user2NewSerialized,
+						Metadata: &types.Metadata{
+							Version: version,
+						},
+					},
+				},
+				OldVersionOfWrites: map[string]*types.Version{
+					"user2": version,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			defer env.cleanup()
+
+			tt.setup(env.db)
+
+			provenanceData, err := ConstructProvenanceEntriesForUserAdminTx(tt.tx, version, env.db)
+			require.NoError(t, err)
+
+			require.Len(t, provenanceData.Deletes, len(tt.expected.Deletes))
+			for expectedUser, expectedVersion := range tt.expected.Deletes {
+				ver := provenanceData.Deletes[expectedUser]
+				require.True(t, proto.Equal(expectedVersion, ver))
+			}
+			tt.expected.Deletes = nil
+			provenanceData.Deletes = nil
+
+			require.Len(t, provenanceData.OldVersionOfWrites, len(tt.expected.OldVersionOfWrites))
+			for expectedUser, expectedVersion := range tt.expected.OldVersionOfWrites {
+				ver := provenanceData.OldVersionOfWrites[expectedUser]
+				require.True(t, proto.Equal(expectedVersion, ver))
+			}
+			tt.expected.OldVersionOfWrites = nil
+			provenanceData.OldVersionOfWrites = nil
+			require.Equal(t, tt.expected, provenanceData)
 		})
 	}
 }

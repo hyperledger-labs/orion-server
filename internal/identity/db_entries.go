@@ -3,6 +3,7 @@ package identity
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.ibm.com/blockchaindb/server/internal/provenance"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -44,6 +45,72 @@ func ConstructDBEntriesForUserAdminTx(tx *types.UserAdministrationTx, version *t
 		Writes:  userWrites,
 		Deletes: userDeletes,
 	}, nil
+}
+
+// ConstructProvenanceEntriesForUserAdminTx constructs provenance entries for the transaction that manipulates
+func ConstructProvenanceEntriesForUserAdminTx(
+	tx *types.UserAdministrationTx,
+	version *types.Version,
+	db worldstate.DB,
+) (*provenance.TxDataForProvenance, error) {
+	identityQuerier := NewQuerier(db)
+	txData := &provenance.TxDataForProvenance{
+		IsValid:            true,
+		DBName:             worldstate.UsersDBName,
+		UserID:             tx.UserID,
+		TxID:               tx.TxID,
+		Deletes:            make(map[string]*types.Version),
+		OldVersionOfWrites: make(map[string]*types.Version),
+	}
+
+	for _, read := range tx.UserReads {
+		k := &provenance.KeyWithVersion{
+			Key:     read.UserID,
+			Version: read.Version,
+		}
+		txData.Reads = append(txData.Reads, k)
+	}
+
+	for _, write := range tx.UserWrites {
+		userSerialized, err := proto.Marshal(write.User)
+		if err != nil {
+			return nil, errors.Wrap(err, "error while marshaling user")
+		}
+
+		kv := &types.KVWithMetadata{
+			Key:   write.User.ID,
+			Value: userSerialized,
+			Metadata: &types.Metadata{
+				Version:       version,
+				AccessControl: write.ACL,
+			},
+		}
+		txData.Writes = append(txData.Writes, kv)
+
+		v, err := identityQuerier.GetVersion(write.User.ID)
+		if err != nil {
+			if _, ok := err.(*UserNotFoundErr); ok {
+				continue
+			}
+
+			return nil, err
+		}
+
+		txData.OldVersionOfWrites[write.User.ID] = v
+	}
+
+	for _, d := range tx.UserDeletes {
+		v, err := identityQuerier.GetVersion(d.UserID)
+		if err != nil {
+			return nil, err
+		}
+
+		// for a delete to be valid, the value must exist and hence, the version will
+		// never be nil
+		txData.Deletes[d.UserID] = v
+	}
+
+	return txData, nil
 }
 
 // ConstructDBEntriesForClusterAdmins constructs database entries for the cluster admins
