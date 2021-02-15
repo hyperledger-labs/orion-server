@@ -1513,6 +1513,267 @@ func TestProvenanceStoreCommitterForUserBlockWithValidTxs(t *testing.T) {
 	}
 }
 
+func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
+	t.Parallel()
+
+	clusterConfigWithOneNode := &types.ClusterConfig{
+		Nodes: []*types.NodeConfig{
+			{
+				ID:          "bdb-node-1",
+				Certificate: []byte("node-cert"),
+				Address:     "127.0.0.1",
+				Port:        0,
+			},
+		},
+		Admins: []*types.Admin{
+			{
+				ID:          "admin1",
+				Certificate: []byte("cert-admin1"),
+			},
+		},
+		CertAuthConfig: &types.CAConfig{
+			Roots: [][]byte{[]byte("root-ca")},
+		},
+	}
+
+	clusterConfigWithTwoNodes := proto.Clone(clusterConfigWithOneNode).(*types.ClusterConfig)
+	clusterConfigWithTwoNodes.Nodes = append(clusterConfigWithTwoNodes.Nodes, &types.NodeConfig{
+		ID:          "bdb-node-2",
+		Certificate: []byte("node-2-cert"),
+		Address:     "127.0.0.2",
+		Port:        0,
+	})
+	clusterConfigWithTwoNodes.Admins[0].Certificate = []byte("cert-new-admin1")
+	clusterConfigWithTwoNodesSerialized, err := proto.Marshal(clusterConfigWithTwoNodes)
+	require.NoError(t, err)
+
+	admin1Serialized, err := proto.Marshal(
+		&types.User{
+			ID:          "admin1",
+			Certificate: []byte("cert-admin1"),
+			Privilege: &types.Privilege{
+				Admin: true,
+			},
+		},
+	)
+	require.NoError(t, err)
+	admin1NewSerialized, err := proto.Marshal(
+		&types.User{
+			ID:          "admin1",
+			Certificate: []byte("cert-new-admin1"),
+			Privilege: &types.Privilege{
+				Admin: true,
+			},
+		},
+	)
+	require.NoError(t, err)
+
+	setup := func(env *committerTestEnv) {
+		configUpdates := []*worldstate.DBUpdates{
+			{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   worldstate.ConfigKey,
+						Value: clusterConfigWithTwoNodesSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+			},
+			{
+				DBName: worldstate.UsersDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + "admin1",
+						Value: admin1NewSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, env.committer.db.Commit(configUpdates, 1))
+
+		provenanceData := []*provenance.TxDataForProvenance{
+			{
+				IsValid: true,
+				DBName:  worldstate.ConfigDBName,
+				UserID:  "user1",
+				TxID:    "tx1",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   worldstate.ConfigKey,
+						Value: clusterConfigWithTwoNodesSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+				Deletes:            make(map[string]*types.Version),
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+			{
+				IsValid: true,
+				DBName:  worldstate.UsersDBName,
+				UserID:  "user1",
+				TxID:    "tx1",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "admin1",
+						Value: admin1NewSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+				Deletes:            make(map[string]*types.Version),
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+		}
+		require.NoError(t, env.committer.provenanceStore.Commit(1, provenanceData))
+	}
+
+	tests := []struct {
+		name         string
+		tx           *types.ConfigTx
+		valInfo      *types.ValidationInfo
+		query        func(s *provenance.Store) ([]*types.ValueWithMetadata, error)
+		expectedData []*types.ValueWithMetadata
+	}{
+		{
+			name: "previous link with the already committed config tx",
+			tx: &types.ConfigTx{
+				UserID: "user1",
+				TxID:   "tx1",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    0,
+				},
+				NewConfig: clusterConfigWithOneNode,
+			},
+			valInfo: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetPreviousValues(
+					worldstate.ConfigDBName,
+					worldstate.ConfigKey,
+					&types.Version{
+						BlockNum: 2,
+						TxNum:    0,
+					},
+					-1,
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value: clusterConfigWithTwoNodesSerialized,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "next link with the admin present in committed config tx",
+			tx: &types.ConfigTx{
+				UserID: "user1",
+				TxID:   "tx1",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    0,
+				},
+				NewConfig: clusterConfigWithOneNode,
+			},
+			valInfo: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetNextValues(
+					worldstate.UsersDBName,
+					"admin1",
+					&types.Version{
+						BlockNum: 1,
+						TxNum:    0,
+					},
+					-1,
+				)
+			},
+			expectedData: []*types.ValueWithMetadata{
+				{
+					Value: admin1Serialized,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newCommitterTestEnv(t)
+			defer env.cleanup()
+			setup(env)
+
+			block := &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: []*types.ValidationInfo{
+						tt.valInfo,
+					},
+				},
+				Payload: &types.Block_ConfigTxEnvelope{
+					ConfigTxEnvelope: &types.ConfigTxEnvelope{
+						Payload: tt.tx,
+					},
+				},
+			}
+
+			_, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToProvenanceStore(2, provenanceData))
+
+			actualData, err := tt.query(env.committer.provenanceStore)
+			require.NoError(t, err)
+			require.Len(t, actualData, len(tt.expectedData))
+			for i, expected := range tt.expectedData {
+				require.True(t, proto.Equal(expected, actualData[i]))
+			}
+
+			txIDs, err := env.committer.provenanceStore.GetTxIDsSubmittedByUser("user1")
+			require.NoError(t, err)
+			require.ElementsMatch(t, []string{"tx1"}, txIDs)
+		})
+	}
+}
+
 func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 	t.Parallel()
 
@@ -1584,6 +1845,36 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 						Payload: &types.UserAdministrationTx{
+							UserID: "user1",
+							TxID:   "tx1",
+						},
+					},
+				},
+			},
+			query: func(s *provenance.Store) (*provenance.TxIDLocation, error) {
+				return s.GetTxIDLocation("tx1")
+			},
+			expectedData: &provenance.TxIDLocation{
+				BlockNum: 2,
+				TxIndex:  0,
+			},
+		},
+		{
+			name: "invalid config tx",
+			block: &types.Block{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 2,
+					},
+					ValidationInfo: []*types.ValidationInfo{
+						{
+							Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+						},
+					},
+				},
+				Payload: &types.Block_ConfigTxEnvelope{
+					ConfigTxEnvelope: &types.ConfigTxEnvelope{
+						Payload: &types.ConfigTx{
 							UserID: "user1",
 							TxID:   "tx1",
 						},
@@ -1838,6 +2129,118 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 			tt.setup(env.db)
 
 			provenanceData, err := constructProvenanceEntriesForDataTx(env.db, tt.tx, tt.version, tt.dirtyWriteKeyVersion)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedProvenanceData, provenanceData)
+		})
+	}
+}
+
+func TestConstructProvenanceEntriesForConfigTx(t *testing.T) {
+	clusterConfig := &types.ClusterConfig{
+		Nodes: []*types.NodeConfig{
+			{
+				ID:          "bdb-node-1",
+				Certificate: []byte("node-cert"),
+				Address:     "127.0.0.1",
+				Port:        0,
+			},
+		},
+		Admins: []*types.Admin{
+			{
+				ID:          "admin1",
+				Certificate: []byte("cert-admin1"),
+			},
+		},
+		CertAuthConfig: &types.CAConfig{
+			Roots: [][]byte{[]byte("root-ca")},
+		},
+	}
+	clusterConfigSerialized, err := proto.Marshal(clusterConfig)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name                   string
+		tx                     *types.ConfigTx
+		version                *types.Version
+		expectedProvenanceData *provenance.TxDataForProvenance
+	}{
+		{
+			name: "first cluster config tx",
+			tx: &types.ConfigTx{
+				UserID:    "user1",
+				TxID:      "tx1",
+				NewConfig: clusterConfig,
+			},
+			version: &types.Version{
+				BlockNum: 1,
+				TxNum:    0,
+			},
+			expectedProvenanceData: &provenance.TxDataForProvenance{
+				IsValid: true,
+				DBName:  worldstate.ConfigDBName,
+				UserID:  "user1",
+				TxID:    "tx1",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   worldstate.ConfigKey,
+						Value: clusterConfigSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+		},
+		{
+			name: "updating existing cluster config",
+			tx: &types.ConfigTx{
+				UserID: "user1",
+				TxID:   "tx1",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    0,
+				},
+				NewConfig: clusterConfig,
+			},
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    0,
+			},
+			expectedProvenanceData: &provenance.TxDataForProvenance{
+				IsValid: true,
+				DBName:  worldstate.ConfigDBName,
+				UserID:  "user1",
+				TxID:    "tx1",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   worldstate.ConfigKey,
+						Value: clusterConfigSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+				OldVersionOfWrites: map[string]*types.Version{
+					worldstate.ConfigKey: {
+						BlockNum: 1,
+						TxNum:    0,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			provenanceData, err := constructProvenanceEntriesForConfigTx(tt.tx, tt.version)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedProvenanceData, provenanceData)
 		})

@@ -225,32 +225,8 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 					Certificate: []byte("certificate 2"),
 				},
 			},
-			version: sampleVersion,
-			expectedUpdates: &worldstate.DBUpdates{
-				DBName: worldstate.UsersDBName,
-				Writes: []*worldstate.KVWithMetadata{
-					{
-						Key:   string(UserNamespace) + "admin1",
-						Value: sampleAdmin("admin1", []byte("certificate 1")),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    1,
-							},
-						},
-					},
-					{
-						Key:   string(UserNamespace) + "admin2",
-						Value: sampleAdmin("admin2", []byte("certificate 2")),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    1,
-							},
-						},
-					},
-				},
-			},
+			version:         sampleVersion,
+			expectedUpdates: nil,
 		},
 		{
 			name: "add, update, and delete admins",
@@ -588,6 +564,202 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 			tt.setup(env.db)
 
 			provenanceData, err := ConstructProvenanceEntriesForUserAdminTx(tt.tx, version, env.db)
+			require.NoError(t, err)
+
+			require.Len(t, provenanceData.Deletes, len(tt.expected.Deletes))
+			for expectedUser, expectedVersion := range tt.expected.Deletes {
+				ver := provenanceData.Deletes[expectedUser]
+				require.True(t, proto.Equal(expectedVersion, ver))
+			}
+			tt.expected.Deletes = nil
+			provenanceData.Deletes = nil
+
+			require.Len(t, provenanceData.OldVersionOfWrites, len(tt.expected.OldVersionOfWrites))
+			for expectedUser, expectedVersion := range tt.expected.OldVersionOfWrites {
+				ver := provenanceData.OldVersionOfWrites[expectedUser]
+				require.True(t, proto.Equal(expectedVersion, ver))
+			}
+			tt.expected.OldVersionOfWrites = nil
+			provenanceData.OldVersionOfWrites = nil
+			require.Equal(t, tt.expected, provenanceData)
+		})
+	}
+}
+
+func TestConstructProvenanceEntriesForClusterAdmins(t *testing.T) {
+	t.Parallel()
+
+	version := &types.Version{
+		BlockNum: 1,
+		TxNum:    1,
+	}
+	admin1 := &types.User{
+		ID:          "admin1",
+		Certificate: []byte("rawcert-admin1"),
+		Privilege: &types.Privilege{
+			Admin: true,
+		},
+	}
+	admin1Serialized, err := proto.Marshal(admin1)
+	require.NoError(t, err)
+
+	admin2 := &types.User{
+		ID:          "admin2",
+		Certificate: []byte("rawcert-admin2"),
+		Privilege: &types.Privilege{
+			Admin: true,
+		},
+	}
+	admin2Serialized, err := proto.Marshal(admin2)
+	require.NoError(t, err)
+
+	admin2New := &types.User{
+		ID:          "admin2",
+		Certificate: []byte("rawcertNew-admin2"),
+		Privilege: &types.Privilege{
+			Admin: true,
+		},
+	}
+	admin2NewSerialized, err := proto.Marshal(admin2New)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		setup        func(db worldstate.DB)
+		userID       string
+		txID         string
+		adminUpdates *worldstate.DBUpdates
+		expected     *provenance.TxDataForProvenance
+	}{
+		{
+			name: "add new admins",
+			setup: func(db worldstate.DB) {
+			},
+			userID: "admin",
+			txID:   "tx1",
+			adminUpdates: &worldstate.DBUpdates{
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(UserNamespace) + "admin1",
+						Value: admin1Serialized,
+						Metadata: &types.Metadata{
+							Version: version,
+						},
+					},
+				},
+			},
+			expected: &provenance.TxDataForProvenance{
+				IsValid: true,
+				DBName:  worldstate.UsersDBName,
+				UserID:  "admin",
+				TxID:    "tx1",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "admin1",
+						Value: admin1Serialized,
+						Metadata: &types.Metadata{
+							Version: version,
+						},
+					},
+				},
+				Deletes:            make(map[string]*types.Version),
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+		},
+		{
+			name: "update and delete admins",
+			setup: func(db worldstate.DB) {
+				adminUpdates := &worldstate.DBUpdates{
+					DBName: worldstate.UsersDBName,
+					Writes: []*worldstate.KVWithMetadata{
+						{
+							Key:   string(UserNamespace) + "admin1",
+							Value: admin1Serialized,
+							Metadata: &types.Metadata{
+								Version: version,
+							},
+						},
+						{
+							Key:   string(UserNamespace) + "admin2",
+							Value: admin2Serialized,
+							Metadata: &types.Metadata{
+								Version: version,
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit([]*worldstate.DBUpdates{adminUpdates}, 1))
+			},
+			userID: "admin",
+			txID:   "tx1",
+			adminUpdates: &worldstate.DBUpdates{
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(UserNamespace) + "admin2",
+						Value: admin2NewSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+				Deletes: []string{string(UserNamespace) + "admin1"},
+			},
+			expected: &provenance.TxDataForProvenance{
+				IsValid: true,
+				DBName:  worldstate.UsersDBName,
+				UserID:  "admin",
+				TxID:    "tx1",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "admin2",
+						Value: admin2NewSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+				Deletes: map[string]*types.Version{
+					"admin1": version,
+				},
+				OldVersionOfWrites: map[string]*types.Version{
+					"admin2": version,
+				},
+			},
+		},
+		{
+			name: "no changes in the admin",
+			setup: func(db worldstate.DB) {
+			},
+			userID:       "admin",
+			txID:         "tx1",
+			adminUpdates: nil,
+			expected: &provenance.TxDataForProvenance{
+				IsValid:            true,
+				DBName:             worldstate.UsersDBName,
+				UserID:             "admin",
+				TxID:               "tx1",
+				Writes:             nil,
+				Deletes:            make(map[string]*types.Version),
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			env := newTestEnv(t)
+			defer env.cleanup()
+
+			tt.setup(env.db)
+
+			provenanceData, err := ConstructProvenanceEntriesForClusterAdmins(tt.userID, tt.txID, tt.adminUpdates, env.db)
 			require.NoError(t, err)
 
 			require.Len(t, provenanceData.Deletes, len(tt.expected.Deletes))

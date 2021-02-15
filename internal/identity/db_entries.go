@@ -1,6 +1,8 @@
 package identity
 
 import (
+	"strings"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/provenance"
@@ -125,6 +127,9 @@ func ConstructDBEntriesForClusterAdmins(oldAdmins, newAdmins []*types.Admin, ver
 
 	for _, oldAdm := range oldAdmins {
 		if _, ok := newAdms[oldAdm.ID]; ok {
+			if proto.Equal(oldAdm, newAdms[oldAdm.ID]) {
+				delete(newAdms, oldAdm.ID)
+			}
 			continue
 		}
 
@@ -166,4 +171,65 @@ func ConstructDBEntriesForClusterAdmins(oldAdmins, newAdmins []*types.Admin, ver
 		Writes:  kvWrites,
 		Deletes: deletes,
 	}, nil
+}
+
+// ConstructProvenanceEntriesForClusterAdmins constructs provenance entries for the transaction that manipulates
+// cluster admins
+func ConstructProvenanceEntriesForClusterAdmins(
+	userID, txID string,
+	adminUpdates *worldstate.DBUpdates,
+	db worldstate.DB,
+) (*provenance.TxDataForProvenance, error) {
+	identityQuerier := NewQuerier(db)
+	txData := &provenance.TxDataForProvenance{
+		IsValid:            true,
+		DBName:             worldstate.UsersDBName,
+		UserID:             userID,
+		TxID:               txID,
+		Deletes:            make(map[string]*types.Version),
+		OldVersionOfWrites: make(map[string]*types.Version),
+	}
+
+	if adminUpdates == nil {
+		return txData, nil
+	}
+
+	for _, w := range adminUpdates.Writes {
+		adminID := getUserIDFromCompositeUserKey(w.Key)
+		txData.Writes = append(
+			txData.Writes,
+			&types.KVWithMetadata{
+				Key:      adminID,
+				Value:    w.Value,
+				Metadata: w.Metadata,
+			},
+		)
+
+		version, err := identityQuerier.GetVersion(adminID)
+		if err != nil {
+			if _, ok := err.(*UserNotFoundErr); ok {
+				continue
+			}
+
+			return nil, err
+		}
+		txData.OldVersionOfWrites[adminID] = version
+	}
+
+	for _, d := range adminUpdates.Deletes {
+		adminID := getUserIDFromCompositeUserKey(d)
+		version, err := identityQuerier.GetVersion(adminID)
+		if err != nil {
+			// admin to be deleted must exist
+			return nil, err
+		}
+		txData.Deletes[adminID] = version
+	}
+
+	return txData, nil
+}
+
+func getUserIDFromCompositeUserKey(ckey string) string {
+	strs := strings.Split(ckey, string(UserNamespace))
+	return strs[1]
 }

@@ -166,7 +166,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 
 		pData, err := identity.ConstructProvenanceEntriesForUserAdminTx(tx, version, c.db)
 		if err != nil {
-			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the user admin ttransaction")
+			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the user admin transaction")
 		}
 		provenanceData = append(provenanceData, pData)
 
@@ -192,7 +192,12 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 
 	case *types.Block_ConfigTxEnvelope:
 		if blockValidationInfo[configTxIndex].Flag != types.Flag_VALID {
-			return nil, nil, nil
+			return nil, []*provenance.TxDataForProvenance{
+				{
+					IsValid: false,
+					TxID:    block.GetConfigTxEnvelope().GetPayload().GetTxID(),
+				},
+			}, nil
 		}
 
 		version := &types.Version{
@@ -206,11 +211,26 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		}
 
 		tx := block.GetConfigTxEnvelope().GetPayload()
-		entries, err := constructDBEntriesForConfigTx(tx, committedConfig, version)
+		adminUpdates, configUpdates, err := constructDBEntriesForConfigTx(tx, committedConfig, version)
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while constructing entries for the config transaction")
 		}
-		dbsUpdates = entries
+		dbsUpdates = append(dbsUpdates, configUpdates)
+		if adminUpdates != nil {
+			dbsUpdates = append(dbsUpdates, adminUpdates)
+		}
+
+		pData, err := constructProvenanceEntriesForConfigTx(tx, version)
+		if err != nil {
+			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the config transaction")
+		}
+		provenanceData = append(provenanceData, pData)
+
+		adminPData, err := identity.ConstructProvenanceEntriesForClusterAdmins(tx.UserID, tx.TxID, adminUpdates, c.db)
+		if err != nil {
+			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for admins in config transaction")
+		}
+		provenanceData = append(provenanceData, adminPData)
 
 		c.logger.Debugf("constructed configuration update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
@@ -266,15 +286,15 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 	}
 }
 
-func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterConfig, version *types.Version) ([]*worldstate.DBUpdates, error) {
+func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterConfig, version *types.Version) (*worldstate.DBUpdates, *worldstate.DBUpdates, error) {
 	adminUpdates, err := identity.ConstructDBEntriesForClusterAdmins(oldConfig.Admins, tx.NewConfig.Admins, version)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	newConfigSerialized, err := proto.Marshal(tx.NewConfig)
 	if err != nil {
-		return nil, errors.Wrap(err, "error while marshaling new configuration")
+		return nil, nil, errors.Wrap(err, "error while marshaling new configuration")
 	}
 
 	configUpdates := &worldstate.DBUpdates{
@@ -290,10 +310,7 @@ func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterC
 		},
 	}
 
-	return []*worldstate.DBUpdates{
-		adminUpdates,
-		configUpdates,
-	}, nil
+	return adminUpdates, configUpdates, nil
 }
 
 func constructProvenanceEntriesForDataTx(
@@ -367,6 +384,38 @@ func constructProvenanceEntriesForDataTx(
 	}
 
 	return txData, nil
+}
+
+func constructProvenanceEntriesForConfigTx(
+	tx *types.ConfigTx,
+	version *types.Version,
+) (*provenance.TxDataForProvenance, error) {
+	configSerialized, err := proto.Marshal(tx.NewConfig)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while marshaling new cluster configuration")
+	}
+
+	pData := &provenance.TxDataForProvenance{
+		IsValid: true,
+		DBName:  worldstate.ConfigDBName,
+		UserID:  tx.UserID,
+		TxID:    tx.TxID,
+		Writes: []*types.KVWithMetadata{
+			{
+				Key:   worldstate.ConfigKey,
+				Value: configSerialized,
+				Metadata: &types.Metadata{
+					Version: version,
+				},
+			},
+		},
+		OldVersionOfWrites: make(map[string]*types.Version),
+	}
+
+	if tx.ReadOldConfigVersion != nil {
+		pData.OldVersionOfWrites[worldstate.ConfigKey] = tx.ReadOldConfigVersion
+	}
+	return pData, nil
 }
 
 func getVersion(
