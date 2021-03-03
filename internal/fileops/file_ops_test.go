@@ -3,88 +3,102 @@
 package fileops
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestIsDirEmpty(t *testing.T) {
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
+
 	t.Run("non-empty directory", func(t *testing.T) {
-		t.Parallel()
-		isEmpty, err := IsDirEmpty("./testdata/dir")
+		isEmpty, err := IsDirEmpty(path.Join(testDir, "dir"))
 		require.NoError(t, err)
 		require.False(t, isEmpty)
 	})
 
 	t.Run("empty directory", func(t *testing.T) {
-		t.Parallel()
-		require.NoError(t, CreateDir("./testdata/z"))
-		isEmpty, err := IsDirEmpty("./testdata/z")
+		require.NoError(t, CreateDir(path.Join(testDir, "z")))
+		isEmpty, err := IsDirEmpty(path.Join(testDir, "z"))
 		require.NoError(t, err)
 		require.True(t, isEmpty)
-		require.NoError(t, os.RemoveAll("./testdata/z"))
 	})
 
 	t.Run("error case", func(t *testing.T) {
-		t.Parallel()
-		_, err := IsDirEmpty("xx")
-		require.Contains(t, err.Error(), "error opening dir [xx]")
+		dirPath := path.Join(testDir, "xx")
+		_, err := IsDirEmpty(dirPath)
+		require.EqualError(t, err,
+			fmt.Sprintf("error opening dir [%s]: open %s: no such file or directory", dirPath, dirPath))
 	})
 }
 
 func TestListSubdirs(t *testing.T) {
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
+
 	t.Run("subdirs exist", func(t *testing.T) {
-		t.Parallel()
-		dirs, err := ListSubdirs("./testdata/dir")
+		dirs, err := ListSubdirs(path.Join(testDir, "dir"))
 		require.NoError(t, err)
 		expectedDirs := []string{"a", "b", "c", "d"}
 		require.Equal(t, expectedDirs, dirs)
 	})
 
 	t.Run("subdirs do not exist", func(t *testing.T) {
-		t.Parallel()
-		dirs, err := ListSubdirs("./testdata/dir/a")
+		dirs, err := ListSubdirs(path.Join(testDir, "dir", "a"))
 		require.NoError(t, err)
 		require.Empty(t, dirs)
 	})
 
 	t.Run("error case", func(t *testing.T) {
-		t.Parallel()
-		_, err := ListSubdirs("xx")
-		require.Contains(t, err.Error(), "error reading dir [xx]")
+		dirPath := path.Join(testDir, "xx")
+		_, err := ListSubdirs(dirPath)
+		require.EqualError(t, err,
+			fmt.Sprintf("error reading dir [%s]: open %s: no such file or directory", dirPath, dirPath))
 	})
 }
 
 func TestFileExists(t *testing.T) {
-	exists, err := Exists("./testdata/dir")
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
+
+	exists, err := Exists(path.Join(testDir, "dir"))
 	require.NoError(t, err)
 	require.True(t, exists)
 
-	exists, err = Exists("./testdata/dir/e")
+	exists, err = Exists(path.Join(testDir, "dir", "e"))
 	require.NoError(t, err)
 	require.True(t, exists)
 
-	exists, err = Exists("xx")
+	exists, err = Exists(path.Join(testDir, "dir", "xx"))
 	require.NoError(t, err)
 	require.False(t, exists)
 }
 
 func TestCreateDir(t *testing.T) {
-	require.DirExists(t, "./testdata/dir")
-	require.NoError(t, CreateDir("./testdata/dir"))
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
 
-	require.NoError(t, CreateDir("./testdata/tmp"))
-	require.DirExists(t, "./testdata/tmp")
-	require.NoError(t, os.RemoveAll("./testdata/tmp"))
+	require.DirExists(t, path.Join(testDir, "dir"))
+	require.NoError(t, CreateDir(path.Join(testDir, "dir")))
 
-	require.NoError(t, CreateDir("./testdata/tmp/"))
-	require.DirExists(t, "./testdata/tmp")
-	require.NoError(t, os.RemoveAll("./testdata/tmp"))
+	require.NoError(t, CreateDir(path.Join(testDir, "tmp")))
+	require.DirExists(t, path.Join(testDir, "tmp"))
+	require.NoError(t, os.RemoveAll(path.Join(testDir, "tmp")))
+
+	require.NoError(t, CreateDir(path.Join(testDir, "tmp")))
+	require.DirExists(t, path.Join(testDir, "tmp"))
+	require.NoError(t, os.RemoveAll(path.Join(testDir, "tmp")))
 }
 
 func TestOpenFile(t *testing.T) {
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
+
 	testCases := []struct {
 		description  string
 		filePath     string
@@ -93,13 +107,13 @@ func TestOpenFile(t *testing.T) {
 	}{
 		{
 			description:  "opening an existing file",
-			filePath:     "./testdata/dir/e",
+			filePath:     path.Join(testDir, "dir", "e"),
 			permission:   0644,
 			existingFile: true,
 		},
 		{
 			description:  "opening a new file",
-			filePath:     "./testdata/new-file",
+			filePath:     path.Join(testDir, "dir", "new-file"),
 			permission:   0755,
 			existingFile: false,
 		},
@@ -127,6 +141,9 @@ func TestOpenFile(t *testing.T) {
 }
 
 func TestCreateFile(t *testing.T) {
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
+
 	tests := []struct {
 		name         string
 		filePath     string
@@ -135,25 +152,22 @@ func TestCreateFile(t *testing.T) {
 	}{
 		{
 			name:         "creating a new file",
-			filePath:     "./testdata/new-file",
+			filePath:     path.Join(testDir, "new-File"),
 			existingFile: false,
 			expectedErr:  "",
 		},
 		{
 			name:         "file already exist",
-			filePath:     "./testdata/dir/e",
+			filePath:     path.Join(testDir, "dir", "e"),
 			existingFile: true,
-			expectedErr:  "file ./testdata/dir/e exist",
+			expectedErr:  "/dir/e exist",
 		},
 	}
 
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			switch tt.existingFile {
-			case false:
-				defer os.RemoveAll(tt.filePath)
-			default:
+			if tt.existingFile {
 				require.FileExists(t, tt.filePath)
 			}
 
@@ -167,19 +181,8 @@ func TestCreateFile(t *testing.T) {
 }
 
 func TestRemove(t *testing.T) {
-	var cleanup func()
-
-	setup := func() {
-		filePath := "./testdata/toberemovedfile"
-		dirPath := "./testdata/toberemoveddir"
-		require.NoError(t, CreateFile(filePath))
-		require.NoError(t, CreateDir(dirPath))
-
-		cleanup = func() {
-			os.RemoveAll(filePath)
-			os.RemoveAll(dirPath)
-		}
-	}
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
 
 	var tests = []struct {
 		name        string
@@ -188,28 +191,25 @@ func TestRemove(t *testing.T) {
 	}{
 		{
 			name:        "removing a file",
-			filePath:    "./testdata/toberemovedfile",
+			filePath:    path.Join(testDir, "dir", "e"),
 			errExpected: false,
 		},
 		{
 			name:        "removing an empty dir",
-			filePath:    "./testdata/toberemoveddir",
+			filePath:    path.Join(testDir, "dir", "a"),
 			errExpected: false,
 		},
 		{
 			name:        "removing a non-existing file",
-			filePath:    "./testdata/doesnotexist",
+			filePath:    path.Join(testDir, "dir", "doesnotexist"),
 			errExpected: true,
 		},
 		{
 			name:        "removing an non-empty dir",
-			filePath:    "./testdata/",
+			filePath:    path.Join(testDir, "dir"),
 			errExpected: true,
 		},
 	}
-
-	setup()
-	defer cleanup()
 
 	for _, tt := range tests {
 		tt := tt
@@ -225,17 +225,8 @@ func TestRemove(t *testing.T) {
 }
 
 func TestRemoveAll(t *testing.T) {
-	var cleanup func()
-
-	setup := func() {
-		require.NoError(t, CreateDir("./testdata/toberemoveddir"))
-		require.NoError(t, CreateDir("./testdata/toberemoveddir/a"))
-		require.NoError(t, CreateFile("./testdata/toberemoveddir/b"))
-
-		cleanup = func() {
-			os.RemoveAll("./testdata/toberemoveddir")
-		}
-	}
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
 
 	var tests = []struct {
 		name     string
@@ -243,17 +234,14 @@ func TestRemoveAll(t *testing.T) {
 	}{
 		{
 			name:     "removing an non-empty directory",
-			filePath: "./testdata/toberemoveddir",
+			filePath: path.Join(testDir, "dir"),
 		},
 		{
 			name:     "removing a non-existing file",
-			filePath: "./testdata/doesnotexist",
+			filePath: path.Join(testDir, "doesnotexist"),
 			// os.RemoveAll does not return error if file does not exist
 		},
 	}
-
-	setup()
-	defer cleanup()
 
 	for _, tt := range tests {
 		tt := tt
@@ -264,33 +252,25 @@ func TestRemoveAll(t *testing.T) {
 }
 
 func TestWrite(t *testing.T) {
-	var cleanup func()
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
 
 	setup := func() (*os.File, *os.File) {
-		contentFilePath := "./testdata/contentfile"
+		contentFilePath := path.Join(testDir, "contentfile")
 		contentFile, err := OpenFile(contentFilePath, 0644)
 		require.NoError(t, err)
 		l, err := contentFile.Write([]byte("hello"))
 		require.NoError(t, err)
 		require.Equal(t, len([]byte("hello")), l)
 
-		emptyFilePath := "./testdata/emptyfile"
+		emptyFilePath := path.Join(testDir, "emptyfile")
 		emptyFile, err := OpenFile(emptyFilePath, 0644)
 		require.NoError(t, err)
-
-		cleanup = func() {
-			contentFile.Close()
-			emptyFile.Close()
-
-			defer os.RemoveAll(contentFilePath)
-			defer os.RemoveAll(emptyFilePath)
-		}
 
 		return contentFile, emptyFile
 	}
 
 	contentFile, emptyFile := setup()
-	defer cleanup()
 
 	var tests = []struct {
 		name            string
@@ -327,26 +307,21 @@ func TestWrite(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	var cleanup func()
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
 
 	setup := func() *os.File {
-		contentFilePath := "./testdata/contentfile"
+		contentFilePath := path.Join(testDir, "contentfile")
 		contentFile, err := OpenFile(contentFilePath, 0644)
 		require.NoError(t, err)
 		l, err := contentFile.Write([]byte("helloworld"))
 		require.NoError(t, err)
 		require.Equal(t, len([]byte("helloworld")), l)
 
-		cleanup = func() {
-			contentFile.Close()
-			defer os.RemoveAll(contentFilePath)
-		}
-
 		return contentFile
 	}
 
 	contentFile := setup()
-	defer cleanup()
 
 	var tests = []struct {
 		name            string
@@ -388,16 +363,51 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestSyncDir(t *testing.T) {
+	testDir := prepareTestDir(t)
+	defer os.RemoveAll(testDir)
+
 	t.Run("green-path", func(t *testing.T) {
-		testPath := "./testdata/dir"
+		testPath := path.Join(testDir, "dir")
 		require.NoError(t, SyncDir(testPath))
 	})
 
 	t.Run("non-existent-dir", func(t *testing.T) {
-		require.EqualError(
-			t,
-			SyncDir("non-existent-dir"),
-			"error while opening dir:non-existent-dir: open non-existent-dir: no such file or directory",
-		)
+		dirPath := path.Join(testDir, "non-existent-dir")
+		err := SyncDir(dirPath)
+		require.EqualError(t, err,
+			fmt.Sprintf("error while opening dir: %s: open %s: no such file or directory", dirPath, dirPath))
 	})
+}
+
+func prepareTestDir(t *testing.T) string {
+	tempDir, err := ioutil.TempDir(os.TempDir(), "UnitTest-fileops")
+	require.NoError(t, err)
+
+	removeAndFailNow := func() {
+		os.RemoveAll(tempDir)
+		t.FailNow()
+	}
+
+	if err := os.Mkdir(path.Join(tempDir, "dir"), 0755); err != nil {
+		removeAndFailNow()
+	}
+	if err := os.Mkdir(path.Join(tempDir, "dir", "a"), 0755); err != nil {
+		removeAndFailNow()
+	}
+	if err := os.Mkdir(path.Join(tempDir, "dir", "b"), 0755); err != nil {
+		removeAndFailNow()
+	}
+	if err := os.Mkdir(path.Join(tempDir, "dir", "c"), 0755); err != nil {
+		removeAndFailNow()
+	}
+	if err := os.Mkdir(path.Join(tempDir, "dir", "d"), 0755); err != nil {
+		removeAndFailNow()
+	}
+	if file, err := os.OpenFile(path.Join(tempDir, "dir", "e"), os.O_CREATE, 0644); err != nil {
+		removeAndFailNow()
+	} else {
+		defer file.Close()
+	}
+
+	return tempDir
 }

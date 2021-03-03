@@ -175,18 +175,18 @@ func Truncate(f *os.File, toSize int64) error {
 func SyncDir(dirPath string) error {
 	dir, err := os.Open(dirPath)
 	if err != nil {
-		return errors.Wrapf(err, "error while opening dir:%s", dirPath)
+		return errors.Wrapf(err, "error while opening dir: %s", dirPath)
 	}
 
 	if err := dir.Sync(); err != nil {
 		if closeErr := dir.Close(); closeErr != nil {
 			log.Printf("error while closing the directory [%s]", dir.Name())
 		}
-		return errors.Wrapf(err, "error while synching dir:%s", dirPath)
+		return errors.Wrapf(err, "error while synching dir: %s", dirPath)
 	}
 
 	if err := dir.Close(); err != nil {
-		return errors.Wrapf(err, "error while closing dir:%s", dirPath)
+		return errors.Wrapf(err, "error while closing dir: %s", dirPath)
 	}
 
 	return nil
