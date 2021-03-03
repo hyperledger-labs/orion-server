@@ -6,10 +6,11 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"io/ioutil"
 	"path"
 	"testing"
+
+	"github.ibm.com/blockchaindb/server/pkg/logger"
 
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"

@@ -3,8 +3,9 @@
 package certificateauthority
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
@@ -31,7 +32,6 @@ func TestNewCACertCollection(t *testing.T) {
 		err = caCertCollection.VerifyCollection()
 		require.NoError(t, err)
 	})
-
 
 	t.Run("not a CA certificate", func(t *testing.T) {
 		caCertCollection, err := NewCACertCollection([][]byte{userCert.Raw}, nil)

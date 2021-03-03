@@ -31,8 +31,7 @@ func TestSendHTTPResponse(t *testing.T) {
 				Header: &types.ResponseHeader{
 					NodeID: "testID",
 				},
-				Response: MarshalOrPanic(&types.GetDBStatusResponse{
-				}),
+				Response: MarshalOrPanic(&types.GetDBStatusResponse{}),
 			}),
 		}
 		SendHTTPResponse(w, http.StatusOK, dbStatus)

@@ -3,9 +3,10 @@
 package cryptoservice_test
 
 import (
-	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"net/http"
 	"testing"
+
+	"github.ibm.com/blockchaindb/server/pkg/logger"
 
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/httphandler"

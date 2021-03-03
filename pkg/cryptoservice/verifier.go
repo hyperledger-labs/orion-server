@@ -4,6 +4,7 @@ package cryptoservice
 
 import (
 	"crypto/x509"
+
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 
 	"github.ibm.com/blockchaindb/server/pkg/crypto"

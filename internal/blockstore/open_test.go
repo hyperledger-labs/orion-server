@@ -5,11 +5,12 @@ package blockstore
 import (
 	"encoding/binary"
 	"fmt"
-	"github.ibm.com/blockchaindb/server/internal/errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.ibm.com/blockchaindb/server/internal/errors"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
