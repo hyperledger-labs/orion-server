@@ -8,9 +8,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/certificateauthority"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
+	"github.ibm.com/blockchaindb/server/pkg/certificateauthority"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
