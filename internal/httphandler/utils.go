@@ -196,6 +196,26 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			UserID:       querierUserID,
 			TargetUserID: params["userId"],
 		}
+	case constants.GetMostRecentUserOrNode:
+		version, err := getVersion(params)
+		if err != nil {
+			SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
+		var queryType types.GetMostRecentUserOrNodeQuery_Type
+		if params["type"] == "node" {
+			queryType = types.GetMostRecentUserOrNodeQuery_NODE
+		} else {
+			queryType = types.GetMostRecentUserOrNodeQuery_USER
+		}
+
+		payload = &types.GetMostRecentUserOrNodeQuery{
+			Type:    queryType,
+			UserID:  querierUserID,
+			ID:      params["id"],
+			Version: version,
+		}
 	}
 
 	err, status := VerifyRequestSignature(signVerifier, querierUserID, signature, payload)

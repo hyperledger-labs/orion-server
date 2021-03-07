@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
+	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
@@ -46,6 +47,11 @@ func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Ha
 		"transactionnumber", "{txnum:[0-9]+}",
 		"mostrecent", "{mostrecent:true}",
 	}
+
+	version := []string{
+		"blocknumber", "{blknum:[0-9]+}",
+		"transactionnumber", "{txnum:[0-9]+}",
+	}
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(versionAndDirectionMatcher...)
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(mostRecentMatcher...)
 	handler.router.HandleFunc(constants.GetHistoricalData, handler.getHistoricalData).Methods(http.MethodGet).Queries(versionAndDirectionMatcher[:4]...)
@@ -57,6 +63,7 @@ func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Ha
 	handler.router.HandleFunc(constants.GetDataWrittenBy, handler.getDataWrittenByUser).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetDataDeletedBy, handler.getDataDeletedByUser).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetTxIDsSubmittedBy, handler.getTxIDsSubmittedBy).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetMostRecentUserOrNode, handler.getMostRecentUserOrNode).Methods(http.MethodGet).Queries(version...)
 
 	return handler
 }
@@ -206,4 +213,27 @@ func processInternalError(w http.ResponseWriter, r *http.Request, err error) {
 			ErrMsg: "error while processing '" + r.Method + " " + r.URL.String() + "' because " + err.Error(),
 		},
 	)
+}
+
+func (p *provenanceRequestHandler) getMostRecentUserOrNode(w http.ResponseWriter, r *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(w, r, constants.GetMostRecentUserOrNode, p.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetMostRecentUserOrNodeQuery)
+
+	var dbName string
+	if query.Type == types.GetMostRecentUserOrNodeQuery_NODE {
+		dbName = worldstate.ConfigDBName
+	} else {
+		dbName = worldstate.UsersDBName
+	}
+
+	response, err := p.db.GetMostRecentValueAtOrBelow(dbName, query.ID, query.Version)
+	if err != nil {
+		processInternalError(w, r, err)
+		return
+	}
+
+	SendHTTPResponse(w, http.StatusOK, response)
 }

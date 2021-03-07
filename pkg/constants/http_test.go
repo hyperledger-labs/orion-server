@@ -169,6 +169,26 @@ func TestURLConstruction(t *testing.T) {
 			},
 			expectedURL: "/ledger/tx/receipt/tx1",
 		},
+		{
+			name: "URLForGetMostRecentNodeInfo",
+			execute: func() string {
+				return URLForGetMostRecentNodeConfig("node1", &types.Version{
+					BlockNum: 10,
+					TxNum:    5,
+				})
+			},
+			expectedURL: "/provenance/node/node1?blocknumber=10&transactionnumber=5",
+		},
+		{
+			name: "URLForGetMostRecentUserInfo",
+			execute: func() string {
+				return URLForGetMostRecentUserInfo("user1", &types.Version{
+					BlockNum: 10,
+					TxNum:    5,
+				})
+			},
+			expectedURL: "/provenance/user/user1?blocknumber=10&transactionnumber=5",
+		},
 	}
 
 	for _, tt := range tests {

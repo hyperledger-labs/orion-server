@@ -178,3 +178,14 @@ message GetTxReceiptQueryEnvelope {
   GetTxReceiptQuery payload = 1;
   bytes signature = 2;
 }
+
+message GetMostRecentUserOrNodeQuery {
+    enum Type {
+        USER = 0;
+        NODE = 1;
+    }
+    Type type = 1;
+    string userID = 2;
+    string ID = 3;
+    Version  version = 4;
+}

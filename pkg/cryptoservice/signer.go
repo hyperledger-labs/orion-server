@@ -28,6 +28,7 @@ func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	case *types.GetDataWrittenByQuery:
 	case *types.GetDataDeletedByQuery:
 	case *types.GetTxIDsSubmittedByQuery:
+	case *types.GetMostRecentUserOrNodeQuery:
 
 	default:
 		return nil, errors.Errorf("unknown query type: %T", v)

@@ -39,14 +39,15 @@ const (
 	GetTxProof     = "/ledger/proof/{blockId:[0-9]+}"
 	GetTxReceipt   = "/ledger/tx/receipt/{txId}"
 
-	ProvenanceEndpoint  = "/provenance/"
-	GetHistoricalData   = "/provenance/data/history/{dbname}/{key}"
-	GetDataReaders      = "/provenance/data/readers/{dbname}/{key}"
-	GetDataWriters      = "/provenance/data/writers/{dbname}/{key}"
-	GetDataReadBy       = "/provenance/data/read/{userId}"
-	GetDataWrittenBy    = "/provenance/data/written/{userId}"
-	GetDataDeletedBy    = "/provenance/data/deleted/{userId}"
-	GetTxIDsSubmittedBy = "/provenance/data/tx/{userId}"
+	ProvenanceEndpoint      = "/provenance/"
+	GetHistoricalData       = "/provenance/data/history/{dbname}/{key}"
+	GetDataReaders          = "/provenance/data/readers/{dbname}/{key}"
+	GetDataWriters          = "/provenance/data/writers/{dbname}/{key}"
+	GetDataReadBy           = "/provenance/data/read/{userId}"
+	GetDataWrittenBy        = "/provenance/data/written/{userId}"
+	GetDataDeletedBy        = "/provenance/data/deleted/{userId}"
+	GetTxIDsSubmittedBy     = "/provenance/data/tx/{userId}"
+	GetMostRecentUserOrNode = "/provenance/{type:user|node}/{id}"
 )
 
 // URLForGetData returns url for GET request to retrieve
@@ -170,4 +171,14 @@ func URLForGetTxIDsSubmittedBy(userID string) string {
 
 func URLForGetTransactionReceipt(txId string) string {
 	return LedgerEndpoint + path.Join("tx", "receipt", txId)
+}
+
+func URLForGetMostRecentUserInfo(userID string, version *types.Version) string {
+	return ProvenanceEndpoint + path.Join("user", userID) +
+		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum)
+}
+
+func URLForGetMostRecentNodeConfig(nodeID string, version *types.Version) string {
+	return ProvenanceEndpoint + path.Join("node", nodeID) +
+		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum)
 }

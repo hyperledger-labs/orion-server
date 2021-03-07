@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
 	"github.ibm.com/blockchaindb/server/internal/bcdb/mocks"
+	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
@@ -643,6 +644,135 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			assertTestCase(t, tt, &types.ResponseEnvelope{})
+		})
+	}
+}
+
+func TestGetMostRecentNodeOrUser(t *testing.T) {
+	t.Parallel()
+
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	sampleVer := &types.Version{
+		BlockNum: 5,
+		TxNum:    10,
+	}
+
+	nodeResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
+			Header: &types.ResponseHeader{
+				NodeID: "testNodeID",
+			},
+			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "node1",
+						Value: []byte("value1"),
+						Metadata: &types.Metadata{
+							Version: sampleVer,
+						},
+					},
+				},
+			}),
+		}),
+	}
+	userResponse := &types.ResponseEnvelope{
+		Payload: MarshalOrPanic(&types.Payload{
+			Header: &types.ResponseHeader{
+				NodeID: "testNodeID",
+			},
+			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "user1",
+						Value: []byte("value1"),
+						Metadata: &types.Metadata{
+							Version: sampleVer,
+						},
+					},
+				},
+			}),
+		}),
+	}
+
+	testCases := []testCase{
+		{
+			name: "valid: node request",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetMostRecentNodeConfig("node1", sampleVer),
+				&types.GetMostRecentUserOrNodeQuery{
+					Type:    types.GetMostRecentUserOrNodeQuery_NODE,
+					UserID:  submittingUserName,
+					ID:      "node1",
+					Version: sampleVer,
+				},
+				aliceSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetMostRecentValueAtOrBelow", worldstate.ConfigDBName, "node1", sampleVer).Return(nodeResponse, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   nodeResponse,
+		},
+		{
+			name: "valid: user request",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetMostRecentUserInfo("user1", sampleVer),
+				&types.GetMostRecentUserOrNodeQuery{
+					Type:    types.GetMostRecentUserOrNodeQuery_USER,
+					UserID:  submittingUserName,
+					ID:      "user1",
+					Version: sampleVer,
+				},
+				aliceSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetMostRecentValueAtOrBelow", worldstate.UsersDBName, "user1", sampleVer).Return(userResponse, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedResponse:   userResponse,
+		},
+		{
+			name: "internal server error",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetMostRecentUserInfo("user1", sampleVer),
+				&types.GetMostRecentUserOrNodeQuery{
+					Type:    types.GetMostRecentUserOrNodeQuery_USER,
+					UserID:  submittingUserName,
+					ID:      "user1",
+					Version: sampleVer,
+				},
+				aliceSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetMostRecentValueAtOrBelow", worldstate.UsersDBName, "user1", sampleVer).Return(nil, errors.New("error in provenance db"))
+				return db
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET " + constants.URLForGetMostRecentUserInfo("user1", sampleVer) + "' because error in provenance db",
+		},
+		constructTestCaseForSigVerificationFailure(t, constants.URLForGetMostRecentUserInfo("user1", sampleVer), submittingUserName),
 	}
 
 	for _, tt := range testCases {
