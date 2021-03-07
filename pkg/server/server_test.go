@@ -14,12 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.ibm.com/blockchaindb/server/internal/certificateauthority"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/config"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
+	"github.ibm.com/blockchaindb/server/pkg/certificateauthority"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
