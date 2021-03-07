@@ -1604,20 +1604,56 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	node1Serialized, err := proto.Marshal(
+		&types.NodeConfig{
+			ID:          "bdb-node-1",
+			Certificate: []byte("cert-node"),
+			Address:     "127.0.0.1",
+			Port:        0,
+		},
+	)
+	require.NoError(t, err)
+	node2Serialized, err := proto.Marshal(
+		&types.NodeConfig{
+			ID:          "bdb-node-2",
+			Certificate: []byte("node-2-cert"),
+			Address:     "127.0.0.2",
+			Port:        0,
+		},
+	)
+	require.NoError(t, err)
+
 	setup := func(env *committerTestEnv) {
+		sampleMetadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    0,
+			},
+		}
+
 		configUpdates := []*worldstate.DBUpdates{
 			{
 				DBName: worldstate.ConfigDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   worldstate.ConfigKey,
-						Value: clusterConfigWithTwoNodesSerialized,
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    0,
-							},
-						},
+						Key:      worldstate.ConfigKey,
+						Value:    clusterConfigWithTwoNodesSerialized,
+						Metadata: sampleMetadata,
+					},
+				},
+			},
+			{
+				DBName: worldstate.ConfigDBName,
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      string(identity.NodeNamespace) + "bdb-node-1",
+						Value:    node1Serialized,
+						Metadata: sampleMetadata,
+					},
+					{
+						Key:      string(identity.NodeNamespace) + "bdb-node-2",
+						Value:    node2Serialized,
+						Metadata: sampleMetadata,
 					},
 				},
 			},
@@ -1625,14 +1661,9 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 				DBName: worldstate.UsersDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   string(identity.UserNamespace) + "admin1",
-						Value: admin1NewSerialized,
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    0,
-							},
-						},
+						Key:      string(identity.UserNamespace) + "admin1",
+						Value:    admin1NewSerialized,
+						Metadata: sampleMetadata,
 					},
 				},
 			},
@@ -1680,19 +1711,51 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 				Deletes:            make(map[string]*types.Version),
 				OldVersionOfWrites: make(map[string]*types.Version),
 			},
+			{
+				IsValid: true,
+				DBName:  worldstate.ConfigDBName,
+				UserID:  "user1",
+				TxID:    "tx1",
+				Writes: []*types.KVWithMetadata{
+					{
+						Key:   "bdb-node-1",
+						Value: node1Serialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+					{
+						Key:   "bdb-node-2",
+						Value: node2Serialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+				Deletes:            make(map[string]*types.Version),
+				OldVersionOfWrites: make(map[string]*types.Version),
+			},
 		}
 		require.NoError(t, env.committer.provenanceStore.Commit(1, provenanceData))
 	}
 
 	tests := []struct {
-		name         string
-		tx           *types.ConfigTx
-		valInfo      *types.ValidationInfo
-		query        func(s *provenance.Store) ([]*types.ValueWithMetadata, error)
-		expectedData []*types.ValueWithMetadata
+		name                     string
+		tx                       *types.ConfigTx
+		valInfo                  *types.ValidationInfo
+		queryAdmin               func(s *provenance.Store) ([]*types.ValueWithMetadata, error)
+		expectedAdminQueryResult []*types.ValueWithMetadata
+		queryNode                func(s *provenance.Store) ([]*types.ValueWithMetadata, error)
+		expectedNodeQueryResult  []*types.ValueWithMetadata
 	}{
 		{
-			name: "previous link with the already committed config tx",
+			name: "previous link with the already committed config tx; get deleted value of bdb-node-2 config",
 			tx: &types.ConfigTx{
 				UserID: "user1",
 				TxID:   "tx1",
@@ -1705,7 +1768,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 			valInfo: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
-			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+			queryAdmin: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
 				return s.GetPreviousValues(
 					worldstate.ConfigDBName,
 					worldstate.ConfigKey,
@@ -1716,7 +1779,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 					-1,
 				)
 			},
-			expectedData: []*types.ValueWithMetadata{
+			expectedAdminQueryResult: []*types.ValueWithMetadata{
 				{
 					Value: clusterConfigWithTwoNodesSerialized,
 					Metadata: &types.Metadata{
@@ -1727,9 +1790,26 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 					},
 				},
 			},
+			queryNode: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetDeletedValues(
+					worldstate.ConfigDBName,
+					"bdb-node-2",
+				)
+			},
+			expectedNodeQueryResult: []*types.ValueWithMetadata{
+				{
+					Value: node2Serialized,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+			},
 		},
 		{
-			name: "next link with the admin present in committed config tx",
+			name: "next link with the admin present in committed config tx; get bdb-node-1 config",
 			tx: &types.ConfigTx{
 				UserID: "user1",
 				TxID:   "tx1",
@@ -1742,7 +1822,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 			valInfo: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
-			query: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+			queryAdmin: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
 				return s.GetNextValues(
 					worldstate.UsersDBName,
 					"admin1",
@@ -1753,12 +1833,29 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 					-1,
 				)
 			},
-			expectedData: []*types.ValueWithMetadata{
+			expectedAdminQueryResult: []*types.ValueWithMetadata{
 				{
 					Value: admin1Serialized,
 					Metadata: &types.Metadata{
 						Version: &types.Version{
 							BlockNum: 2,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+			queryNode: func(s *provenance.Store) ([]*types.ValueWithMetadata, error) {
+				return s.GetValues(
+					worldstate.ConfigDBName,
+					"bdb-node-1",
+				)
+			},
+			expectedNodeQueryResult: []*types.ValueWithMetadata{
+				{
+					Value: node1Serialized,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
 							TxNum:    0,
 						},
 					},
@@ -1796,10 +1893,17 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, env.committer.commitToProvenanceStore(2, provenanceData))
 
-			actualData, err := tt.query(env.committer.provenanceStore)
+			actualData, err := tt.queryAdmin(env.committer.provenanceStore)
 			require.NoError(t, err)
-			require.Len(t, actualData, len(tt.expectedData))
-			for i, expected := range tt.expectedData {
+			require.Len(t, actualData, len(tt.expectedAdminQueryResult))
+			for i, expected := range tt.expectedAdminQueryResult {
+				require.True(t, proto.Equal(expected, actualData[i]))
+			}
+
+			actualData, err = tt.queryNode(env.committer.provenanceStore)
+			require.NoError(t, err)
+			require.Len(t, actualData, len(tt.expectedNodeQueryResult))
+			for i, expected := range tt.expectedNodeQueryResult {
 				require.True(t, proto.Equal(expected, actualData[i]))
 			}
 
@@ -2276,9 +2380,9 @@ func TestConstructProvenanceEntriesForConfigTx(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			provenanceData, err := constructProvenanceEntriesForConfigTx(tt.tx, tt.version)
+			provenanceData, err := constructProvenanceEntriesForConfigTx(tt.tx, tt.version, &dbEntriesForConfigTx{}, nil)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedProvenanceData, provenanceData)
+			require.Equal(t, tt.expectedProvenanceData, provenanceData[0])
 		})
 	}
 }

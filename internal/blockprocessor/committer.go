@@ -225,17 +225,11 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			dbsUpdates = append(dbsUpdates, entries.nodeUpdates)
 		}
 
-		pData, err := constructProvenanceEntriesForConfigTx(tx, version)
+		pData, err := constructProvenanceEntriesForConfigTx(tx, version, entries, c.db)
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the config transaction")
 		}
-		provenanceData = append(provenanceData, pData)
-
-		adminPData, err := identity.ConstructProvenanceEntriesForClusterAdmins(tx.UserID, tx.TxID, entries.adminUpdates, c.db)
-		if err != nil {
-			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for admins in config transaction")
-		}
-		provenanceData = append(provenanceData, adminPData)
+		provenanceData = append(provenanceData, pData...)
 
 		c.logger.Debugf("constructed configuration update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
@@ -409,13 +403,15 @@ func constructProvenanceEntriesForDataTx(
 func constructProvenanceEntriesForConfigTx(
 	tx *types.ConfigTx,
 	version *types.Version,
-) (*provenance.TxDataForProvenance, error) {
+	updates *dbEntriesForConfigTx,
+	db worldstate.DB,
+) ([]*provenance.TxDataForProvenance, error) {
 	configSerialized, err := proto.Marshal(tx.NewConfig)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while marshaling new cluster configuration")
 	}
 
-	pData := &provenance.TxDataForProvenance{
+	configTxPData := &provenance.TxDataForProvenance{
 		IsValid: true,
 		DBName:  worldstate.ConfigDBName,
 		UserID:  tx.UserID,
@@ -433,9 +429,24 @@ func constructProvenanceEntriesForConfigTx(
 	}
 
 	if tx.ReadOldConfigVersion != nil {
-		pData.OldVersionOfWrites[worldstate.ConfigKey] = tx.ReadOldConfigVersion
+		configTxPData.OldVersionOfWrites[worldstate.ConfigKey] = tx.ReadOldConfigVersion
 	}
-	return pData, nil
+
+	adminsPData, err := identity.ConstructProvenanceEntriesForClusterAdmins(tx.UserID, tx.TxID, updates.adminUpdates, db)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while constructing provenance entries for cluster admins")
+	}
+
+	nodesPData, err := identity.ConstructProvenanceEntriesForNodes(tx.UserID, tx.TxID, updates.nodeUpdates, db)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while constructing provenance entries for nodes")
+	}
+
+	return []*provenance.TxDataForProvenance{
+		configTxPData,
+		adminsPData,
+		nodesPData,
+	}, nil
 }
 
 func getVersion(

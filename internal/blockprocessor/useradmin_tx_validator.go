@@ -315,7 +315,7 @@ func (v *userAdminTxValidator) validateACLOnUserDeletes(operatingUser string, de
 
 func (v *userAdminTxValidator) mvccValidation(userReads []*types.UserRead) (*types.ValidationInfo, error) {
 	for _, r := range userReads {
-		committedVersion, err := v.identityQuerier.GetVersion(r.UserID)
+		committedVersion, err := v.identityQuerier.GetUserVersion(r.UserID)
 		if err != nil {
 			if _, ok := err.(*identity.NotFoundErr); !ok {
 				return nil, err

@@ -93,7 +93,7 @@ func ConstructProvenanceEntriesForUserAdminTx(
 		}
 		txData.Writes = append(txData.Writes, kv)
 
-		v, err := identityQuerier.GetVersion(write.User.ID)
+		v, err := identityQuerier.GetUserVersion(write.User.ID)
 		if err != nil {
 			if _, ok := err.(*NotFoundErr); ok {
 				continue
@@ -106,7 +106,7 @@ func ConstructProvenanceEntriesForUserAdminTx(
 	}
 
 	for _, d := range tx.UserDeletes {
-		v, err := identityQuerier.GetVersion(d.UserID)
+		v, err := identityQuerier.GetUserVersion(d.UserID)
 		if err != nil {
 			return nil, err
 		}
@@ -209,7 +209,7 @@ func ConstructProvenanceEntriesForClusterAdmins(
 			},
 		)
 
-		version, err := identityQuerier.GetVersion(adminID)
+		version, err := identityQuerier.GetUserVersion(adminID)
 		if err != nil {
 			if _, ok := err.(*NotFoundErr); ok {
 				continue
@@ -222,7 +222,7 @@ func ConstructProvenanceEntriesForClusterAdmins(
 
 	for _, d := range adminUpdates.Deletes {
 		adminID := getUserIDFromCompositeUserKey(d)
-		version, err := identityQuerier.GetVersion(adminID)
+		version, err := identityQuerier.GetUserVersion(adminID)
 		if err != nil {
 			// admin to be deleted must exist
 			return nil, err
@@ -283,8 +283,68 @@ func ConstructDBEntriesForNodes(oldNodes, newNodes []*types.NodeConfig, version 
 	}, nil
 }
 
+// ConstructProvenanceEntriesForNodes constructs provenance entries for the transaction that manipulates
+// nodes present in the cluster configuration
+func ConstructProvenanceEntriesForNodes(
+	userID, txID string,
+	nodeUpdates *worldstate.DBUpdates,
+	db worldstate.DB,
+) (*provenance.TxDataForProvenance, error) {
+	identityQuerier := NewQuerier(db)
+	txData := &provenance.TxDataForProvenance{
+		IsValid:            true,
+		DBName:             worldstate.ConfigDBName,
+		UserID:             userID,
+		TxID:               txID,
+		Deletes:            make(map[string]*types.Version),
+		OldVersionOfWrites: make(map[string]*types.Version),
+	}
+
+	if nodeUpdates == nil {
+		return txData, nil
+	}
+
+	for _, w := range nodeUpdates.Writes {
+		nodeID := getNodeIDFromCompositeUserKey(w.Key)
+		txData.Writes = append(
+			txData.Writes,
+			&types.KVWithMetadata{
+				Key:      nodeID,
+				Value:    w.Value,
+				Metadata: w.Metadata,
+			},
+		)
+
+		version, err := identityQuerier.GetNodeVersion(nodeID)
+		if err != nil {
+			if _, ok := err.(*NotFoundErr); ok {
+				continue
+			}
+
+			return nil, errors.Wrap(err, "error while fetching a node version")
+		}
+		txData.OldVersionOfWrites[nodeID] = version
+	}
+
+	for _, d := range nodeUpdates.Deletes {
+		nodeID := getNodeIDFromCompositeUserKey(d)
+		version, err := identityQuerier.GetNodeVersion(nodeID)
+		if err != nil {
+			// node to be deleted must exist
+			return nil, errors.Wrap(err, "error while fetching a node version")
+		}
+		txData.Deletes[nodeID] = version
+	}
+
+	return txData, nil
+}
+
 func getUserIDFromCompositeUserKey(ckey string) string {
 	strs := strings.Split(ckey, string(UserNamespace))
 	return strs[1]
 }
 
+func getNodeIDFromCompositeUserKey(ckey string) string {
+	strs := strings.Split(ckey, string(NodeNamespace))
+	return strs[1]
+}

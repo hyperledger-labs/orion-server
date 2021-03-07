@@ -89,8 +89,8 @@ func (q *Querier) GetCertificate(userID string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-// GetVersion returns the current version of a given userID
-func (q *Querier) GetVersion(userID string) (*types.Version, error) {
+// GetUserVersion returns the current version of a given userID
+func (q *Querier) GetUserVersion(userID string) (*types.Version, error) {
 	_, metadata, err := q.GetUser(userID)
 	if err != nil {
 		return nil, err
@@ -171,6 +171,16 @@ func (q *Querier) GetNode(nodeID string) (*types.NodeConfig, *types.Metadata, er
 	}
 
 	return node, meta, nil
+}
+
+// GetNodeVersion returns the current version of a given nodeID
+func (q *Querier) GetNodeVersion(nodeID string) (*types.Version, error) {
+	_, metadata, err := q.GetNode(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata.Version, nil
 }
 
 func (q *Querier) hasPrivilege(userID, dbName string, privilege types.Privilege_Access) (bool, error) {

@@ -242,8 +242,8 @@ func TestQuerier(t *testing.T) {
 				require.True(t, proto.Equal(sampleMetadata.AccessControl, acl))
 			})
 
-			t.Run("GetVersion()", func(t *testing.T) {
-				ver, err := env.q.GetVersion(tt.userID)
+			t.Run("GetUserVersion()", func(t *testing.T) {
+				ver, err := env.q.GetUserVersion(tt.userID)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(sampleMetadata.Version, ver))
 			})
@@ -328,7 +328,7 @@ func TestQuerierNonExistingUser(t *testing.T) {
 	})
 
 	t.Run("GetVersion returns UserNotFoundErr", func(t *testing.T) {
-		ver, err := env.q.GetVersion("nouser")
+		ver, err := env.q.GetUserVersion("nouser")
 		require.EqualError(t, err, "the user [nouser] does not exist")
 		require.Nil(t, ver)
 	})
