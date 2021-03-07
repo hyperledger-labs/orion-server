@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.ibm.com/blockchaindb/server/internal/certificateauthority"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/config"
@@ -32,6 +34,35 @@ type serverTestEnv struct {
 	testDataPath   string
 	adminSigner    crypto.Signer
 	client         *mock.Client
+	certCol        *certificateauthority.CACertCollection
+}
+
+func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, error) {
+	configQuery := &types.GetNodeConfigQuery{
+		NodeID: env.bcdbHTTPServer.conf.Node.Identity.ID,
+		UserID: "admin",
+	}
+
+	cfg, err := env.client.GetNodeConfig(&types.GetNodeConfigQueryEnvelope{
+		Payload:   configQuery,
+		Signature: testutils.SignatureFromQuery(t, env.adminSigner, configQuery),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	require.NotNil(t, cfg.Payload)
+
+	configPayload := &types.Payload{}
+	err = json.Unmarshal(cfg.Payload, configPayload)
+	require.NoError(t, err)
+
+	nodeConfig := &types.GetNodeConfigResponse{}
+	err = json.Unmarshal(configPayload.Response, nodeConfig)
+	require.NoError(t, err)
+
+	err = env.certCol.VerifyLeafCert(nodeConfig.GetNodeConfig().GetCertificate())
+	require.NoError(t, err)
+
+	return crypto.NewVerifier(nodeConfig.GetNodeConfig().GetCertificate())
 }
 
 func newServerTestEnv(t *testing.T) *serverTestEnv {
@@ -51,6 +82,13 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
 	require.NoError(t, err)
 	require.NotNil(t, keyPair)
+
+	block, _ := pem.Decode(rootCAPemCert)
+	certsCollection, err := certificateauthority.NewCACertCollection([][]byte{block.Bytes}, nil)
+	require.NoError(t, err)
+
+	err = certsCollection.VerifyCollection()
+	require.NoError(t, err)
 
 	serverRootCACertFile, err := os.Create(path.Join(tempDir, "serverRootCACert.pem"))
 	require.NoError(t, err)
@@ -148,6 +186,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 		testDataPath:   tempDir,
 		adminSigner:    adminSigner,
 		client:         client,
+		certCol:        certsCollection,
 	}
 }
 
@@ -156,6 +195,9 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	// making sure key does not exist and then posting it into DB
 	t.Parallel()
 	env := newServerTestEnv(t)
+
+	verifier, err := env.getNodeSigVerifier(t)
+	require.NoError(t, err)
 
 	dataQuery := &types.GetDataQuery{
 		DBName: worldstate.DefaultDBName,
@@ -171,6 +213,9 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, data)
 	require.NotNil(t, data.Payload)
+
+	err = verifier.Verify(data.GetPayload(), data.GetSignature())
+	require.NoError(t, err)
 
 	payload := &types.Payload{}
 	err = json.Unmarshal(data.GetPayload(), payload)
@@ -195,8 +240,7 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 			},
 		},
 	}
-	// TODO (bartem): need to came up with the better way to handle
-	// transaction submission and getting results back
+
 	_, err = env.client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
 			Payload:   dataTx,
@@ -219,6 +263,11 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 
 		if data.GetPayload() == nil {
 			return false
+		}
+
+		err = verifier.Verify(data.GetPayload(), data.GetSignature())
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		payload := &types.Payload{}
@@ -249,6 +298,9 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 			Signature: testutils.SignatureFromQuery(t, env.adminSigner, provenanceQuery),
 		},
 	)
+	require.NoError(t, err)
+
+	err = verifier.Verify(data.GetPayload(), data.GetSignature())
 	require.NoError(t, err)
 
 	payload = &types.Payload{}
@@ -295,6 +347,9 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 		})
 	require.NoError(t, err)
 
+	verifier, err := env.getNodeSigVerifier(t)
+	require.NoError(t, err)
+
 	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "testUser"}
 	querySig, err := cryptoservice.SignQuery(env.adminSigner, query)
 	require.NoError(t, err)
@@ -306,6 +361,11 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 
 		if err != nil {
 			return false
+		}
+
+		err = verifier.Verify(user.GetPayload(), user.GetSignature())
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		if user.GetPayload() == nil {
@@ -341,6 +401,9 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 		})
 	require.NoError(t, err)
 
+	verifier, err := env.getNodeSigVerifier(t)
+	require.NoError(t, err)
+
 	dbStatusQuery := &types.GetDBStatusQuery{UserID: "admin", DBName: "testDB"}
 	require.Eventually(t, func() bool {
 		db, err := env.client.GetDBStatus(&types.GetDBStatusQueryEnvelope{
@@ -349,6 +412,11 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 		})
 		if err != nil {
 			return false
+		}
+
+		err = verifier.Verify(db.GetPayload(), db.GetSignature())
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		payload := &types.Payload{}
@@ -395,6 +463,10 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 			return false
 		}
 
+		err = verifier.Verify(data.GetPayload(), data.GetSignature())
+		if err != nil {
+			t.Fatal(err)
+		}
 		payload := &types.Payload{}
 		err = json.Unmarshal(data.GetPayload(), payload)
 		require.NoError(t, err)
@@ -481,73 +553,4 @@ func TestServerWithFailureScenarios(t *testing.T) {
 			require.Contains(t, err.Error(), tt.expectedError)
 		})
 	}
-}
-
-func addDBRWPermissionToAdmin(t *testing.T, env *serverTestEnv, dbName string) {
-	queryUser := &types.GetUserQuery{UserID: "admin", TargetUserID: "admin"}
-	queryUserSig, err := cryptoservice.SignQuery(env.adminSigner, queryUser)
-	require.NoError(t, err)
-
-	adminUserRec, err := env.client.GetUser(&types.GetUserQueryEnvelope{
-		Payload:   queryUser,
-		Signature: queryUserSig,
-	})
-	require.NoError(t, err)
-	require.NotNil(t, adminUserRec)
-
-	payload := &types.Payload{}
-	err = json.Unmarshal(adminUserRec.GetPayload(), payload)
-	require.NoError(t, err)
-	require.NotNil(t, adminUserRec.GetPayload())
-
-	response := &types.GetUserResponse{}
-	err = json.Unmarshal(payload.GetResponse(), response)
-	require.NoError(t, err)
-	require.NotNil(t, response.GetUser())
-
-	if response.GetUser().GetPrivilege().DBPermission == nil {
-		response.GetUser().GetPrivilege().DBPermission = map[string]types.Privilege_Access{
-			dbName: types.Privilege_ReadWrite,
-		}
-	}
-
-	userTx := &types.UserAdministrationTx{
-		TxID:   uuid.New().String(),
-		UserID: "admin",
-		UserWrites: []*types.UserWrite{
-			{
-				User: response.GetUser(),
-				ACL:  response.GetMetadata().GetAccessControl(),
-			},
-		},
-		UserReads: []*types.UserRead{
-			{
-				UserID:  response.GetUser().GetID(),
-				Version: response.GetMetadata().GetVersion(),
-			},
-		},
-	}
-	_, err = env.client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
-		Payload:   userTx,
-		Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
-	})
-	require.NoError(t, err)
-
-	require.Eventually(t, func() bool {
-		rec, err := env.client.GetUser(&types.GetUserQueryEnvelope{
-			Payload:   queryUser,
-			Signature: queryUserSig,
-		})
-
-		payload := &types.Payload{}
-		err = json.Unmarshal(rec.GetPayload(), payload)
-		require.NoError(t, err)
-
-		response := &types.GetUserResponse{}
-		err = json.Unmarshal(payload.GetResponse(), response)
-		require.NoError(t, err)
-
-		acl, ok := response.GetUser().GetPrivilege().GetDBPermission()[dbName]
-		return err == nil && ok && acl == types.Privilege_ReadWrite
-	}, time.Minute, 100*time.Millisecond)
 }

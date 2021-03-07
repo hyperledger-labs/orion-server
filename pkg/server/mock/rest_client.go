@@ -105,6 +105,23 @@ func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.ResponseEnve
 	return res, err
 }
 
+func (c *Client) GetNodeConfig(e *types.GetNodeConfigQueryEnvelope) (*types.ResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForNodeConfigPath(e.Payload.NodeID),
+		e.Payload.UserID,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.ResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*types.ResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetHistoricalData(e.Payload.DBName, e.Payload.Key),
