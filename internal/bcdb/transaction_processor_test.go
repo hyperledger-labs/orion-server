@@ -232,14 +232,18 @@ func TestTransactionProcessor(t *testing.T) {
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
 		tx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
-			UserID:    "testUser",
-			DBName:    worldstate.DefaultDBName,
-			TxID:      "tx1",
-			DataReads: []*types.DataRead{},
-			DataWrites: []*types.DataWrite{
+			UserID: "testUser",
+			TxID:   "tx1",
+			DBOperations: []*types.DBOperation{
 				{
-					Key:   "test-key1",
-					Value: []byte("test-value1"),
+					DBName:    worldstate.DefaultDBName,
+					DataReads: []*types.DataRead{},
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   "test-key1",
+							Value: []byte("test-value1"),
+						},
+					},
 				},
 			},
 		})
@@ -327,14 +331,18 @@ func TestTransactionProcessor(t *testing.T) {
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
 		tx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
-			UserID:    "testUser",
-			DBName:    worldstate.DefaultDBName,
-			TxID:      "tx1",
-			DataReads: []*types.DataRead{},
-			DataWrites: []*types.DataWrite{
+			UserID: "testUser",
+			TxID:   "tx1",
+			DBOperations: []*types.DBOperation{
 				{
-					Key:   "test-key1",
-					Value: []byte("test-value1"),
+					DBName:    worldstate.DefaultDBName,
+					DataReads: []*types.DataRead{},
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   "test-key1",
+							Value: []byte("test-value1"),
+						},
+					},
 				},
 			},
 		})
@@ -418,8 +426,12 @@ func TestTransactionProcessor(t *testing.T) {
 
 		dataTx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
 			UserID: "testUser",
-			DBName: worldstate.DefaultDBName,
 			TxID:   "tx1",
+			DBOperations: []*types.DBOperation{
+				{
+					DBName: worldstate.DefaultDBName,
+				},
+			},
 		})
 
 		resp, err := env.txProcessor.submitTransaction(dataTx, 0)

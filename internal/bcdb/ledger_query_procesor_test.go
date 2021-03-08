@@ -230,11 +230,15 @@ func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.
 			Payload: &types.DataTx{
 				UserID: "testUser",
 				TxID:   fmt.Sprintf("Tx%d%s", blockNumber, key[i]),
-				DBName: worldstate.DefaultDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key:   key[i],
-						Value: value[i],
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   key[i],
+								Value: value[i],
+							},
+						},
 					},
 				},
 			},
@@ -274,52 +278,56 @@ func createProvenanceDataFromBlock(block *types.Block, dirtyWriteKeyVersion map[
 		}
 
 		pData := constructProvenanceEntriesForDataTx(tx.GetPayload(), version, dirtyWriteKeyVersion)
-		provenanceData = append(provenanceData, pData)
+		provenanceData = append(provenanceData, pData...)
 	}
 
 	return provenanceData
 }
 
-func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Version, dirtyWriteKeyVersion map[string]*types.Version) *provenance.TxDataForProvenance {
-	txData := &provenance.TxDataForProvenance{
-		DBName:             tx.DBName,
-		UserID:             tx.UserID,
-		TxID:               tx.TxID,
-		OldVersionOfWrites: make(map[string]*types.Version),
-	}
+func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Version, dirtyWriteKeyVersion map[string]*types.Version) []*provenance.TxDataForProvenance {
+	txpData := make([]*provenance.TxDataForProvenance, len(tx.DBOperations))
 
-	for _, read := range tx.DataReads {
-		k := &provenance.KeyWithVersion{
-			Key:     read.Key,
-			Version: read.Version,
-		}
-		txData.Reads = append(txData.Reads, k)
-	}
-
-	for _, write := range tx.DataWrites {
-		kv := &types.KVWithMetadata{
-			Key:   write.Key,
-			Value: write.Value,
-			Metadata: &types.Metadata{
-				Version:       version,
-				AccessControl: write.ACL,
-			},
-		}
-		txData.Writes = append(txData.Writes, kv)
-
-		oldVersion, ok := dirtyWriteKeyVersion[write.Key]
-		if !ok {
-			continue
+	for i, ops := range tx.DBOperations {
+		txpData[i] = &provenance.TxDataForProvenance{
+			DBName:             ops.DBName,
+			UserID:             tx.UserID,
+			TxID:               tx.TxID,
+			OldVersionOfWrites: make(map[string]*types.Version),
 		}
 
-		txData.OldVersionOfWrites[write.Key] = oldVersion
+		for _, read := range ops.DataReads {
+			k := &provenance.KeyWithVersion{
+				Key:     read.Key,
+				Version: read.Version,
+			}
+			txpData[i].Reads = append(txpData[i].Reads, k)
+		}
+
+		for _, write := range ops.DataWrites {
+			kv := &types.KVWithMetadata{
+				Key:   write.Key,
+				Value: write.Value,
+				Metadata: &types.Metadata{
+					Version:       version,
+					AccessControl: write.ACL,
+				},
+			}
+			txpData[i].Writes = append(txpData[i].Writes, kv)
+
+			oldVersion, ok := dirtyWriteKeyVersion[write.Key]
+			if !ok {
+				continue
+			}
+
+			txpData[i].OldVersionOfWrites[write.Key] = oldVersion
+		}
+
+		for _, w := range ops.DataWrites {
+			dirtyWriteKeyVersion[w.Key] = version
+		}
 	}
 
-	for _, w := range tx.DataWrites {
-		dirtyWriteKeyVersion[w.Key] = version
-	}
-
-	return txData
+	return txpData
 }
 
 func TestGetBlock(t *testing.T) {

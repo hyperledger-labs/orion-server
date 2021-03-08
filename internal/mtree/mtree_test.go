@@ -127,12 +127,16 @@ func generateDataBlock(t *testing.T, txNum int) *types.Block {
 
 	for i := 0; i < txNum; i++ {
 		txPayload := &types.DataTx{
-			UserID:      "testUser",
-			TxID:        fmt.Sprintf("%d", i),
-			DBName:      "testDB",
-			DataReads:   nil,
-			DataWrites:  nil,
-			DataDeletes: nil,
+			UserID: "testUser",
+			TxID:   fmt.Sprintf("%d", i),
+			DBOperations: []*types.DBOperation{
+				{
+					DBName:      "testDB",
+					DataReads:   nil,
+					DataWrites:  nil,
+					DataDeletes: nil,
+				},
+			},
 		}
 		envelope := &types.DataTxEnvelope{
 			Payload:   txPayload,

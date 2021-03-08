@@ -28,6 +28,7 @@ func TestValidateDataTx(t *testing.T) {
 			Privilege: &types.Privilege{
 				DBPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
+					"db1":                    types.Privilege_ReadWrite,
 				},
 			},
 		}
@@ -53,24 +54,36 @@ func TestValidateDataTx(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		txEnv          *types.DataTxEnvelope
-		pendingWrites  map[string]bool
-		pendingDeletes map[string]bool
+		pendingOps     *pendingOperations
 		expectedResult *types.ValidationInfo
 	}{
 		{
-			name: "invalid: unallowed character in the database name",
+			name: "invalid: unallowed character in the first database name",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: "db1/name",
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: "db1/name",
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
+					},
+					{
+						DBName: "db2",
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the database name [db1/name] is not valid",
@@ -83,13 +96,21 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: "db1",
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+					},
+					{
+						DBName: "db1",
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 				ReasonIfInvalid: "the database [db1] does not exist in the cluster",
@@ -102,13 +123,21 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.ConfigDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+					},
+					{
+						DBName: worldstate.ConfigDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the database [" + worldstate.ConfigDBName + "] is a system database and no user can write to a system database via data transaction. Use appropriate transaction type to modify the system database",
@@ -130,13 +159,18 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_UNAUTHORISED,
 				ReasonIfInvalid: "signature verification failed: x509: ECDSA verification failure",
@@ -158,13 +192,18 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no read-write permission on the database [" + worldstate.DefaultDBName + "]",
@@ -177,18 +216,23 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
-						ACL: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+								ACL: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{
+										"user1": true,
+									},
+								},
 							},
 						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the user [user1] defined in the access control for the key [key1] does not exist",
@@ -201,18 +245,23 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
-					},
-				},
-				DataDeletes: []*types.DataDelete{
-					{
-						Key: "key2",
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key2",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the key [key2] does not exist in the database and hence, it cannot be deleted",
@@ -244,18 +293,23 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
-					},
-				},
-				DataDeletes: []*types.DataDelete{
-					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the key [key1] is being updated as well as deleted. Only one operation per key is allowed within a transaction",
@@ -288,13 +342,18 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataReads: []*types.DataRead{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+						DataReads: []*types.DataRead{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no read permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
@@ -327,13 +386,18 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataWrites: []*types.DataWrite{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
@@ -366,13 +430,18 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataDeletes: []*types.DataDelete{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key1",
+							},
+						},
 					},
 				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]. Hence, the user cannot delete the key",
@@ -385,15 +454,26 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataReads: []*types.DataRead{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
+						DBName: worldstate.DefaultDBName,
+						DataReads: []*types.DataRead{
+							{
+								Key: "key1",
+							},
+							{
+								Key: "key2",
+							},
+						},
 					},
 				},
 			}),
-			pendingWrites: map[string]bool{
-				"key1": true,
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+					constructCompositeKey("db1", "key2"):                    true,
+				},
+				pendingDeletes: map[string]bool{},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
@@ -401,9 +481,48 @@ func TestValidateDataTx(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: no user can directly write to a system database",
+			setup: func(db worldstate.DB) {
+				addUserWithCorrectPrivilege(db)
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
+				UserID: "operatingUser",
+				DBOperations: []*types.DBOperation{
+					{
+						DBName: worldstate.DefaultDBName,
+					},
+					{
+						DBName: worldstate.UsersDBName,
+					},
+				},
+			}),
+			pendingOps: newPendingOperations(),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "the database [" + worldstate.UsersDBName + "] is a system database and no user can write to a system database via data transaction. Use appropriate transaction type to modify the system database",
+			},
+		},
+		{
 			name: "valid",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
+				db1 := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "db1",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+								},
+							},
+						},
+					},
+				}
+				require.NoError(t, db.Commit(db1, 1))
 
 				data := []*worldstate.DBUpdates{
 					{
@@ -439,34 +558,95 @@ func TestValidateDataTx(t *testing.T) {
 							},
 						},
 					},
+					{
+						DBName: "db1",
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key3",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											"operatingUser": true,
+										},
+									},
+								},
+							},
+							{
+								Key: "key4",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											"operatingUser": true,
+										},
+									},
+								},
+							},
+						},
+					},
 				}
 
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
-				DataReads: []*types.DataRead{
+				DBOperations: []*types.DBOperation{
 					{
-						Key: "key1",
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
+						DBName: worldstate.DefaultDBName,
+						DataReads: []*types.DataRead{
+							{
+								Key: "key1",
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
+							},
+						},
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key1",
+								Value: []byte("new-val"),
+							},
+						},
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key2",
+							},
+						},
+					},
+					{
+						DBName: "db1",
+						DataReads: []*types.DataRead{
+							{
+								Key: "key3",
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
+							},
+						},
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key3",
+								Value: []byte("new-val"),
+							},
+						},
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key4",
+							},
 						},
 					},
 				},
-				DataWrites: []*types.DataWrite{
-					{
-						Key:   "key1",
-						Value: []byte("new-val"),
-					},
-				},
-				DataDeletes: []*types.DataDelete{
-					{
-						Key: "key2",
-					},
-				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -478,8 +658,13 @@ func TestValidateDataTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 				UserID: "operatingUser",
-				DBName: worldstate.DefaultDBName,
+				DBOperations: []*types.DBOperation{
+					{
+						DBName: worldstate.DefaultDBName,
+					},
+				},
 			}),
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -496,7 +681,7 @@ func TestValidateDataTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.validate(tt.txEnv, tt.pendingWrites, tt.pendingDeletes)
+			result, err := env.validator.dataTxValidator.validate(tt.txEnv, tt.pendingOps)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
@@ -628,7 +813,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		dataDeletes    []*types.DataDelete
-		pendingDeletes map[string]bool
+		pendingOps     *pendingOperations
 		expectedResult *types.ValidationInfo
 	}{
 		{
@@ -650,8 +835,11 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			pendingDeletes: map[string]bool{
-				"key1": true,
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{},
+				pendingDeletes: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+				},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
@@ -666,7 +854,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			pendingDeletes: map[string]bool{},
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the key [key1] does not exist in the database and hence, it cannot be deleted",
@@ -699,7 +887,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			pendingDeletes: map[string]bool{},
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -715,7 +903,7 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 			defer env.cleanup()
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.validateFieldsInDataDeletes(worldstate.DefaultDBName, tt.dataDeletes, tt.pendingDeletes)
+			result, err := env.validator.dataTxValidator.validateFieldsInDataDeletes(worldstate.DefaultDBName, tt.dataDeletes, tt.pendingOps)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})
@@ -1287,8 +1475,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		dataReads      []*types.DataRead
-		pendingWrites  map[string]bool
-		pendingDeletes map[string]bool
+		pendingOps     *pendingOperations
 		expectedResult *types.ValidationInfo
 	}{
 		{
@@ -1300,8 +1487,11 @@ func TestMVCCOnDataTx(t *testing.T) {
 					Version: version1,
 				},
 			},
-			pendingWrites: map[string]bool{
-				"key1": true,
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+				},
+				pendingDeletes: map[string]bool{},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
@@ -1317,8 +1507,11 @@ func TestMVCCOnDataTx(t *testing.T) {
 					Version: version1,
 				},
 			},
-			pendingDeletes: map[string]bool{
-				"key1": true,
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{},
+				pendingDeletes: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+				},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
@@ -1334,6 +1527,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 					Version: version1,
 				},
 			},
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
 				ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the key [key1] in database [" + worldstate.DefaultDBName + "] changed",
@@ -1374,6 +1568,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 					Version: version1,
 				},
 			},
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
 				ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the key [key2] in database [" + worldstate.DefaultDBName + "] changed",
@@ -1418,6 +1613,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 					Version: nil,
 				},
 			},
+			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1434,7 +1630,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.mvccValidation(worldstate.DefaultDBName, tt.dataReads, tt.pendingWrites, tt.pendingDeletes)
+			result, err := env.validator.dataTxValidator.mvccValidation(worldstate.DefaultDBName, tt.dataReads, tt.pendingOps)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})

@@ -342,6 +342,7 @@ func TestValidateDataBlock(t *testing.T) {
 			Privilege: &types.Privilege{
 				DBPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
+					"db1":                    types.Privilege_ReadWrite,
 				},
 			},
 		}
@@ -373,6 +374,23 @@ func TestValidateDataBlock(t *testing.T) {
 			name: "data block with valid and invalid transactions",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
+				db1 := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "db1",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+								},
+							},
+						},
+					},
+				}
+				require.NoError(t, db.Commit(db1, 1))
 
 				data := []*worldstate.DBUpdates{
 					{
@@ -408,6 +426,29 @@ func TestValidateDataBlock(t *testing.T) {
 							},
 						},
 					},
+					{
+						DBName: "db1",
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+								},
+							},
+							{
+								Key: "key2",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+								},
+							},
+						},
+					},
 				}
 
 				require.NoError(t, db.Commit(data, 1))
@@ -423,51 +464,97 @@ func TestValidateDataBlock(t *testing.T) {
 						Envelopes: []*types.DataTxEnvelope{
 							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 								UserID: "operatingUser",
-								DBName: worldstate.DefaultDBName,
-								DataReads: []*types.DataRead{
+								DBOperations: []*types.DBOperation{
 									{
-										Key: "key1",
-										Version: &types.Version{
-											BlockNum: 1,
-											TxNum:    1,
+										DBName: worldstate.DefaultDBName,
+										DataReads: []*types.DataRead{
+											{
+												Key: "key1",
+												Version: &types.Version{
+													BlockNum: 1,
+													TxNum:    1,
+												},
+											},
+										},
+										DataWrites: []*types.DataWrite{
+											{
+												Key:   "key1",
+												Value: []byte("new-val"),
+											},
+										},
+										DataDeletes: []*types.DataDelete{
+											{
+												Key: "key2",
+											},
 										},
 									},
-								},
-								DataWrites: []*types.DataWrite{
 									{
-										Key:   "key1",
-										Value: []byte("new-val"),
-									},
-								},
-								DataDeletes: []*types.DataDelete{
-									{
-										Key: "key2",
+										DBName: "db1",
+										DataReads: []*types.DataRead{
+											{
+												Key: "key1",
+												Version: &types.Version{
+													BlockNum: 1,
+													TxNum:    1,
+												},
+											},
+										},
+										DataWrites: []*types.DataWrite{
+											{
+												Key:   "key1",
+												Value: []byte("new-val"),
+											},
+										},
+										DataDeletes: []*types.DataDelete{
+											{
+												Key: "key2",
+											},
+										},
 									},
 								},
 							}),
 							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 								UserID: "operatingUser",
-								DBName: worldstate.DefaultDBName,
-								DataReads: []*types.DataRead{
+								DBOperations: []*types.DBOperation{
 									{
-										Key: "key1",
-										Version: &types.Version{
-											BlockNum: 1,
-											TxNum:    1,
+										DBName: worldstate.DefaultDBName,
+										DataReads: []*types.DataRead{
+											{
+												Key: "key1",
+												Version: &types.Version{
+													BlockNum: 1,
+													TxNum:    1,
+												},
+											},
 										},
 									},
 								},
 							}),
 							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
 								UserID: "operatingUser",
-								DBName: worldstate.DefaultDBName,
-								DataReads: []*types.DataRead{
+								DBOperations: []*types.DBOperation{
 									{
-										Key: "key2",
-										Version: &types.Version{
-											BlockNum: 1,
-											TxNum:    1,
+										DBName: worldstate.DefaultDBName,
+										DataReads: []*types.DataRead{
+											{
+												Key: "key2",
+												Version: &types.Version{
+													BlockNum: 1,
+													TxNum:    1,
+												},
+											},
 										},
+									},
+								},
+							}),
+							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
+								UserID: "operatingUser",
+								DBOperations: []*types.DBOperation{
+									{
+										DBName: worldstate.DefaultDBName,
+									},
+									{
+										DBName: "db2",
 									},
 								},
 							}),
@@ -486,6 +573,10 @@ func TestValidateDataBlock(t *testing.T) {
 				{
 					Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
 					ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key2] in database [" + worldstate.DefaultDBName + "]",
+				},
+				{
+					Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
+					ReasonIfInvalid: "the database [db2] does not exist in the cluster",
 				},
 			},
 		},

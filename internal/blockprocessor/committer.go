@@ -124,11 +124,12 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			if err != nil {
 				return nil, nil, err
 			}
-			provenanceData = append(provenanceData, pData)
+			provenanceData = append(provenanceData, pData...)
 
+			toProcessUpdatesFromIndex := len(dbsUpdates)
 			dbsUpdates = append(
 				dbsUpdates,
-				constructDBEntriesForDataTx(tx, version),
+				constructDBEntriesForDataTx(tx, version)...,
 			)
 
 			// after constructing entries for each transaction, we update the
@@ -136,8 +137,11 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			// when more than one transaction in a block performs write to the
 			// same key (through blind writes), the existing value in the dirty
 			// set would get updated to reflect the new version
-			for _, w := range dbsUpdates[len(dbsUpdates)-1].Writes {
-				dirtyWriteKeyVersion[w.Key] = w.Metadata.Version
+			for i := toProcessUpdatesFromIndex; i <= len(dbsUpdates)-1; i++ {
+				dbUpdates := dbsUpdates[i]
+				for _, w := range dbsUpdates[len(dbsUpdates)-1].Writes {
+					dirtyWriteKeyVersion[constructCompositeKey(dbUpdates.DBName, w.Key)] = w.Metadata.Version
+				}
 			}
 		}
 		c.logger.Debugf("constructed %d, updates for data transactions, block number %d",
@@ -238,31 +242,37 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 	return dbsUpdates, provenanceData, nil
 }
 
-func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) *worldstate.DBUpdates {
-	var kvWrites []*worldstate.KVWithMetadata
-	var kvDeletes []string
+func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*worldstate.DBUpdates {
+	dbsUpdates := make([]*worldstate.DBUpdates, len(tx.DBOperations))
 
-	for _, write := range tx.DataWrites {
-		kv := &worldstate.KVWithMetadata{
-			Key:   write.Key,
-			Value: write.Value,
-			Metadata: &types.Metadata{
-				Version:       version,
-				AccessControl: write.ACL,
-			},
+	for i, ops := range tx.DBOperations {
+		var kvWrites []*worldstate.KVWithMetadata
+		var kvDeletes []string
+
+		for _, write := range ops.DataWrites {
+			kv := &worldstate.KVWithMetadata{
+				Key:   write.Key,
+				Value: write.Value,
+				Metadata: &types.Metadata{
+					Version:       version,
+					AccessControl: write.ACL,
+				},
+			}
+			kvWrites = append(kvWrites, kv)
 		}
-		kvWrites = append(kvWrites, kv)
+
+		for _, d := range ops.DataDeletes {
+			kvDeletes = append(kvDeletes, d.Key)
+		}
+
+		dbsUpdates[i] = &worldstate.DBUpdates{
+			DBName:  ops.DBName,
+			Writes:  kvWrites,
+			Deletes: kvDeletes,
+		}
 	}
 
-	for _, d := range tx.DataDeletes {
-		kvDeletes = append(kvDeletes, d.Key)
-	}
-
-	return &worldstate.DBUpdates{
-		DBName:  tx.DBName,
-		Writes:  kvWrites,
-		Deletes: kvDeletes,
-	}
+	return dbsUpdates
 }
 
 func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types.Version) *worldstate.DBUpdates {
@@ -332,72 +342,77 @@ func constructProvenanceEntriesForDataTx(
 	tx *types.DataTx,
 	version *types.Version,
 	dirtyWriteKeyVersion map[string]*types.Version,
-) (*provenance.TxDataForProvenance, error) {
-	txData := &provenance.TxDataForProvenance{
-		IsValid:            true,
-		DBName:             tx.DBName,
-		UserID:             tx.UserID,
-		TxID:               tx.TxID,
-		Deletes:            make(map[string]*types.Version),
-		OldVersionOfWrites: make(map[string]*types.Version),
+) ([]*provenance.TxDataForProvenance, error) {
+	txpData := make([]*provenance.TxDataForProvenance, len(tx.DBOperations))
+
+	for i, ops := range tx.DBOperations {
+		pData := &provenance.TxDataForProvenance{
+			IsValid:            true,
+			DBName:             ops.DBName,
+			UserID:             tx.UserID,
+			TxID:               tx.TxID,
+			Deletes:            make(map[string]*types.Version),
+			OldVersionOfWrites: make(map[string]*types.Version),
+		}
+
+		for _, read := range ops.DataReads {
+			k := &provenance.KeyWithVersion{
+				Key:     read.Key,
+				Version: read.Version,
+			}
+			pData.Reads = append(pData.Reads, k)
+		}
+
+		for _, write := range ops.DataWrites {
+			kv := &types.KVWithMetadata{
+				Key:   write.Key,
+				Value: write.Value,
+				Metadata: &types.Metadata{
+					Version:       version,
+					AccessControl: write.ACL,
+				},
+			}
+			pData.Writes = append(pData.Writes, kv)
+
+			// Given that two or more transaction within a
+			// block can do blind write to a key, we need
+			// to ensure that the old version is the one
+			// written by the last transaction and not the
+			// one present in the worldstate
+			v, err := getVersion(ops.DBName, write.Key, dirtyWriteKeyVersion, db)
+			if err != nil {
+				return nil, err
+			}
+			if v == nil {
+				continue
+			}
+
+			pData.OldVersionOfWrites[write.Key] = v
+		}
+
+		// we assume a block to delete a key only once. If more than
+		// one transaction in a block deletes the same key, only the
+		// first valid transaction gets committed while others get
+		// invalidated.
+		for _, d := range ops.DataDeletes {
+			// as there can be a blind delete with previous transaction
+			// in the same block writing the value, we need to first
+			// consider the dirty set before fetching the version from
+			// the worldstate
+			v, err := getVersion(ops.DBName, d.Key, dirtyWriteKeyVersion, db)
+			if err != nil {
+				return nil, err
+			}
+
+			// for a delete to be valid, the value must exist and hence, the version will
+			// never be nil
+			pData.Deletes[d.Key] = v
+		}
+
+		txpData[i] = pData
 	}
 
-	for _, read := range tx.DataReads {
-		k := &provenance.KeyWithVersion{
-			Key:     read.Key,
-			Version: read.Version,
-		}
-		txData.Reads = append(txData.Reads, k)
-	}
-
-	for _, write := range tx.DataWrites {
-		kv := &types.KVWithMetadata{
-			Key:   write.Key,
-			Value: write.Value,
-			Metadata: &types.Metadata{
-				Version:       version,
-				AccessControl: write.ACL,
-			},
-		}
-		txData.Writes = append(txData.Writes, kv)
-
-		// Given that two or more transaction within a
-		// block can do blind write to a key, we need
-		// to ensure that the old version is the one
-		// written by the last transaction and not the
-		// one present in the worldstate
-		v, err := getVersion(tx.DBName, write.Key, dirtyWriteKeyVersion, db)
-		if err != nil {
-			return nil, err
-		}
-		if v == nil {
-			continue
-		}
-
-		txData.OldVersionOfWrites[write.Key] = v
-	}
-
-	// we assume a block to delete a key only once. If more than
-	// one transaction in a block deletes the same key, only the
-	// first valid transaction gets committed while others get
-	// invalidated. A bug towards thiis would be fixed in the
-	// issue #362
-	for _, d := range tx.DataDeletes {
-		// as there can be a blind delete with previous transaction
-		// in the same block writing the value, we need to first
-		// consider the dirty set before fetching the version from
-		// the worldstate
-		v, err := getVersion(tx.DBName, d.Key, dirtyWriteKeyVersion, db)
-		if err != nil {
-			return nil, err
-		}
-
-		// for a delete to be valid, the value must exist and hence, the version will
-		// never be nil
-		txData.Deletes[d.Key] = v
-	}
-
-	return txData, nil
+	return txpData, nil
 }
 
 func constructProvenanceEntriesForConfigTx(
@@ -454,7 +469,7 @@ func getVersion(
 	dirtyWriteKeyVersion map[string]*types.Version,
 	db worldstate.DB,
 ) (*types.Version, error) {
-	version, ok := dirtyWriteKeyVersion[key]
+	version, ok := dirtyWriteKeyVersion[constructCompositeKey(dbName, key)]
 	if ok {
 		return version, nil
 	}

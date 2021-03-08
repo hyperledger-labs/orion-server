@@ -606,11 +606,15 @@ func createSampleTx(t *testing.T, key []string, value [][]byte, signer crypto.Si
 	for i := 0; i < len(key); i++ {
 		e := testutils.SignedDataTxEnvelope(t, signer, &types.DataTx{
 			UserID: "testUser",
-			DBName: worldstate.DefaultDBName,
-			DataWrites: []*types.DataWrite{
+			DBOperations: []*types.DBOperation{
 				{
-					Key:   key[i],
-					Value: value[i],
+					DBName: worldstate.DefaultDBName,
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   key[i],
+							Value: value[i],
+						},
+					},
 				},
 			},
 		})

@@ -109,10 +109,14 @@ func TestBatchCreator(t *testing.T) {
 	dataTx1 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user1",
-			DBName: "db1",
-			DataDeletes: []*types.DataDelete{
+			DBOperations: []*types.DBOperation{
 				{
-					Key: "key1",
+					DBName: "db1",
+					DataDeletes: []*types.DataDelete{
+						{
+							Key: "key1",
+						},
+					},
 				},
 			},
 		},
@@ -121,10 +125,14 @@ func TestBatchCreator(t *testing.T) {
 	dataTx2 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user2",
-			DBName: "db2",
-			DataDeletes: []*types.DataDelete{
+			DBOperations: []*types.DBOperation{
 				{
-					Key: "key2",
+					DBName: "db2",
+					DataDeletes: []*types.DataDelete{
+						{
+							Key: "key2",
+						},
+					},
 				},
 			},
 		},

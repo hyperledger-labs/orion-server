@@ -18,51 +18,82 @@ type dataTxValidator struct {
 	logger          *logger.SugarLogger
 }
 
-func (v *dataTxValidator) validate(
-	txEnv *types.DataTxEnvelope,
-	pendingWrites map[string]bool,
-	pendingDeletes map[string]bool,
-) (*types.ValidationInfo, error) {
-	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
-	if err != nil || valInfo.Flag != types.Flag_VALID {
-		return valInfo, err
+func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
+	var valRes *types.ValidationInfo
+	var err error
+
+	valRes, err = v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
+	if err != nil {
+		return nil, err
+	}
+	if valRes.Flag != types.Flag_VALID {
+		return valRes, err
 	}
 
-	tx := txEnv.Payload
-	switch {
-	case !v.db.ValidDBName(tx.DBName):
+	dbs := make(map[string]bool)
+	for _, ops := range txEnv.Payload.DBOperations {
+		if !dbs[ops.DBName] {
+			dbs[ops.DBName] = true
+			continue
+		}
+
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-			ReasonIfInvalid: "the database name [" + tx.DBName + "] is not valid",
+			ReasonIfInvalid: "the database [" + ops.DBName + "] occurs more than once in the operations. The database present in the operations should be unique",
+		}, nil
+	}
+
+	for _, ops := range txEnv.Payload.DBOperations {
+		valRes, err = v.validateOps(txEnv.Payload.UserID, ops, pendingOps)
+		if err != nil || valRes.Flag != types.Flag_VALID {
+			return valRes, err
+		}
+	}
+
+	return valRes, nil
+}
+
+func (v *dataTxValidator) validateOps(
+	userID string,
+	txOps *types.DBOperation,
+	pendingOps *pendingOperations,
+) (*types.ValidationInfo, error) {
+	dbName := txOps.DBName
+
+	switch {
+	case !v.db.ValidDBName(dbName):
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "the database name [" + dbName + "] is not valid",
 		}, nil
 
-	case !v.db.Exist(tx.DBName):
+	case !v.db.Exist(dbName):
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
-			ReasonIfInvalid: "the database [" + tx.DBName + "] does not exist in the cluster",
+			ReasonIfInvalid: "the database [" + dbName + "] does not exist in the cluster",
 		}, nil
 
-	case worldstate.IsSystemDB(tx.DBName):
+	case worldstate.IsSystemDB(dbName):
 		return &types.ValidationInfo{
 			Flag: types.Flag_INVALID_NO_PERMISSION,
-			ReasonIfInvalid: "the database [" + tx.DBName + "] is a system database and no user can write to a " +
+			ReasonIfInvalid: "the database [" + dbName + "] is a system database and no user can write to a " +
 				"system database via data transaction. Use appropriate transaction type to modify the system database",
 		}, nil
 
 	default:
-		hasPerm, err := v.identityQuerier.HasReadWriteAccess(tx.UserID, tx.DBName)
+		hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, dbName)
 		if err != nil {
 			return nil, err
 		}
 		if !hasPerm {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + tx.UserID + "] has no read-write permission on the database [" + tx.DBName + "]",
+				ReasonIfInvalid: "the user [" + userID + "] has no read-write permission on the database [" + dbName + "]",
 			}, nil
 		}
 	}
 
-	r, err := v.validateFieldsInDataWrites(tx.DataWrites)
+	r, err := v.validateFieldsInDataWrites(txOps.DataWrites)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +101,7 @@ func (v *dataTxValidator) validate(
 		return r, nil
 	}
 
-	r, err = v.validateFieldsInDataDeletes(tx.DBName, tx.DataDeletes, pendingDeletes)
+	r, err = v.validateFieldsInDataDeletes(txOps.DBName, txOps.DataDeletes, pendingOps)
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +109,12 @@ func (v *dataTxValidator) validate(
 		return r, nil
 	}
 
-	r = validateUniquenessInDataWritesAndDeletes(tx.DataWrites, tx.DataDeletes)
+	r = validateUniquenessInDataWritesAndDeletes(txOps.DataWrites, txOps.DataDeletes)
 	if r.Flag != types.Flag_VALID {
 		return r, nil
 	}
 
-	r, err = v.validateACLOnDataReads(tx.UserID, tx.DBName, tx.DataReads)
+	r, err = v.validateACLOnDataReads(userID, dbName, txOps.DataReads)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +122,7 @@ func (v *dataTxValidator) validate(
 		return r, nil
 	}
 
-	r, err = v.validateACLOnDataWrites(tx.UserID, tx.DBName, tx.DataWrites)
+	r, err = v.validateACLOnDataWrites(userID, dbName, txOps.DataWrites)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +130,7 @@ func (v *dataTxValidator) validate(
 		return r, nil
 	}
 
-	r, err = v.validateACLOnDataDeletes(tx.UserID, tx.DBName, tx.DataDeletes)
+	r, err = v.validateACLOnDataDeletes(userID, dbName, txOps.DataDeletes)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +138,7 @@ func (v *dataTxValidator) validate(
 		return r, nil
 	}
 
-	return v.mvccValidation(tx.DBName, tx.DataReads, pendingWrites, pendingDeletes)
+	return v.mvccValidation(dbName, txOps.DataReads, pendingOps)
 }
 
 func (v *dataTxValidator) validateFieldsInDataWrites(DataWrites []*types.DataWrite) (*types.ValidationInfo, error) {
@@ -166,7 +197,7 @@ func (v *dataTxValidator) validateFieldsInDataWrites(DataWrites []*types.DataWri
 func (v *dataTxValidator) validateFieldsInDataDeletes(
 	dbName string,
 	dataDeletes []*types.DataDelete,
-	pendingDeletes map[string]bool,
+	pendingOps *pendingOperations,
 ) (*types.ValidationInfo, error) {
 	for _, d := range dataDeletes {
 		if d == nil {
@@ -180,7 +211,7 @@ func (v *dataTxValidator) validateFieldsInDataDeletes(
 		// key is already deleted by some other previous transaction in the block. Only if it
 		// is not deleted by any previous transaction, we need to check whether the key exist
 		// in the worldstate.
-		if pendingDeletes[d.Key] {
+		if pendingOps.existDelete(dbName, d.Key) {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
 				ReasonIfInvalid: "the key [" + d.Key + "] is already deleted by some previous transaction in the block",
@@ -310,9 +341,9 @@ func (v *dataTxValidator) validateACLOnDataDeletes(userID, dbName string, delete
 	}, nil
 }
 
-func (v *dataTxValidator) mvccValidation(dbName string, reads []*types.DataRead, pendingWrites map[string]bool, pendingDeletes map[string]bool) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) mvccValidation(dbName string, reads []*types.DataRead, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
 	for _, r := range reads {
-		if pendingWrites[r.Key] || pendingDeletes[r.Key] {
+		if pendingOps.exist(dbName, r.Key) {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
 				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [" + r.Key + "] in database [" + dbName + "]",

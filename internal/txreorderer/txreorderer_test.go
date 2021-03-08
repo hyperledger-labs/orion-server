@@ -39,20 +39,24 @@ func TestTxReorderer(t *testing.T) {
 	dataTx1 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user1",
-			DBName: "db1",
-			DataReads: []*types.DataRead{
+			DBOperations: []*types.DBOperation{
 				{
-					Key: "key1",
-					Version: &types.Version{
-						BlockNum: 1,
-						TxNum:    1,
+					DBName: "db1",
+					DataReads: []*types.DataRead{
+						{
+							Key: "key1",
+							Version: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
+						},
 					},
-				},
-			},
-			DataWrites: []*types.DataWrite{
-				{
-					Key:   "key2",
-					Value: []byte("value2"),
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   "key2",
+							Value: []byte("value2"),
+						},
+					},
 				},
 			},
 		},
@@ -61,10 +65,14 @@ func TestTxReorderer(t *testing.T) {
 	dataTx2 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user1",
-			DBName: "db1",
-			DataDeletes: []*types.DataDelete{
+			DBOperations: []*types.DBOperation{
 				{
-					Key: "key1",
+					DBName: "db1",
+					DataDeletes: []*types.DataDelete{
+						{
+							Key: "key1",
+						},
+					},
 				},
 			},
 		},
@@ -73,10 +81,14 @@ func TestTxReorderer(t *testing.T) {
 	dataTx3 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user2",
-			DBName: "db2",
-			DataDeletes: []*types.DataDelete{
+			DBOperations: []*types.DBOperation{
 				{
-					Key: "key2",
+					DBName: "db2",
+					DataDeletes: []*types.DataDelete{
+						{
+							Key: "key2",
+						},
+					},
 				},
 			},
 		},
@@ -85,10 +97,14 @@ func TestTxReorderer(t *testing.T) {
 	dataTx4 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user2",
-			DBName: "db2",
-			DataDeletes: []*types.DataDelete{
+			DBOperations: []*types.DBOperation{
 				{
-					Key: "key3",
+					DBName: "db2",
+					DataDeletes: []*types.DataDelete{
+						{
+							Key: "key3",
+						},
+					},
 				},
 			},
 		},
@@ -97,10 +113,14 @@ func TestTxReorderer(t *testing.T) {
 	dataTx5 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
 			UserID: "user2",
-			DBName: "db2",
-			DataDeletes: []*types.DataDelete{
+			DBOperations: []*types.DBOperation{
 				{
-					Key: "key4",
+					DBName: "db2",
+					DataDeletes: []*types.DataDelete{
+						{
+							Key: "key4",
+						},
+					},
 				},
 			},
 		},

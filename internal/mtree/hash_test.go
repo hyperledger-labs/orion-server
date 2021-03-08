@@ -53,12 +53,16 @@ func Test_calculateTxHash(t *testing.T) {
 			name: "Data tx",
 			tx: &types.DataTxEnvelope{
 				Payload: &types.DataTx{
-					UserID:      "testUser",
-					TxID:        "DataTx1",
-					DBName:      "testDB",
-					DataReads:   nil,
-					DataWrites:  nil,
-					DataDeletes: nil,
+					UserID: "testUser",
+					TxID:   "DataTx1",
+					DBOperations: []*types.DBOperation{
+						{
+							DBName:      "testDB",
+							DataReads:   nil,
+							DataWrites:  nil,
+							DataDeletes: nil,
+						},
+					},
 				},
 				Signature: []byte("signature"),
 			},
@@ -71,12 +75,17 @@ func Test_calculateTxHash(t *testing.T) {
 			name: "Data tx, no validation info",
 			tx: &types.DataTxEnvelope{
 				Payload: &types.DataTx{
-					UserID:      "testUser",
-					TxID:        "DataTx1",
-					DBName:      "testDB",
-					DataReads:   nil,
-					DataWrites:  nil,
-					DataDeletes: nil,
+					UserID: "testUser",
+					TxID:   "DataTx1",
+					DBOperations: []*types.DBOperation{
+						{
+
+							DBName:      "testDB",
+							DataReads:   nil,
+							DataWrites:  nil,
+							DataDeletes: nil,
+						},
+					},
 				},
 				Signature: []byte("signature"),
 			},
@@ -103,7 +112,6 @@ func Test_calculateTxHash(t *testing.T) {
 				h, err := crypto.ComputeSHA256Hash(append(payloadBytes, valBytes...))
 				require.NoError(t, err)
 				require.Equal(t, h, got)
-
 			}
 		})
 	}

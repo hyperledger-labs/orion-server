@@ -250,26 +250,30 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 	dataTx := &types.DataTx{
 		UserID: userID,
 		TxID:   "1",
-		DBName: "testDB",
-		DataDeletes: []*types.DataDelete{
+		DBOperations: []*types.DBOperation{
 			{
-				Key: "foo",
-			},
-		},
-		DataReads: []*types.DataRead{
-			{
-				Key: "bar",
-				Version: &types.Version{
-					TxNum:    1,
-					BlockNum: 1,
+				DBName: "testDB",
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "foo",
+					},
 				},
-			},
-		},
-		DataWrites: []*types.DataWrite{
-			{
-				Key:   "xxx",
-				Value: []byte("yyy"),
-				ACL:   &types.AccessControl{},
+				DataReads: []*types.DataRead{
+					{
+						Key: "bar",
+						Version: &types.Version{
+							TxNum:    1,
+							BlockNum: 1,
+						},
+					},
+				},
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "xxx",
+						Value: []byte("yyy"),
+						ACL:   &types.AccessControl{},
+					},
+				},
 			},
 		},
 	}
@@ -531,7 +535,6 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 				err := json.NewDecoder(rr.Body).Decode(resp)
 				require.NoError(t, err)
 				require.Equal(t, txResp, resp)
-
 			} else {
 				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)

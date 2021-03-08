@@ -74,6 +74,10 @@ message UserAdministrationTxEnvelope {
 message DataTx {
     string userID = 1;
     string txID = 2;
+    repeated DBOperation DBOperations = 3;
+}
+
+message DBOperation {
     string DB_name = 3;
     repeated DataRead data_reads = 4;
     repeated DataWrite data_writes = 5;

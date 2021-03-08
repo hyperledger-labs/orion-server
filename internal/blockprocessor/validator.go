@@ -18,6 +18,7 @@ type validator struct {
 	dbAdminTxValidator   *dbAdminTxValidator
 	userAdminTxValidator *userAdminTxValidator
 	dataTxValidator      *dataTxValidator
+	signValidator        *txSigValidator
 	logger               *logger.SugarLogger
 }
 
@@ -58,6 +59,8 @@ func newValidator(conf *Config) *validator {
 			logger:          conf.Logger,
 		},
 
+		signValidator: txSigValidator,
+
 		logger: conf.Logger,
 	}
 }
@@ -94,11 +97,10 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	case *types.Block_DataTxEnvelopes:
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
 		valInfo := make([]*types.ValidationInfo, len(dataTxEnvs))
-		pendingWrites := make(map[string]bool)
-		pendingDeletes := make(map[string]bool)
+		pendingOps := newPendingOperations()
 
 		for txNum, txEnv := range dataTxEnvs {
-			valRes, err := v.dataTxValidator.validate(txEnv, pendingWrites, pendingDeletes)
+			valRes, err := v.dataTxValidator.validate(txEnv, pendingOps)
 			if err != nil {
 				return nil, errors.WithMessage(err, "error while validating data transaction")
 			}
@@ -109,12 +111,14 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 				continue
 			}
 
-			for _, w := range txEnv.Payload.DataWrites {
-				pendingWrites[w.Key] = true
-			}
+			for _, ops := range txEnv.Payload.DBOperations {
+				for _, w := range ops.DataWrites {
+					pendingOps.addWrite(ops.DBName, w.Key)
+				}
 
-			for _, d := range txEnv.Payload.DataDeletes {
-				pendingDeletes[d.Key] = true
+				for _, d := range ops.DataDeletes {
+					pendingOps.addDelete(ops.DBName, d.Key)
+				}
 			}
 		}
 
@@ -168,4 +172,40 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	default:
 		return nil, errors.Errorf("unexpected transaction envelope in the block")
 	}
+}
+
+type pendingOperations struct {
+	pendingWrites  map[string]bool
+	pendingDeletes map[string]bool
+}
+
+func newPendingOperations() *pendingOperations {
+	return &pendingOperations{
+		pendingWrites:  make(map[string]bool),
+		pendingDeletes: make(map[string]bool),
+	}
+}
+
+func (p *pendingOperations) addWrite(dbName, key string) {
+	ckey := constructCompositeKey(dbName, key)
+	p.pendingWrites[ckey] = true
+}
+
+func (p *pendingOperations) addDelete(dbName, key string) {
+	ckey := constructCompositeKey(dbName, key)
+	p.pendingDeletes[ckey] = true
+}
+
+func (p *pendingOperations) existDelete(dbName, key string) bool {
+	ckey := constructCompositeKey(dbName, key)
+	return p.pendingDeletes[ckey]
+}
+
+func (p *pendingOperations) exist(dbName, key string) bool {
+	ckey := constructCompositeKey(dbName, key)
+	return p.pendingWrites[ckey] || p.pendingDeletes[ckey]
+}
+
+func constructCompositeKey(dbName, key string) string {
+	return dbName + "~" + key
 }

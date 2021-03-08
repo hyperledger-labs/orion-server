@@ -159,7 +159,7 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, 
 				return err
 			}
 			if lastVer == nil {
-				commitSet[actualKey] = string(newValue)
+				commitSet[write.Key] = string(newValue)
 				s.logger.Debug("previous version of key [" + actualKey + "] does not exist in db [" + tx.DBName + "]")
 				continue
 			}
@@ -173,7 +173,7 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, 
 		}
 
 		if oldValue == nil {
-			oldValueStr, ok := commitSet[actualKey]
+			oldValueStr, ok := commitSet[write.Key]
 			if !ok {
 				s.logger.Debugf("key [%s] version [%d,%d] for which oldValue is not found", actualKey, oldVersion.BlockNum, oldVersion.TxNum)
 				return errors.Errorf("error while finding the previous version of the key[%s]", write.Key)
@@ -188,7 +188,7 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, 
 		s.logger.Debugf("oldValue[%s]---(next)--->newValue[%s]", quad.NativeOf(oldValue), string(newValue))
 		cayleyTx.AddQuad(quad.Make(oldValue, NEXT, string(newValue), ""))
 
-		commitSet[actualKey] = string(newValue)
+		commitSet[write.Key] = string(newValue)
 	}
 
 	return nil

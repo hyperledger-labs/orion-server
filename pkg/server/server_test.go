@@ -230,12 +230,16 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 
 	dataTx := &types.DataTx{
 		UserID: "admin",
-		DBName: worldstate.DefaultDBName,
 		TxID:   uuid.New().String(),
-		DataWrites: []*types.DataWrite{
+		DBOperations: []*types.DBOperation{
 			{
-				Key:   "foo",
-				Value: []byte("bar"),
+				DBName: worldstate.DefaultDBName,
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "foo",
+						Value: []byte("bar"),
+					},
+				},
 			},
 		},
 	}
@@ -430,12 +434,16 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 
 	dataTx := &types.DataTx{
 		UserID: "admin",
-		DBName: "testDB",
 		TxID:   uuid.New().String(),
-		DataWrites: []*types.DataWrite{
+		DBOperations: []*types.DBOperation{
 			{
-				Key:   "foo",
-				Value: []byte("bar"),
+				DBName: "testDB",
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "foo",
+						Value: []byte("bar"),
+					},
+				},
 			},
 		},
 	}
