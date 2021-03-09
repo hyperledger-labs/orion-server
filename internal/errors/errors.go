@@ -32,6 +32,16 @@ type DuplicateTxIDError struct {
 	TxID string
 }
 
-func (e DuplicateTxIDError) Error() string {
-	return "the transaction has a duplicate txID [" + e.TxID + "]"
+func (d *DuplicateTxIDError) Error() string {
+	return "the transaction has a duplicate txID [" + d.TxID + "]"
+}
+
+// ClosedError is used when a blocking operation aborted because a component closed,
+// or when an operation is performed on a component that is already closed.
+type ClosedError struct {
+	ErrMsg string
+}
+
+func (c *ClosedError) Error() string {
+	return c.ErrMsg
 }
