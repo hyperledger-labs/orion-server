@@ -44,8 +44,12 @@ fmt:
 goimports:
 	find . -name \*.go -not -path "./pkg/types/*" -exec goimports -w -l {} \;
 
+.PHONY: binary
+binary:
+	go build -o bin/bdb cmd/bdb/main.go
+
 .PHONY: test
-test-script:
+test-script: 
 	scripts/run-unit-tests.sh
 
 .PHONY: clean
@@ -54,7 +58,7 @@ clean:
 	@rm -rf test/tests.* test/coverage.*
 
 .PHONY: protos
-protos: 
+protos:
 	docker run -it -v `pwd`:`pwd` -w `pwd` sykesm/fabric-protos:0.2 scripts/compile_go_protos.sh
 
 TEST_TARGETS := test-default test-bench test-short test-verbose test-race
@@ -63,12 +67,14 @@ test-short:   ARGS=-short
 test-verbose: ARGS=-v
 test-race:    ARGS=-race
 $(TEST_TARGETS): test
-check test tests: 
+check test tests:
+	go build -o bin/bdb cmd/bdb/main.go
 	go test -timeout $(TIMEOUT) $(ARGS) $(TESTPKGS)
 
 test-coverage-tools: | $(GOCOVMERGE) $(GOCOV) $(GOCOVXML) 
 test-coverage: COVERAGE_DIR := $(CURDIR)/test/coverage.$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 test-coverage: test-coverage-tools
+	go build -o bin/bdb cmd/bdb/main.go
 	mkdir -p $(COVERAGE_DIR)/coverage
 	$(GO) test \
 		-coverpkg=$$($(GO) list -f '{{ join .Deps "\n" }}' $(TESTPKGS) | \

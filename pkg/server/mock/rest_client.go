@@ -95,7 +95,7 @@ func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.ResponseEnve
 		e.Signature,
 	)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "error while issuing "+constants.URLForGetConfig())
 	}
 
 	defer resp.Body.Close()

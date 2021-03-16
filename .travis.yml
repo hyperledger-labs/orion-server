@@ -2,4 +2,4 @@ language: go
 go:
     - 1.15.5
 script:
-    - scripts/run-unit-tests.sh
+    - scripts/run-tests.sh

@@ -15,6 +15,7 @@ run_tests() {
 }
 
 main() {
+    go build -o bin/bdb cmd/bdb/main.go
     # default behavior is to run all tests
     local -a package_spec=("${TEST_PKGS:-github.ibm.com/blockchaindb/server/...}")
 
