@@ -46,7 +46,7 @@ goimports:
 
 .PHONY: binary
 binary:
-	go build -o bin/bdb cmd/bdb/main.go
+	go build -o $(BIN)/bdb cmd/bdb/main.go
 
 .PHONY: test
 test-script: 
@@ -68,13 +68,13 @@ test-verbose: ARGS=-v
 test-race:    ARGS=-race
 $(TEST_TARGETS): test
 check test tests:
-	go build -o bin/bdb cmd/bdb/main.go
+	go build -o $(BIN)/bdb cmd/bdb/main.go
 	go test -timeout $(TIMEOUT) $(ARGS) $(TESTPKGS)
 
 test-coverage-tools: | $(GOCOVMERGE) $(GOCOV) $(GOCOVXML) 
 test-coverage: COVERAGE_DIR := $(CURDIR)/test/coverage.$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 test-coverage: test-coverage-tools
-	go build -o bin/bdb cmd/bdb/main.go
+	go build -o $(BIN)/bdb cmd/bdb/main.go
 	mkdir -p $(COVERAGE_DIR)/coverage
 	$(GO) test \
 		-coverpkg=$$($(GO) list -f '{{ join .Deps "\n" }}' $(TESTPKGS) | \
