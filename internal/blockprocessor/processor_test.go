@@ -105,11 +105,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
 
 	b := New(&Config{
-		BlockQueue:      queue.New(10),
-		BlockStore:      blockStore,
-		ProvenanceStore: provenanceStore,
-		DB:              db,
-		Logger:          logger,
+		BlockOneQueueBarrier: queue.NewOneQueueBarrier(logger),
+		BlockStore:           blockStore,
+		ProvenanceStore:      provenanceStore,
+		DB:                   db,
+		Logger:               logger,
 	})
 
 	genesisBlock := &types.Block{
@@ -143,8 +143,6 @@ func newTestEnv(t *testing.T) *testEnv {
 			},
 		},
 	}
-	go b.Start()
-	b.WaitTillStart()
 
 	cleanup := func(stopBlockProcessor bool) {
 		if stopBlockProcessor {
@@ -168,7 +166,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		}
 	}
 
-	return &testEnv{
+	env := &testEnv{
 		blockProcessor: b,
 		db:             db,
 		dbPath:         dir,
@@ -180,10 +178,18 @@ func newTestEnv(t *testing.T) *testEnv {
 		genesisBlock:   genesisBlock,
 		cleanup:        cleanup,
 	}
+
+	go env.blockProcessor.Start()
+	env.blockProcessor.WaitTillStart()
+
+	return env
 }
 
 func setup(t *testing.T, env *testEnv) {
-	env.blockProcessor.blockQueue.Enqueue(env.genesisBlock)
+	reply, err := env.blockProcessor.blockOneQueueBarrier.EnqueueWait(env.genesisBlock)
+	require.NoError(t, err)
+	require.Nil(t, reply) // May not be nil when we implement dynamic config
+
 	assertConfigHasCommitted := func() bool {
 		exist, err := env.blockProcessor.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
 		if err != nil || !exist {
@@ -282,8 +288,9 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}
 
 		for _, tt := range testCases {
-			env.blockProcessor.blockQueue.Enqueue(tt.block)
-			require.Eventually(t, env.blockProcessor.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
+			reply, err := env.blockProcessor.blockOneQueueBarrier.EnqueueWait(tt.block)
+			require.NoError(t, err)
+			require.Nil(t, reply) // May not be nil when we implement dynamic config
 
 			assertCommittedValue := func() bool {
 				val, metadata, err := env.db.Get(worldstate.DefaultDBName, tt.key)
@@ -360,9 +367,10 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 		for _, tt := range testCases {
 			for _, block := range tt.blocks {
-				env.blockProcessor.blockQueue.Enqueue(block)
+				reply, err := env.blockProcessor.blockOneQueueBarrier.EnqueueWait(block)
+				require.NoError(t, err)
+				require.Nil(t, reply) // May not be nil when we implement dynamic config
 			}
-			require.Eventually(t, env.blockProcessor.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
 
 			assertCommittedValue := func() bool {
 				val, metadata, err := env.db.Get(worldstate.DefaultDBName, "key1")
@@ -428,7 +436,7 @@ func TestFailureAndRecovery(t *testing.T) {
 		env.blockProcessor.started = make(chan struct{})
 		env.blockProcessor.stop = make(chan struct{})
 		env.blockProcessor.stopped = make(chan struct{})
-		env.blockProcessor.blockQueue = queue.New(10)
+		env.blockProcessor.blockOneQueueBarrier = queue.NewOneQueueBarrier(env.blockProcessor.logger)
 		defer env.blockProcessor.Stop()
 		go env.blockProcessor.Start()
 		env.blockProcessor.WaitTillStart()
@@ -525,60 +533,60 @@ func TestFailureAndRecovery(t *testing.T) {
 }
 
 func TestBlockCommitListener(t *testing.T) {
-	t.Run("listener is involved successfully", func(t *testing.T) {
-		env := newTestEnv(t)
-		defer env.cleanup(true)
 
-		setup(t, env)
-		block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
-		block2.Header.ValidationInfo = []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
+	env := newTestEnv(t)
+	defer env.cleanup(true)
+
+	setup(t, env)
+	block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
+	block2.Header.ValidationInfo = []*types.ValidationInfo{
+		{
+			Flag: types.Flag_VALID,
+		},
+	}
+	expectedBlock := proto.Clone(block2).(*types.Block)
+	expectedBlock.XXX_sizecache = 0
+	genesisHash, err := env.blockStore.GetHash(uint64(1))
+	expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, []*types.Block{block2}, 2)
+	root, err := mtree.BuildTreeForBlockTx(block2)
+	require.NoError(t, err)
+	expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+
+	listener1 := &mocks.BlockCommitListener{}
+	listener1.On("PostBlockCommitProcessing", mock.Anything).Return(func(arg mock.Arguments) {
+		receivedBlock := arg.Get(0).(*types.Block)
+		require.True(t, proto.Equal(expectedBlock, receivedBlock))
+	}).Return(nil)
+	listener2 := &mocks.BlockCommitListener{}
+	listener2.On("PostBlockCommitProcessing", mock.Anything).Return(func(arg mock.Arguments) {
+		receivedBlock := arg.Get(0).(*types.Block)
+		require.True(t, proto.Equal(expectedBlock, receivedBlock))
+	}).Return(nil)
+
+	env.blockProcessor.RegisterBlockCommitListener("listener1", listener1)
+	env.blockProcessor.RegisterBlockCommitListener("listener2", listener2)
+
+	reply, err := env.blockProcessor.blockOneQueueBarrier.EnqueueWait(block2)
+	require.NoError(t, err)
+	require.Nil(t, reply) // May not be nil when we implement dynamic config
+
+	assertCommittedBlock := func() bool {
+		height, err := env.blockStore.Height()
+		if err != nil {
+			return false
 		}
-		expectedBlock := proto.Clone(block2).(*types.Block)
-		expectedBlock.XXX_sizecache = 0
-		genesisHash, err := env.blockStore.GetHash(uint64(1))
-		expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, []*types.Block{block2}, 2)
-		root, err := mtree.BuildTreeForBlockTx(block2)
-		require.NoError(t, err)
-		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
-
-		listener1 := &mocks.BlockCommitListener{}
-		listener1.On("PostBlockCommitProcessing", mock.Anything).Return(func(arg mock.Arguments) {
-			receivedBlock := arg.Get(0).(*types.Block)
-			require.True(t, proto.Equal(expectedBlock, receivedBlock))
-		}).Return(nil)
-		listener2 := &mocks.BlockCommitListener{}
-		listener2.On("PostBlockCommitProcessing", mock.Anything).Return(func(arg mock.Arguments) {
-			receivedBlock := arg.Get(0).(*types.Block)
-			require.True(t, proto.Equal(expectedBlock, receivedBlock))
-		}).Return(nil)
-
-		env.blockProcessor.RegisterBlockCommitListener("listener1", listener1)
-		env.blockProcessor.RegisterBlockCommitListener("listener2", listener2)
-
-		env.blockProcessor.blockQueue.Enqueue(block2)
-		require.Eventually(t, env.blockProcessor.blockQueue.IsEmpty, 2*time.Second, 100*time.Millisecond)
-
-		assertCommittedBlock := func() bool {
-			height, err := env.blockStore.Height()
-			if err != nil {
-				return false
-			}
-			if height != 2 {
-				return false
-			}
-
-			block, err := env.blockStore.Get(2)
-			if err != nil {
-				return false
-			}
-			return proto.Equal(block2, block)
+		if height != 2 {
+			return false
 		}
 
-		require.Eventually(t, assertCommittedBlock, 2*time.Second, 100*time.Millisecond)
-	})
+		block, err := env.blockStore.Get(2)
+		if err != nil {
+			return false
+		}
+		return proto.Equal(expectedBlock, block)
+	}
+
+	require.Eventually(t, assertCommittedBlock, 2*time.Second, 100*time.Millisecond)
 }
 
 func createSampleBlock(blockNumber uint64, env []*types.DataTxEnvelope) *types.Block {

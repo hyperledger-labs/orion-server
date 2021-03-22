@@ -36,7 +36,7 @@ func NewOneQueueBarrier(logger *logger.SugarLogger) *OneQueueBarrier {
 	return qb
 }
 
-// Enqueue submits an entry for consumption and ways for a reply, indicating processing had finished.
+// EnqueueWait submits an entry for consumption and ways for a reply, indicating processing had finished.
 // An error is returned if the OneQueueBarrier was closed.
 func (qb *OneQueueBarrier) EnqueueWait(entry interface{}) (interface{}, error) {
 	select {

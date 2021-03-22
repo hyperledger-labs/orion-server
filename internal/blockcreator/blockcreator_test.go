@@ -1,6 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-package blockcreator
+package blockcreator_test
 
 import (
 	"io/ioutil"
@@ -11,6 +11,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"github.ibm.com/blockchaindb/server/internal/blockcreator"
+	"github.ibm.com/blockchaindb/server/internal/blockcreator/mocks"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
@@ -20,7 +22,9 @@ import (
 )
 
 type testEnv struct {
-	creator        *BlockCreator
+	creator        *blockcreator.BlockCreator
+	txBatchQueue   *queue.Queue
+	blockQueue     *queue.Queue
 	db             worldstate.DB
 	dbPath         string
 	blockStore     *blockstore.Store
@@ -69,13 +73,23 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
-	b, err := New(&Config{
-		TxBatchQueue: queue.New(10),
-		BlockQueue:   queue.New(10),
+	txBatchQ := queue.New(10) // Input: transactions
+	b, err := blockcreator.New(&blockcreator.Config{
+		TxBatchQueue: txBatchQ,
 		Logger:       logger,
 		BlockStore:   blockStore,
 	})
 	require.NoError(t, err)
+
+	blockQueue := queue.New(10) // Output: accumulates the blocks that are submitted to the Replicator.
+	mockReplicator := &mocks.Replicator{}
+	mockReplicator.SubmitCalls(
+		func(block interface{}) error {
+			blockQueue.Enqueue(block)
+			return nil
+		},
+	)
+	b.RegisterReplicator(mockReplicator)
 	go b.Start()
 	b.WaitTillStart()
 
@@ -97,6 +111,8 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	return &testEnv{
 		creator:        b,
+		txBatchQueue:   txBatchQ,   // Input
+		blockQueue:     blockQueue, // Output
 		db:             db,
 		dbPath:         dir,
 		blockStore:     blockStore,
@@ -308,16 +324,16 @@ func TestBatchCreator(t *testing.T) {
 
 	enqueueTxBatchesAndAssertBlocks := func(t *testing.T, testEnv *testEnv, txBatches []interface{}, expectedBlocks []*types.Block) {
 		for _, txBatch := range txBatches {
-			testEnv.creator.txBatchQueue.Enqueue(txBatch)
+			testEnv.txBatchQueue.Enqueue(txBatch)
 		}
 
 		hasBlockCountMatched := func() bool {
-			return len(expectedBlocks) == testEnv.creator.blockQueue.Size()
+			return len(expectedBlocks) == testEnv.blockQueue.Size()
 		}
 		require.Eventually(t, hasBlockCountMatched, 2*time.Second, 1000*time.Millisecond)
 
 		for _, expectedBlock := range expectedBlocks {
-			block := testEnv.creator.blockQueue.Dequeue().(*types.Block)
+			block := testEnv.blockQueue.Dequeue().(*types.Block)
 			block.Header.ValidationInfo = expectedBlock.Header.ValidationInfo
 			require.True(t, proto.Equal(expectedBlock, block), "Expected block  %v, received block %v", expectedBlock, block)
 		}

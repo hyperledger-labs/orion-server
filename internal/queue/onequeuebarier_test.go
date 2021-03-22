@@ -18,19 +18,6 @@ func TestNewOneQueueBarrier(t *testing.T) {
 	require.NotNil(t, qb)
 }
 
-func testEnqueueFunc(t *testing.T, qb *queue.OneQueueBarrier, wg *sync.WaitGroup, entry interface{}, expectReply interface{}, expectErr error) {
-	reply, err := qb.EnqueueWait(entry)
-	if expectErr == nil {
-		require.NoError(t, err)
-		require.Equal(t, expectReply, reply)
-	} else {
-		require.EqualError(t, err, expectErr.Error())
-		require.IsType(t, expectErr, err)
-		require.Nil(t, reply)
-	}
-	wg.Done()
-}
-
 func TestOneQueueBarrier_EnqueueWait(t *testing.T) {
 	t.Run("Close release producing go-routine", func(t *testing.T) {
 		wg := &sync.WaitGroup{}
@@ -69,21 +56,6 @@ func TestOneQueueBarrier_EnqueueWait(t *testing.T) {
 		require.NoError(t, err)
 		wg.Wait()
 	})
-}
-
-func testDequeueFunc(t *testing.T, qb *queue.OneQueueBarrier, wg *sync.WaitGroup, expectEntry interface{}, expectErr error) interface{} {
-	entry, err := qb.Dequeue()
-	if expectErr == nil {
-		require.NoError(t, err)
-		require.Equal(t, expectEntry, entry)
-	} else {
-		require.EqualError(t, err, expectErr.Error())
-		require.IsType(t, expectErr, err)
-		require.Nil(t, entry)
-	}
-	wg.Done()
-
-	return entry
 }
 
 func TestOneQueueBarrier_Dequeue(t *testing.T) {
@@ -178,6 +150,34 @@ func TestOneQueueBarrier_Dequeue(t *testing.T) {
 		wgP.Wait()
 
 	})
+}
+
+func testEnqueueFunc(t *testing.T, qb *queue.OneQueueBarrier, wg *sync.WaitGroup, entry interface{}, expectReply interface{}, expectErr error) {
+	reply, err := qb.EnqueueWait(entry)
+	if expectErr == nil {
+		require.NoError(t, err)
+		require.Equal(t, expectReply, reply)
+	} else {
+		require.EqualError(t, err, expectErr.Error())
+		require.IsType(t, expectErr, err)
+		require.Nil(t, reply)
+	}
+	wg.Done()
+}
+
+func testDequeueFunc(t *testing.T, qb *queue.OneQueueBarrier, wg *sync.WaitGroup, expectEntry interface{}, expectErr error) interface{} {
+	entry, err := qb.Dequeue()
+	if expectErr == nil {
+		require.NoError(t, err)
+		require.Equal(t, expectEntry, entry)
+	} else {
+		require.EqualError(t, err, expectErr.Error())
+		require.IsType(t, expectErr, err)
+		require.Nil(t, entry)
+	}
+	wg.Done()
+
+	return entry
 }
 
 func testLogger(t *testing.T, level string) *logger.SugarLogger {

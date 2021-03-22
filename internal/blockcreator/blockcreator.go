@@ -5,16 +5,24 @@ package blockcreator
 import (
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockstore"
+	ierrors "github.ibm.com/blockchaindb/server/internal/errors"
 	"github.ibm.com/blockchaindb/server/internal/queue"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
+//go:generate counterfeiter -o mocks/replicator.go --fake-name Replicator . Replicator
+
+// Replicator is the input to the block replication layer.
+type Replicator interface {
+	Submit(block interface{}) error
+}
+
 // BlockCreator uses transactions batch queue to construct the
 // block and stores the created block in the block queue
 type BlockCreator struct {
 	txBatchQueue                *queue.Queue
-	blockQueue                  *queue.Queue
+	blockReplicator             Replicator
 	nextBlockNumber             uint64
 	previousBlockHeaderBaseHash []byte
 	blockStore                  *blockstore.Store
@@ -28,7 +36,6 @@ type BlockCreator struct {
 // block creator
 type Config struct {
 	TxBatchQueue *queue.Queue
-	BlockQueue   *queue.Queue
 	BlockStore   *blockstore.Store
 	Logger       *logger.SugarLogger
 }
@@ -46,7 +53,6 @@ func New(conf *Config) (*BlockCreator, error) {
 	}
 	return &BlockCreator{
 		txBatchQueue:                conf.TxBatchQueue,
-		blockQueue:                  conf.BlockQueue,
 		nextBlockNumber:             height + 1,
 		logger:                      conf.Logger,
 		blockStore:                  conf.BlockStore,
@@ -55,6 +61,10 @@ func New(conf *Config) (*BlockCreator, error) {
 		stopped:                     make(chan struct{}),
 		previousBlockHeaderBaseHash: lastBlockBaseHash,
 	}, nil
+}
+
+func (b *BlockCreator) RegisterReplicator(blockReplicator Replicator) {
+	b.blockReplicator = blockReplicator
 }
 
 // Start runs the block assembler in an infinite loop
@@ -110,7 +120,27 @@ func (b *BlockCreator) Start() {
 				b.logger.Debugf("created block %d with a DB administrative transaction", blkNum)
 			}
 
-			b.blockQueue.Enqueue(block)
+			err = b.blockReplicator.Submit(block)
+			switch err.(type) {
+			case nil:
+				// All is well
+			case *ierrors.ClosedError:
+				// This may happen when shutting down the server. 'continue' will eventually pick up the stop signal.
+				b.logger.Warnf("block submission to block-replicator failed, dropping block, shutting down, because: %s", err)
+				continue
+			case *ierrors.NotLeaderError:
+				b.logger.Warnf("block submission to block-replicator failed, because this node is not a leader: %s", err)
+				//TODO reject or redirect all TXs in the block via the pending-tx component.
+				// If there is another leader then redirect, else reject.
+				// This will drain the pipeline and eventually there will be no more transactions coming in.
+				// See issue:
+				// https://github.ibm.com/blockchaindb/server/issues/401
+				continue
+
+			default:
+				b.logger.Panicf("block submission to block-replicator failed: %v", err)
+			}
+
 			h, err := blockstore.ComputeBlockBaseHash(block)
 			if err != nil {
 				b.logger.Panicf("Error calculating block hash {%v}", err)

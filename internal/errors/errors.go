@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 package errors
 
+import "fmt"
+
 type NotFoundErr struct {
 	Message string
 }
@@ -44,4 +46,18 @@ type ClosedError struct {
 
 func (c *ClosedError) Error() string {
 	return c.ErrMsg
+}
+
+// NotLeaderError is an error that denotes that the current node is not the cluster leader.
+// The error carries the identity of the leader if it is known (>0), or 0 if it is not.
+type NotLeaderError struct {
+	LeaderID int
+}
+
+func (n *NotLeaderError) Error() string {
+	return fmt.Sprintf("not a leader, leader is: %d", n.LeaderID)
+}
+
+func (n *NotLeaderError) GetLeaderID() int {
+	return n.LeaderID
 }

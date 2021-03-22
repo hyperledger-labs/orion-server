@@ -17,39 +17,39 @@ import (
 
 // BlockProcessor holds block validator and committer
 type BlockProcessor struct {
-	blockQueue *queue.Queue
-	blockStore *blockstore.Store
-	validator  *validator
-	committer  *committer
-	listeners  *blockCommitListeners
-	started    chan struct{}
-	stop       chan struct{}
-	stopped    chan struct{}
-	logger     *logger.SugarLogger
+	blockOneQueueBarrier *queue.OneQueueBarrier
+	blockStore           *blockstore.Store
+	validator            *validator
+	committer            *committer
+	listeners            *blockCommitListeners
+	started              chan struct{}
+	stop                 chan struct{}
+	stopped              chan struct{}
+	logger               *logger.SugarLogger
 }
 
 // Config holds the configuration information needed to bootstrap the
 // block processor
 type Config struct {
-	BlockQueue      *queue.Queue
-	BlockStore      *blockstore.Store
-	DB              worldstate.DB
-	ProvenanceStore *provenance.Store
-	Logger          *logger.SugarLogger
+	BlockOneQueueBarrier *queue.OneQueueBarrier
+	BlockStore           *blockstore.Store
+	DB                   worldstate.DB
+	ProvenanceStore      *provenance.Store
+	Logger               *logger.SugarLogger
 }
 
 // New creates a ValidatorAndCommitter
 func New(conf *Config) *BlockProcessor {
 	return &BlockProcessor{
-		blockQueue: conf.BlockQueue,
-		blockStore: conf.BlockStore,
-		validator:  newValidator(conf),
-		committer:  newCommitter(conf),
-		listeners:  newBlockCommitListeners(conf.Logger),
-		started:    make(chan struct{}),
-		stop:       make(chan struct{}),
-		stopped:    make(chan struct{}),
-		logger:     conf.Logger,
+		blockOneQueueBarrier: conf.BlockOneQueueBarrier,
+		blockStore:           conf.BlockStore,
+		validator:            newValidator(conf),
+		committer:            newCommitter(conf),
+		listeners:            newBlockCommitListeners(conf.Logger),
+		started:              make(chan struct{}),
+		stop:                 make(chan struct{}),
+		stopped:              make(chan struct{}),
+		logger:               conf.Logger,
 	}
 }
 
@@ -71,10 +71,12 @@ func (b *BlockProcessor) Start() {
 			return
 
 		default:
-			blockData := b.blockQueue.Dequeue()
-			if blockData == nil {
-				// when the queue is closed during the teardown/cleanup,
-				// the block would be nil.
+			// The replication layer go-routine that enqueued the block will be blocked until after commit; it must be
+			// released by calling OneQueueBarrier.Reply().
+			blockData, err := b.blockOneQueueBarrier.Dequeue()
+			if err != nil {
+				// when the queue is closed during the teardown/cleanup, an error will be returned.
+				b.logger.Warnf("OneQueueBarrier error: %s", err)
 				continue
 			}
 			block := blockData.(*types.Block)
@@ -102,6 +104,23 @@ func (b *BlockProcessor) Start() {
 			}
 			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
 
+			//TODO detect config changes that affect the replication component and return an appropriate non-nil object
+			// to instruct it to reconfigure itself. See issues:
+			// https://github.ibm.com/blockchaindb/server/issues/396
+			// https://github.ibm.com/blockchaindb/server/issues/413
+			var reConfig interface{}
+
+			// The replication layer go-routine is blocked until after commit, and is released by calling Reply().
+			// The post-commit listeners are called after the replication layer go-routine is released. This is an
+			// optimization, as post-commit processing can proceed in parallel with the replication go-routine handling
+			// the next block.
+			err = b.blockOneQueueBarrier.Reply(reConfig)
+			if err != nil {
+				// when the queue is closed during the teardown/cleanup, an error will be returned.
+				b.logger.Warnf("OneQueueBarrier error: %s", err)
+				continue
+			}
+
 			if err = b.listeners.invoke(block); err != nil {
 				panic(err)
 			}
@@ -116,7 +135,9 @@ func (b *BlockProcessor) WaitTillStart() {
 
 // Stop stops the block processor
 func (b *BlockProcessor) Stop() {
-	b.blockQueue.Close()
+	if err := b.blockOneQueueBarrier.Close(); err != nil {
+		b.logger.Warnf("OneQueueBarrier error: %s", err)
+	}
 	close(b.stop)
 	<-b.stopped
 }
@@ -207,7 +228,7 @@ func (l *blockCommitListeners) invoke(block *types.Block) error {
 	defer l.RUnlock()
 
 	for name, listener := range l.listens {
-		l.logger.Debug("Invoking listener ["+name+"] for block [%d]", block.Header.BaseHeader.Number)
+		l.logger.Debugf("Invoking listener [%s] for block [%d]", name, block.Header.BaseHeader.Number)
 		if err := listener.PostBlockCommitProcessing(block); err != nil {
 			return errors.WithMessage(err, "error while invoking listener ["+name+"]")
 		}

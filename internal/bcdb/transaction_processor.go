@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.ibm.com/blockchaindb/server/internal/replication"
+
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/blockcreator"
 	"github.ibm.com/blockchaindb/server/internal/blockprocessor"
@@ -26,16 +28,17 @@ const (
 )
 
 type transactionProcessor struct {
-	nodeID         string
-	txQueue        *queue.Queue
-	txBatchQueue   *queue.Queue
-	blockQueue     *queue.Queue
-	txReorderer    *txreorderer.TxReorderer
-	blockCreator   *blockcreator.BlockCreator
-	blockProcessor *blockprocessor.BlockProcessor
-	blockStore     *blockstore.Store
-	pendingTxs     *pendingTxs
-	logger         *logger.SugarLogger
+	nodeID               string
+	txQueue              *queue.Queue
+	txBatchQueue         *queue.Queue
+	blockOneQueueBarrier *queue.OneQueueBarrier
+	txReorderer          *txreorderer.TxReorderer
+	blockCreator         *blockcreator.BlockCreator
+	blockReplicator      *replication.BlockReplicator
+	blockProcessor       *blockprocessor.BlockProcessor
+	blockStore           *blockstore.Store
+	pendingTxs           *pendingTxs
+	logger               *logger.SugarLogger
 	sync.Mutex
 }
 
@@ -59,7 +62,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	p.logger = conf.logger
 	p.txQueue = queue.New(conf.txQueueLength)
 	p.txBatchQueue = queue.New(conf.txBatchQueueLength)
-	p.blockQueue = queue.New(conf.blockQueueLength)
+	p.blockOneQueueBarrier = queue.NewOneQueueBarrier(conf.logger)
 
 	p.txReorderer = txreorderer.New(
 		&txreorderer.Config{
@@ -75,7 +78,6 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	if p.blockCreator, err = blockcreator.New(
 		&blockcreator.Config{
 			TxBatchQueue: p.txBatchQueue,
-			BlockQueue:   p.blockQueue,
 			Logger:       conf.logger,
 			BlockStore:   conf.blockStore,
 		},
@@ -83,22 +85,35 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		return nil, err
 	}
 
-	p.blockProcessor = blockprocessor.New(
-		&blockprocessor.Config{
-			BlockQueue:      p.blockQueue,
-			BlockStore:      conf.blockStore,
-			ProvenanceStore: conf.provenanceStore,
-			DB:              conf.db,
-			Logger:          conf.logger,
+	p.blockReplicator = replication.NewBlockReplicator(
+		&replication.Config{
+			BlockOneQueueBarrier: p.blockOneQueueBarrier,
+			Logger:               conf.logger,
 		},
 	)
 
-	p.blockProcessor.RegisterBlockCommitListener(commitListenerName, p)
+	p.blockCreator.RegisterReplicator(p.blockReplicator)
+
+	p.blockProcessor = blockprocessor.New(
+		&blockprocessor.Config{
+			BlockOneQueueBarrier: p.blockOneQueueBarrier,
+			BlockStore:           conf.blockStore,
+			ProvenanceStore:      conf.provenanceStore,
+			DB:                   conf.db,
+			Logger:               conf.logger,
+		},
+	)
+
+	_ = p.blockProcessor.RegisterBlockCommitListener(commitListenerName, p)
 
 	go p.txReorderer.Start()
 	p.txReorderer.WaitTillStart()
+
 	go p.blockCreator.Start()
 	p.blockCreator.WaitTillStart()
+
+	p.blockReplicator.Start()
+
 	go p.blockProcessor.Start()
 	p.blockProcessor.WaitTillStart()
 
@@ -229,6 +244,7 @@ func (t *transactionProcessor) close() error {
 
 	t.txReorderer.Stop()
 	t.blockCreator.Stop()
+	t.blockReplicator.Close()
 	t.blockProcessor.Stop()
 
 	return nil
