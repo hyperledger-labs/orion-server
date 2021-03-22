@@ -58,7 +58,7 @@ func TestMPTrieGetProof(t *testing.T) {
 
 	fmt.Println("Trie before delete")
 	printTrie(t, trie, 20)
-	rootHashBeforeDelete, err := trie.hash()
+	rootHashBeforeDelete, err := trie.Hash()
 	require.NoError(t, err)
 	require.NotNil(t, rootHashBeforeDelete)
 
@@ -69,7 +69,7 @@ func TestMPTrieGetProof(t *testing.T) {
 
 	fmt.Println("Trie after delete")
 	printTrie(t, trie, 20)
-	rootHashAfterDelete, err := trie.hash()
+	rootHashAfterDelete, err := trie.Hash()
 	require.NoError(t, err)
 	require.NotNil(t, rootHashAfterDelete)
 

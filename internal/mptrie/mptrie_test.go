@@ -547,7 +547,7 @@ func TestHistoryAccess(t *testing.T) {
 				err = trie.Update(key, val)
 				require.NoError(t, err)
 			}
-			checkpointHash, err := trie.hash()
+			checkpointHash, err := trie.Hash()
 			require.NoError(t, err)
 			require.NotNil(t, checkpointHash)
 

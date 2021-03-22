@@ -5,14 +5,15 @@ package blockprocessor
 import (
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/pkg/errors"
 )
 
 // BlockProcessor holds block validator and committer
@@ -35,6 +36,7 @@ type Config struct {
 	BlockStore           *blockstore.Store
 	DB                   worldstate.DB
 	ProvenanceStore      *provenance.Store
+	StateTrieStore       mptrie.Store
 	Logger               *logger.SugarLogger
 }
 
@@ -60,6 +62,10 @@ func (b *BlockProcessor) Start() {
 
 	if err := b.recoverWorldStateDBIfNeeded(); err != nil {
 		panic(errors.WithMessage(err, "error while recovering node"))
+	}
+
+	if err := b.initAndRecoverStateTrieIfNeeded(); err != nil {
+		panic(errors.WithMessage(err, "error while recovering node state trie"))
 	}
 
 	b.logger.Debug("block processor has been started successfully")
@@ -102,6 +108,7 @@ func (b *BlockProcessor) Start() {
 			if err = b.committer.commitBlock(block); err != nil {
 				panic(err)
 			}
+
 			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
 
 			//TODO detect config changes that affect the replication component and return an appropriate non-nil object
@@ -177,10 +184,47 @@ func (b *BlockProcessor) recoverWorldStateDBIfNeeded() error {
 		if err != nil {
 			return err
 		}
-
-		return b.committer.commitToDBs(block)
+		dbsUpdates, provenanceData, err := b.committer.constructDBAndProvenanceEntries(block)
+		if err != nil {
+			return err
+		}
+		return b.committer.commitToDBs(dbsUpdates, provenanceData, block)
 	}
 
+	return nil
+}
+
+func (b *BlockProcessor) initAndRecoverStateTrieIfNeeded() error {
+	lastTrieBlock, blockStoreHeight, stateTrie, err := loadStateTrie(b.committer.stateTrieStore, b.blockStore)
+	if err != nil {
+		return err
+	}
+	b.committer.stateTrie = stateTrie
+	switch {
+	case blockStoreHeight == lastTrieBlock:
+	case lastTrieBlock+1 == blockStoreHeight:
+		b.logger.Warnf("state trie store not updated, last block in block store is %d, last block in state trie is %d, updating trie", blockStoreHeight, lastTrieBlock)
+		block, err := b.blockStore.Get(blockStoreHeight)
+		if err != nil {
+			return err
+		}
+		dbsUpdates, _, err := b.committer.constructDBAndProvenanceEntries(block)
+		if err != nil {
+			return err
+		}
+		if err = b.committer.applyBlockOnStateTrie(dbsUpdates); err != nil {
+			return err
+		}
+		if err = b.committer.commitTrie(blockStoreHeight); err != nil {
+			return err
+		}
+	default:
+		return errors.Errorf(
+			"the difference between the height of the block store [%d] and the state trie store [%d] cannot be greater than 1 block. The node cannot be recovered",
+			blockStoreHeight,
+			lastTrieBlock,
+		)
+	}
 	return nil
 }
 

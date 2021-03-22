@@ -12,12 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor/mocks"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	mptrieStore "github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
@@ -27,6 +26,9 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type testEnv struct {
@@ -98,6 +100,21 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
+	mptrieStorePath := filepath.Join(dir, "statetriestore")
+	mptrieStore, err := mptrieStore.Open(
+		&mptrieStore.Config{
+			StoreDir: mptrieStorePath,
+			Logger:   logger,
+		},
+	)
+
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, err)
+		}
+		t.Fatalf("error while creating the block store, %v", err)
+	}
+
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "node1", "admin1"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
@@ -107,6 +124,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	b := New(&Config{
 		BlockOneQueueBarrier: queue.NewOneQueueBarrier(logger),
 		BlockStore:           blockStore,
+		StateTrieStore:       mptrieStore,
 		ProvenanceStore:      provenanceStore,
 		DB:                   db,
 		Logger:               logger,
@@ -377,14 +395,23 @@ func TestValidatorAndCommitter(t *testing.T) {
 		}
 
 		for _, tt := range testCases {
+			stateTrieRootOrg, err := env.blockProcessor.committer.stateTrie.Hash()
+			require.NoError(t, err)
 			for _, block := range tt.expectedBlocks {
-				// Because we update both SkipchainHashes and TxMerkelTreeRootHash during process, we want to precalculate them
-				// the expected blocks
+				// Because we update SkipchainHashes, TxMerkelTreeRootHash and StateMerkelTreeRootHash during process, we want to precalculate them
+				// for the expected blocks
 				block.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, tt.expectedBlocks, block.Header.BaseHeader.Number)
 				root, err := mtree.BuildTreeForBlockTx(block)
 				require.NoError(t, err)
 				block.Header.TxMerkelTreeRootHash = root.Hash()
+
+				dbsUpdates, err := ConstructDBUpdatesForBlock(block, env.blockProcessor.committer.db)
+				require.NoError(t, err)
+				require.NoError(t, env.blockProcessor.committer.applyBlockOnStateTrie(dbsUpdates))
+				block.Header.StateMerkelTreeRootHash, err = env.blockProcessor.committer.stateTrie.Hash()
+				require.NoError(t, err)
 			}
+			env.blockProcessor.committer.stateTrie, err = mptrie.NewTrie(stateTrieRootOrg, env.blockProcessor.committer.stateTrieStore)
 		}
 
 		for _, tt := range testCases {
@@ -572,6 +599,14 @@ func TestBlockCommitListener(t *testing.T) {
 	root, err := mtree.BuildTreeForBlockTx(block2)
 	require.NoError(t, err)
 	expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+	stateTrieRootOrg, err := env.blockProcessor.committer.stateTrie.Hash()
+
+	dbsUpdates, err := ConstructDBUpdatesForBlock(block2, env.blockProcessor.committer.db)
+	require.NoError(t, err)
+	require.NoError(t, env.blockProcessor.committer.applyBlockOnStateTrie(dbsUpdates))
+	expectedBlock.Header.StateMerkelTreeRootHash, err = env.blockProcessor.committer.stateTrie.Hash()
+	require.NoError(t, err)
+	env.blockProcessor.committer.stateTrie, err = mptrie.NewTrie(stateTrieRootOrg, env.blockProcessor.committer.stateTrieStore)
 
 	listener1 := &mocks.BlockCommitListener{}
 	listener1.On("PostBlockCommitProcessing", mock.Anything).Return(func(arg mock.Arguments) {

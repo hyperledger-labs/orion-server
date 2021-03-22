@@ -15,3 +15,7 @@ func constructBlockStorePath(dir string) string {
 func constructProvenanceStorePath(dir string) string {
 	return filepath.Join(dir, "provenancestore")
 }
+
+func constructStateTrieStorePath(dir string) string {
+	return filepath.Join(dir, "statetriestore")
+}

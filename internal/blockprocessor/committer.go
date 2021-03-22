@@ -3,14 +3,16 @@
 package blockprocessor
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -23,9 +25,9 @@ type committer struct {
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
+	stateTrieStore  mptrie.Store
+	stateTrie       *mptrie.MPTrie
 	logger          *logger.SugarLogger
-	// TODO
-	// 2. Proof Store
 }
 
 func newCommitter(conf *Config) *committer {
@@ -33,11 +35,31 @@ func newCommitter(conf *Config) *committer {
 		db:              conf.DB,
 		blockStore:      conf.BlockStore,
 		provenanceStore: conf.ProvenanceStore,
+		stateTrieStore:  conf.StateTrieStore,
 		logger:          conf.Logger,
 	}
 }
 
 func (c *committer) commitBlock(block *types.Block) error {
+
+	// Calculate expected changes to world state db and provenance db
+	dbsUpdates, provenanceData, err := c.constructDBAndProvenanceEntries(block)
+	if err != nil {
+		return errors.WithMessagef(err, "error while constructing database and provenance entries for block %d", block.GetHeader().GetBaseHeader().GetNumber())
+	}
+
+	// Update state trie with expected world state db changes
+	if err := c.applyBlockOnStateTrie(dbsUpdates); err != nil {
+		panic(err)
+	}
+	stateTrieRootHash, err := c.stateTrie.Hash()
+	if err != nil {
+		panic(err)
+	}
+	// Update block with state trie root
+	block.Header.StateMerkelTreeRootHash = stateTrieRootHash
+
+	// Commit block to block store
 	if err := c.commitToBlockStore(block); err != nil {
 		return errors.WithMessagef(
 			err,
@@ -46,7 +68,13 @@ func (c *committer) commitBlock(block *types.Block) error {
 		)
 	}
 
-	return c.commitToDBs(block)
+	// Commit block to world state db and provenance db
+	if err = c.commitToDBs(dbsUpdates, provenanceData, block); err != nil {
+		return err
+	}
+
+	// Commit state trie changes to trie store
+	return c.commitTrie(block.GetHeader().GetBaseHeader().GetNumber())
 }
 
 func (c *committer) commitToBlockStore(block *types.Block) error {
@@ -57,13 +85,8 @@ func (c *committer) commitToBlockStore(block *types.Block) error {
 	return nil
 }
 
-func (c *committer) commitToDBs(block *types.Block) error {
+func (c *committer) commitToDBs(dbsUpdates []*worldstate.DBUpdates, provenanceData []*provenance.TxDataForProvenance, block *types.Block) error {
 	blockNum := block.GetHeader().GetBaseHeader().GetNumber()
-
-	dbsUpdates, provenanceData, err := c.constructDBAndProvenanceEntries(block)
-	if err != nil {
-		return errors.WithMessagef(err, "error while constructing database and provenance entries for block %d", blockNum)
-	}
 
 	if err := c.commitToProvenanceStore(blockNum, provenanceData); err != nil {
 		return errors.WithMessagef(err, "error while committing block %d to the block store", blockNum)
@@ -240,6 +263,38 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 	}
 
 	return dbsUpdates, provenanceData, nil
+}
+
+func (c *committer) applyBlockOnStateTrie(worldStateUpdates []*worldstate.DBUpdates) error {
+	for _, dbUpdate := range worldStateUpdates {
+		for _, dbWrite := range dbUpdate.Writes {
+			key, err := mptrie.CalculateFullKey(dbUpdate.DBName, dbWrite.Key)
+			if err != nil {
+				return err
+			}
+			// TODO: should we add Metadata to value
+			value := dbWrite.Value
+			err = c.stateTrie.Update(key, value)
+			if err != nil {
+				return err
+			}
+		}
+		for _, dbDelete := range dbUpdate.Deletes {
+			key, err := mptrie.CalculateFullKey(dbUpdate.DBName, dbDelete)
+			if err != nil {
+				return err
+			}
+			_, err = c.stateTrie.Delete(key)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (c *committer) commitTrie(height uint64) error {
+	return c.stateTrie.Commit(height)
 }
 
 func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*worldstate.DBUpdates {
@@ -475,4 +530,38 @@ func getVersion(
 	}
 
 	return db.GetVersion(dbName, key)
+}
+
+func loadStateTrie(mpTrieStore mptrie.Store, blockStore *blockstore.Store) (uint64, uint64, *mptrie.MPTrie, error) {
+	blockStoreHeight, err := blockStore.Height()
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	if blockStoreHeight == 0 {
+		trie, err := mptrie.NewTrie(nil, mpTrieStore)
+		return 0, 0, trie, err
+	}
+
+	lastStoredTrieBlockNum, err := mpTrieStore.LastBlock()
+	if err == leveldb.ErrNotFound {
+		trie, err := mptrie.NewTrie(nil, mpTrieStore)
+		return 0, blockStoreHeight, trie, err
+	}
+
+	lastBlockNum := blockStoreHeight
+	if lastStoredTrieBlockNum < lastBlockNum {
+		lastBlockNum = lastStoredTrieBlockNum
+	}
+	// We ignore the case then last block number in trie store is bigger that block store height
+	// In this case we just revert trie back to block store height
+	// While committing next block, last block number will be updated
+
+	lastTrieBlockHeader, err := blockStore.GetHeader(lastBlockNum)
+	if err != nil {
+		return 0, blockStoreHeight, nil, err
+	}
+
+	trie, err := mptrie.NewTrie(lastTrieBlockHeader.GetStateMerkelTreeRootHash(), mpTrieStore)
+	return lastBlockNum, blockStoreHeight, trie, err
 }

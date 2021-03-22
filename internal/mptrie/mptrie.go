@@ -10,7 +10,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 )
 
-// Store stores Trie nodes and values in way hash(node)->node bytes hash(value)->value bytes
+// Store stores Trie nodes and values in way Hash(node)->node bytes Hash(value)->value bytes
 type Store interface {
 	// GetNode returns TrieNode associated with key/ptr. It may be temporal node
 	// created by PutNode, node market to persist after PersistNode or after executing
@@ -41,7 +41,7 @@ type MPTrie struct {
 }
 
 // NewTrie creates new Merkle-Patricia Trie, with backend store.
-// If root node hash is not nil, root node loaded from store, otherwise, empty trie is created
+// If root node Hash is not nil, root node loaded from store, otherwise, empty trie is created
 func NewTrie(rootHash []byte, store Store) (*MPTrie, error) {
 	res := &MPTrie{
 		store: store,
@@ -60,13 +60,13 @@ func NewTrie(rootHash []byte, store Store) (*MPTrie, error) {
 			return nil, err
 		}
 		if res.root == nil {
-			return nil, errors.New("invalid root hash provided, not found in store")
+			return nil, errors.New("invalid root Hash provided, not found in store")
 		}
 	}
 	return res, nil
 }
 
-func (t *MPTrie) hash() ([]byte, error) {
+func (t *MPTrie) Hash() ([]byte, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.root.hash()
@@ -630,4 +630,23 @@ func min(a, b int) int {
 		return b
 	}
 	return a
+}
+
+func CalculateFullKey(dbName, key string) ([]byte, error) {
+	bytesToHash := make([]byte, 0)
+	if len(dbName) > 0 {
+		dbNameHash, err := crypto.ComputeSHA256Hash([]byte(dbName))
+		if err != nil {
+			return nil, err
+		}
+		bytesToHash = append(bytesToHash, dbNameHash...)
+	}
+	if len(key) > 0 {
+		keyHash, err := crypto.ComputeSHA256Hash([]byte(key))
+		if err != nil {
+			return nil, err
+		}
+		bytesToHash = append(bytesToHash, keyHash...)
+	}
+	return crypto.ComputeSHA256Hash(bytesToHash)
 }

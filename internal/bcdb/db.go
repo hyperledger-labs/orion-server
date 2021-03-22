@@ -13,6 +13,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	mptrieStore "github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate/leveldb"
@@ -131,6 +132,7 @@ type db struct {
 	db                       worldstate.DB
 	blockStore               *blockstore.Store
 	provenanceStore          *provenance.Store
+	stateTrieStore           *mptrieStore.Store
 	signer                   crypto.Signer
 	logger                   *logger.SugarLogger
 }
@@ -176,6 +178,16 @@ func NewDB(localConf *config.LocalConfiguration, logger *logger.SugarLogger) (DB
 		return nil, errors.WithMessage(err, "error while creating the block store")
 	}
 
+	stateTrieStore, err := mptrieStore.Open(
+		&mptrieStore.Config{
+			StoreDir: constructStateTrieStorePath(ledgerDir),
+			Logger:   logger,
+		},
+	)
+	if err != nil {
+		return nil, errors.WithMessage(err, "error while creating the state trie store")
+	}
+
 	querier := identity.NewQuerier(levelDB)
 
 	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: localConf.Server.Identity.KeyPath})
@@ -215,6 +227,7 @@ func NewDB(localConf *config.LocalConfiguration, logger *logger.SugarLogger) (DB
 			db:                 levelDB,
 			blockStore:         blockStore,
 			provenanceStore:    provenanceStore,
+			stateTrieStore:     stateTrieStore,
 			txQueueLength:      localConf.Server.QueueLength.Transaction,
 			txBatchQueueLength: localConf.Server.QueueLength.ReorderedTransactionBatch,
 			blockQueueLength:   localConf.Server.QueueLength.Block,
@@ -236,6 +249,7 @@ func NewDB(localConf *config.LocalConfiguration, logger *logger.SugarLogger) (DB
 		db:                       levelDB,
 		blockStore:               blockStore,
 		provenanceStore:          provenanceStore,
+		stateTrieStore:           stateTrieStore,
 		logger:                   logger,
 		signer:                   signer,
 	}, nil
@@ -514,6 +528,10 @@ func (d *db) Close() error {
 	}
 
 	if err := d.blockStore.Close(); err != nil {
+		return errors.WithMessage(err, "error while closing the block store")
+	}
+
+	if err := d.stateTrieStore.Close(); err != nil {
 		return errors.WithMessage(err, "error while closing the block store")
 	}
 
