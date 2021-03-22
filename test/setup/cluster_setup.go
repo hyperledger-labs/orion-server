@@ -1,12 +1,15 @@
 package setup
 
 import (
+	"crypto/tls"
 	"os"
+	"path"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/fileops"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 )
@@ -14,6 +17,7 @@ import (
 // Cluster holds bcdb servers present in a blockchainDB cluster
 type Cluster struct {
 	Servers        []*Server
+	Users          []string
 	testDirAbsPath string
 	bdbBinaryPath  string
 	cmdTimeout     time.Duration
@@ -62,6 +66,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 
 	cluster := &Cluster{
 		Servers:        make([]*Server, conf.NumberOfServers),
+		Users:          []string{"admin"},
 		logger:         l,
 		testDirAbsPath: conf.TestDirAbsolutePath,
 		bdbBinaryPath:  conf.BDBBinaryPath,
@@ -223,6 +228,66 @@ func (c *Cluster) createCryptoMaterials() error {
 	for _, s := range c.Servers {
 		if err := s.createCryptoMaterials(c.rootCAPemCert, c.caPrivKey); err != nil {
 			return err
+		}
+	}
+
+	if err := c.createUsersCryptoMaterials(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Cluster) createUsersCryptoMaterials() error {
+	if err := fileops.CreateDir(path.Join(c.testDirAbsPath, "users")); err != nil {
+		return err
+	}
+
+	keyPair, err := tls.X509KeyPair(c.rootCAPemCert, c.caPrivKey)
+	if err != nil {
+		return err
+	}
+
+	for _, user := range c.Users {
+		pemUserCert, pemUserKey, err := testutils.IssueCertificate("Cluster User: "+user, "127.0.0.1", keyPair)
+
+		userCertPath := path.Join(c.testDirAbsPath, "users", user+".pem")
+		pemUserCertFile, err := os.Create(userCertPath)
+		if err != nil {
+			return err
+		}
+		_, err = pemUserCertFile.Write(pemUserCert)
+		if err != nil {
+			return err
+		}
+		if err = pemUserCertFile.Close(); err != nil {
+			return err
+		}
+
+		userKeyPath := path.Join(c.testDirAbsPath, "users", user+".key")
+		pemUserKeyFile, err := os.Create(userKeyPath)
+		if err != nil {
+			return err
+		}
+		if _, err = pemUserKeyFile.Write(pemUserKey); err != nil {
+			return err
+		}
+		if err = pemUserKeyFile.Close(); err != nil {
+			return err
+		}
+
+		for _, s := range c.Servers {
+			if user == "admin" {
+				s.adminCertPath = userCertPath
+				s.adminKeyPath = userKeyPath
+				adminSigner, err := crypto.NewSigner(
+					&crypto.SignerOptions{KeyFilePath: userKeyPath},
+				)
+				if err != nil {
+					return err
+				}
+				s.adminSigner = adminSigner
+			}
 		}
 	}
 

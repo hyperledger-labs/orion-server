@@ -1,23 +1,27 @@
-package setup
+package setup_test
 
 import (
 	"errors"
+	"io/ioutil"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.ibm.com/blockchaindb/server/test/setup"
 )
 
 func TestCluster(t *testing.T) {
-	setupConfig := &Config{
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+	setupConfig := &setup.Config{
 		NumberOfServers:     3,
-		TestDirAbsolutePath: "/tmp",
+		TestDirAbsolutePath: dir,
 		BDBBinaryPath:       "../../.bin/bdb",
 		CmdTimeout:          10 * time.Second,
 	}
-	c, err := NewCluster(setupConfig)
+	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
 	defer c.ShutdownAndCleanup()
 
@@ -40,12 +44,12 @@ func TestCluster(t *testing.T) {
 func TestClusterErrorCases(t *testing.T) {
 	tests := []struct {
 		name        string
-		setupConfig *Config
+		setupConfig *setup.Config
 		expected    error
 	}{
 		{
 			name: "bdb executable not exist",
-			setupConfig: &Config{
+			setupConfig: &setup.Config{
 				NumberOfServers:     3,
 				TestDirAbsolutePath: "/tmp",
 				BDBBinaryPath:       "../bdb",
@@ -55,7 +59,7 @@ func TestClusterErrorCases(t *testing.T) {
 		},
 		{
 			name: "cmd timeout is low",
-			setupConfig: &Config{
+			setupConfig: &setup.Config{
 				NumberOfServers:     3,
 				TestDirAbsolutePath: "/tmp",
 				BDBBinaryPath:       "../bdb",
@@ -69,25 +73,25 @@ func TestClusterErrorCases(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			c, err := NewCluster(tt.setupConfig)
+			c, err := setup.NewCluster(tt.setupConfig)
 			require.EqualError(t, err, tt.expected.Error())
 			require.Nil(t, c)
 		})
 	}
 }
 
-func testQueryOnServer(t *testing.T, c *Cluster) {
+func testQueryOnServer(t *testing.T, c *setup.Cluster) {
 	for _, s := range c.Servers {
 		client, err := s.NewRESTClient()
 		require.NoError(t, err)
 
 		query := &types.GetConfigQuery{
-			UserID: s.adminID,
+			UserID: s.AdminID(),
 		}
 		response, err := client.GetConfig(
 			&types.GetConfigQueryEnvelope{
 				Payload:   query,
-				Signature: testutils.SignatureFromQuery(t, s.adminSigner, query),
+				Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
 			},
 		)
 		require.NoError(t, err)
@@ -95,7 +99,7 @@ func testQueryOnServer(t *testing.T, c *Cluster) {
 	}
 }
 
-func testConnectionRefused(t *testing.T, s *Server) {
+func testConnectionRefused(t *testing.T, s *setup.Server) {
 	client, err := s.NewRESTClient()
 	require.NoError(t, err)
 	_, err = client.GetDBStatus(&types.GetDBStatusQueryEnvelope{

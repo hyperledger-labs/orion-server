@@ -1,8 +1,8 @@
 package setup
 
 import (
-	"bytes"
 	"crypto/tls"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/onsi/gomega"
+	"github.com/onsi/gomega/gbytes"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/fileops"
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
@@ -23,11 +25,13 @@ import (
 
 // Server holds parameters related to the server
 type Server struct {
+	serverNum            int
 	serverID             string
 	address              string
 	port                 int
 	configDir            string
 	configFilePath       string
+	bootstrapFilePath    string
 	cryptoMaterialsDir   string
 	serverRootCACertPath string
 	serverCertPath       string
@@ -37,8 +41,8 @@ type Server struct {
 	adminKeyPath         string
 	adminSigner          crypto.Signer
 	cmd                  *exec.Cmd
-	outBuffer            *syncBuf
-	errBuffer            *syncBuf
+	outBuffer            *gbytes.Buffer
+	errBuffer            *gbytes.Buffer
 	client               *mock.Client
 	logger               *logger.SugarLogger
 	mu                   sync.RWMutex
@@ -48,10 +52,11 @@ type Server struct {
 func NewServer(id int, dir string, logger *logger.SugarLogger) (*Server, error) {
 	sNumber := strconv.FormatInt(int64(id), 10)
 	s := &Server{
+		serverNum:          id,
 		serverID:           "node-" + sNumber,
 		address:            "127.0.0.1",
 		port:               0,
-		adminID:            "node-" + sNumber + "-admin",
+		adminID:            "admin",
 		configDir:          filepath.Join(dir, "node-"+sNumber),
 		configFilePath:     filepath.Join(dir, "node-"+sNumber, "config.yml"),
 		cryptoMaterialsDir: filepath.Join(dir, "node-"+sNumber, "crypto"),
@@ -66,6 +71,20 @@ func NewServer(id int, dir string, logger *logger.SugarLogger) (*Server, error) 
 	}
 
 	return s, nil
+}
+
+func (s *Server) AdminID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.adminID
+}
+
+func (s *Server) AdminSigner() crypto.Signer {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.adminSigner
 }
 
 func (s *Server) createCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
@@ -117,44 +136,6 @@ func (s *Server) createCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
 		return err
 	}
 
-	pemAdminCert, pemAdminKey, err := testutils.IssueCertificate(s.serverID+" Admin", s.address, keyPair)
-	if err != nil {
-		return err
-	}
-
-	s.adminCertPath = path.Join(s.cryptoMaterialsDir, "admin.pem")
-	pemAdminCertFile, err := os.Create(s.adminCertPath)
-	if err != nil {
-		return err
-	}
-	_, err = pemAdminCertFile.Write(pemAdminCert)
-	if err != nil {
-		return err
-	}
-	if err = pemAdminCertFile.Close(); err != nil {
-		return err
-	}
-
-	s.adminKeyPath = path.Join(s.cryptoMaterialsDir, "admin.key")
-	pemAdminKeyFile, err := os.Create(s.adminKeyPath)
-	if err != nil {
-		return err
-	}
-	if _, err = pemAdminKeyFile.Write(pemAdminKey); err != nil {
-		return err
-	}
-	if err = pemAdminKeyFile.Close(); err != nil {
-		return err
-	}
-
-	adminSigner, err := crypto.NewSigner(
-		&crypto.SignerOptions{KeyFilePath: path.Join(s.cryptoMaterialsDir, "admin.key")},
-	)
-	if err != nil {
-		return err
-	}
-	s.adminSigner = adminSigner
-
 	return nil
 }
 
@@ -168,7 +149,8 @@ func (s *Server) createConfigFile() error {
 	}
 
 	if _, err = f.WriteString(
-		"node:\n" +
+		"# Integration test config.yml\n\n" +
+			"node:\n" +
 			"  identity:\n" +
 			"    id: " + s.serverID + "\n" +
 			"    certificatePath: " + s.serverCertPath + "\n" +
@@ -183,16 +165,17 @@ func (s *Server) createConfigFile() error {
 			"    transaction: 1000\n" +
 			"    reorderedTransactionBatch: 100\n" +
 			"    block: 100\n" +
-			"  logLevel: info\n" +
+			"  logLevel: info\n\n" +
 			"consensus:\n" +
 			"  algorithm: raft\n" +
 			"  maxBlockSize: 2\n" +
 			"  blockTimeout: 50ms\n" +
+			"  maxTransactionCountPerBlock: 1\n\n" +
 			"admin:\n" +
 			"  id: " + s.adminID + "\n" +
-			"  certificatePath: " + s.adminCertPath + "\n" +
+			"  certificatePath: " + s.adminCertPath + "\n\n" +
 			"caconfig:\n" +
-			"  rootCACertsPath: " + s.serverRootCACertPath + "\n",
+			"  rootCACertsPath: " + s.serverRootCACertPath + "\n\n",
 	); err != nil {
 		return err
 	}
@@ -208,13 +191,16 @@ func (s *Server) createCmdToStartServers(executablePath string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.outBuffer = &syncBuf{}
-	s.errBuffer = &syncBuf{}
+	s.outBuffer = gbytes.NewBuffer()
+	s.errBuffer = gbytes.NewBuffer()
+	commandOut := io.MultiWriter(s.outBuffer, os.Stdout)
+	commandErr := io.MultiWriter(s.errBuffer, os.Stderr)
+
 	s.cmd = &exec.Cmd{
 		Path:   executablePath,
 		Args:   []string{executablePath, "start", "--configpath", s.configDir},
-		Stdout: s.outBuffer,
-		Stderr: s.errBuffer,
+		Stdout: commandOut,
+		Stderr: commandErr,
 	}
 }
 
@@ -227,25 +213,15 @@ func (s *Server) start(timeout time.Duration) error {
 		return errors.Wrap(err, "error while starting "+s.serverID)
 	}
 
-	beginning := time.Now()
 	log.Println("Check whether the server " + s.serverID + " has started")
 
-	started := false
-	for time.Since(beginning) < timeout {
-		output := s.outBuffer.String()
-		if strings.Contains(output, "Starting the server on "+s.address+":") {
-			started = true
-			break
-		}
+	g := gomega.NewWithT(&testFailure{})
 
-		time.Sleep(1 * time.Second)
-	}
-
-	if !started {
+	if !g.Eventually(s.outBuffer, 10).Should(gbytes.Say("Starting the server on " + s.address + ":")) {
 		return errors.New("failed to start the server: " + s.serverID)
 	}
 
-	port, err := retrievePort(s.outBuffer.String(), s.address)
+	port, err := retrievePort(string(s.outBuffer.Contents()), s.address)
 	if err != nil {
 		return err
 	}
@@ -300,25 +276,10 @@ func (s *Server) NewRESTClient() (*mock.Client, error) {
 	return mock.NewRESTClient("http://" + s.address + ":" + strconv.FormatInt(int64(s.port), 10))
 }
 
-type syncBuf struct {
-	mu  sync.Mutex
-	buf bytes.Buffer
+// testFailure is in lieu of *testing.T for gomega's types.GomegaTestingT
+type testFailure struct {
 }
 
-func (s *syncBuf) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.buf.Write(p)
-}
-
-func (s *syncBuf) Reset() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.buf.Reset()
-}
-
-func (s *syncBuf) String() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.buf.String()
+func (t *testFailure) Fatalf(format string, args ...interface{}) {
+	log.Printf(format, args...)
 }
