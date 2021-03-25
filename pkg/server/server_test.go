@@ -28,6 +28,7 @@ import (
 )
 
 type serverTestEnv struct {
+	serverConfig   *config.Configurations
 	bcdbHTTPServer *BCDBHTTPServer
 	caKeys         tls.Certificate
 	testDataPath   string
@@ -36,9 +37,31 @@ type serverTestEnv struct {
 	certCol        *certificateauthority.CACertCollection
 }
 
+func (env *serverTestEnv) restart(t *testing.T) {
+	err := env.bcdbHTTPServer.Stop()
+	require.NoError(t, err)
+
+	localConfigOnly := &config.Configurations{
+		LocalConfig:  env.serverConfig.LocalConfig,
+		SharedConfig: nil,
+	}
+
+	env.bcdbHTTPServer, err = New(localConfigOnly)
+	require.NoError(t, err)
+
+	err = env.bcdbHTTPServer.Start()
+	require.NoError(t, err)
+
+	port, err := env.bcdbHTTPServer.Port()
+	require.NoError(t, err)
+	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
+	require.NoError(t, err)
+	env.client = client
+}
+
 func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, error) {
 	configQuery := &types.GetNodeConfigQuery{
-		NodeID: env.bcdbHTTPServer.conf.Node.Identity.ID,
+		NodeID: env.bcdbHTTPServer.conf.LocalConfig.Node.Identity.ID,
 		UserID: "admin",
 	}
 
@@ -127,49 +150,74 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
 	require.NoError(t, err)
 
-	server, err := New(&config.Configurations{
-		Node: config.NodeConf{
-			Identity: config.IdentityConf{
-				ID:              "testNode" + uuid.New().String(),
-				CertificatePath: path.Join(tempDir, "server.pem"),
-				KeyPath:         path.Join(tempDir, "server.key"),
-			},
-			Database: config.DatabaseConf{
-				Name:            "leveldb",
-				LedgerDirectory: path.Join(tempDir, "ledger"),
-			},
-			Network: config.NetworkConf{
-				Address: "127.0.0.1",
-				Port:    0, // use ephemeral port for testing
-			},
-			QueueLength: config.QueueLengthConf{
-				Block:                     1,
-				Transaction:               1,
-				ReorderedTransactionBatch: 1,
-			},
+	nodeID := "testNode" + uuid.New().String()
+	serverConfig := &config.Configurations{
+		LocalConfig: &config.LocalConfiguration{
+			Node: config.NodeConf{
+				Identity: config.IdentityConf{
+					ID:              nodeID,
+					CertificatePath: path.Join(tempDir, "server.pem"),
+					KeyPath:         path.Join(tempDir, "server.key"),
+				},
+				Database: config.DatabaseConf{
+					Name:            "leveldb",
+					LedgerDirectory: path.Join(tempDir, "ledger"),
+				},
+				Network: config.NetworkConf{
+					Address: "127.0.0.1",
+					Port:    0, // use ephemeral port for testing
+				},
+				QueueLength: config.QueueLengthConf{
+					Block:                     1,
+					Transaction:               1,
+					ReorderedTransactionBatch: 1,
+				},
 
-			LogLevel: "debug",
+				LogLevel: "debug",
+			},
+			BlockCreation: config.BlockCreationConf{
+				BlockTimeout:                500 * time.Millisecond,
+				MaxBlockSize:                1,
+				MaxTransactionCountPerBlock: 1,
+			},
 		},
-		Admin: config.AdminConf{
-			ID:              "admin",
-			CertificatePath: path.Join(tempDir, "admin.pem"),
+		SharedConfig: &config.SharedConfiguration{
+			Nodes: []config.DBNodeConf{
+				{
+					NodeID:          nodeID,
+					Host:            "127.0.0.1",
+					Port:            0,
+					CertificatePath: path.Join(tempDir, "server.pem"),
+				},
+			},
+			Admin: config.AdminConf{
+				ID:              "admin",
+				CertificatePath: path.Join(tempDir, "admin.pem"),
+			},
+			CAConfig: config.CAConfiguration{
+				RootCACertsPath: []string{path.Join(tempDir, "serverRootCACert.pem")},
+			},
+			Consensus: config.ConsensusConf{
+				Algorithm: "solo",
+			},
 		},
-		CAConfig: config.CAConfiguration{
-			RootCACertsPath: []string{path.Join(tempDir, "serverRootCACert.pem")},
-		},
-		Consensus: config.ConsensusConf{
-			Algorithm:                   "solo",
-			BlockTimeout:                500 * time.Millisecond,
-			MaxBlockSize:                1,
-			MaxTransactionCountPerBlock: 1,
-		},
-	})
+	}
+	server, err := New(serverConfig)
 	require.NoError(t, err)
 
 	err = server.Start()
 	require.NoError(t, err)
+	env := &serverTestEnv{
+		serverConfig:   serverConfig,
+		bcdbHTTPServer: server,
+		caKeys:         keyPair,
+		testDataPath:   tempDir,
+		adminSigner:    adminSigner,
+		certCol:        certsCollection,
+	}
+
 	t.Cleanup(func() {
-		if err := server.Stop(); err != nil {
+		if err := env.bcdbHTTPServer.Stop(); err != nil {
 			t.Errorf("error while stopping the server: %v", err)
 		}
 	})
@@ -178,15 +226,9 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	require.NoError(t, err)
 	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
 	require.NoError(t, err)
+	env.client = client
 
-	return &serverTestEnv{
-		bcdbHTTPServer: server,
-		caKeys:         keyPair,
-		testDataPath:   tempDir,
-		adminSigner:    adminSigner,
-		client:         client,
-		certCol:        certsCollection,
-	}
+	return env
 }
 
 func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
@@ -560,4 +602,109 @@ func TestServerWithFailureScenarios(t *testing.T) {
 			require.Contains(t, err.Error(), tt.expectedError)
 		})
 	}
+}
+
+func TestServerWithRestart(t *testing.T) {
+	t.Parallel()
+	env := newServerTestEnv(t)
+
+	userCert, _, err := testutils.IssueCertificate("BCDB User", "127.0.0.1", env.caKeys)
+	require.NoError(t, err)
+	certBlock, _ := pem.Decode(userCert)
+
+	userTx := &types.UserAdministrationTx{
+		TxID:   uuid.New().String(),
+		UserID: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: &types.User{
+					ID: "testUser",
+					Privilege: &types.Privilege{
+						DBPermission: map[string]types.Privilege_Access{
+							worldstate.DefaultDBName: types.Privilege_ReadWrite,
+						},
+					},
+					Certificate: certBlock.Bytes,
+				},
+			},
+		},
+	}
+	_, err = env.client.SubmitTransaction(constants.PostUserTx,
+		&types.UserAdministrationTxEnvelope{
+			Payload:   userTx,
+			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+		})
+	require.NoError(t, err)
+
+	verifier, err := env.getNodeSigVerifier(t)
+	require.NoError(t, err)
+
+	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "testUser"}
+	querySig, err := cryptoservice.SignQuery(env.adminSigner, query)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		user, err := env.client.GetUser(&types.GetUserQueryEnvelope{
+			Payload:   query,
+			Signature: querySig,
+		})
+
+		if err != nil {
+			return false
+		}
+
+		err = verifier.Verify(user.GetPayload(), user.GetSignature())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if user.GetPayload() == nil {
+			return false
+		}
+
+		payload := &types.Payload{}
+		err = json.Unmarshal(user.GetPayload(), payload)
+		require.NoError(t, err)
+
+		response := &types.GetUserResponse{}
+		err = json.Unmarshal(payload.GetResponse(), response)
+
+		return response.GetUser() != nil &&
+			response.GetUser().GetID() == "testUser"
+	}, time.Minute, 100*time.Millisecond)
+
+	env.restart(t)
+
+	querySig, err = cryptoservice.SignQuery(env.adminSigner, query)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		user, err := env.client.GetUser(&types.GetUserQueryEnvelope{
+			Payload:   query,
+			Signature: querySig,
+		})
+
+		if err != nil {
+			t.Logf("query error: %s", err)
+			return false
+		}
+
+		err = verifier.Verify(user.GetPayload(), user.GetSignature())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if user.GetPayload() == nil {
+			t.Log("nil payload")
+			return false
+		}
+
+		payload := &types.Payload{}
+		err = json.Unmarshal(user.GetPayload(), payload)
+		require.NoError(t, err)
+
+		response := &types.GetUserResponse{}
+		err = json.Unmarshal(payload.GetResponse(), response)
+
+		return response.GetUser() != nil &&
+			response.GetUser().GetID() == "testUser"
+	}, 10*time.Second, 100*time.Millisecond)
 }

@@ -3,6 +3,8 @@
 package config
 
 import (
+	"os"
+	"path"
 	"time"
 
 	"github.com/pkg/errors"
@@ -10,17 +12,47 @@ import (
 )
 
 const (
-	name     = "config"
-	filetype = "yml"
+	defaultLocalConfigFile = "config.yml"
 )
 
 // Configurations holds the complete configuration
 // of a database node
 type Configurations struct {
-	Node      NodeConf
-	Consensus ConsensusConf
-	Admin     AdminConf
-	CAConfig  CAConfiguration
+	LocalConfig  *LocalConfiguration
+	SharedConfig *SharedConfiguration
+}
+
+type LocalConfiguration struct {
+	Node          NodeConf
+	BlockCreation BlockCreationConf
+	Replication   ReplicationConf
+	Bootstrap     BootstrapConf
+}
+
+type ReplicationConf struct {
+	WALDir  string
+	SnapDir string
+	Network NetworkConf
+	TLS     TLSConf
+}
+
+type TLSConf struct {
+	// Require server-side TLS.
+	Enabled bool
+	// Require client certificates / mutual TLS for inbound connections.
+	ClientAuthRequired bool
+	// X.509 certificate used for TLS server
+	ServerCertificatePath string
+	// Private key for TLS server
+	ServerKeyPath string
+	// X.509 certificate used for creating TLS client connections.
+	ClientCertificatePath string
+	// Private key used for creating TLS client connections.
+	ClientKeyPath string
+	// cluster.tls.caConfig defines the paths to the x509 certificates
+	// of the root and intermediate certificate authorities that issued
+	// all the certificates used for intra-cluster communication.
+	CaConfig CAConfiguration
 }
 
 // NodeConf holds the identity information of the
@@ -30,6 +62,7 @@ type NodeConf struct {
 	Identity    IdentityConf
 	Network     NetworkConf
 	Database    DatabaseConf
+	Replication ReplicationConf
 	QueueLength QueueLengthConf
 	LogLevel    string
 }
@@ -64,28 +97,17 @@ type QueueLengthConf struct {
 	Block                     uint32
 }
 
-// ConsensusConf holds the employed consensus algorithm
-// along with block size in MB and block timeout in
-// milliseconds
-type ConsensusConf struct {
-	Algorithm                   string
+// BlockCreationConf holds the block creation parameters
+// TODO consider moving this to shared-config if we want to have it consistent across nodes
+type BlockCreationConf struct {
 	MaxBlockSize                uint32
 	MaxTransactionCountPerBlock uint32
 	BlockTimeout                time.Duration
 }
 
-// AdminConf holds the credentials of the blockchain
-// database cluster admin such as the ID and path to
-// the x509 certificate
-type AdminConf struct {
-	ID              string
-	CertificatePath string
-}
-
-// CAConfiguration holds the path to the x509 certificates of the certificate authorities who issues all certificates.
-type CAConfiguration struct {
-	RootCACertsPath         []string
-	IntermediateCACertsPath []string
+type BootstrapConf struct {
+	Method string
+	File   string
 }
 
 // Read reads configurations from the config file and returns the config
@@ -94,21 +116,51 @@ func Read(configFilePath string) (*Configurations, error) {
 		return nil, errors.New("path to the configuration file is empty")
 	}
 
+	fileInfo, err := os.Stat(configFilePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read the status of the configuration path: '%s'", configFilePath)
+	}
+
+	fileName := configFilePath
+	if fileInfo.IsDir() {
+		fileName = path.Join(configFilePath, defaultLocalConfigFile)
+	}
+
+	conf := &Configurations{}
+	conf.LocalConfig, err = ReadLocalConfig(fileName)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read the local configuration from: '%s'", fileName)
+	}
+
+	if conf.LocalConfig.Bootstrap.File != "" {
+		conf.SharedConfig, err = ReadSharedConfig(conf.LocalConfig.Bootstrap.File)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to read the shared configuration from: '%s'", conf.LocalConfig.Bootstrap.File)
+		}
+	}
+
+	return conf, nil
+}
+
+// ReadLocalConfig reads the local config from the file and returns it.
+func ReadLocalConfig(localConfigFile string) (*LocalConfiguration, error) {
+	if localConfigFile == "" {
+		return nil, errors.New("path to the local configuration file is empty")
+	}
+
 	v := viper.New()
-	v.AddConfigPath(configFilePath)
-	v.SetConfigName(name)
-	v.SetConfigType(filetype)
+	v.SetConfigFile(localConfigFile)
 
 	v.SetDefault("node.database.name", "leveldb")
 	v.SetDefault("node.database.ledgerDirectory", "./tmp/")
 
 	if err := v.ReadInConfig(); err != nil {
-		return nil, errors.Wrap(err, "error reading config file")
+		return nil, errors.Wrapf(err, "error reading local config file: %s", localConfigFile)
 	}
 
-	conf := &Configurations{}
+	conf := &LocalConfiguration{}
 	if err := v.UnmarshalExact(conf); err != nil {
-		return nil, errors.Wrap(err, "unable to unmarshal config file into struct")
+		return nil, errors.Wrapf(err, "unable to unmarshal local config file: '%s' into struct", localConfigFile)
 	}
 	return conf, nil
 }

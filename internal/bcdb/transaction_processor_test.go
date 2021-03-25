@@ -222,7 +222,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 	cryptoDir, conf := testConfiguration(t)
 	require.NotEqual(t, "", cryptoDir)
-	defer os.RemoveAll(conf.Node.Database.LedgerDirectory)
+	defer os.RemoveAll(conf.LocalConfig.Node.Database.LedgerDirectory)
 
 	t.Run("commit a data transaction asynchronously", func(t *testing.T) {
 		t.Parallel()
@@ -585,39 +585,53 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "bdb-node-1", "admin"})
 
 	return cryptoDir, &config.Configurations{
-		Node: config.NodeConf{
-			Identity: config.IdentityConf{
-				ID:              "bdb-node-1",
-				CertificatePath: path.Join(cryptoDir, "bdb-node-1.pem"),
-				KeyPath:         path.Join(cryptoDir, "bdb-node-1.key"),
+		LocalConfig: &config.LocalConfiguration{
+			Node: config.NodeConf{
+				Identity: config.IdentityConf{
+					ID:              "bdb-node-1",
+					CertificatePath: path.Join(cryptoDir, "bdb-node-1.pem"),
+					KeyPath:         path.Join(cryptoDir, "bdb-node-1.key"),
+				},
+				Network: config.NetworkConf{
+					Address: "127.0.0.1",
+					Port:    0,
+				},
+				Database: config.DatabaseConf{
+					Name:            "leveldb",
+					LedgerDirectory: ledgerDir,
+				},
+				QueueLength: config.QueueLengthConf{
+					Transaction:               1000,
+					ReorderedTransactionBatch: 100,
+					Block:                     100,
+				},
+				LogLevel: "debug",
 			},
-			Network: config.NetworkConf{
-				Address: "127.0.0.1",
-				Port:    0,
+			BlockCreation: config.BlockCreationConf{
+				MaxBlockSize:                2,
+				MaxTransactionCountPerBlock: 1,
+				BlockTimeout:                50 * time.Millisecond,
 			},
-			Database: config.DatabaseConf{
-				Name:            "leveldb",
-				LedgerDirectory: ledgerDir,
-			},
-			QueueLength: config.QueueLengthConf{
-				Transaction:               1000,
-				ReorderedTransactionBatch: 100,
-				Block:                     100,
-			},
-			LogLevel: "debug",
 		},
-		Consensus: config.ConsensusConf{
-			Algorithm:                   "raft",
-			MaxBlockSize:                2,
-			MaxTransactionCountPerBlock: 1,
-			BlockTimeout:                50 * time.Millisecond,
-		},
-		Admin: config.AdminConf{
-			ID:              "admin",
-			CertificatePath: path.Join(cryptoDir, "admin.pem"),
-		},
-		CAConfig: config.CAConfiguration{
-			RootCACertsPath: []string{path.Join(cryptoDir, testutils.RootCAFileName+".pem")},
+		SharedConfig: &config.SharedConfiguration{
+			Nodes: []config.DBNodeConf{
+				{
+					NodeID:          "bdb-node-1",
+					Host:            "127.0.0.1",
+					Port:            33000,
+					CertificatePath: path.Join(cryptoDir, "bdb-node-1.pem"),
+				},
+			},
+			Consensus: config.ConsensusConf{
+				Algorithm: "raft",
+			},
+			CAConfig: config.CAConfiguration{
+				RootCACertsPath: []string{path.Join(cryptoDir, testutils.RootCAFileName+".pem")},
+			},
+			Admin: config.AdminConf{
+				ID:              "admin",
+				CertificatePath: path.Join(cryptoDir, "admin.pem"),
+			},
 		},
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ type Cluster struct {
 	bdbBinaryPath  string
 	cmdTimeout     time.Duration
 	logger         *logger.SugarLogger
+	rootCAPath     string
 	rootCAPemCert  []byte
 	caPrivKey      []byte
 	mu             sync.Mutex
@@ -59,11 +61,6 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		return nil, err
 	}
 
-	rootCAPemCert, caPrivKey, err := testutils.GenerateRootCA("BCDB RootCA", "127.0.0.1")
-	if err != nil {
-		return nil, err
-	}
-
 	cluster := &Cluster{
 		Servers:        make([]*Server, conf.NumberOfServers),
 		Users:          []string{"admin"},
@@ -71,8 +68,11 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		testDirAbsPath: conf.TestDirAbsolutePath,
 		bdbBinaryPath:  conf.BDBBinaryPath,
 		cmdTimeout:     conf.CmdTimeout,
-		rootCAPemCert:  rootCAPemCert,
-		caPrivKey:      caPrivKey,
+		rootCAPath:     path.Join(conf.TestDirAbsolutePath, "ca"),
+	}
+
+	if err := cluster.createRootCA(); err != nil {
+		return nil, err
 	}
 
 	for i := 0; i < conf.NumberOfServers; i++ {
@@ -90,9 +90,49 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		return nil, err
 	}
 
+	if err := cluster.createBootstrapFile(); err != nil {
+		return nil, err
+	}
+
 	cluster.createCmdToStartServers()
 
 	return cluster, nil
+}
+
+func (c *Cluster) createRootCA() (err error) {
+	c.rootCAPemCert, c.caPrivKey, err = testutils.GenerateRootCA("BCDB RootCA", "127.0.0.1")
+	if err != nil {
+		return err
+	}
+
+	if err = fileops.CreateDir(c.rootCAPath); err != nil {
+		return err
+	}
+	serverRootCACertPath := path.Join(c.rootCAPath, "rootCA.pem")
+	serverRootCACertFile, err := os.Create(serverRootCACertPath)
+	if err != nil {
+		return err
+	}
+	if _, err = serverRootCACertFile.Write(c.rootCAPemCert); err != nil {
+		return err
+	}
+	if err = serverRootCACertFile.Close(); err != nil {
+		return err
+	}
+
+	serverRootCAKeyPath := path.Join(c.rootCAPath, "rootCA.key")
+	serverRootCAKeyFile, err := os.Create(serverRootCAKeyPath)
+	if err != nil {
+		return err
+	}
+	if _, err = serverRootCAKeyFile.Write(c.caPrivKey); err != nil {
+		return err
+	}
+	if err = serverRootCAKeyFile.Close(); err != nil {
+		return err
+	}
+
+	return err
 }
 
 // Start starts the cluster by starting all servers in the cluster
@@ -276,8 +316,8 @@ func (c *Cluster) createUsersCryptoMaterials() error {
 			return err
 		}
 
-		for _, s := range c.Servers {
-			if user == "admin" {
+		if user == "admin" {
+			for _, s := range c.Servers {
 				s.adminCertPath = userCertPath
 				s.adminKeyPath = userKeyPath
 				adminSigner, err := crypto.NewSigner(
@@ -297,6 +337,47 @@ func (c *Cluster) createUsersCryptoMaterials() error {
 func (c *Cluster) createConfigFile() error {
 	for _, s := range c.Servers {
 		if err := s.createConfigFile(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (c *Cluster) createBootstrapFile() error {
+
+	bootstrap := "# Integration test shared-config-bootstrap.yml\n" +
+		"consensus:\n" + //TODO add additional fields when supported
+		"  algorithm: raft\n" +
+		"admin:\n" +
+		"  id: admin\n" +
+		"  certificatePath: " + path.Join(c.testDirAbsPath, "users", "admin.pem") + "\n" +
+		"caconfig:\n" +
+		"  rootCACertsPath: " + path.Join(c.rootCAPath, "rootCA.pem") + "\n" +
+		"nodes:\n"
+	for _, s := range c.Servers {
+		node := "" +
+			"  - nodeId: " + s.serverID + "\n" +
+			"    host: " + s.address+"\n" +
+			"    port: "+ strconv.FormatInt(int64(s.port), 10) + "\n" +
+			"    certificatePath: " + s.serverCertPath +"\n"
+		bootstrap = bootstrap + node
+	}
+
+	for _, s := range c.Servers {
+		f, err := os.Create(s.bootstrapFilePath)
+		if err != nil {
+			return err
+		}
+		if _, err = f.WriteString(bootstrap); err != nil {
+			return err
+		}
+
+		if err = f.Sync(); err != nil {
+			return err
+		}
+
+		if err = f.Close(); err != nil {
 			return err
 		}
 	}

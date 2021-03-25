@@ -1,0 +1,26 @@
+# bad-shared-config-bootstrap.yml
+
+clusterrrrrr:
+  # members contains the set of servers that take part in consensus.
+  members:
+    - nodeId: bcdb-node1
+      raftId: 1
+      peerHost: raft1.example.com
+      peerPort: 7050
+      advertiseHost: bcdb1.example.com
+      advertisePort: 6001
+
+  # maxRaftId is an integer that is equal or larger than the largest raftId ever used.
+  maxRaftId: 3
+
+consensus:
+  # consensus.algorithm denotes the employed consensus
+  # algorithm. Currently, only raft consensus is supported
+  algorithmmmmm: raft
+
+admiiiin:
+  # admin.id denotes the id of the cluster admin
+  id: admin
+  # identity.certificatePath denotes the path
+  # to the x509 certificate of the cluster admin
+  certificatePath: ./testdata/admin.cert

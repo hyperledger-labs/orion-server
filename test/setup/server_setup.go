@@ -59,6 +59,7 @@ func NewServer(id int, dir string, logger *logger.SugarLogger) (*Server, error) 
 		adminID:            "admin",
 		configDir:          filepath.Join(dir, "node-"+sNumber),
 		configFilePath:     filepath.Join(dir, "node-"+sNumber, "config.yml"),
+		bootstrapFilePath:  filepath.Join(dir, "node-"+sNumber, "shared-config-bootstrap.yml"),
 		cryptoMaterialsDir: filepath.Join(dir, "node-"+sNumber, "crypto"),
 		logger:             logger,
 	}
@@ -165,17 +166,22 @@ func (s *Server) createConfigFile() error {
 			"    transaction: 1000\n" +
 			"    reorderedTransactionBatch: 100\n" +
 			"    block: 100\n" +
-			"  logLevel: info\n\n" +
-			"consensus:\n" +
-			"  algorithm: raft\n" +
+			"  logLevel: info\n" +
+			"blockCreation:\n" +
 			"  maxBlockSize: 2\n" +
+			"  maxTransactionCountPerBlock: 1\n" +
 			"  blockTimeout: 50ms\n" +
-			"  maxTransactionCountPerBlock: 1\n\n" +
-			"admin:\n" +
-			"  id: " + s.adminID + "\n" +
-			"  certificatePath: " + s.adminCertPath + "\n\n" +
-			"caconfig:\n" +
-			"  rootCACertsPath: " + s.serverRootCACertPath + "\n\n",
+			"replication:\n" +
+			"  walDir: " + filepath.Join(s.configDir, "etcdraft", "wal") + "\n" + //TODO create path
+			"  snapDir: " + filepath.Join(s.configDir, "etcdraft", "snap") + "\n" + //TODO create path
+			"  network:\n" +
+			"    address: 127.0.0.1\n" +
+			"    port: 7050\n" + //TODO offset port by node number
+			"  tls:\n" + //TODO add rest of fields when security is supported
+			"    enabled: false\n" +
+			"bootstrap:\n" +
+			"  method: genesis\n" +
+			"  file: " + s.bootstrapFilePath + "\n",
 	); err != nil {
 		return err
 	}

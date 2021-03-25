@@ -29,31 +29,31 @@ type BCDBHTTPServer struct {
 // New creates a object of BCDBHTTPServer
 func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 	c := &logger.Config{
-		Level:         conf.Node.LogLevel,
+		Level:         conf.LocalConfig.Node.LogLevel,
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
-		Name:          conf.Node.Identity.ID,
+		Name:          conf.LocalConfig.Node.Identity.ID,
 	}
-	logger, err := logger.New(c)
+	lg, err := logger.New(c)
 	if err != nil {
 		return nil, err
 	}
 
-	db, err := bcdb.NewDB(conf, logger)
+	db, err := bcdb.NewDB(conf, lg)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating the database object")
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(constants.UserEndpoint, httphandler.NewUsersRequestHandler(db, logger))
-	mux.Handle(constants.DataEndpoint, httphandler.NewDataRequestHandler(db, logger))
-	mux.Handle(constants.DBEndpoint, httphandler.NewDBRequestHandler(db, logger))
-	mux.Handle(constants.ConfigEndpoint, httphandler.NewConfigRequestHandler(db, logger))
-	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, logger))
-	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, logger))
+	mux.Handle(constants.UserEndpoint, httphandler.NewUsersRequestHandler(db, lg))
+	mux.Handle(constants.DataEndpoint, httphandler.NewDataRequestHandler(db, lg))
+	mux.Handle(constants.DBEndpoint, httphandler.NewDBRequestHandler(db, lg))
+	mux.Handle(constants.ConfigEndpoint, httphandler.NewConfigRequestHandler(db, lg))
+	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, lg))
+	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, lg))
 
-	netConf := conf.Node.Network
+	netConf := conf.LocalConfig.Node.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
 	listen, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -65,7 +65,7 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		handler: mux,
 		listen:  listen,
 		conf:    conf,
-		logger:  logger,
+		logger:  lg,
 	}, nil
 }
 

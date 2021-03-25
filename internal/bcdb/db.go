@@ -137,11 +137,11 @@ type db struct {
 
 // NewDB creates a new database bcdb which handles both the queries and transactions.
 func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) {
-	if conf.Node.Database.Name != "leveldb" {
+	if conf.LocalConfig.Node.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
 	}
 
-	ledgerDir := conf.Node.Database.LedgerDirectory
+	ledgerDir := conf.LocalConfig.Node.Database.LedgerDirectory
 	if err := createLedgerDir(ledgerDir); err != nil {
 		return nil, err
 	}
@@ -178,14 +178,14 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	querier := identity.NewQuerier(levelDB)
 
-	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: conf.Node.Identity.KeyPath})
+	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: conf.LocalConfig.Node.Identity.KeyPath})
 	if err != nil {
 		return nil, errors.Wrap(err, "can't load private key")
 	}
 
 	worldstateQueryProcessor := newWorldstateQueryProcessor(
 		&worldstateQueryProcessorConfig{
-			nodeID:          conf.Node.Identity.ID,
+			nodeID:          conf.LocalConfig.Node.Identity.ID,
 			db:              levelDB,
 			blockStore:      blockStore,
 			identityQuerier: querier,
@@ -211,15 +211,15 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	txProcessor, err := newTransactionProcessor(
 		&txProcessorConfig{
-			nodeID:             conf.Node.Identity.ID,
+			nodeID:             conf.LocalConfig.Node.Identity.ID,
 			db:                 levelDB,
 			blockStore:         blockStore,
 			provenanceStore:    provenanceStore,
-			txQueueLength:      conf.Node.QueueLength.Transaction,
-			txBatchQueueLength: conf.Node.QueueLength.ReorderedTransactionBatch,
-			blockQueueLength:   conf.Node.QueueLength.Block,
-			maxTxCountPerBatch: conf.Consensus.MaxTransactionCountPerBlock,
-			batchTimeout:       conf.Consensus.BlockTimeout,
+			txQueueLength:      conf.LocalConfig.Node.QueueLength.Transaction,
+			txBatchQueueLength: conf.LocalConfig.Node.QueueLength.ReorderedTransactionBatch,
+			blockQueueLength:   conf.LocalConfig.Node.QueueLength.Block,
+			maxTxCountPerBatch: conf.LocalConfig.BlockCreation.MaxTransactionCountPerBlock,
+			batchTimeout:       conf.LocalConfig.BlockCreation.BlockTimeout,
 			logger:             logger,
 		},
 	)
@@ -228,7 +228,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	}
 
 	return &db{
-		nodeID:                   conf.Node.Identity.ID,
+		nodeID:                   conf.LocalConfig.Node.Identity.ID,
 		worldstateQueryProcessor: worldstateQueryProcessor,
 		ledgerQueryProcessor:     ledgerQueryProcessor,
 		provenanceQueryProcessor: provenanceQueryProcessor,
@@ -554,18 +554,26 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 		return nil, err
 	}
 
+	var nodes []*types.NodeConfig
+	for _, node := range conf.SharedConfig.Nodes {
+		nc := &types.NodeConfig{
+			ID:      node.NodeID,
+			Address: node.Host,
+			Port:    node.Port,
+		}
+		if cert, ok := certs.nodeCertificates[node.NodeID]; ok {
+			nc.Certificate = cert
+		} else {
+			return nil, errors.Errorf("Cannot find certificate for node: %s", node.NodeID)
+		}
+		nodes = append(nodes, nc)
+	}
+
 	clusterConfig := &types.ClusterConfig{
-		Nodes: []*types.NodeConfig{
-			{
-				ID:          conf.Node.Identity.ID,
-				Certificate: certs.nodeCert,
-				Address:     conf.Node.Network.Address,
-				Port:        conf.Node.Network.Port,
-			},
-		},
+		Nodes: nodes,
 		Admins: []*types.Admin{
 			{
-				ID:          conf.Admin.ID,
+				ID:          conf.SharedConfig.Admin.ID,
 				Certificate: certs.adminCert,
 			},
 		},
@@ -582,30 +590,34 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 }
 
 type certsInGenesisConfig struct {
-	nodeCert   []byte
-	adminCert  []byte
-	rootCACert []byte
-	caCerts    *types.CAConfig
+	nodeCertificates map[string][]byte
+	adminCert        []byte
+	caCerts          *types.CAConfig
 }
 
 func readCerts(conf *config.Configurations) (*certsInGenesisConfig, error) {
-	certsInGen := &certsInGenesisConfig{caCerts: &types.CAConfig{}}
-
-	nodeCert, err := ioutil.ReadFile(conf.Node.Identity.CertificatePath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "error while reading node certificate %s", conf.Node.Identity.CertificatePath)
+	certsInGen := &certsInGenesisConfig{
+		nodeCertificates: make(map[string][]byte),
+		caCerts:          &types.CAConfig{},
 	}
-	nodePemCert, _ := pem.Decode(nodeCert)
-	certsInGen.nodeCert = nodePemCert.Bytes
 
-	adminCert, err := ioutil.ReadFile(conf.Admin.CertificatePath)
+	for _, node := range conf.SharedConfig.Nodes {
+		nodeCert, err := ioutil.ReadFile(node.CertificatePath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while reading node certificate: %s", node.CertificatePath)
+		}
+		nodePemCert, _ := pem.Decode(nodeCert)
+		certsInGen.nodeCertificates[node.NodeID] = nodePemCert.Bytes
+	}
+
+	adminCert, err := ioutil.ReadFile(conf.SharedConfig.Admin.CertificatePath)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error while reading admin certificate %s", conf.Admin.CertificatePath)
+		return nil, errors.Wrapf(err, "error while reading admin certificate %s", conf.SharedConfig.Admin.CertificatePath)
 	}
 	adminPemCert, _ := pem.Decode(adminCert)
 	certsInGen.adminCert = adminPemCert.Bytes
 
-	for _, certPath := range conf.CAConfig.RootCACertsPath {
+	for _, certPath := range conf.SharedConfig.CAConfig.RootCACertsPath {
 		rootCACert, err := ioutil.ReadFile(certPath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error while reading root CA certificate %s", certPath)
@@ -614,7 +626,7 @@ func readCerts(conf *config.Configurations) (*certsInGenesisConfig, error) {
 		certsInGen.caCerts.Roots = append(certsInGen.caCerts.Roots, caPemCert.Bytes)
 	}
 
-	for _, certPath := range conf.CAConfig.IntermediateCACertsPath {
+	for _, certPath := range conf.SharedConfig.CAConfig.IntermediateCACertsPath {
 		caCert, err := ioutil.ReadFile(certPath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "error while reading intermediate CA certificate %s", certPath)
