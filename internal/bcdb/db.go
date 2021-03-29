@@ -137,11 +137,11 @@ type db struct {
 
 // NewDB creates a new database bcdb which handles both the queries and transactions.
 func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) {
-	if conf.LocalConfig.Node.Database.Name != "leveldb" {
+	if conf.LocalConfig.Server.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
 	}
 
-	ledgerDir := conf.LocalConfig.Node.Database.LedgerDirectory
+	ledgerDir := conf.LocalConfig.Server.Database.LedgerDirectory
 	if err := createLedgerDir(ledgerDir); err != nil {
 		return nil, err
 	}
@@ -178,14 +178,14 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	querier := identity.NewQuerier(levelDB)
 
-	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: conf.LocalConfig.Node.Identity.KeyPath})
+	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: conf.LocalConfig.Server.Identity.KeyPath})
 	if err != nil {
 		return nil, errors.Wrap(err, "can't load private key")
 	}
 
 	worldstateQueryProcessor := newWorldstateQueryProcessor(
 		&worldstateQueryProcessorConfig{
-			nodeID:          conf.LocalConfig.Node.Identity.ID,
+			nodeID:          conf.LocalConfig.Server.Identity.ID,
 			db:              levelDB,
 			blockStore:      blockStore,
 			identityQuerier: querier,
@@ -211,13 +211,13 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	txProcessor, err := newTransactionProcessor(
 		&txProcessorConfig{
-			nodeID:             conf.LocalConfig.Node.Identity.ID,
+			nodeID:             conf.LocalConfig.Server.Identity.ID,
 			db:                 levelDB,
 			blockStore:         blockStore,
 			provenanceStore:    provenanceStore,
-			txQueueLength:      conf.LocalConfig.Node.QueueLength.Transaction,
-			txBatchQueueLength: conf.LocalConfig.Node.QueueLength.ReorderedTransactionBatch,
-			blockQueueLength:   conf.LocalConfig.Node.QueueLength.Block,
+			txQueueLength:      conf.LocalConfig.Server.QueueLength.Transaction,
+			txBatchQueueLength: conf.LocalConfig.Server.QueueLength.ReorderedTransactionBatch,
+			blockQueueLength:   conf.LocalConfig.Server.QueueLength.Block,
 			maxTxCountPerBatch: conf.LocalConfig.BlockCreation.MaxTransactionCountPerBlock,
 			batchTimeout:       conf.LocalConfig.BlockCreation.BlockTimeout,
 			logger:             logger,
@@ -228,7 +228,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	}
 
 	return &db{
-		nodeID:                   conf.LocalConfig.Node.Identity.ID,
+		nodeID:                   conf.LocalConfig.Server.Identity.ID,
 		worldstateQueryProcessor: worldstateQueryProcessor,
 		ledgerQueryProcessor:     ledgerQueryProcessor,
 		provenanceQueryProcessor: provenanceQueryProcessor,

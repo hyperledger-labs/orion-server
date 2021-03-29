@@ -61,7 +61,7 @@ func (env *serverTestEnv) restart(t *testing.T) {
 
 func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, error) {
 	configQuery := &types.GetNodeConfigQuery{
-		NodeID: env.bcdbHTTPServer.conf.LocalConfig.Node.Identity.ID,
+		NodeID: env.bcdbHTTPServer.conf.LocalConfig.Server.Identity.ID,
 		UserID: "admin",
 	}
 
@@ -153,7 +153,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	nodeID := "testNode" + uuid.New().String()
 	serverConfig := &config.Configurations{
 		LocalConfig: &config.LocalConfiguration{
-			Node: config.NodeConf{
+			Server: config.ServerConf{
 				Identity: config.IdentityConf{
 					ID:              nodeID,
 					CertificatePath: path.Join(tempDir, "server.pem"),
@@ -182,7 +182,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 			},
 		},
 		SharedConfig: &config.SharedConfiguration{
-			Nodes: []config.DBNodeConf{
+			Nodes: []config.NodeConf{
 				{
 					NodeID:          nodeID,
 					Host:            "127.0.0.1",

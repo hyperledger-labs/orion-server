@@ -104,14 +104,22 @@ func (m *ClusterConfig) GetCertAuthConfig() *CAConfig {
 	return nil
 }
 
-// NodeConfig holds the information about a
-// database node in the cluster. TODO: change
-// the name NodeConfig to Node once the existing
-// message Node is renamed to something else.
+// NodeConfig holds the information about a database node in the cluster.
+// This information is exposed to the clients.
+// The address and port (see below) define the HTTP/REST endpoint that clients connect to,
+// and must be reachable by clients that submit requests to the database.
+//
+// TODO: change the name NodeConfig to Node once the existing message Node is renamed to something else.
 type NodeConfig struct {
-	ID                   string   `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
-	Address              string   `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	Port                 uint32   `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	// A unique identifier for the node within the cluster.
+	// TODO define and enforce the characters that can be used for this field. Should be something that complies with file names.
+	ID string `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	// The host name or IP address of the HTTP/REST endpoint served by this node.
+	Address string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	// The port of the HTTP/REST endpoint served by this node.
+	Port uint32 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	// The x509 certificate used by this node to authenticate its communication with clients.
+	// This certificate corresponds to the private key the server uses to sign blocks and transaction responses.
 	Certificate          []byte   `protobuf:"bytes,4,opt,name=certificate,proto3" json:"certificate,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -171,8 +179,7 @@ func (m *NodeConfig) GetCertificate() []byte {
 	return nil
 }
 
-// Admin holds the id and certificate of the
-// cluster administrator
+// Admin holds the id and certificate of the cluster administrator.
 type Admin struct {
 	ID                   string   `protobuf:"bytes,1,opt,name=ID,proto3" json:"ID,omitempty"`
 	Certificate          []byte   `protobuf:"bytes,2,opt,name=certificate,proto3" json:"certificate,omitempty"`

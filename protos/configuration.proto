@@ -16,19 +16,26 @@ message ClusterConfig {
   CAConfig cert_auth_config = 3;
 }
 
-// NodeConfig holds the information about a
-// database node in the cluster. TODO: change
-// the name NodeConfig to Node once the existing
-// message Node is renamed to something else.
+// NodeConfig holds the information about a database node in the cluster.
+// This information is exposed to the clients.
+// The address and port (see below) define the HTTP/REST endpoint that clients connect to,
+// and must be reachable by clients that submit requests to the database.
+//
+// TODO: change the name NodeConfig to Node once the existing message Node is renamed to something else.
 message NodeConfig {
+  // A unique identifier for the node within the cluster.
+  // TODO define and enforce the characters that can be used for this field. Should be something that complies with file names.
   string ID = 1;
+  // The host name or IP address of the HTTP/REST endpoint served by this node.
   string address = 2;
+  // The port of the HTTP/REST endpoint served by this node.
   uint32 port = 3;
+  // The x509 certificate used by this node to authenticate its communication with clients.
+  // This certificate corresponds to the private key the server uses to sign blocks and transaction responses.
   bytes certificate = 4;
 }
 
-// Admin holds the id and certificate of the
-// cluster administrator
+// Admin holds the id and certificate of the cluster administrator.
 message Admin {
   string ID = 1;
   bytes certificate = 2;

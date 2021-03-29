@@ -1,7 +1,8 @@
-node:
-  # The identity and credentials of this node.
+# The properties of this server.
+server:
+  # The identity and credentials of this server.
   identity:
-    # identity.id denotes the id of the node.
+    # identity.id denotes the id of the server.
     id: bdb-node-1
     # identity.certificatePath denotes the path to the x509 certificate
     # of the node. This certificate and associated key is used in all

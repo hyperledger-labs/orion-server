@@ -222,7 +222,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 	cryptoDir, conf := testConfiguration(t)
 	require.NotEqual(t, "", cryptoDir)
-	defer os.RemoveAll(conf.LocalConfig.Node.Database.LedgerDirectory)
+	defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 
 	t.Run("commit a data transaction asynchronously", func(t *testing.T) {
 		t.Parallel()
@@ -586,7 +586,7 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 
 	return cryptoDir, &config.Configurations{
 		LocalConfig: &config.LocalConfiguration{
-			Node: config.NodeConf{
+			Server: config.ServerConf{
 				Identity: config.IdentityConf{
 					ID:              "bdb-node-1",
 					CertificatePath: path.Join(cryptoDir, "bdb-node-1.pem"),
@@ -614,7 +614,7 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 			},
 		},
 		SharedConfig: &config.SharedConfiguration{
-			Nodes: []config.DBNodeConf{
+			Nodes: []config.NodeConf{
 				{
 					NodeID:          "bdb-node-1",
 					Host:            "127.0.0.1",

@@ -151,7 +151,7 @@ func (s *Server) createConfigFile() error {
 
 	if _, err = f.WriteString(
 		"# Integration test config.yml\n\n" +
-			"node:\n" +
+			"server:\n" +
 			"  identity:\n" +
 			"    id: " + s.serverID + "\n" +
 			"    certificatePath: " + s.serverCertPath + "\n" +

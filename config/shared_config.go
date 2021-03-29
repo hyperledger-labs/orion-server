@@ -9,28 +9,49 @@ import (
 	"time"
 )
 
+// SharedConfiguration holds the initial configuration that will be converted into the ledger's genesis block and
+// loaded into the database when the server starts with an empty ledger and database.
+//
+// This struct may also be used to bootstrap a new node into an existing cluster (not yet implemented).
+//
+// This part of the configuration is replicated and is common to all nodes.
+// After the initial bootstrap, this part of the configuration can change only through configuration transactions.
 type SharedConfiguration struct {
-	Nodes     []DBNodeConf
+	// Nodes carry the identity, endpoint, and certificate of each database node that serves to clients.
+	Nodes     []NodeConf
 	Consensus ConsensusConf
 	CAConfig  CAConfiguration
 	Admin     AdminConf
 }
 
-type DBNodeConf struct {
+// NodeConf carry the identity, endpoint, and certificate of a database node that serves to clients.
+// The NodeID correlates the node definition here with the peer definition in the SharedConfiguration.Consensus.
+// The Host and Port are those that are accessible from clients.
+// The certificate is the one used to authenticate with clients and validate the server;s signature on
+// blocks and transaction/query responses.
+type NodeConf struct {
 	NodeID          string
 	Host            string
 	Port            uint32
 	CertificatePath string
 }
 
-// ConsensusConf holds the employed consensus algorithm and its parameters
+// ConsensusConf holds the employed consensus algorithm and its parameters.
 type ConsensusConf struct {
+	// The consensus algorithm.
 	Algorithm string
-	Members   []PeerConf
+	// Members contains the set of servers that take part in consensus.
+	Members []PeerConf
+	// Observers contains the set of servers that are allowed to communicate Members, and fetch their state.
 	Observers []PeerConf
-	Raft      RaftConf
+	// Raft specific parameters.
+	Raft RaftConf
 }
 
+// PeerConf defines a server take part in consensus, or an observer.
+// The NodeID correlates the peer definition here with the node definition in the SharedConfiguration.Nodes.
+// The Host and Port are those that are accessible from other peers.
+// RaftID must be >0 for members, or =0 for observers.
 type PeerConf struct {
 	NodeID   string
 	RaftID   uint64
@@ -38,6 +59,7 @@ type PeerConf struct {
 	PeerPort uint32
 }
 
+// RaftConf holds Raft specific parameters.
 type RaftConf struct {
 	TickInterval   time.Duration
 	ElectionTicks  uint32
@@ -58,8 +80,8 @@ type CAConfiguration struct {
 	IntermediateCACertsPath []string
 }
 
-// ReadSharedConfig reads the shared config from the file and returns it.
-func ReadSharedConfig(sharedConfigFile string) (*SharedConfiguration, error) {
+// readSharedConfig reads the shared config from the file and returns it.
+func readSharedConfig(sharedConfigFile string) (*SharedConfiguration, error) {
 	if sharedConfigFile == "" {
 		return nil, errors.New("path to the shared configuration file is empty")
 	}

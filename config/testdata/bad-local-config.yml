@@ -1,4 +1,4 @@
-node:
+server:
   identity:
     id: bdb-node-1
     certificatePath: ./testdata/node.cert

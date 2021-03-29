@@ -29,11 +29,11 @@ type BCDBHTTPServer struct {
 // New creates a object of BCDBHTTPServer
 func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 	c := &logger.Config{
-		Level:         conf.LocalConfig.Node.LogLevel,
+		Level:         conf.LocalConfig.Server.LogLevel,
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
-		Name:          conf.LocalConfig.Node.Identity.ID,
+		Name:          conf.LocalConfig.Server.Identity.ID,
 	}
 	lg, err := logger.New(c)
 	if err != nil {
@@ -53,7 +53,7 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, lg))
 	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, lg))
 
-	netConf := conf.LocalConfig.Node.Network
+	netConf := conf.LocalConfig.Server.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
 	listen, err := net.Listen("tcp", addr)
 	if err != nil {
