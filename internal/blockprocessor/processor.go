@@ -56,6 +56,16 @@ func New(conf *Config) *BlockProcessor {
 	}
 }
 
+// Bootstrap initializes the ledger and database with the first block, which contains a config transaction.
+// This block is a.k.a. the "genesis block".
+func (b *BlockProcessor) Bootstrap(configBlock *types.Block) error {
+	if err := b.initAndRecoverStateTrieIfNeeded(); err != nil {
+		return errors.WithMessage(err, "error while recovering node state trie")
+	}
+
+	return b.validateAndCommit(configBlock)
+}
+
 // Start starts the validator and committer
 func (b *BlockProcessor) Start() {
 	b.logger.Debug("starting the block processor")
@@ -88,36 +98,19 @@ func (b *BlockProcessor) Start() {
 			}
 			block := blockData.(*types.Block)
 
-			b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
-			validationInfo, err := b.validator.validateBlock(block)
-			if err != nil {
+			if err = b.validateAndCommit(block); err != nil {
 				panic(err)
 			}
 
-			block.Header.ValidationInfo = validationInfo
-
-			if err := b.blockStore.AddSkipListLinks(block); err != nil {
-				panic(err)
-			}
-
-			root, err := mtree.BuildTreeForBlockTx(block)
-			if err != nil {
-				panic(err)
-			}
-			block.Header.TxMerkelTreeRootHash = root.Hash()
-
-			if err = b.committer.commitBlock(block); err != nil {
-				panic(err)
-			}
-
-			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
-
-			//TODO detect config changes that affect the replication component and return an appropriate non-nil object
+			//TODO Detect config changes that affect the replication component and return an appropriate non-nil object
 			// to instruct it to reconfigure itself. See issues:
 			// https://github.ibm.com/blockchaindb/server/issues/396
 			// https://github.ibm.com/blockchaindb/server/issues/413
 			var reConfig interface{}
-
+			switch block.Payload.(type) {
+			case *types.Block_ConfigTxEnvelope:
+				reConfig = block.GetConfigTxEnvelope().GetPayload().GetNewConfig()
+			}
 			// The replication layer go-routine is blocked until after commit, and is released by calling Reply().
 			// The post-commit listeners are called after the replication layer go-routine is released. This is an
 			// optimization, as post-commit processing can proceed in parallel with the replication go-routine handling
@@ -134,6 +127,36 @@ func (b *BlockProcessor) Start() {
 			}
 		}
 	}
+}
+
+func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
+	b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
+	validationInfo, err := b.validator.validateBlock(block)
+	if err != nil {
+		if block.GetHeader().GetBaseHeader().GetNumber() > 1 {
+			panic(err)
+		}
+		return err
+	}
+
+	block.Header.ValidationInfo = validationInfo
+
+	if err = b.blockStore.AddSkipListLinks(block); err != nil {
+		panic(err)
+	}
+
+	root, err := mtree.BuildTreeForBlockTx(block)
+	if err != nil {
+		panic(err)
+	}
+	block.Header.TxMerkelTreeRootHash = root.Hash()
+
+	if err = b.committer.commitBlock(block); err != nil {
+		panic(err)
+	}
+
+	b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
+	return err
 }
 
 // WaitTillStart waits till the block processor is started

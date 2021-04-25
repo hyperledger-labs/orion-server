@@ -41,6 +41,7 @@ type testEnv struct {
 	userID              string
 	userCert            *x509.Certificate
 	userSigner          crypto.Signer
+	genesisConfig       *types.ClusterConfig
 	genesisBlock        *types.Block
 	cleanup             func(bool)
 }
@@ -130,6 +131,46 @@ func newTestEnv(t *testing.T) *testEnv {
 		Logger:               logger,
 	})
 
+	genesisConfig := &types.ClusterConfig{
+		Nodes: []*types.NodeConfig{
+			{
+				Id:          "node1",
+				Address:     "127.0.0.1",
+				Port:        6090,
+				Certificate: nodeCert.Raw,
+			},
+		},
+		Admins: []*types.Admin{
+			{
+				Id:          "admin1",
+				Certificate: adminCert.Raw,
+			},
+		},
+		CertAuthConfig: &types.CAConfig{
+			Roots: [][]byte{caCert.Raw},
+		},
+		ConsensusConfig: &types.ConsensusConfig{
+			Algorithm: "raft",
+			Members: []*types.PeerConfig{
+				{
+					NodeId:           "node1",
+					RaftId:           1,
+					PeerHost:         "127.0.0.1",
+					PeerPort:         7090,
+					XXX_unrecognized: nil,
+					XXX_sizecache:    0,
+				},
+			},
+			RaftConfig: &types.RaftConfig{
+				TickInterval:   "100ms",
+				ElectionTicks:  100,
+				HeartbeatTicks: 10,
+			},
+			XXX_NoUnkeyedLiteral: struct{}{},
+			XXX_unrecognized:     nil,
+			XXX_sizecache:        0,
+		},
+	}
 	genesisBlock := &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
@@ -139,46 +180,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Payload: &types.Block_ConfigTxEnvelope{
 			ConfigTxEnvelope: &types.ConfigTxEnvelope{
 				Payload: &types.ConfigTx{
-					NewConfig: &types.ClusterConfig{
-						Nodes: []*types.NodeConfig{
-							{
-								Id:          "node1",
-								Address:     "127.0.0.1",
-								Port:        6090,
-								Certificate: nodeCert.Raw,
-							},
-						},
-						Admins: []*types.Admin{
-							{
-								Id:          "admin1",
-								Certificate: adminCert.Raw,
-							},
-						},
-						CertAuthConfig: &types.CAConfig{
-							Roots: [][]byte{caCert.Raw},
-						},
-						ConsensusConfig: &types.ConsensusConfig{
-							Algorithm: "raft",
-							Members: []*types.PeerConfig{
-								{
-									NodeId:           "node1",
-									RaftId:           1,
-									PeerHost:         "127.0.0.1",
-									PeerPort:         7090,
-									XXX_unrecognized: nil,
-									XXX_sizecache:    0,
-								},
-							},
-							RaftConfig: &types.RaftConfig{
-								TickInterval:   "100ms",
-								ElectionTicks:  100,
-								HeartbeatTicks: 10,
-							},
-							XXX_NoUnkeyedLiteral: struct{}{},
-							XXX_unrecognized:     nil,
-							XXX_sizecache:        0,
-						},
-					},
+					NewConfig: genesisConfig,
 				},
 			},
 		},
@@ -215,6 +217,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		userID:         "testUser",
 		userCert:       userCert,
 		userSigner:     userSigner,
+		genesisConfig:  genesisConfig,
 		genesisBlock:   genesisBlock,
 		cleanup:        cleanup,
 	}
@@ -228,7 +231,8 @@ func newTestEnv(t *testing.T) *testEnv {
 func setup(t *testing.T, env *testEnv) {
 	reply, err := env.blockProcessor.blockOneQueueBarrier.EnqueueWait(env.genesisBlock)
 	require.NoError(t, err)
-	require.Nil(t, reply) // May not be nil when we implement dynamic config
+	require.NotNil(t, reply)
+	require.Equal(t, env.genesisConfig, reply)
 
 	assertConfigHasCommitted := func() bool {
 		exist, err := env.blockProcessor.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")

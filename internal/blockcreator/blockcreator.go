@@ -67,6 +67,21 @@ func (b *BlockCreator) RegisterReplicator(blockReplicator Replicator) {
 	b.blockReplicator = blockReplicator
 }
 
+func BootstrapBlock(tx *types.ConfigTxEnvelope) (*types.Block, error) {
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number: 1,
+			},
+		},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: tx,
+		},
+	}
+
+	return block, nil
+}
+
 // Start runs the block assembler in an infinite loop
 func (b *BlockCreator) Start() {
 	defer close(b.stopped)

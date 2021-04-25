@@ -4,20 +4,32 @@
 package replication
 
 import (
+	"context"
+	"errors"
 	"sync"
 
+	"github.com/IBM-Blockchain/bcdb-server/config"
+	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
 	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
 )
 
 type BlockReplicator struct {
+	localConf       *config.LocalConfiguration
 	raftCh          chan interface{}       // TODO a placeholder for the Raft pipeline
 	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver  with the block-processor commit
+	transport       *comm.HTTPTransport
 
 	stopCh   chan struct{}
 	stopOnce sync.Once
 	doneCh   chan struct{}
+
+	mutex         sync.Mutex
+	clusterConfig *types.ClusterConfig
 
 	logger *logger.SugarLogger
 }
@@ -25,6 +37,9 @@ type BlockReplicator struct {
 // Config holds the configuration information required to initialize the block replicator.
 type Config struct {
 	//TODO just a skeleton
+	LocalConf            *config.LocalConfiguration
+	ClusterConfig        *types.ClusterConfig
+	Transport            *comm.HTTPTransport
 	BlockOneQueueBarrier *queue.OneQueueBarrier
 	Logger               *logger.SugarLogger
 }
@@ -34,10 +49,13 @@ func NewBlockReplicator(conf *Config) *BlockReplicator {
 	//TODO just a skeleton
 
 	br := &BlockReplicator{
+		localConf:       conf.LocalConf,
 		raftCh:          make(chan interface{}, 10), // TODO a placeholder for the Raft pipeline
 		oneQueueBarrier: conf.BlockOneQueueBarrier,
 		stopCh:          make(chan struct{}),
 		doneCh:          make(chan struct{}),
+		clusterConfig:   conf.ClusterConfig,
+		transport:       conf.Transport,
 		logger:          conf.Logger,
 	}
 
@@ -70,14 +88,14 @@ func (br *BlockReplicator) Start() {
 func (br *BlockReplicator) run(readyCh chan<- struct{}) {
 	defer close(br.doneCh)
 
-	br.logger.Info("starting the block replicator")
+	br.logger.Info("Starting the block replicator")
 	close(readyCh)
 
 Replicator_Loop:
 	for {
 		select {
 		case <-br.stopCh:
-			br.logger.Info("stopping block replicator")
+			br.logger.Info("Stopping block replicator")
 			return
 
 		case blockToCommit := <-br.raftCh:
@@ -89,14 +107,18 @@ Replicator_Loop:
 				break Replicator_Loop
 			}
 
-			// A non-nil reply is an indication that the last block was a valid config that applies to the replication
-			// component.
+			// A non-nil reply is an indication that the last block was a valid config that applies
+			// to the replication component.
 			if reConfig != nil {
-				br.logger.Infof("New config committed, going to apply to block replicator: %v", reConfig)
-				// TODO
+				clusterConfig := reConfig.(*types.ClusterConfig)
+				if err = br.updateClusterConfig(clusterConfig); err != nil {
+					br.logger.Panicf("Failed to update ClusterConfig: %s", err)
+				}
 			}
 		}
 	}
+
+	br.logger.Info("Exiting the block replicator")
 }
 
 // Close signals the internal go-routine to stop and waits for it to exit.
@@ -114,4 +136,32 @@ func (br *BlockReplicator) Close() (err error) {
 	})
 
 	return err
+}
+
+func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfig) error {
+	br.logger.Infof("New cluster config committed, going to apply to block replicator: %+v", clusterConfig)
+
+	//TODO dynamic re-config, update transport config, etc
+
+	return errors.New("dynamic re-config of ClusterConfig not supported yet")
+}
+
+func (br *BlockReplicator) Process(ctx context.Context, m raftpb.Message) error {
+	// see: rafthttp.RAFT
+	//TODO
+	return nil
+}
+
+func (br *BlockReplicator) IsIDRemoved(id uint64) bool {
+	// see: rafthttp.RAFT
+	//TODO
+	return false
+}
+func (br *BlockReplicator) ReportUnreachable(id uint64) {
+	// see: rafthttp.RAFT
+	//TODO
+}
+func (br *BlockReplicator) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
+	// see: rafthttp.RAFT
+	//TODO
 }

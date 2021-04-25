@@ -45,7 +45,7 @@ type txProcessorTestEnv struct {
 	cleanup        func()
 }
 
-func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
+func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configurations) *txProcessorTestEnv {
 	dir, err := ioutil.TempDir("/tmp", "transactionProcessor")
 	require.NoError(t, err)
 
@@ -117,20 +117,13 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 
-	nodeID := "bdb-node-1"
-
 	txProcConf := &txProcessorConfig{
-		nodeID:             nodeID,
-		db:                 db,
-		blockStore:         blockStore,
-		provenanceStore:    provenanceStore,
-		stateTrieStore:     stateTrieStore,
-		txQueueLength:      100,
-		txBatchQueueLength: 100,
-		blockQueueLength:   100,
-		maxTxCountPerBatch: 1,
-		batchTimeout:       50 * time.Millisecond,
-		logger:             logger,
+		config:          conf,
+		db:              db,
+		blockStore:      blockStore,
+		provenanceStore: provenanceStore,
+		stateTrieStore:  stateTrieStore,
+		logger:          logger,
 	}
 	txProcessor, err := newTransactionProcessor(txProcConf)
 	require.NoError(t, err)
@@ -175,43 +168,10 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 	}
 }
 
-func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Configurations, dbName string) {
-	configTx, err := prepareConfigTx(conf)
+func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, dbName string) {
+	h, err := env.txProcessor.blockStore.Height()
 	require.NoError(t, err)
-
-	txHash, err := calculateTxHash(configTx, &types.ValidationInfo{Flag: types.Flag_VALID})
-	require.NoError(t, err)
-	txMerkelRootHash, err := crypto.ConcatenateHashes(txHash, nil)
-	require.NoError(t, err)
-
-	stateTrie, err := mptrie.NewTrie(nil, env.stateTrieStore)
-	require.NoError(t, err)
-	stateTrieRoot := applyTxsOnTrie(t, env, configTx, stateTrie)
-
-	expectedRespPayload := &types.TxReceiptResponse{
-		Receipt: &types.TxReceipt{
-			Header: &types.BlockHeader{
-				BaseHeader: &types.BlockHeaderBase{
-					Number:                1,
-					LastCommittedBlockNum: 0,
-				},
-				TxMerkelTreeRootHash:    txMerkelRootHash,
-				StateMerkelTreeRootHash: stateTrieRoot,
-				ValidationInfo: []*types.ValidationInfo{
-					{
-						Flag: types.Flag_VALID,
-					},
-				},
-			},
-			TxIndex: 0,
-		},
-	}
-
-	resp, err := env.txProcessor.submitTransaction(configTx, 5*time.Second)
-	require.NoError(t, err)
-
-	require.True(t, proto.Equal(expectedRespPayload, resp))
-	require.True(t, env.txProcessor.pendingTxs.isEmpty())
+	require.Equal(t, uint64(1), h)
 
 	user := &types.User{
 		Id:          env.userID,
@@ -258,10 +218,10 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("commit a data transaction asynchronously", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t, cryptoDir)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
-		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+		setupTxProcessor(t, env, worldstate.DefaultDBName)
 
 		tx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
 			MustSignUserIds: []string{"testUser"},
@@ -365,10 +325,10 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("commit a data transaction synchronously", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t, cryptoDir)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
-		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+		setupTxProcessor(t, env, worldstate.DefaultDBName)
 
 		tx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
 			MustSignUserIds: []string{"testUser"},
@@ -467,10 +427,10 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with the already committed transaction", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t, cryptoDir)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
-		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+		setupTxProcessor(t, env, worldstate.DefaultDBName)
 
 		dataTx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
 			MustSignUserIds: []string{"testUser"},
@@ -501,10 +461,10 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t, cryptoDir)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
-		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+		setupTxProcessor(t, env, worldstate.DefaultDBName)
 
 		dbTx := testutils.SignedDBAdministrationTxEnvelope(t, env.userSigner, &types.DBAdministrationTx{
 			UserId: "testUser",
@@ -539,10 +499,10 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
 		t.Parallel()
-		env := newTxProcessorTestEnv(t, cryptoDir)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
-		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
+		setupTxProcessor(t, env, worldstate.DefaultDBName)
 
 		resp, err := env.txProcessor.submitTransaction([]byte("hello"), 0)
 		require.EqualError(t, err, "unexpected transaction type")
