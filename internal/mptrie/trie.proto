@@ -1,0 +1,27 @@
+// Copyright IBM Corp. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+syntax = "proto3";
+
+option go_package = "github.ibm.com/blockchaindb/server/internal/mptrie";
+
+package mptrie;
+
+message BranchNode {
+  repeated bytes children = 1;
+  bytes valuePtr = 2;
+  bool deleted = 3;
+}
+
+message ExtensionNode {
+  bytes key = 1;
+  bytes child = 2;
+}
+
+message ValueNode {
+  bytes key = 1;
+  bytes valuePtr = 2;
+  bool deleted = 3;
+}
+
+message EmptyNode {
+}
