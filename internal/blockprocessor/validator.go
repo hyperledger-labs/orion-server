@@ -86,6 +86,14 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
 		}
 
+		if r := validateConsensusConfig(configTx.NewConfig.ConsensusConfig); r.Flag != types.Flag_VALID {
+			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
+		}
+
+		if r := validateMembersNodesMatch(configTx.NewConfig.ConsensusConfig.Members, configTx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
+			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
+		}
+
 		return []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,

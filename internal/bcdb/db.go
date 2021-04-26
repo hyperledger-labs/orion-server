@@ -136,12 +136,12 @@ type db struct {
 }
 
 // NewDB creates a new database bcdb which handles both the queries and transactions.
-func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) {
-	if conf.LocalConfig.Server.Database.Name != "leveldb" {
+func NewDB(localConf *config.LocalConfiguration, logger *logger.SugarLogger) (DB, error) {
+	if localConf.Server.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
 	}
 
-	ledgerDir := conf.LocalConfig.Server.Database.LedgerDirectory
+	ledgerDir := localConf.Server.Database.LedgerDirectory
 	if err := createLedgerDir(ledgerDir); err != nil {
 		return nil, err
 	}
@@ -178,14 +178,14 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	querier := identity.NewQuerier(levelDB)
 
-	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: conf.LocalConfig.Server.Identity.KeyPath})
+	signer, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: localConf.Server.Identity.KeyPath})
 	if err != nil {
 		return nil, errors.Wrap(err, "can't load private key")
 	}
 
 	worldstateQueryProcessor := newWorldstateQueryProcessor(
 		&worldstateQueryProcessorConfig{
-			nodeID:          conf.LocalConfig.Server.Identity.ID,
+			nodeID:          localConf.Server.Identity.ID,
 			db:              levelDB,
 			blockStore:      blockStore,
 			identityQuerier: querier,
@@ -211,15 +211,15 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	txProcessor, err := newTransactionProcessor(
 		&txProcessorConfig{
-			nodeID:             conf.LocalConfig.Server.Identity.ID,
+			nodeID:             localConf.Server.Identity.ID,
 			db:                 levelDB,
 			blockStore:         blockStore,
 			provenanceStore:    provenanceStore,
-			txQueueLength:      conf.LocalConfig.Server.QueueLength.Transaction,
-			txBatchQueueLength: conf.LocalConfig.Server.QueueLength.ReorderedTransactionBatch,
-			blockQueueLength:   conf.LocalConfig.Server.QueueLength.Block,
-			maxTxCountPerBatch: conf.LocalConfig.BlockCreation.MaxTransactionCountPerBlock,
-			batchTimeout:       conf.LocalConfig.BlockCreation.BlockTimeout,
+			txQueueLength:      localConf.Server.QueueLength.Transaction,
+			txBatchQueueLength: localConf.Server.QueueLength.ReorderedTransactionBatch,
+			blockQueueLength:   localConf.Server.QueueLength.Block,
+			maxTxCountPerBatch: localConf.BlockCreation.MaxTransactionCountPerBlock,
+			batchTimeout:       localConf.BlockCreation.BlockTimeout,
 			logger:             logger,
 		},
 	)
@@ -228,7 +228,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	}
 
 	return &db{
-		nodeID:                   conf.LocalConfig.Server.Identity.ID,
+		nodeID:                   localConf.Server.Identity.ID,
 		worldstateQueryProcessor: worldstateQueryProcessor,
 		ledgerQueryProcessor:     ledgerQueryProcessor,
 		provenanceQueryProcessor: provenanceQueryProcessor,
@@ -517,6 +517,7 @@ func (d *db) Close() error {
 		return errors.WithMessage(err, "error while closing the block store")
 	}
 
+	d.logger.Info("Closed internal DB")
 	return nil
 }
 
@@ -554,6 +555,7 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 		return nil, err
 	}
 
+	inNodes := false
 	var nodes []*types.NodeConfig
 	for _, node := range conf.SharedConfig.Nodes {
 		nc := &types.NodeConfig{
@@ -567,6 +569,13 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 			return nil, errors.Errorf("Cannot find certificate for node: %s", node.NodeID)
 		}
 		nodes = append(nodes, nc)
+
+		if node.NodeID == conf.LocalConfig.Server.Identity.ID {
+			inNodes = true
+		}
+	}
+	if !inNodes {
+		return nil, errors.Errorf("Cannot find local Server.Identity.ID [%s] in SharedConfig.Nodes: %v", conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Nodes)
 	}
 
 	clusterConfig := &types.ClusterConfig{
@@ -578,6 +587,56 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 			},
 		},
 		CertAuthConfig: certs.caCerts,
+		ConsensusConfig: &types.ConsensusConfig{
+			Algorithm: conf.SharedConfig.Consensus.Algorithm,
+			Members:   make([]*types.PeerConfig, len(conf.SharedConfig.Consensus.Members)),
+			Observers: make([]*types.PeerConfig, len(conf.SharedConfig.Consensus.Observers)),
+			RaftConfig: &types.RaftConfig{
+				TickInterval:   conf.SharedConfig.Consensus.RaftConfig.TickInterval,
+				ElectionTicks:  conf.SharedConfig.Consensus.RaftConfig.ElectionTicks,
+				HeartbeatTicks: conf.SharedConfig.Consensus.RaftConfig.HeartbeatTicks,
+			},
+		},
+	}
+
+	inMembers := false
+	for i, m := range conf.SharedConfig.Consensus.Members {
+		clusterConfig.ConsensusConfig.Members[i] = &types.PeerConfig{
+			NodeId:   m.NodeId,
+			RaftId:   m.RaftId,
+			PeerHost: m.PeerHost,
+			PeerPort: m.PeerPort,
+		}
+		if m.NodeId == conf.LocalConfig.Server.Identity.ID {
+			inMembers = true
+		}
+	}
+
+	inObservers := false
+	for i, m := range conf.SharedConfig.Consensus.Observers {
+		clusterConfig.ConsensusConfig.Observers[i] = &types.PeerConfig{
+			NodeId:   m.NodeId,
+			RaftId:   m.RaftId,
+			PeerHost: m.PeerHost,
+			PeerPort: m.PeerPort,
+		}
+		if m.NodeId == conf.LocalConfig.Server.Identity.ID {
+			inObservers = true
+		}
+	}
+
+	if !inMembers && !inObservers {
+		return nil, errors.Errorf("Cannot find local Server.Identity.ID [%s] in SharedConfig.Consensus Members or Observers: %v",
+			conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Consensus)
+	}
+	if inObservers && inMembers {
+		return nil, errors.Errorf("local Server.Identity.ID [%s] cannot be in SharedConfig.Consensus both Members and Observers: %v",
+			conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Consensus)
+	}
+	// TODO add support for observers, see issue: https://github.ibm.com/blockchaindb/server/issues/403
+	if inObservers {
+		return nil, errors.Errorf("not supported yet: local Server.Identity.ID [%s] is in SharedConfig.Consensus.Observers: %v",
+			conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Consensus)
 	}
 
 	return &types.ConfigTxEnvelope{

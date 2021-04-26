@@ -6,12 +6,11 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"net/http"
-	"net/url"
-
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/pkg/constants"
 	"github.ibm.com/blockchaindb/server/pkg/types"
+	"net/http"
+	"net/url"
 )
 
 type Client struct {
@@ -33,7 +32,19 @@ func NewRESTClient(rawurl string) (*Client, error) {
 	if err != nil {
 		return nil, errors.Wrapf(err, "parsing url %s", rawurl)
 	}
-	res.httpClient = http.DefaultClient
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+		},
+	}
+	res.httpClient = httpClient
+
+	//TODO using the default client which allows keep-alives exposes a bug in the server. The when stopped, the server
+	// does not close (or shutdown) the http server, and keeps the old connections. The client sends requests that need
+	// to get to the new server on the old connections, and they get processed by the old http server, in which the
+	// handlers lead nowhere. See: https://github.ibm.com/blockchaindb/server/issues/429
+	//res.httpClient = http.DefaultClient
+
 	return res, nil
 }
 

@@ -75,8 +75,8 @@ func (b *BlockProcessor) Start() {
 			// released by calling OneQueueBarrier.Reply().
 			blockData, err := b.blockOneQueueBarrier.Dequeue()
 			if err != nil {
-				// when the queue is closed during the teardown/cleanup, an error will be returned.
-				b.logger.Warnf("OneQueueBarrier error: %s", err)
+				// when the queue is closed during the teardown/cleanup
+				b.logger.Debugf("OneQueueBarrier error: %s", err)
 				continue
 			}
 			block := blockData.(*types.Block)
@@ -116,8 +116,8 @@ func (b *BlockProcessor) Start() {
 			// the next block.
 			err = b.blockOneQueueBarrier.Reply(reConfig)
 			if err != nil {
-				// when the queue is closed during the teardown/cleanup, an error will be returned.
-				b.logger.Warnf("OneQueueBarrier error: %s", err)
+				// when the queue is closed during the teardown/cleanup
+				b.logger.Debugf("OneQueueBarrier error: %s", err)
 				continue
 			}
 

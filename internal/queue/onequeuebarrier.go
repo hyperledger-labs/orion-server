@@ -41,7 +41,7 @@ func NewOneQueueBarrier(logger *logger.SugarLogger) *OneQueueBarrier {
 func (qb *OneQueueBarrier) EnqueueWait(entry interface{}) (interface{}, error) {
 	select {
 	case <-qb.stopCh:
-		qb.logger.Info("stopped before enqueue")
+		qb.logger.Debug("stopped before enqueue")
 		return nil, &ierrors.ClosedError{ErrMsg: "closed"}
 	case qb.entryCh <- entry:
 		qb.logger.Debug("Enqueued entry")
@@ -49,7 +49,7 @@ func (qb *OneQueueBarrier) EnqueueWait(entry interface{}) (interface{}, error) {
 
 	select {
 	case <-qb.stopCh:
-		qb.logger.Info("stopped before reply")
+		qb.logger.Debug("stopped before reply")
 		return nil, &ierrors.ClosedError{ErrMsg: "closed"}
 	case reply := <-qb.replyCh:
 		return reply, nil
@@ -62,7 +62,7 @@ func (qb *OneQueueBarrier) EnqueueWait(entry interface{}) (interface{}, error) {
 func (qb *OneQueueBarrier) Dequeue() (interface{}, error) {
 	select {
 	case <-qb.stopCh:
-		qb.logger.Info("stopped before dequeue")
+		qb.logger.Debug("stopped before dequeue")
 		return nil, &ierrors.ClosedError{ErrMsg: "closed"}
 	case entry := <-qb.entryCh:
 		return entry, nil
@@ -75,7 +75,7 @@ func (qb *OneQueueBarrier) Dequeue() (interface{}, error) {
 func (qb *OneQueueBarrier) Reply(reply interface{}) error {
 	select {
 	case <-qb.stopCh:
-		qb.logger.Info("stopped before reply")
+		qb.logger.Debug("stopped before reply")
 		return &ierrors.ClosedError{ErrMsg: "closed"}
 	case qb.replyCh <- reply:
 		qb.logger.Debug("Submitted reply")

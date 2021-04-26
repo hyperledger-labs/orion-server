@@ -5,6 +5,8 @@ package blockprocessor
 import (
 	"fmt"
 	"net"
+	"net/url"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -60,6 +62,14 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		return r, nil
 	}
 
+	if r := validateConsensusConfig(tx.NewConfig.ConsensusConfig); r.Flag != types.Flag_VALID {
+		return r, nil
+	}
+
+	if r := validateMembersNodesMatch(tx.NewConfig.ConsensusConfig.Members, tx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
+		return r, nil
+	}
+
 	return v.mvccValidation(tx.ReadOldConfigVersion)
 }
 
@@ -106,7 +116,8 @@ func validateNodeConfig(nodes []*types.NodeConfig, caCertCollection *certificate
 		}
 	}
 
-	nodeIDs := make(map[string]bool)
+	nodeIDsSet := make(map[string]bool)
+	hostPortSet := make(map[string]bool)
 
 	for _, n := range nodes {
 		switch {
@@ -123,20 +134,25 @@ func validateNodeConfig(nodes []*types.NodeConfig, caCertCollection *certificate
 			}
 
 		case n.Address == "":
-			// TODO: ip address must be unique as well
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the node [" + n.ID + "] has an empty ip address",
 			}
 
 		case net.ParseIP(n.Address) == nil:
+			// TODO allow host names for cluster nodes
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the node [" + n.ID + "] has an invalid ip address [" + n.Address + "]",
 			}
 
+		case n.Port == 0 || n.Port >= (1<<16):
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("the node [%s] has an invalid port number [%d]", n.ID, n.Port),
+			}
+
 		default:
-			// TODO: should the certificate be unique as well?
 			if err := caCertCollection.VerifyLeafCert(n.Certificate); err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -145,13 +161,24 @@ func validateNodeConfig(nodes []*types.NodeConfig, caCertCollection *certificate
 			}
 		}
 
-		if nodeIDs[n.ID] {
+		// node ID must be unique
+		if nodeIDsSet[n.ID] {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there are two nodes with the same ID [" + n.ID + "] in the node config. The node IDs must be unique",
 			}
 		}
-		nodeIDs[n.ID] = true
+		nodeIDsSet[n.ID] = true
+
+		// node host:port must be unique as well
+		hostPort := fmt.Sprintf("%s:%d", n.Address, n.Port)
+		if hostPortSet[hostPort] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "there are two nodes with the same Host:Port [" + hostPort + "] in the node config. Endpoints must be unique",
+			}
+		}
+		hostPortSet[hostPort] = true
 	}
 
 	return &types.ValidationInfo{
@@ -205,6 +232,219 @@ func validateAdminConfig(admins []*types.Admin, caCertCollection *certificateaut
 	}
 }
 
+// validate the internal consistency of the ConsensusConfig
+func validateConsensusConfig(consensusConf *types.ConsensusConfig) *types.ValidationInfo {
+	switch {
+	case consensusConf == nil:
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config is empty.",
+		}
+
+	case consensusConf.Algorithm != "raft":
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: fmt.Sprintf("Consensus config Algorithm '%s' is not supported.", consensusConf.Algorithm),
+		}
+
+	case len(consensusConf.Members) == 0:
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config has no member peers. At least one member peer is required.",
+		}
+	}
+
+	nodeIDsSet := make(map[string]bool)
+	hostPortSet := make(map[string]bool)
+	raftIDSet := make(map[uint64]bool)
+
+	for _, m := range consensusConf.Members {
+		switch {
+		case m == nil:
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an empty member entry.",
+			}
+
+		case m.NodeId == "":
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has a member with an empty ID. A valid nodeID must be an non-empty string.",
+			}
+
+		case m.RaftId == 0:
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("Consensus config has a member [%s] with Raft ID 0, must be >0.", m.NodeId),
+			}
+		}
+
+		if err := validateHostPort(m.PeerHost, m.PeerPort); err != nil {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("Consensus config has a member [%s] with %s", m.NodeId, err.Error()),
+			}
+		}
+
+		// node ID must be unique
+		if nodeIDsSet[m.NodeId] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two members with the same ID [" + m.NodeId + "], the node IDs must be unique.",
+			}
+		}
+		nodeIDsSet[m.NodeId] = true
+
+		// peer raft IDs must be unique
+		if raftIDSet[m.RaftId] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("Consensus config has two members with the same Raft ID [%d], Raft IDs must be unique.", m.RaftId),
+			}
+		}
+		raftIDSet[m.RaftId] = true
+
+		// peer host:port must be unique
+		hostPort := fmt.Sprintf("%s:%d", m.PeerHost, m.PeerPort)
+		if hostPortSet[hostPort] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two members with the same Host:Port [" + hostPort + "], endpoints must be unique.",
+			}
+		}
+		hostPortSet[hostPort] = true
+	}
+
+	for _, o := range consensusConf.Observers {
+		switch {
+		case o == nil:
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an empty observer entry.",
+			}
+
+		case o.NodeId == "":
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an observer with an empty ID. A valid nodeID must be an non-empty string.",
+			}
+
+		case o.RaftId != 0:
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("Consensus config has an observer [%s] with Raft ID >0.", o.NodeId),
+			}
+		}
+
+		if err := validateHostPort(o.PeerHost, o.PeerPort); err != nil {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("Consensus config has an observer [%s] with %s", o.NodeId, err.Error()),
+			}
+		}
+
+		// node ID must be unique, across members as well
+		if nodeIDsSet[o.NodeId] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two peers with the same ID [" + o.NodeId + "], the node IDs must be unique.",
+			}
+		}
+		nodeIDsSet[o.NodeId] = true
+
+		// peer host:port must be unique, across members as well
+		hostPort := fmt.Sprintf("%s:%d", o.PeerHost, o.PeerPort)
+		if hostPortSet[hostPort] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two peers with the same Host:Port [" + hostPort + "], endpoints must be unique.",
+			}
+		}
+		hostPortSet[hostPort] = true
+	}
+
+	switch {
+	case consensusConf.RaftConfig == nil:
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config RaftConfig is empty.",
+		}
+
+	case consensusConf.RaftConfig.TickInterval == "":
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config RaftConfig.TickInterval is empty.",
+		}
+
+	case consensusConf.RaftConfig.HeartbeatTicks == 0:
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config RaftConfig.HeartbeatTicks is 0.",
+		}
+
+	case consensusConf.RaftConfig.ElectionTicks == 0:
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config RaftConfig.ElectionTicks is 0.",
+		}
+	}
+
+	if d, err := time.ParseDuration(consensusConf.RaftConfig.TickInterval); err != nil {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config RaftConfig.TickInterval is invalid: " + err.Error(),
+		}
+	} else if d <= 0 {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "Consensus config RaftConfig.TickInterval is invalid: " + consensusConf.RaftConfig.TickInterval,
+		}
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}
+}
+
+func validateMembersNodesMatch(members []*types.PeerConfig, nodes []*types.NodeConfig) *types.ValidationInfo {
+	if len(nodes) != len(members) {
+		return &types.ValidationInfo{
+			Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: fmt.Sprintf(
+				"ClusterConfig.Nodes must be the same length as ClusterConfig.ConsensusConfig.Members, and Nodes set must include all Members"),
+		}
+	}
+
+	nodesMap := make(map[string]*types.NodeConfig)
+	for _, n := range nodes {
+		nodesMap[n.ID] = n
+	}
+
+	for _, m := range members {
+		if n, ok := nodesMap[m.NodeId]; !ok {
+			return &types.ValidationInfo{
+				Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf(
+					"ClusterConfig.Nodes set does not include ClusterConfig.ConsensusConfig.Members peer [%s], Nodes set must include all Members.", m.NodeId),
+			}
+		} else {
+			nHostPort := fmt.Sprintf("%s:%d", n.Address, n.Port)
+			mHostPort := fmt.Sprintf("%s:%d", m.PeerHost, m.PeerPort)
+			if nHostPort == mHostPort {
+				return &types.ValidationInfo{
+					Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: fmt.Sprintf(
+						"ClusterConfig node [%s] and respective peer have the same endpoint [%s], node and peer endpoints must be unique.", m.NodeId, nHostPort),
+				}
+			}
+		}
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}
+}
+
 func (v *configTxValidator) mvccValidation(readOldConfigVersion *types.Version) (*types.ValidationInfo, error) {
 	_, metadata, err := v.db.GetConfig()
 	if err != nil {
@@ -221,4 +461,28 @@ func (v *configTxValidator) mvccValidation(readOldConfigVersion *types.Version) 
 	return &types.ValidationInfo{
 		Flag: types.Flag_VALID,
 	}, nil
+}
+
+func validateHostPort(host string, port uint32) error {
+	if host == "" {
+		return errors.New("an empty host")
+	}
+
+	// Check for either an IP address or a hostname
+	if net.ParseIP(host) == nil {
+		u, err := url.Parse("bogus://" + host)
+		if err != nil {
+			return errors.New(fmt.Sprintf("an invalid host [%s]", host))
+		}
+		if u.Hostname() != host {
+			return errors.New(fmt.Sprintf("an invalid host [%s]", host))
+		}
+	}
+
+	if port == 0 || port >= (1<<16) {
+		return errors.Errorf("an invalid port number [%d]", port)
+
+	}
+
+	return nil
 }

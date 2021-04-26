@@ -76,7 +76,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 	}
 
 	for i := 0; i < conf.NumberOfServers; i++ {
-		cluster.Servers[i], err = NewServer(i, conf.TestDirAbsolutePath, l)
+		cluster.Servers[i], err = NewServer(uint64(i), conf.TestDirAbsolutePath, l)
 		if err != nil {
 			return nil, err
 		}
@@ -346,23 +346,38 @@ func (c *Cluster) createConfigFile() error {
 
 func (c *Cluster) createBootstrapFile() error {
 
+	members := "  members:\n"
+	for _, s := range c.Servers {
+		members = members +
+			"    - nodeId: " + s.serverID + "\n" +
+			"      raftId: " + strconv.FormatInt(int64(s.serverNum), 10) + "\n" +
+			"      peerHost: " + s.address + "\n" +
+			"      peerPort: " + strconv.FormatInt(int64(s.peerPort), 10) + "\n"
+	}
+
+	nodes := "nodes:\n"
+	for _, s := range c.Servers {
+		nodes = nodes +
+			"  - nodeId: " + s.serverID + "\n" +
+			"    host: " + s.address + "\n" +
+			"    port: " + strconv.FormatInt(int64(s.nodePort), 10) + "\n" +
+			"    certificatePath: " + s.serverCertPath + "\n"
+	}
+
 	bootstrap := "# Integration test shared-config-bootstrap.yml\n" +
 		"consensus:\n" + //TODO add additional fields when supported
 		"  algorithm: raft\n" +
+		members +
+		"  raftConfig:\n" +
+		"    tickInterval: 100ms" + "\n" +
+		"    electionTicks: 50" + "\n" +
+		"    heartbeatTicks: 5" + "\n" +
 		"admin:\n" +
 		"  id: admin\n" +
 		"  certificatePath: " + path.Join(c.testDirAbsPath, "users", "admin.pem") + "\n" +
 		"caconfig:\n" +
 		"  rootCACertsPath: " + path.Join(c.rootCAPath, "rootCA.pem") + "\n" +
-		"nodes:\n"
-	for _, s := range c.Servers {
-		node := "" +
-			"  - nodeId: " + s.serverID + "\n" +
-			"    host: " + s.address+"\n" +
-			"    port: "+ strconv.FormatInt(int64(s.port), 10) + "\n" +
-			"    certificatePath: " + s.serverCertPath +"\n"
-		bootstrap = bootstrap + node
-	}
+		nodes
 
 	for _, s := range c.Servers {
 		f, err := os.Create(s.bootstrapFilePath)

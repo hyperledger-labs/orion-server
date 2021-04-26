@@ -108,6 +108,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 										{
 											ID:          "node1",
 											Address:     "127.0.0.1",
+											Port:        6090,
 											Certificate: nodeCert.Raw,
 										},
 									},
@@ -140,6 +141,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 										{
 											ID:          "node1",
 											Address:     "127.0.0.1",
+											Port:        6090,
 											Certificate: nodeCert.Raw,
 										},
 									},
@@ -175,6 +177,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 										{
 											ID:          "node1",
 											Address:     "127.0.0.1",
+											Port:        6090,
 											Certificate: nodeCert.Raw,
 										},
 									},
@@ -210,6 +213,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 										{
 											ID:          "node1",
 											Address:     "127.0.0.1",
+											Port:        6090,
 											Certificate: []byte("random"),
 										},
 									},
@@ -245,6 +249,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 										{
 											ID:          "node1",
 											Address:     "127.0.0.1",
+											Port:        6090,
 											Certificate: nodeCert.Raw,
 										},
 									},
@@ -297,6 +302,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 								{
 									ID:          "node1",
 									Address:     "127.0.0.1",
+									Port:        6090,
 									Certificate: nodeCert.Raw,
 								},
 							},
@@ -308,6 +314,22 @@ func TestValidateGenesisBlock(t *testing.T) {
 							},
 							CertAuthConfig: &types.CAConfig{
 								Roots: [][]byte{caCert.Raw},
+							},
+							ConsensusConfig: &types.ConsensusConfig{
+								Algorithm: "raft",
+								Members: []*types.PeerConfig{
+									{
+										NodeId:   "node1",
+										RaftId:   1,
+										PeerHost: "10.10.10.10",
+										PeerPort: 7090,
+									},
+								},
+								RaftConfig: &types.RaftConfig{
+									TickInterval:   "100ms",
+									ElectionTicks:  100,
+									HeartbeatTicks: 10,
+								},
 							},
 						},
 					},
@@ -927,6 +949,7 @@ func TestValidateConfigBlock(t *testing.T) {
 									{
 										ID:          "node1",
 										Address:     "127.0.0.1",
+										Port:        6090,
 										Certificate: nodeCert.Raw,
 									},
 								},
@@ -938,6 +961,22 @@ func TestValidateConfigBlock(t *testing.T) {
 								},
 								CertAuthConfig: &types.CAConfig{
 									Roots: [][]byte{caCert.Raw},
+								},
+								ConsensusConfig: &types.ConsensusConfig{
+									Algorithm: "raft",
+									Members: []*types.PeerConfig{
+										{
+											NodeId:   "node1",
+											RaftId:   1,
+											PeerHost: "10.10.10.10",
+											PeerPort: 7090,
+										},
+									},
+									RaftConfig: &types.RaftConfig{
+										TickInterval:   "100ms",
+										ElectionTicks:  100,
+										HeartbeatTicks: 10,
+									},
 								},
 							},
 						}),
@@ -968,6 +1007,7 @@ func TestValidateConfigBlock(t *testing.T) {
 									{
 										ID:          "node1",
 										Address:     "127.0.0.1",
+										Port:        6090,
 										Certificate: nodeCert.Raw,
 									},
 								},
@@ -979,6 +1019,22 @@ func TestValidateConfigBlock(t *testing.T) {
 								},
 								CertAuthConfig: &types.CAConfig{
 									Roots: [][]byte{caCert.Raw},
+								},
+								ConsensusConfig: &types.ConsensusConfig{
+									Algorithm: "raft",
+									Members: []*types.PeerConfig{
+										{
+											NodeId:   "node1",
+											RaftId:   1,
+											PeerHost: "10.10.10.10",
+											PeerPort: 7090,
+										},
+									},
+									RaftConfig: &types.RaftConfig{
+										TickInterval:   "100ms",
+										ElectionTicks:  100,
+										HeartbeatTicks: 10,
+									},
 								},
 							},
 						}),

@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,6 +28,9 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
+var basePort uint32 = 6090
+var basePortMutex sync.Mutex
+
 type serverTestEnv struct {
 	serverConfig   *config.Configurations
 	bcdbHTTPServer *BCDBHTTPServer
@@ -38,6 +42,7 @@ type serverTestEnv struct {
 }
 
 func (env *serverTestEnv) restart(t *testing.T) {
+	t.Log("Stopping server")
 	err := env.bcdbHTTPServer.Stop()
 	require.NoError(t, err)
 
@@ -56,6 +61,7 @@ func (env *serverTestEnv) restart(t *testing.T) {
 	require.NoError(t, err)
 	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
 	require.NoError(t, err)
+
 	env.client = client
 }
 
@@ -150,6 +156,11 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
 	require.NoError(t, err)
 
+	basePortMutex.Lock()
+	nodePort := basePort
+	basePort += 1
+	basePortMutex.Unlock()
+
 	nodeID := "testNode" + uuid.New().String()
 	serverConfig := &config.Configurations{
 		LocalConfig: &config.LocalConfiguration{
@@ -165,7 +176,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 				},
 				Network: config.NetworkConf{
 					Address: "127.0.0.1",
-					Port:    0, // use ephemeral port for testing
+					Port:    nodePort,
 				},
 				QueueLength: config.QueueLengthConf{
 					Block:                     1,
@@ -186,7 +197,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 				{
 					NodeID:          nodeID,
 					Host:            "127.0.0.1",
-					Port:            0,
+					Port:            nodePort,
 					CertificatePath: path.Join(tempDir, "server.pem"),
 				},
 			},
@@ -197,8 +208,21 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 			CAConfig: config.CAConfiguration{
 				RootCACertsPath: []string{path.Join(tempDir, "serverRootCACert.pem")},
 			},
-			Consensus: config.ConsensusConf{
-				Algorithm: "solo",
+			Consensus: &config.ConsensusConf{
+				Algorithm: "raft",
+				Members: []*config.PeerConf{
+					{
+						NodeId:   nodeID,
+						RaftId:   1,
+						PeerHost: "127.0.0.1",
+						PeerPort: nodePort + 1000,
+					},
+				},
+				RaftConfig: &config.RaftConf{
+					TickInterval:   "100ms",
+					ElectionTicks:  100,
+					HeartbeatTicks: 10,
+				},
 			},
 		},
 	}
@@ -217,6 +241,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	}
 
 	t.Cleanup(func() {
+		t.Logf("Cleanup %s", t.Name())
 		if err := env.bcdbHTTPServer.Stop(); err != nil {
 			t.Errorf("error while stopping the server: %v", err)
 		}
@@ -672,7 +697,10 @@ func TestServerWithRestart(t *testing.T) {
 			response.GetUser().GetID() == "testUser"
 	}, time.Minute, 100*time.Millisecond)
 
+	t.Log("Before restart")
 	env.restart(t)
+
+	t.Log("After restart")
 
 	querySig, err = cryptoservice.SignQuery(env.adminSigner, query)
 	require.NoError(t, err)

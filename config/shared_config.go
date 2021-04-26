@@ -6,7 +6,6 @@ package config
 import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
-	"time"
 )
 
 // SharedConfiguration holds the initial configuration that will be converted into the ledger's genesis block and
@@ -19,7 +18,7 @@ import (
 type SharedConfiguration struct {
 	// Nodes carry the identity, endpoint, and certificate of each database node that serves to clients.
 	Nodes     []NodeConf
-	Consensus ConsensusConf
+	Consensus *ConsensusConf
 	CAConfig  CAConfiguration
 	Admin     AdminConf
 }
@@ -36,34 +35,42 @@ type NodeConf struct {
 	CertificatePath string
 }
 
-// ConsensusConf holds the employed consensus algorithm and its parameters.
 type ConsensusConf struct {
-	// The consensus algorithm.
+	// The consensus algorithm, currently only "raft" is supported.
 	Algorithm string
-	// Members contains the set of servers that take part in consensus.
-	Members []PeerConf
-	// Observers contains the set of servers that are allowed to communicate Members, and fetch their state.
-	Observers []PeerConf
-	// Raft specific parameters.
-	Raft RaftConf
+	// Peers that take part in consensus.
+	Members []*PeerConf
+	// Peers that are allowed to connect and fetch the ledger from members, but do not take part in consensus.
+	Observers []*PeerConf
+	// Raft protocol parameters.
+	RaftConfig *RaftConf
 }
 
-// PeerConf defines a server take part in consensus, or an observer.
-// The NodeID correlates the peer definition here with the node definition in the SharedConfiguration.Nodes.
-// The Host and Port are those that are accessible from other peers.
-// RaftID must be >0 for members, or =0 for observers.
-type PeerConf struct {
-	NodeID   string
-	RaftID   uint64
-	PeerHost string
-	PeerPort uint32
-}
-
-// RaftConf holds Raft specific parameters.
 type RaftConf struct {
-	TickInterval   time.Duration
-	ElectionTicks  uint32
+	// Time interval between two Node.Tick invocations. e.g. 100ms.
+	TickInterval string
+	// The number of Node.Tick invocations that must pass  between elections.
+	// That is, if a follower does not receive any
+	// message from the leader of current term before ElectionTick has
+	// elapsed, it will become candidate and start an election.
+	// electionTicks must be greater than heartbeatTicks.
+	ElectionTicks uint32
+	// The number of Node.Tick invocations that must
+	// pass between heartbeats. That is, a leader sends heartbeat
+	// messages to maintain its leadership every HeartbeatTick ticks.
 	HeartbeatTicks uint32
+}
+
+// PeerConf defines a server that takes part in consensus, or an observer.
+type PeerConf struct {
+	// The node ID correlates the peer definition here with the NodeConfig.ID field.
+	NodeId string
+	// Raft ID must be >0 for members, or =0 for observers.
+	RaftId uint64
+	// The host name or IP address that is used by other peers to connect to this peer.
+	PeerHost string
+	// The port that is used by other peers to connect to this peer.
+	PeerPort uint32
 }
 
 // AdminConf holds the credentials of the blockchain

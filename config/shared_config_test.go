@@ -3,8 +3,9 @@
 package config
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var expectedSharedConfig = &SharedConfiguration{
@@ -28,38 +29,38 @@ var expectedSharedConfig = &SharedConfiguration{
 			CertificatePath: "./testdata/cluster/bcdb-node3/node.cert",
 		},
 	},
-	Consensus: ConsensusConf{
+	Consensus: &ConsensusConf{
 		Algorithm: "raft",
-		Members: []PeerConf{
+		Members: []*PeerConf{
 			{
-				NodeID:   "bcdb-node1",
-				RaftID:   1,
+				NodeId:   "bcdb-node1",
+				RaftId:   1,
 				PeerHost: "raft1.example.com",
 				PeerPort: 7050,
 			},
 			{
-				NodeID:   "bcdb-node2",
-				RaftID:   2,
+				NodeId:   "bcdb-node2",
+				RaftId:   2,
 				PeerHost: "raft2.example.com",
 				PeerPort: 7050,
 			},
 			{
-				NodeID:   "bcdb-node3",
-				RaftID:   3,
+				NodeId:   "bcdb-node3",
+				RaftId:   3,
 				PeerHost: "raft3.example.com",
 				PeerPort: 7050,
 			},
 		},
-		Observers: []PeerConf{
+		Observers: []*PeerConf{
 			{
-				NodeID:   "bcdb-node4",
-				RaftID:   0,
+				NodeId:   "bcdb-node4",
+				RaftId:   0,
 				PeerHost: "raft4.example.com",
 				PeerPort: 7050,
 			},
 		},
-		Raft: RaftConf{
-			TickInterval:   100000000,
+		RaftConfig: &RaftConf{
+			TickInterval:   "100ms",
 			ElectionTicks:  50,
 			HeartbeatTicks: 5,
 		},

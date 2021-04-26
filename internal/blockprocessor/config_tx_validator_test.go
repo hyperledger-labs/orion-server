@@ -134,6 +134,7 @@ func TestValidateConfigTx(t *testing.T) {
 						{
 							ID:          "node1",
 							Address:     "127.0.0.1",
+							Port:        6090,
 							Certificate: nodeCert.Raw,
 						},
 					},
@@ -160,6 +161,7 @@ func TestValidateConfigTx(t *testing.T) {
 						{
 							ID:          "node1",
 							Address:     "127.0.0.1",
+							Port:        6090,
 							Certificate: nodeCert.Raw,
 						},
 					},
@@ -171,6 +173,23 @@ func TestValidateConfigTx(t *testing.T) {
 					},
 					CertAuthConfig: &types.CAConfig{
 						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7090,
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  100,
+							HeartbeatTicks: 10,
+						},
 					},
 				},
 			}),
@@ -189,6 +208,7 @@ func TestValidateConfigTx(t *testing.T) {
 						{
 							ID:          "node1",
 							Address:     "127.0.0.1",
+							Port:        6090,
 							Certificate: nodeCert.Raw,
 						},
 					},
@@ -200,6 +220,23 @@ func TestValidateConfigTx(t *testing.T) {
 					},
 					CertAuthConfig: &types.CAConfig{
 						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7090,
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  100,
+							HeartbeatTicks: 10,
+						},
 					},
 				},
 			}),
@@ -386,6 +423,7 @@ func TestValidateNodeConfig(t *testing.T) {
 				{
 					ID:          "node1",
 					Address:     "127.0.0.1",
+					Port:        6090,
 					Certificate: []byte("random"),
 				},
 			},
@@ -395,16 +433,18 @@ func TestValidateNodeConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: duplicate nodes in the node config",
+			name: "invalid: duplicate node IDs in the node config",
 			nodes: []*types.NodeConfig{
 				{
 					ID:          "node1",
 					Address:     "127.0.0.1",
+					Port:        6090,
 					Certificate: nodeCert.Raw,
 				},
 				{
 					ID:          "node1",
 					Address:     "127.0.0.1",
+					Port:        6091,
 					Certificate: nodeCert.Raw,
 				},
 			},
@@ -414,11 +454,33 @@ func TestValidateNodeConfig(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: duplicate node EPs in the node config",
+			nodes: []*types.NodeConfig{
+				{
+					ID:          "node1",
+					Address:     "127.0.0.1",
+					Port:        6090,
+					Certificate: nodeCert.Raw,
+				},
+				{
+					ID:          "node2",
+					Address:     "127.0.0.1",
+					Port:        6090,
+					Certificate: nodeCert.Raw,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "there are two nodes with the same Host:Port [127.0.0.1:6090] in the node config. Endpoints must be unique",
+			},
+		},
+		{
 			name: "valid",
 			nodes: []*types.NodeConfig{
 				{
 					ID:          "node1",
 					Address:     "127.0.0.1",
+					Port:        6090,
 					Certificate: nodeCert.Raw,
 				},
 			},
@@ -541,6 +603,546 @@ func TestValidateAdminConfig(t *testing.T) {
 			t.Parallel()
 
 			result := validateAdminConfig(tt.admins, caCertCollection)
+			require.Equal(t, tt.expectedResult, result)
+		})
+	}
+}
+
+//TODO
+func TestValidateConsensusConfig(t *testing.T) {
+	t.Parallel()
+
+	peer1 := &types.PeerConfig{
+		NodeId:   "node1",
+		RaftId:   1,
+		PeerHost: "10.10.10.10",
+		PeerPort: 6090,
+	}
+
+	tests := []struct {
+		name            string
+		consensusConfig *types.ConsensusConfig
+		expectedResult  *types.ValidationInfo
+	}{
+		{
+			name:            "invalid: empty",
+			consensusConfig: nil,
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config is empty.",
+			},
+		},
+		{
+			name: "invalid: unsupported algorithm",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "solo",
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config Algorithm 'solo' is not supported.",
+			},
+		},
+		{
+			name: "invalid: no members",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   nil,
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has no member peers. At least one member peer is required.",
+			},
+		},
+
+		{
+			name: "invalid: empty member",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{nil, nil},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an empty member entry.",
+			},
+		},
+		{
+			name: "invalid: member empty nodeID",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId: "",
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has a member with an empty ID. A valid nodeID must be an non-empty string.",
+			},
+		},
+		{
+			name: "invalid: member host is empty",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "",
+						PeerPort: 7090,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has a member [node1] with an empty host",
+			},
+		},
+		{
+			name: "invalid: member host is not valid",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "server.com/data",
+						PeerPort: 6090,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has a member [node1] with an invalid host [server.com/data]",
+			},
+		},
+		{
+			name: "invalid: duplicate member IDs",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6090,
+					},
+					{
+						NodeId:   "node1",
+						RaftId:   2,
+						PeerHost: "server.com",
+						PeerPort: 6091,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two members with the same ID [node1], the node IDs must be unique.",
+			},
+		},
+		{
+			name: "invalid: duplicate member EPs",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6090,
+					},
+					{
+						NodeId:   "node2",
+						RaftId:   2,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6090,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two members with the same Host:Port [10.10.10.10:6090], endpoints must be unique.",
+			},
+		},
+		{
+			name: "invalid: duplicate raft IDs",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6090,
+					},
+					{
+						NodeId:   "node2",
+						RaftId:   1,
+						PeerHost: "server.com",
+						PeerPort: 6091,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two members with the same Raft ID [1], Raft IDs must be unique.",
+			},
+		},
+		{
+			name: "invalid: member with raft ID 0",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   0,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6090,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has a member [node1] with Raft ID 0, must be >0.",
+			},
+		},
+		//=== observers
+		{
+			name: "invalid: empty observer",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				Observers: []*types.PeerConfig{nil, nil},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an empty observer entry.",
+			},
+		},
+		{
+			name: "invalid: observer empty nodeID",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				Observers: []*types.PeerConfig{
+					{
+						NodeId: "",
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an observer with an empty ID. A valid nodeID must be an non-empty string.",
+			},
+		},
+		{
+			name: "invalid: observer host is empty",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				Observers: []*types.PeerConfig{
+					{
+						NodeId:   "node2",
+						RaftId:   0,
+						PeerHost: "",
+						PeerPort: 7091,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an observer [node2] with an empty host",
+			},
+		},
+		{
+			name: "invalid: observer host is not valid",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				Observers: []*types.PeerConfig{
+					{
+						NodeId:   "node2",
+						RaftId:   0,
+						PeerHost: "server.com/data",
+						PeerPort: 6091,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an observer [node2] with an invalid host [server.com/data]",
+			},
+		},
+		{
+			name: "invalid: duplicate observer IDs",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				Observers: []*types.PeerConfig{
+					{
+						NodeId:   "node2",
+						RaftId:   0,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6091,
+					},
+					{
+						NodeId:   "node2",
+						RaftId:   0,
+						PeerHost: "server.com",
+						PeerPort: 6092,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two peers with the same ID [node2], the node IDs must be unique.",
+			},
+		},
+		{
+			name: "invalid: duplicate observer EPs",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				Observers: []*types.PeerConfig{
+					{
+						NodeId:   "node2",
+						RaftId:   0,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6091,
+					},
+					{
+						NodeId:   "node3",
+						RaftId:   0,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6091,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has two peers with the same Host:Port [10.10.10.10:6091], endpoints must be unique.",
+			},
+		},
+		{
+			name: "invalid: member with raft ID >0",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				Observers: []*types.PeerConfig{
+					{
+						NodeId:   "node2",
+						RaftId:   2,
+						PeerHost: "server.com",
+						PeerPort: 6091,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config has an observer [node2] with Raft ID >0.",
+			},
+		},
+		//=== Raft
+		{
+			name: "invalid: raft config empty",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config RaftConfig is empty.",
+			},
+		},
+		{
+			name: "invalid: raft config no interval",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				RaftConfig: &types.RaftConfig{
+					ElectionTicks:  100,
+					HeartbeatTicks: 10,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config RaftConfig.TickInterval is empty.",
+			},
+		},
+		{
+			name: "invalid: raft config election ticks",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				RaftConfig: &types.RaftConfig{
+					TickInterval:   "10s",
+					HeartbeatTicks: 10,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config RaftConfig.ElectionTicks is 0.",
+			},
+		},
+		{
+			name: "invalid: raft config heartbeat ticks",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   []*types.PeerConfig{peer1},
+				RaftConfig: &types.RaftConfig{
+					TickInterval:   "10s",
+					ElectionTicks:  10,
+					HeartbeatTicks: 0,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "Consensus config RaftConfig.HeartbeatTicks is 0.",
+			},
+		},
+
+		//=== valid
+		{
+			name: "valid",
+			consensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6090,
+					},
+					{
+						NodeId:   "node2",
+						RaftId:   2,
+						PeerHost: "server.com",
+						PeerPort: 6091,
+					},
+				},
+				Observers: []*types.PeerConfig{
+					{
+						NodeId:   "node3",
+						RaftId:   0,
+						PeerHost: "10.10.10.10",
+						PeerPort: 6092,
+					},
+					{
+						NodeId:   "node4",
+						RaftId:   0,
+						PeerHost: "server.com",
+						PeerPort: 6093,
+					},
+				},
+				RaftConfig: &types.RaftConfig{
+					TickInterval:   "100ms",
+					ElectionTicks:  100,
+					HeartbeatTicks: 10,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := validateConsensusConfig(tt.consensusConfig)
+			require.Equal(t, tt.expectedResult, result)
+		})
+	}
+}
+
+//TODO
+func TestValidateMembersNodesMatch(t *testing.T) {
+	t.Parallel()
+
+	peer1 := &types.PeerConfig{
+		NodeId:   "node1",
+		RaftId:   1,
+		PeerHost: "10.10.10.10",
+		PeerPort: 6090,
+	}
+	node1 := &types.NodeConfig{
+		ID:          "node1",
+		Address:     "11.11.11.11",
+		Port:        7090,
+		Certificate: []byte{1, 2, 3, 4},
+	}
+
+	peer2 := &types.PeerConfig{
+		NodeId:   "node2",
+		RaftId:   2,
+		PeerHost: "10.10.10.10",
+		PeerPort: 6091,
+	}
+	node2 := &types.NodeConfig{
+		ID:          "node2",
+		Address:     "11.11.11.11",
+		Port:        7091,
+		Certificate: []byte{1, 2, 3, 4},
+	}
+
+	tests := []struct {
+		name           string
+		nodes          []*types.NodeConfig
+		members        []*types.PeerConfig
+		expectedResult *types.ValidationInfo
+	}{
+		{
+			name:    "exact match",
+			nodes:   []*types.NodeConfig{node1, node2},
+			members: []*types.PeerConfig{peer1, peer2},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name:    "invalid: more nodes",
+			nodes:   []*types.NodeConfig{node1, node2},
+			members: []*types.PeerConfig{peer2},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "ClusterConfig.Nodes must be the same length as ClusterConfig.ConsensusConfig.Members, and Nodes set must include all Members",
+			},
+		},
+		{
+			name:    "invalid: more peers",
+			nodes:   []*types.NodeConfig{node1},
+			members: []*types.PeerConfig{peer1, peer2},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "ClusterConfig.Nodes must be the same length as ClusterConfig.ConsensusConfig.Members, and Nodes set must include all Members",
+			},
+		},
+		{
+			name:  "invalid: node-peer endpoint clash",
+			nodes: []*types.NodeConfig{node1},
+			members: []*types.PeerConfig{
+				{
+					NodeId:   "node1",
+					RaftId:   1,
+					PeerHost: node1.Address,
+					PeerPort: node1.Port,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "ClusterConfig node [node1] and respective peer have the same endpoint [11.11.11.11:7090], node and peer endpoints must be unique.",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := validateMembersNodesMatch(tt.members, tt.nodes)
 			require.Equal(t, tt.expectedResult, result)
 		})
 	}

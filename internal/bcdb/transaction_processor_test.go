@@ -622,8 +622,21 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 					CertificatePath: path.Join(cryptoDir, "bdb-node-1.pem"),
 				},
 			},
-			Consensus: config.ConsensusConf{
+			Consensus: &config.ConsensusConf{
 				Algorithm: "raft",
+				Members: []*config.PeerConf{
+					{
+						NodeId:   "bdb-node-1",
+						RaftId:   1,
+						PeerHost: "127.0.0.1",
+						PeerPort: 34000,
+					},
+				},
+				RaftConfig: &config.RaftConf{
+					TickInterval:   "100ms",
+					ElectionTicks:  100,
+					HeartbeatTicks: 10,
+				},
 			},
 			CAConfig: config.CAConfiguration{
 				RootCACertsPath: []string{path.Join(cryptoDir, testutils.RootCAFileName+".pem")},

@@ -6,14 +6,26 @@ option go_package = "github.ibm.com/blockchaindb/server/pkg/types";
 
 package types;
 
-// ClusterConfig holds the configuration of a
-// blockchain database cluster which includes
-// a set of nodes, admins, and a root certificate
-// authority
+// ClusterConfig holds the shared configuration of a blockchain database cluster.
+// This includes:
+// - a set of nodes that server client requests,
+// - a set of admins,
+// - the certificate authority configuration, including root and intermediate certificates, and
+// - the consensus configuration.
+//
+// This part of the configuration is replicated and is common to all nodes.
+// After the initial bootstrap, this part of the configuration can change only through configuration transactions.
 message ClusterConfig {
+  // The set of nodes that serve client requests, as they are known to clients.
   repeated NodeConfig nodes = 1;
+  // The set of database administrators.
   repeated Admin admins = 2;
+  // The x509 certificates of the root and intermediate certificate authorities that issued all the certificates used
+  // for client facing communication, including the client certificates and the server certificates for signing
+  // transactions and blocks.
   CAConfig cert_auth_config = 3;
+  // The consensus configuration.
+  ConsensusConfig consensus_config = 4;
 }
 
 // NodeConfig holds the information about a database node in the cluster.
@@ -35,7 +47,7 @@ message NodeConfig {
   bytes certificate = 4;
 }
 
-// Admin holds the id and certificate of the cluster administrator.
+// Admin holds the id and certificate of a cluster administrator.
 message Admin {
   string ID = 1;
   bytes certificate = 2;
@@ -44,6 +56,49 @@ message Admin {
 message CAConfig {
   repeated bytes roots = 1;
   repeated bytes intermediates = 2;
+}
+
+// The definitions of the clustered consensus algorithm, members, and parameters.
+message ConsensusConfig {
+  // The consensus algorithm, currently only "raft" is supported.
+  string algorithm = 1;
+  // Peers that take part in consensus.
+  repeated PeerConfig members = 2;
+  // Peers that are allowed to connect and fetch the ledger from members, but do not take part in consensus.
+  repeated PeerConfig observers = 3;
+  // Raft protocol parameters.
+  RaftConfig raftConfig = 4;
+}
+
+// PeerConfig defines a server that takes part in consensus, or an observer.
+message PeerConfig {
+  // The node ID correlates the peer definition here with the NodeConfig.ID field.
+  string node_id = 1;
+  // Raft ID must be >0 for members, or =0 for observers.
+  uint64 raft_id = 2;
+  // The host name or IP address that is used by other peers to connect to this peer.
+  string peer_host = 3;
+  // The port that is used by other peers to connect to this peer.
+  uint32 peer_port = 4;
+}
+
+message RaftConfig {
+  // Time interval between two Node.Tick invocations, e.g. 100ms.
+  // Any duration string parsable by ParseDuration():
+  // https://golang.org/pkg/time/#ParseDuration
+  string tick_interval = 1;
+
+  // The number of Node.Tick invocations that must pass  between elections.
+  // That is, if a follower does not receive any
+  // message from the leader of current term before ElectionTick has
+  // elapsed, it will become candidate and start an election.
+  // electionTicks must be greater than heartbeatTicks.
+  uint32 election_ticks = 2;
+
+  // The number of Node.Tick invocations that must
+  // pass between heartbeats. That is, a leader sends heartbeat
+  // messages to maintain its leadership every HeartbeatTick ticks.
+   uint32 heartbeat_ticks = 3;
 }
 
 // Database configuration. Stores default read/write ACLs

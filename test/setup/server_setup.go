@@ -23,12 +23,17 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 )
 
+var baseNodePort int = 32000
+var basePeerPort int = 33000
+var mutex sync.Mutex
+
 // Server holds parameters related to the server
 type Server struct {
-	serverNum            int
+	serverNum            uint64
 	serverID             string
-	address              string
-	port                 int
+	address              string // For testing, the node-host and peer-host address are the same.
+	nodePort             int
+	peerPort             int
 	configDir            string
 	configFilePath       string
 	bootstrapFilePath    string
@@ -49,13 +54,22 @@ type Server struct {
 }
 
 // NewServer creates a new blockchain database server
-func NewServer(id int, dir string, logger *logger.SugarLogger) (*Server, error) {
-	sNumber := strconv.FormatInt(int64(id), 10)
+func NewServer(id uint64, dir string, logger *logger.SugarLogger) (*Server, error) {
+
+	mutex.Lock()
+	nPort := baseNodePort
+	pPort := basePeerPort
+	baseNodePort++
+	basePeerPort++
+	mutex.Unlock()
+
+	sNumber := strconv.FormatInt(int64(id+1), 10)
 	s := &Server{
-		serverNum:          id,
+		serverNum:          id + 1,
 		serverID:           "node-" + sNumber,
 		address:            "127.0.0.1",
-		port:               0,
+		nodePort:           nPort,
+		peerPort:           pPort,
 		adminID:            "admin",
 		configDir:          filepath.Join(dir, "node-"+sNumber),
 		configFilePath:     filepath.Join(dir, "node-"+sNumber, "config.yml"),
@@ -158,7 +172,7 @@ func (s *Server) createConfigFile() error {
 			"    keyPath: " + s.serverKeyPath + "\n" +
 			"  network:\n" +
 			"    address: " + s.address + "\n" +
-			"    port: " + strconv.FormatInt(int64(s.port), 10) + "\n" +
+			"    port: " + strconv.FormatInt(int64(s.nodePort), 10) + "\n" +
 			"  database:\n" +
 			"    name: leveldb\n" +
 			"    ledgerDirectory: " + filepath.Join(s.configDir, "ledger") + "\n" +
@@ -214,7 +228,7 @@ func (s *Server) start(timeout time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.logger.Debug("Starting server " + s.serverID + " on " + s.address + ":" + strconv.FormatInt(int64(s.port), 10))
+	s.logger.Debug("Starting server " + s.serverID + " on " + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10))
 	if err := s.cmd.Start(); err != nil {
 		return errors.Wrap(err, "error while starting "+s.serverID)
 	}
@@ -231,9 +245,9 @@ func (s *Server) start(timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	s.port = port
+	s.nodePort = port
 
-	s.logger.Debug("Successfully started server " + s.serverID + " on " + s.address + ":" + strconv.FormatInt(int64(s.port), 10))
+	s.logger.Debug("Successfully started server " + s.serverID + " on " + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10))
 	return nil
 }
 
@@ -279,7 +293,7 @@ func (s *Server) NewRESTClient() (*mock.Client, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return mock.NewRESTClient("http://" + s.address + ":" + strconv.FormatInt(int64(s.port), 10))
+	return mock.NewRESTClient("http://" + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10))
 }
 
 // testFailure is in lieu of *testing.T for gomega's types.GomegaTestingT

@@ -40,7 +40,7 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		return nil, err
 	}
 
-	db, err := bcdb.NewDB(conf, lg)
+	db, err := bcdb.NewDB(conf.LocalConfig, lg)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating the database object")
 	}
@@ -112,12 +112,15 @@ func (s *BCDBHTTPServer) Start() error {
 				s.logger.Panicf("server stopped unexpectedly, %v", err)
 			}
 		}
+		s.logger.Infof("Finished serving requests on %s", s.listen.Addr().String())
 	}()
 
 	return nil
 }
 
+
 // Stop stops the server
+// TODO close or shutdown the HTTP server as well. See https://github.ibm.com/blockchaindb/server/issues/429
 func (s *BCDBHTTPServer) Stop() error {
 	if s == nil || s.listen == nil {
 		return nil

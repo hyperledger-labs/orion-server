@@ -126,6 +126,7 @@ func newTestEnv(t *testing.T) *testEnv {
 							{
 								ID:          "node1",
 								Address:     "127.0.0.1",
+								Port:        6090,
 								Certificate: nodeCert.Raw,
 							},
 						},
@@ -137,6 +138,27 @@ func newTestEnv(t *testing.T) *testEnv {
 						},
 						CertAuthConfig: &types.CAConfig{
 							Roots: [][]byte{caCert.Raw},
+						},
+						ConsensusConfig: &types.ConsensusConfig{
+							Algorithm: "raft",
+							Members: []*types.PeerConfig{
+								{
+									NodeId:           "node1",
+									RaftId:           1,
+									PeerHost:         "127.0.0.1",
+									PeerPort:         7090,
+									XXX_unrecognized: nil,
+									XXX_sizecache:    0,
+								},
+							},
+							RaftConfig:           &types.RaftConfig{
+								TickInterval:         "100ms",
+								ElectionTicks:        100,
+								HeartbeatTicks:       10,
+							},
+							XXX_NoUnkeyedLiteral: struct{}{},
+							XXX_unrecognized:     nil,
+							XXX_sizecache:        0,
 						},
 					},
 				},

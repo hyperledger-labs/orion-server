@@ -59,9 +59,9 @@ consensus:
       peerHost: raft4.example.com
       peerPort: 7050
 
-  # consensus.raft carries the configuration parameters that are specific to
+  # consensus.raftConfig carries the configuration parameters that are specific to
   # the etcd/raft library.
-  raft:
+  raftConfig:
     # tickInterval is the time interval between two Node.Tick invocations.
     tickInterval: 100ms
 
