@@ -6,6 +6,7 @@ import "github.ibm.com/blockchaindb/server/pkg/crypto"
 
 type TrieNode interface {
 	hash() ([]byte, error)
+	bytes() [][]byte
 }
 
 type TrieNodeWithValue interface {
@@ -15,18 +16,24 @@ type TrieNodeWithValue interface {
 	isDeleted() bool
 }
 
+var deleteBytes = []byte{1}
+
 func (m *BranchNode) hash() ([]byte, error) {
-	bytesToHash := make([]byte, 0)
+	return calcHash(m.bytes())
+}
+
+func (m *BranchNode) bytes() [][]byte {
+	bytes := make([][]byte, 0)
 	for _, child := range m.Children {
-		bytesToHash = append(bytesToHash, child...)
+		bytes = append(bytes, child)
 	}
 	if len(m.ValuePtr) > 0 {
-		bytesToHash = append(bytesToHash, m.ValuePtr...)
+		bytes = append(bytes, m.ValuePtr)
 	}
 	if m.isDeleted() {
-		bytesToHash = append(bytesToHash, 1)
+		bytes = append(bytes, deleteBytes)
 	}
-	return crypto.ComputeSHA256Hash(bytesToHash)
+	return bytes
 }
 
 func (m *BranchNode) getValuePtr() []byte {
@@ -42,28 +49,36 @@ func (m *BranchNode) isDeleted() bool {
 }
 
 func (m *ExtensionNode) hash() ([]byte, error) {
-	bytesToHash := make([]byte, 0)
+	return calcHash(m.bytes())
+}
+
+func (m *ExtensionNode) bytes() [][]byte {
+	bytes := make([][]byte, 0)
 	if len(m.Key) > 0 {
-		bytesToHash = append(bytesToHash, m.Key...)
+		bytes = append(bytes, m.Key)
 	}
 	if len(m.Child) > 0 {
-		bytesToHash = append(bytesToHash, m.Child...)
+		bytes = append(bytes, m.Child)
 	}
-	return crypto.ComputeSHA256Hash(bytesToHash)
+	return bytes
 }
 
 func (m *ValueNode) hash() ([]byte, error) {
-	bytesToHash := make([]byte, 0)
+	return calcHash(m.bytes())
+}
+
+func (m *ValueNode) bytes() [][]byte {
+	bytes := make([][]byte, 0)
 	if len(m.Key) > 0 {
-		bytesToHash = append(bytesToHash, m.Key...)
+		bytes = append(bytes, m.Key)
 	}
 	if len(m.ValuePtr) > 0 {
-		bytesToHash = append(bytesToHash, m.ValuePtr...)
+		bytes = append(bytes, m.ValuePtr)
 	}
 	if m.isDeleted() {
-		bytesToHash = append(bytesToHash, 1)
+		bytes = append(bytes, deleteBytes)
 	}
-	return crypto.ComputeSHA256Hash(bytesToHash)
+	return bytes
 }
 
 func (m *ValueNode) getValuePtr() []byte {
@@ -80,4 +95,16 @@ func (m *ValueNode) isDeleted() bool {
 
 func (m *EmptyNode) hash() ([]byte, error) {
 	panic("can't hash empty node")
+}
+
+func (m *EmptyNode) bytes() [][]byte {
+	panic("can't hash empty node")
+}
+
+func calcHash(bytes [][]byte) ([]byte, error) {
+	bytesToHash := make([]byte, 0)
+	for _, b := range bytes {
+		bytesToHash = append(bytesToHash, b...)
+	}
+	return crypto.ComputeSHA256Hash(bytesToHash)
 }

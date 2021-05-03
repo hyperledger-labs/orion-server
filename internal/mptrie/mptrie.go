@@ -556,7 +556,6 @@ func (t *MPTrie) getPath(hexKey []byte) ([]TrieNode, TrieNodeWithValue, error) {
 		default:
 			return nil, nil, errors.New("Unknown trie node type")
 		}
-		res = append(res, node)
 	}
 }
 
