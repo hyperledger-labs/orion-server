@@ -165,6 +165,26 @@ func TestValidateDBAdminTx(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: db does not exist already and also does not appear in the createDB list",
+			setup: func(db worldstate.DB) {
+				require.NoError(t, db.Commit(privilegedUser, 1))
+			},
+			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
+				UserID: "userWithMorePrivilege",
+				DBsIndex: map[string]*types.DBIndex{
+					"db1": {
+						AttributeAndType: map[string]types.Type{
+							"attr1": types.Type_STRING,
+						},
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "index definion provided for database [db1] cannot be processed as the database neither exist nor in the create DB list",
+			},
+		},
+		{
 			name: "valid transaction",
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
@@ -188,6 +208,13 @@ func TestValidateDBAdminTx(t *testing.T) {
 				UserID:    "userWithMorePrivilege",
 				CreateDBs: []string{"db1", "db2"},
 				DeleteDBs: []string{"db3", "db4"},
+				DBsIndex: map[string]*types.DBIndex{
+					"db1": {
+						AttributeAndType: map[string]types.Type{
+							"attr1": types.Type_STRING,
+						},
+					},
+				},
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
@@ -399,6 +426,114 @@ func TestValidateDeleteDBEntries(t *testing.T) {
 			}
 
 			result := env.validator.dbAdminTxValidator.validateDeleteDBEntries(tt.toDeleteDBs)
+			require.True(t, proto.Equal(tt.expectedResult, result))
+		})
+	}
+}
+
+func TestValidateIndexDBEntries(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		setup          func(db worldstate.DB)
+		toCreateDBs    []string
+		toDeleteDBs    []string
+		dbsIndex       map[string]*types.DBIndex
+		expectedResult *types.ValidationInfo
+	}{
+		{
+			name: "invalid: db does not exist already and also does not appear in the createDB list",
+			dbsIndex: map[string]*types.DBIndex{
+				"db1": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_STRING,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "index definion provided for database [db1] cannot be processed as the database neither exist nor in the create DB list",
+			},
+		},
+		{
+			name:        "valid: db does not exist already but appears in the createDB list",
+			toCreateDBs: []string{"db1"},
+			dbsIndex: map[string]*types.DBIndex{
+				"db1": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_STRING,
+						"attr2": types.Type_NUMBER,
+						"attr3": types.Type_BOOLEAN,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name: "invalid: db exist but appears in the deleteDB list too",
+			setup: func(db worldstate.DB) {
+				createDB := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "db1",
+							},
+							{
+								Key: "db2",
+							},
+						},
+					},
+				}
+				require.NoError(t, db.Commit(createDB, 1))
+			},
+			toDeleteDBs: []string{"db1", "db2"},
+			dbsIndex: map[string]*types.DBIndex{
+				"db1": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_STRING,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "index definion provided for database [db1] cannot be processed as the database is present in the delete list",
+			},
+		},
+		{
+			name:        "invalid: unknown attribute type",
+			toCreateDBs: []string{"db1"},
+			dbsIndex: map[string]*types.DBIndex{
+				"db1": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_STRING,
+						"attr2": types.Type_NUMBER,
+						"attr3": 10,
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "invalid type provided for the attribute [attr3]",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			env := newValidatorTestEnv(t)
+			defer env.cleanup()
+			if tt.setup != nil {
+				tt.setup(env.db)
+			}
+
+			result := env.validator.dbAdminTxValidator.validateIndexEntries(tt.dbsIndex, tt.toCreateDBs, tt.toDeleteDBs)
 			require.True(t, proto.Equal(tt.expectedResult, result))
 		})
 	}

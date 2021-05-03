@@ -3,6 +3,7 @@
 package blockprocessor
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -829,6 +830,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 		expectedDBsBefore []string
 		dbAdminTx         *types.DBAdministrationTx
 		expectedDBsAfter  []string
+		expectedIndex     map[string]*types.DBIndex
 		valInfo           []*types.ValidationInfo
 	}{
 		{
@@ -854,8 +856,113 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			dbAdminTx: &types.DBAdministrationTx{
 				CreateDBs: []string{"db3", "db4"},
 				DeleteDBs: []string{"db1", "db2"},
+				DBsIndex: map[string]*types.DBIndex{
+					"db3": {
+						AttributeAndType: map[string]types.Type{
+							"attr1": types.Type_BOOLEAN,
+							"attr2": types.Type_NUMBER,
+						},
+					},
+				},
 			},
 			expectedDBsAfter: []string{"db3", "db4"},
+			expectedIndex: map[string]*types.DBIndex{
+				"db3": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_BOOLEAN,
+						"attr2": types.Type_NUMBER,
+					},
+				},
+				"db4": nil,
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		},
+		{
+			name: "change index of an existing DB and create index for new DB",
+			setup: func(db worldstate.DB) {
+				indexDB1, err := json.Marshal(
+					map[string]types.Type{
+						"attr1-db1": types.Type_NUMBER,
+						"attr2-db1": types.Type_BOOLEAN,
+						"attr3-db1": types.Type_STRING,
+					},
+				)
+				require.NoError(t, err)
+
+				indexDB2, err := json.Marshal(
+					map[string]types.Type{
+						"attr1-db2": types.Type_NUMBER,
+						"attr2-db2": types.Type_BOOLEAN,
+						"attr3-db2": types.Type_STRING,
+					},
+				)
+				require.NoError(t, err)
+
+				createDBs := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key:   "db1",
+								Value: indexDB1,
+							},
+							{
+								Key:   "db2",
+								Value: indexDB2,
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(createDBs, 1))
+			},
+			expectedDBsBefore: []string{"db1", "db2"},
+			dbAdminTx: &types.DBAdministrationTx{
+				CreateDBs: []string{"db3", "db4"},
+				DBsIndex: map[string]*types.DBIndex{
+					"db1": {
+						AttributeAndType: map[string]types.Type{
+							"attr1": types.Type_BOOLEAN,
+							"attr2": types.Type_NUMBER,
+						},
+					},
+					"db2": nil,
+					"db3": {
+						AttributeAndType: map[string]types.Type{
+							"attr1": types.Type_STRING,
+						},
+					},
+					"db4": {
+						AttributeAndType: map[string]types.Type{
+							"attr1": types.Type_NUMBER,
+						},
+					},
+				},
+			},
+			expectedDBsAfter: []string{"db1", "db2", "db3", "db4"},
+			expectedIndex: map[string]*types.DBIndex{
+				"db1": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_BOOLEAN,
+						"attr2": types.Type_NUMBER,
+					},
+				},
+				"db2": nil,
+				"db3": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_STRING,
+					},
+				},
+				"db4": {
+					AttributeAndType: map[string]types.Type{
+						"attr1": types.Type_NUMBER,
+					},
+				},
+			},
 			valInfo: []*types.ValidationInfo{
 				{
 					Flag: types.Flag_VALID,
@@ -886,6 +993,10 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				DeleteDBs: []string{"db1", "db2"},
 			},
 			expectedDBsAfter: []string{"db1", "db2"},
+			expectedIndex: map[string]*types.DBIndex{
+				"db1": nil,
+				"db2": nil,
+			},
 			valInfo: []*types.ValidationInfo{
 				{
 					Flag: types.Flag_INVALID_NO_PERMISSION,
@@ -926,6 +1037,15 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 
 			for _, dbName := range tt.expectedDBsAfter {
 				require.True(t, env.db.Exist(dbName))
+				index, _, err := env.db.Get(worldstate.DatabasesDBName, dbName)
+				require.NoError(t, err)
+
+				var expectedIndex []byte
+				if tt.expectedIndex[dbName] != nil {
+					expectedIndex, err = json.Marshal(tt.expectedIndex[dbName].GetAttributeAndType())
+				}
+				require.NoError(t, err)
+				require.Equal(t, expectedIndex, index)
 			}
 		})
 	}
