@@ -110,10 +110,15 @@ message ConfigTx {
 }
 
 message DBAdministrationTx {
-  string userID = 1;
-  string txID = 2;
-  repeated string createDBs = 3;
-  repeated string deleteDBs = 4;
+    string userID = 1;
+    string txID = 2;
+    repeated string createDBs = 3;
+    repeated string deleteDBs = 4;
+    map<string, DBIndex> DBsIndex = 5;
+}
+
+message DBIndex {
+    map<string, Type> attributeAndType = 1;
 }
 
 message UserAdministrationTx {
@@ -205,4 +210,10 @@ enum Flag {
   INVALID_INCORRECT_ENTRIES = 5;
   INVALID_UNAUTHORISED = 6;
   INVALID_MISSING_SIGNATURE = 7;
+}
+
+enum Type {
+  NUMBER = 0;
+  STRING = 1;
+  BOOLEAN = 2;
 }
