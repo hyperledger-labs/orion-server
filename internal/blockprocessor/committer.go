@@ -3,6 +3,8 @@
 package blockprocessor
 
 import (
+	"encoding/json"
+
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
@@ -211,8 +213,10 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		}
 
 		tx := block.GetDBAdministrationTxEnvelope().GetPayload()
-		dbsUpdates = []*worldstate.DBUpdates{
-			constructDBEntriesForDBAdminTx(tx, version),
+		var err error
+		dbsUpdates, err = constructDBEntriesForDBAdminTx(tx, version)
+		if err != nil {
+			return nil, nil, errors.WithMessage(err, "error while creating entries for db admin transaction")
 		}
 		c.logger.Debugf("constructed db admin update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
@@ -328,12 +332,26 @@ func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*wo
 	return dbsUpdates
 }
 
-func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types.Version) *worldstate.DBUpdates {
+func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types.Version) ([]*worldstate.DBUpdates, error) {
 	var toCreateDBs []*worldstate.KVWithMetadata
+	var indexForExistingDBs []*worldstate.KVWithMetadata
 
 	for _, dbName := range tx.CreateDBs {
+		var value []byte
+		dbIndex, ok := tx.DBsIndex[dbName]
+		if ok {
+			v, err := json.Marshal(dbIndex.GetAttributeAndType())
+			if err != nil {
+				return nil, errors.Wrap(err, "error while marshaling index for database ["+dbName+"]")
+			}
+			value = v
+
+			delete(tx.DBsIndex, dbName)
+		}
+
 		db := &worldstate.KVWithMetadata{
-			Key: dbName,
+			Key:   dbName,
+			Value: value,
 			Metadata: &types.Metadata{
 				Version: version,
 			},
@@ -341,11 +359,37 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 		toCreateDBs = append(toCreateDBs, db)
 	}
 
-	return &worldstate.DBUpdates{
-		DBName:  worldstate.DatabasesDBName,
-		Writes:  toCreateDBs,
-		Deletes: tx.DeleteDBs,
+	for dbName, dbIndex := range tx.DBsIndex {
+		var value []byte
+		if dbIndex != nil && dbIndex.GetAttributeAndType() != nil {
+			v, err := json.Marshal(dbIndex.GetAttributeAndType())
+			if err != nil {
+				return nil, errors.Wrap(err, "error while marshaling index for database ["+dbName+"]")
+			}
+			value = v
+		}
+
+		db := &worldstate.KVWithMetadata{
+			Key:   dbName,
+			Value: value,
+			Metadata: &types.Metadata{
+				Version: version,
+			},
+		}
+		indexForExistingDBs = append(indexForExistingDBs, db)
 	}
+
+	return []*worldstate.DBUpdates{
+		{
+			DBName:  worldstate.DatabasesDBName,
+			Writes:  toCreateDBs,
+			Deletes: tx.DeleteDBs,
+		},
+		{
+			DBName: worldstate.DatabasesDBName,
+			Writes: indexForExistingDBs,
+		},
+	}, nil
 }
 
 type dbEntriesForConfigTx struct {

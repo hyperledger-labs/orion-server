@@ -3,11 +3,11 @@
 package blockprocessor
 
 import (
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/pkg/errors"
 )
 
 type dbAdminTxValidator struct {
@@ -39,7 +39,11 @@ func (v *dbAdminTxValidator) validate(txEnv *types.DBAdministrationTxEnvelope) (
 		return r, nil
 	}
 
-	return v.validateDeleteDBEntries(tx.DeleteDBs), nil
+	if r := v.validateDeleteDBEntries(tx.DeleteDBs); r.Flag != types.Flag_VALID {
+		return r, nil
+	}
+
+	return v.validateIndexEntries(tx.DBsIndex, tx.CreateDBs, tx.DeleteDBs), nil
 }
 
 func (v *dbAdminTxValidator) validateCreateDBEntries(toCreateDBs []string) *types.ValidationInfo {
@@ -107,6 +111,7 @@ func (v *dbAdminTxValidator) validateDeleteDBEntries(toDeleteDBs []string) *type
 			}
 
 		case !v.db.ValidDBName(dbName):
+			v.logger.Debug("invalid db name")
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "the database name [" + dbName + "] is not valid",
@@ -140,6 +145,51 @@ func (v *dbAdminTxValidator) validateDeleteDBEntries(toDeleteDBs []string) *type
 			}
 
 			toDeleteDBsLookup[dbName] = true
+		}
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}
+}
+
+func (v *dbAdminTxValidator) validateIndexEntries(dbsIndex map[string]*types.DBIndex, toCreateDBs, toDeleteDBs []string) *types.ValidationInfo {
+	toCreateDBsLookup := make(map[string]bool)
+	toDeleteDBsLookup := make(map[string]bool)
+
+	for _, dbName := range toCreateDBs {
+		toCreateDBsLookup[dbName] = true
+	}
+	for _, dbName := range toDeleteDBs {
+		toDeleteDBsLookup[dbName] = true
+	}
+
+	for dbName, dbIndex := range dbsIndex {
+		if !v.db.Exist(dbName) && !toCreateDBsLookup[dbName] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "index definion provided for database [" + dbName + "] cannot be processed as the database neither exists nor is in the create DB list",
+			}
+		}
+
+		if v.db.Exist(dbName) && toDeleteDBsLookup[dbName] {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "index definion provided for database [" + dbName + "] cannot be processed as the database is present in the delete list",
+			}
+		}
+
+		for attr, ty := range dbIndex.AttributeAndType {
+			switch ty {
+			case types.Type_NUMBER:
+			case types.Type_STRING:
+			case types.Type_BOOLEAN:
+			default:
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: "invalid type provided for the attribute [" + attr + "]",
+				}
+			}
 		}
 	}
 
