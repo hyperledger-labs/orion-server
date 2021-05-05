@@ -124,7 +124,7 @@ func newTestEnv(t *testing.T) *testEnv {
 func TestBatchCreator(t *testing.T) {
 	dataTx1 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
-			UserID: "user1",
+			MustSignUserIDs: []string{"user1"},
 			DBOperations: []*types.DBOperation{
 				{
 					DBName: "db1",
@@ -140,7 +140,7 @@ func TestBatchCreator(t *testing.T) {
 
 	dataTx2 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
-			UserID: "user2",
+			MustSignUserIDs: []string{"user2"},
 			DBOperations: []*types.DBOperation{
 				{
 					DBName: "db2",

@@ -52,7 +52,7 @@ message DataTxEnvelopes {
 
 message DataTxEnvelope {
     DataTx payload = 1;
-    bytes signature = 2;
+    map<string, bytes> signatures = 2;
 }
 
 message ConfigTxEnvelope {
@@ -72,7 +72,7 @@ message UserAdministrationTxEnvelope {
 
 
 message DataTx {
-    string userID = 1;
+    repeated string mustSignUserIDs = 1;
     string txID = 2;
     repeated DBOperation DBOperations = 3;
 }
@@ -151,6 +151,11 @@ message Version {
 message AccessControl {
   map<string, bool> read_users = 1;
   map<string, bool> read_write_users = 2;
+  enum write_policy {
+      ANY = 0;
+      ALL = 1;
+  }
+  write_policy sign_policy_for_write = 3;
 }
 
 message KVWithMetadata{
@@ -199,4 +204,5 @@ enum Flag {
   INVALID_NO_PERMISSION = 4;
   INVALID_INCORRECT_ENTRIES = 5;
   INVALID_UNAUTHORISED = 6;
+  INVALID_MISSING_SIGNATURE = 7;
 }

@@ -13,6 +13,7 @@ import (
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
 	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/logger"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
@@ -484,8 +485,8 @@ func TestValidateDataBlock(t *testing.T) {
 				Payload: &types.Block_DataTxEnvelopes{
 					DataTxEnvelopes: &types.DataTxEnvelopes{
 						Envelopes: []*types.DataTxEnvelope{
-							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-								UserID: "operatingUser",
+							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
+								MustSignUserIDs: []string{"operatingUser"},
 								DBOperations: []*types.DBOperation{
 									{
 										DBName: worldstate.DefaultDBName,
@@ -535,8 +536,8 @@ func TestValidateDataBlock(t *testing.T) {
 									},
 								},
 							}),
-							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-								UserID: "operatingUser",
+							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
+								MustSignUserIDs: []string{"operatingUser"},
 								DBOperations: []*types.DBOperation{
 									{
 										DBName: worldstate.DefaultDBName,
@@ -552,8 +553,8 @@ func TestValidateDataBlock(t *testing.T) {
 									},
 								},
 							}),
-							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-								UserID: "operatingUser",
+							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
+								MustSignUserIDs: []string{"operatingUser"},
 								DBOperations: []*types.DBOperation{
 									{
 										DBName: worldstate.DefaultDBName,
@@ -569,8 +570,8 @@ func TestValidateDataBlock(t *testing.T) {
 									},
 								},
 							}),
-							testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-								UserID: "operatingUser",
+							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
+								MustSignUserIDs: []string{"operatingUser"},
 								DBOperations: []*types.DBOperation{
 									{
 										DBName: worldstate.DefaultDBName,
@@ -661,7 +662,7 @@ func TestValidateUserBlock(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadUsers: map[string]bool{
 									"adminUser": true,
 								},

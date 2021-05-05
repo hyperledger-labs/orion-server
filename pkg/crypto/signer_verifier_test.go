@@ -36,6 +36,7 @@ func TestNewVerifierAndNewSigner(t *testing.T) {
 		signer, err := NewSigner(opt)
 		require.NoError(t, err)
 		require.NotNil(t, signer)
+		require.Equal(t, opt.Identity, signer.Identity())
 
 		// Non exist file
 		opt.KeyFilePath = "testdata/error_client.key"
@@ -169,6 +170,7 @@ func validateLoadedCrypto(t *testing.T, verifier *Verifier, err error) {
 
 func createTestData(t *testing.T) (*SignerOptions, []byte) {
 	return &SignerOptions{
+			Identity:    "testUser",
 			KeyFilePath: "testdata/client.key",
 		},
 		loadRawCertificate(t, "testdata/service.pem")

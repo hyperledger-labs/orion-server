@@ -15,16 +15,19 @@ import (
 
 // SignerOptions - crypto data location
 type SignerOptions struct {
+	Identity    string
 	KeyFilePath string
 }
 
 // Signer is cryptographic primitive used only to sign messages. Each entity usually access single Signer
 type Signer interface {
 	Sign(msgBytes []byte) ([]byte, error)
+	Identity() string
 }
 
 type signer struct {
-	singer *ecdsa.PrivateKey
+	singer   *ecdsa.PrivateKey
+	identity string
 }
 
 // KeyLoader load private keys from given file path
@@ -77,7 +80,8 @@ func NewSigner(opt *SignerOptions) (Signer, error) {
 		return nil, err
 	}
 	return &signer{
-		singer: key.(*ecdsa.PrivateKey),
+		singer:   key.(*ecdsa.PrivateKey),
+		identity: opt.Identity,
 	}, nil
 }
 
@@ -88,4 +92,8 @@ func (s *signer) Sign(msgBytes []byte) ([]byte, error) {
 	}
 
 	return s.singer.Sign(rand.Reader, h, crypto.SHA256)
+}
+
+func (s *signer) Identity() string {
+	return s.identity
 }

@@ -53,8 +53,8 @@ func Test_calculateTxHash(t *testing.T) {
 			name: "Data tx",
 			tx: &types.DataTxEnvelope{
 				Payload: &types.DataTx{
-					UserID: "testUser",
-					TxID:   "DataTx1",
+					MustSignUserIDs: []string{"testUser"},
+					TxID:            "DataTx1",
 					DBOperations: []*types.DBOperation{
 						{
 							DBName:      "testDB",
@@ -64,7 +64,9 @@ func Test_calculateTxHash(t *testing.T) {
 						},
 					},
 				},
-				Signature: []byte("signature"),
+				Signatures: map[string][]byte{
+					"testUser": []byte("signature"),
+				},
 			},
 			valInfo: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
@@ -75,8 +77,8 @@ func Test_calculateTxHash(t *testing.T) {
 			name: "Data tx, no validation info",
 			tx: &types.DataTxEnvelope{
 				Payload: &types.DataTx{
-					UserID: "testUser",
-					TxID:   "DataTx1",
+					MustSignUserIDs: []string{"testUser"},
+					TxID:            "DataTx1",
 					DBOperations: []*types.DBOperation{
 						{
 
@@ -87,7 +89,9 @@ func Test_calculateTxHash(t *testing.T) {
 						},
 					},
 				},
-				Signature: []byte("signature"),
+				Signatures: map[string][]byte{
+					"testUser": []byte("signature"),
+				},
 			},
 			valInfo: nil,
 			wantErr: false,

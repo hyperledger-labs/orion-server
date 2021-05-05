@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.ibm.com/blockchaindb/server/internal/bcdb"
@@ -107,21 +109,36 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		return
 	}
 
-	if txEnv.Payload.UserID == "" {
+	if len(txEnv.Payload.MustSignUserIDs) == 0 {
 		SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
-	if len(txEnv.Signature) == 0 {
+	var notSigned []string
+	for _, user := range txEnv.Payload.MustSignUserIDs {
+		if user == "" {
+			SendHTTPResponse(response, http.StatusBadRequest,
+				&types.HttpResponseErr{ErrMsg: "an empty UserID in MustSignUserIDs list present in the transaction envelope"})
+			return
+		}
+
+		if _, ok := txEnv.Signatures[user]; !ok {
+			notSigned = append(notSigned, user)
+		}
+	}
+	if len(notSigned) > 0 {
+		sort.Strings(notSigned)
 		SendHTTPResponse(response, http.StatusBadRequest,
-			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
+			&types.HttpResponseErr{ErrMsg: "users [" + strings.Join(notSigned, ",") + "] in the must sign list have not signed the transaction"})
 		return
 	}
 
-	if err, code := VerifyRequestSignature(d.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
-		return
+	for _, userID := range txEnv.Payload.MustSignUserIDs {
+		if err, code := VerifyRequestSignature(d.sigVerifier, userID, txEnv.Signatures[userID], txEnv.Payload); err != nil {
+			SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+			return
+		}
 	}
 
 	d.txHandler.handleTransaction(response, txEnv, timeout)

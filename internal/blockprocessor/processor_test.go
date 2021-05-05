@@ -634,8 +634,8 @@ func createSampleBlock(blockNumber uint64, env []*types.DataTxEnvelope) *types.B
 func createSampleTx(t *testing.T, key []string, value [][]byte, signer crypto.Signer) []*types.DataTxEnvelope {
 	envelopes := make([]*types.DataTxEnvelope, 0)
 	for i := 0; i < len(key); i++ {
-		e := testutils.SignedDataTxEnvelope(t, signer, &types.DataTx{
-			UserID: "testUser",
+		e := testutils.SignedDataTxEnvelope(t, []crypto.Signer{signer}, &types.DataTx{
+			MustSignUserIDs: []string{"testUser"},
 			DBOperations: []*types.DBOperation{
 				{
 					DBName: worldstate.DefaultDBName,

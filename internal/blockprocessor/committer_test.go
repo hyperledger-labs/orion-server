@@ -163,6 +163,7 @@ func TestCommitter(t *testing.T) {
 					Envelopes: []*types.DataTxEnvelope{
 						{
 							Payload: &types.DataTx{
+								MustSignUserIDs: []string{"testUser"},
 								DBOperations: []*types.DBOperation{
 									{
 										DBName: "db1",
@@ -405,6 +406,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
+						MustSignUserIDs: []string{"testUser"},
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -445,6 +447,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
+						MustSignUserIDs: []string{"testUser"},
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -469,6 +472,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
+						MustSignUserIDs: []string{"testUser"},
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -493,6 +497,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
+						MustSignUserIDs: []string{"testUser"},
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -515,6 +520,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
+						MustSignUserIDs: []string{"testUser"},
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -644,10 +650,10 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 		{
 			name: "add and delete users",
 			setup: func(env *committerTestEnv) {
-				user1 := constructUserForTest(t, "user1", nil, sampleVersion, nil)
-				user2 := constructUserForTest(t, "user2", nil, sampleVersion, nil)
-				user3 := constructUserForTest(t, "user3", nil, sampleVersion, nil)
-				user4 := constructUserForTest(t, "user4", nil, sampleVersion, nil)
+				user1 := constructUserForTest(t, "user1", nil, nil, sampleVersion, nil)
+				user2 := constructUserForTest(t, "user2", nil, nil, sampleVersion, nil)
+				user3 := constructUserForTest(t, "user3", nil, nil, sampleVersion, nil)
+				user4 := constructUserForTest(t, "user4", nil, nil, sampleVersion, nil)
 				users := []*worldstate.DBUpdates{
 					{
 						DBName: worldstate.UsersDBName,
@@ -740,7 +746,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, nil),
 						},
 					},
 				}
@@ -1199,8 +1205,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx1",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx1",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1225,8 +1231,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx2",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx2",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1286,8 +1292,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx1",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx1",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1344,8 +1350,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx1",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx1",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1410,8 +1416,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx1",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx1",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1461,8 +1467,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx1",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx1",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1487,8 +1493,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx2",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx2",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1511,8 +1517,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx3",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx3",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1588,8 +1594,8 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						UserID: "user1",
-						TxID:   "tx1",
+						MustSignUserIDs: []string{"user1"},
+						TxID:            "tx1",
 						DBOperations: []*types.DBOperation{
 							{
 								DBName: worldstate.DefaultDBName,
@@ -1678,7 +1684,7 @@ func TestProvenanceStoreCommitterForUserBlockWithValidTxs(t *testing.T) {
 		BlockNum: 1,
 		TxNum:    0,
 	}
-	user1 := constructUserForTest(t, "user1", []byte("rawcert-user1"), sampleVersion, nil)
+	user1 := constructUserForTest(t, "user1", []byte("rawcert-user1"), nil, sampleVersion, nil)
 	rawUser1New := &types.User{
 		ID:          "user1",
 		Certificate: []byte("rawcert-user1-new"),
@@ -2220,8 +2226,8 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 						Envelopes: []*types.DataTxEnvelope{
 							{
 								Payload: &types.DataTx{
-									UserID: "user1",
-									TxID:   "tx1",
+									MustSignUserIDs: []string{"user1"},
+									TxID:            "tx1",
 									DBOperations: []*types.DBOperation{
 										{
 											DBName: worldstate.DefaultDBName,
@@ -2231,8 +2237,8 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 							},
 							{
 								Payload: &types.DataTx{
-									UserID: "user1",
-									TxID:   "tx2",
+									MustSignUserIDs: []string{"user1"},
+									TxID:            "tx2",
 									DBOperations: []*types.DBOperation{
 										{
 											DBName: worldstate.DefaultDBName,
@@ -2330,8 +2336,8 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 						Envelopes: []*types.DataTxEnvelope{
 							{
 								Payload: &types.DataTx{
-									UserID: "user1",
-									TxID:   "tx1",
+									MustSignUserIDs: []string{"user1"},
+									TxID:            "tx1",
 									DBOperations: []*types.DBOperation{
 										{
 											DBName: worldstate.DefaultDBName,
@@ -2385,8 +2391,8 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 		{
 			name: "tx with only reads",
 			tx: &types.DataTx{
-				UserID: "user1",
-				TxID:   "tx1",
+				MustSignUserIDs: []string{"user1"},
+				TxID:            "tx1",
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -2473,8 +2479,8 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 		{
 			name: "tx with writes and previous version",
 			tx: &types.DataTx{
-				UserID: "user2",
-				TxID:   "tx2",
+				MustSignUserIDs: []string{"user2"},
+				TxID:            "tx2",
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,

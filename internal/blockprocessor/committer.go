@@ -349,7 +349,7 @@ func constructProvenanceEntriesForDataTx(
 		pData := &provenance.TxDataForProvenance{
 			IsValid:            true,
 			DBName:             ops.DBName,
-			UserID:             tx.UserID,
+			UserID:             tx.MustSignUserIDs[0],
 			TxID:               tx.TxID,
 			Deletes:            make(map[string]*types.Version),
 			OldVersionOfWrites: make(map[string]*types.Version),

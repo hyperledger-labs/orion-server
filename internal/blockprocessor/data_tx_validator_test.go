@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.ibm.com/blockchaindb/server/internal/identity"
 	"github.ibm.com/blockchaindb/server/internal/worldstate"
+	"github.ibm.com/blockchaindb/server/pkg/crypto"
 	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
 	"github.ibm.com/blockchaindb/server/pkg/types"
 )
@@ -16,15 +17,17 @@ import (
 func TestValidateDataTx(t *testing.T) {
 	t.Parallel()
 
-	userID := "operatingUser"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"operatingUser", "bogusUser"})
-	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "operatingUser")
+	alice := "alice"
+	bob := "bob"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{alice, bob, "bogusUser"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, alice)
+	bobCert, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, bob)
 	bogusCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "bogusUser")
 
 	addUserWithCorrectPrivilege := func(db worldstate.DB) {
-		user := &types.User{
-			ID:          userID,
-			Certificate: userCert.Raw,
+		a := &types.User{
+			ID:          alice,
+			Certificate: aliceCert.Raw,
 			Privilege: &types.Privilege{
 				DBPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
@@ -32,7 +35,20 @@ func TestValidateDataTx(t *testing.T) {
 				},
 			},
 		}
-		userSerialized, err := proto.Marshal(user)
+		aliceSerialized, err := proto.Marshal(a)
+		require.NoError(t, err)
+
+		b := &types.User{
+			ID:          bob,
+			Certificate: bobCert.Raw,
+			Privilege: &types.Privilege{
+				DBPermission: map[string]types.Privilege_Access{
+					worldstate.DefaultDBName: types.Privilege_ReadWrite,
+					"db1":                    types.Privilege_ReadWrite,
+				},
+			},
+		}
+		bobSerialized, err := proto.Marshal(b)
 		require.NoError(t, err)
 
 		userAdd := []*worldstate.DBUpdates{
@@ -40,8 +56,12 @@ func TestValidateDataTx(t *testing.T) {
 				DBName: worldstate.UsersDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:   string(identity.UserNamespace) + "operatingUser",
-						Value: userSerialized,
+						Key:   string(identity.UserNamespace) + alice,
+						Value: aliceSerialized,
+					},
+					{
+						Key:   string(identity.UserNamespace) + bob,
+						Value: bobSerialized,
 					},
 				},
 			},
@@ -62,8 +82,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: "db1/name",
@@ -94,8 +114,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -121,8 +141,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -144,24 +164,28 @@ func TestValidateDataTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: signature verification failure",
+			name: "Invalid signature from must sign user",
 			setup: func(db worldstate.DB) {
 				user := []*worldstate.DBUpdates{
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", bogusCert.Raw, nil, nil),
+							constructUserForTest(t, alice, bogusCert.Raw, nil, nil, nil),
+							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
 						},
 					},
 				}
 
 				require.NoError(t, db.Commit(user, 1))
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice, bob},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
+					},
+					{
+						DBName: worldstate.ConfigDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -173,7 +197,110 @@ func TestValidateDataTx(t *testing.T) {
 			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_UNAUTHORISED,
-				ReasonIfInvalid: "signature verification failed: x509: ECDSA verification failure",
+				ReasonIfInvalid: "signature of the must sign user [" + alice + "] is not valid (maybe the certifcate got changed)",
+			},
+		},
+		{
+			name: "Invalid signature from non-must sign user and bob does not have rw access on the db",
+			setup: func(db worldstate.DB) {
+				user := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, alice, bogusCert.Raw, nil, nil, nil),
+							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(user, 1))
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
+				MustSignUserIDs: []string{bob},
+				DBOperations: []*types.DBOperation{
+					{
+						DBName: worldstate.DefaultDBName,
+					},
+				},
+			}),
+			pendingOps: newPendingOperations(),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "none of the user in [bob] has read-write permission on the database [bdb]",
+			},
+		},
+		{
+			name: "Invalid signature from non-must sign user but the transaction would be marked valid",
+			setup: func(db worldstate.DB) {
+				user := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, alice, bogusCert.Raw, nil, nil, nil),
+							constructUserForTest(t, bob, bobCert.Raw, &types.Privilege{
+								DBPermission: map[string]types.Privilege_Access{
+									worldstate.DefaultDBName: types.Privilege_ReadWrite,
+								},
+							}, nil, nil),
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(user, 1))
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
+				MustSignUserIDs: []string{bob},
+				DBOperations: []*types.DBOperation{
+					{
+						DBName: worldstate.DefaultDBName,
+					},
+				},
+			}),
+			pendingOps: newPendingOperations(),
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name: "invalid: duplicate database entry in operations",
+			setup: func(db worldstate.DB) {
+				user := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.UsersDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							constructUserForTest(t, alice, aliceCert.Raw, nil, nil, nil),
+							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(user, 1))
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
+				MustSignUserIDs: []string{bob},
+				DBOperations: []*types.DBOperation{
+					{
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key1",
+							},
+						},
+					},
+					{
+						DBName: worldstate.DefaultDBName,
+						DataWrites: []*types.DataWrite{
+							{
+								Key: "key2",
+							},
+						},
+					},
+				},
+			}),
+			pendingOps: newPendingOperations(),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the database [" + worldstate.DefaultDBName + "] occurs more than once in the operations. The database present in the operations should be unique",
 			},
 		},
 		{
@@ -183,15 +310,16 @@ func TestValidateDataTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", userCert.Raw, nil, nil),
+							constructUserForTest(t, alice, aliceCert.Raw, nil, nil, nil),
+							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
 						},
 					},
 				}
 
 				require.NoError(t, db.Commit(user, 1))
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -206,7 +334,7 @@ func TestValidateDataTx(t *testing.T) {
 			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no read-write permission on the database [" + worldstate.DefaultDBName + "]",
+				ReasonIfInvalid: "none of the user in [alice, bob] has read-write permission on the database [" + worldstate.DefaultDBName + "]",
 			},
 		},
 		{
@@ -214,8 +342,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -243,8 +371,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -291,8 +419,8 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -340,8 +468,8 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -356,7 +484,7 @@ func TestValidateDataTx(t *testing.T) {
 			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no read permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+				ReasonIfInvalid: "none of the user in [alice] has a read permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
 			},
 		},
 		{
@@ -384,8 +512,8 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -400,7 +528,7 @@ func TestValidateDataTx(t *testing.T) {
 			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+				ReasonIfInvalid: "none of the user in [alice] has a write/delete permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
 			},
 		},
 		{
@@ -428,8 +556,8 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -444,7 +572,7 @@ func TestValidateDataTx(t *testing.T) {
 			pendingOps: newPendingOperations(),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]. Hence, the user cannot delete the key",
+				ReasonIfInvalid: "none of the user in [alice] has a write/delete permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
 			},
 		},
 		{
@@ -452,8 +580,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -485,8 +613,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -503,7 +631,7 @@ func TestValidateDataTx(t *testing.T) {
 			},
 		},
 		{
-			name: "valid",
+			name: "valid (has extra sign)",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 				db1 := []*worldstate.DBUpdates{
@@ -537,7 +665,7 @@ func TestValidateDataTx(t *testing.T) {
 									},
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
-											"operatingUser": true,
+											"alice": true,
 										},
 									},
 								},
@@ -551,7 +679,7 @@ func TestValidateDataTx(t *testing.T) {
 									},
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
-											"operatingUser": true,
+											"alice": true,
 										},
 									},
 								},
@@ -570,7 +698,7 @@ func TestValidateDataTx(t *testing.T) {
 									},
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
-											"operatingUser": true,
+											"alice": true,
 										},
 									},
 								},
@@ -584,7 +712,7 @@ func TestValidateDataTx(t *testing.T) {
 									},
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
-											"operatingUser": true,
+											"alice": true,
 										},
 									},
 								},
@@ -595,8 +723,8 @@ func TestValidateDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -652,12 +780,229 @@ func TestValidateDataTx(t *testing.T) {
 			},
 		},
 		{
+			name: "valid (mix of write policy)",
+			setup: func(db worldstate.DB) {
+				addUserWithCorrectPrivilege(db)
+				db1 := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DatabasesDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "db1",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+								},
+							},
+						},
+					},
+				}
+				require.NoError(t, db.Commit(db1, 1))
+
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											alice: true,
+											bob:   true,
+										},
+										SignPolicyForWrite: types.AccessControl_ALL,
+									},
+								},
+							},
+							{
+								Key: "key2",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											alice: true,
+											bob:   true,
+										},
+										SignPolicyForWrite: types.AccessControl_ANY,
+									},
+								},
+							},
+						},
+					},
+					{
+						DBName: "db1",
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key3",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											alice: true,
+											bob:   true,
+										},
+										SignPolicyForWrite: types.AccessControl_ALL,
+									},
+								},
+							},
+							{
+								Key: "key4",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											alice: true,
+											bob:   true,
+										},
+										SignPolicyForWrite: types.AccessControl_ANY,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
+				DBOperations: []*types.DBOperation{
+					{
+						DBName: worldstate.DefaultDBName,
+						DataReads: []*types.DataRead{
+							{
+								Key: "key1",
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
+							},
+						},
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key1",
+								Value: []byte("new-val"),
+							},
+						},
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key2",
+							},
+						},
+					},
+					{
+						DBName: "db1",
+						DataReads: []*types.DataRead{
+							{
+								Key: "key3",
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
+							},
+						},
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key3",
+								Value: []byte("new-val"),
+							},
+						},
+						DataDeletes: []*types.DataDelete{
+							{
+								Key: "key4",
+							},
+						},
+					},
+				},
+			}),
+			pendingOps: newPendingOperations(),
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name: "invalid due to inadequate sign to match the acl)",
+			setup: func(db worldstate.DB) {
+				addUserWithCorrectPrivilege(db)
+
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											alice: true,
+											bob:   true,
+										},
+										SignPolicyForWrite: types.AccessControl_ALL,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
+				DBOperations: []*types.DBOperation{
+					{
+						DBName: worldstate.DefaultDBName,
+						DataReads: []*types.DataRead{
+							{
+								Key: "key1",
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
+							},
+						},
+						DataWrites: []*types.DataWrite{
+							{
+								Key:   "key1",
+								Value: []byte("new-val"),
+							},
+						},
+					},
+				},
+			}),
+			pendingOps: newPendingOperations(),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "not all required users in [alice,bob] have signed the transaction to write/delete key [key1] present in the database [bdb]",
+			},
+		},
+		{
 			name: "valid: no read/write/delete",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 			},
-			txEnv: testutils.SignedDataTxEnvelope(t, userSigner, &types.DataTx{
-				UserID: "operatingUser",
+			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
+				MustSignUserIDs: []string{alice},
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -751,8 +1096,8 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, nil, nil),
-							constructUserForTest(t, "user2", nil, nil, nil),
+							constructUserForTest(t, "user1", nil, nil, nil, nil),
+							constructUserForTest(t, "user2", nil, nil, nil, nil),
 						},
 					},
 				}
@@ -1008,7 +1353,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		dataReads      []*types.DataRead
-		operatingUser  string
+		operatingUser  []string
 		expectedResult *types.ValidationInfo
 	}{
 		{
@@ -1040,10 +1385,10 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"operatingUser", "anotherUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no read permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+				ReasonIfInvalid: "none of the user in [operatingUser,anotherUser] has a read permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
 			},
 		},
 		{
@@ -1075,7 +1420,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"operatingUser", "anotherUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1109,7 +1454,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"anotherUser", "operatingUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1138,7 +1483,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"operatingUser", "anotherUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1147,7 +1492,7 @@ func TestValidateAClOnDataReads(t *testing.T) {
 			name:          "valid: empty reads",
 			setup:         func(db worldstate.DB) {},
 			dataReads:     nil,
-			operatingUser: "operatingUser",
+			operatingUser: []string{"operatingUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1183,11 +1528,11 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		dataWrites     []*types.DataWrite
-		operatingUser  string
+		operatingUser  []string
 		expectedResult *types.ValidationInfo
 	}{
 		{
-			name: "invalid: user does not have the permission",
+			name: "invalid: user does not have the permission - ANY write policy",
 			setup: func(db worldstate.DB) {
 				data := []*worldstate.DBUpdates{
 					{
@@ -1199,6 +1544,80 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 									Version: sampleVersion,
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
+											"user1": true,
+										},
+										SignPolicyForWrite: types.AccessControl_ANY,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			dataWrites: []*types.DataWrite{
+				{
+					Key: "key1",
+				},
+			},
+			operatingUser: []string{"operatingUser", "anotherUser"},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "none of the user in [operatingUser,anotherUser] has a write/delete permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+			},
+		},
+		{
+			name: "invalid: user does not have the permission - ALL write policy",
+			setup: func(db worldstate.DB) {
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: sampleVersion,
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											"user1": true,
+											"user2": true,
+											"user3": true,
+										},
+										SignPolicyForWrite: types.AccessControl_ALL,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			dataWrites: []*types.DataWrite{
+				{
+					Key: "key1",
+				},
+			},
+			operatingUser: []string{"user1", "user2"},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "not all required users in [user1,user2,user3] have signed the transaction to write/delete key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+			},
+		},
+		{
+			name: "invalid: no user has permission to modify read-only key",
+			setup: func(db worldstate.DB) {
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: sampleVersion,
+									AccessControl: &types.AccessControl{
+										ReadUsers: map[string]bool{
 											"user1": true,
 										},
 									},
@@ -1215,14 +1634,14 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"user1", "user2"},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+				ReasonIfInvalid: "no user can write or delete the key [key1]",
 			},
 		},
 		{
-			name: "valid: acl check passes",
+			name: "valid: acl check passes - ANY write policy",
 			setup: func(db worldstate.DB) {
 				data := []*worldstate.DBUpdates{
 					{
@@ -1235,7 +1654,9 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
 											"operatingUser": true,
+											"user1":         true,
 										},
+										SignPolicyForWrite: types.AccessControl_ANY,
 									},
 								},
 							},
@@ -1250,7 +1671,43 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"anotherUser", "operatingUser"},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name: "valid: acl check passes - ALL write policy",
+			setup: func(db worldstate.DB) {
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: sampleVersion,
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											"operatingUser": true,
+											"user1":         true,
+										},
+										SignPolicyForWrite: types.AccessControl_ALL,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			dataWrites: []*types.DataWrite{
+				{
+					Key: "key1",
+				},
+			},
+			operatingUser: []string{"anotherUser", "operatingUser", "user1"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1279,7 +1736,7 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"operatingUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1288,7 +1745,7 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 			name:          "valid: empty writes",
 			setup:         func(db worldstate.DB) {},
 			dataWrites:    nil,
-			operatingUser: "operatingUser",
+			operatingUser: []string{"anotherUser", "operatingUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1324,11 +1781,11 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 		name           string
 		setup          func(db worldstate.DB)
 		dataDeletes    []*types.DataDelete
-		operatingUser  string
+		operatingUser  []string
 		expectedResult *types.ValidationInfo
 	}{
 		{
-			name: "invalid: user does not have the permission",
+			name: "invalid: user does not have the permission - ANY write policy",
 			setup: func(db worldstate.DB) {
 				data := []*worldstate.DBUpdates{
 					{
@@ -1340,6 +1797,80 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 									Version: sampleVersion,
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
+											"user1": true,
+										},
+										SignPolicyForWrite: types.AccessControl_ANY,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			dataDeletes: []*types.DataDelete{
+				{
+					Key: "key1",
+				},
+			},
+			operatingUser: []string{"operatingUser", "anotherUser"},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "none of the user in [operatingUser,anotherUser] has a write/delete permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+			},
+		},
+		{
+			name: "invalid: user does not have the permission - ALL write policy",
+			setup: func(db worldstate.DB) {
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: sampleVersion,
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											"user1": true,
+											"user2": true,
+											"user3": true,
+										},
+										SignPolicyForWrite: types.AccessControl_ALL,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			dataDeletes: []*types.DataDelete{
+				{
+					Key: "key1",
+				},
+			},
+			operatingUser: []string{"user1", "user2"},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "not all required users in [user1,user2,user3] have signed the transaction to write/delete key [key1] present in the database [" + worldstate.DefaultDBName + "]",
+			},
+		},
+		{
+			name: "invalid: no user has permission to modify read-only key",
+			setup: func(db worldstate.DB) {
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: sampleVersion,
+									AccessControl: &types.AccessControl{
+										ReadUsers: map[string]bool{
 											"user1": true,
 										},
 									},
@@ -1356,14 +1887,14 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"user1", "user2"},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no write permission on key [key1] present in the database [" + worldstate.DefaultDBName + "]. Hence, the user cannot delete the key",
+				ReasonIfInvalid: "no user can write or delete the key [key1]",
 			},
 		},
 		{
-			name: "valid: acl check passes",
+			name: "valid: acl check passes - ANY write policy",
 			setup: func(db worldstate.DB) {
 				data := []*worldstate.DBUpdates{
 					{
@@ -1376,7 +1907,9 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 									AccessControl: &types.AccessControl{
 										ReadWriteUsers: map[string]bool{
 											"operatingUser": true,
+											"user1":         true,
 										},
+										SignPolicyForWrite: types.AccessControl_ANY,
 									},
 								},
 							},
@@ -1391,7 +1924,43 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"anotherUser", "operatingUser"},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name: "valid: acl check passes - ALL write policy",
+			setup: func(db worldstate.DB) {
+				data := []*worldstate.DBUpdates{
+					{
+						DBName: worldstate.DefaultDBName,
+						Writes: []*worldstate.KVWithMetadata{
+							{
+								Key: "key1",
+								Metadata: &types.Metadata{
+									Version: sampleVersion,
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											"operatingUser": true,
+											"user1":         true,
+										},
+										SignPolicyForWrite: types.AccessControl_ANY,
+									},
+								},
+							},
+						},
+					},
+				}
+
+				require.NoError(t, db.Commit(data, 1))
+			},
+			dataDeletes: []*types.DataDelete{
+				{
+					Key: "key1",
+				},
+			},
+			operatingUser: []string{"anotherUser", "operatingUser", "user1"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1420,7 +1989,7 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 					Key: "key1",
 				},
 			},
-			operatingUser: "operatingUser",
+			operatingUser: []string{"operatingUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1429,7 +1998,7 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 			name:          "valid: empty delete",
 			setup:         func(db worldstate.DB) {},
 			dataDeletes:   nil,
-			operatingUser: "operatingUser",
+			operatingUser: []string{"operatingUser"},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},

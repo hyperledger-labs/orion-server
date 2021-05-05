@@ -228,8 +228,8 @@ func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.
 	for i := 0; i < len(key); i++ {
 		e := &types.DataTxEnvelope{
 			Payload: &types.DataTx{
-				UserID: "testUser",
-				TxID:   fmt.Sprintf("Tx%d%s", blockNumber, key[i]),
+				MustSignUserIDs: []string{"testUser"},
+				TxID:            fmt.Sprintf("Tx%d%s", blockNumber, key[i]),
 				DBOperations: []*types.DBOperation{
 					{
 						DBName: worldstate.DefaultDBName,
@@ -290,7 +290,7 @@ func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Versio
 	for i, ops := range tx.DBOperations {
 		txpData[i] = &provenance.TxDataForProvenance{
 			DBName:             ops.DBName,
-			UserID:             tx.UserID,
+			UserID:             tx.MustSignUserIDs[0],
 			TxID:               tx.TxID,
 			OldVersionOfWrites: make(map[string]*types.Version),
 		}

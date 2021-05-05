@@ -219,7 +219,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadUsers: map[string]bool{
 									"user2": true,
 								},
@@ -255,7 +255,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"user2": true,
 								},
@@ -294,7 +294,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"user2": true,
 								},
@@ -330,7 +330,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 								Key:   string(identity.UserNamespace) + "adminUser",
 								Value: adminUserSerialized,
 							},
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadUsers: map[string]bool{
 									"adminUser": true,
 								},
@@ -772,13 +772,13 @@ func TestValidateACLOnUserReads(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"user1": true,
 								},
@@ -809,18 +809,18 @@ func TestValidateACLOnUserReads(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user3", nil, sampleVersion, nil),
+							constructUserForTest(t, "user3", nil, nil, sampleVersion, nil),
 						},
 					},
 				}
@@ -879,7 +879,7 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 		BlockNum: 2,
 		TxNum:    1,
 	}
-	adminEntry := constructUserForTest(t, "admin", nil, sampleVersion, nil)
+	adminEntry := constructUserForTest(t, "admin", nil, nil, sampleVersion, nil)
 	admUsr := &types.User{}
 	require.NoError(t, proto.Unmarshal(adminEntry.Value, admUsr))
 	admUsr.Privilege = &types.Privilege{
@@ -904,7 +904,7 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							adminEntry,
 						},
 					},
@@ -931,13 +931,13 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"user1": true,
 								},
@@ -972,18 +972,18 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user3", nil, sampleVersion, nil),
+							constructUserForTest(t, "user3", nil, nil, sampleVersion, nil),
 						},
 					},
 				}
@@ -1050,7 +1050,7 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 		BlockNum: 2,
 		TxNum:    1,
 	}
-	adminEntry := constructUserForTest(t, "admin", nil, sampleVersion, nil)
+	adminEntry := constructUserForTest(t, "admin", nil, nil, sampleVersion, nil)
 	admUsr := &types.User{}
 	require.NoError(t, proto.Unmarshal(adminEntry.Value, admUsr))
 	admUsr.Privilege = &types.Privilege{
@@ -1075,7 +1075,7 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							adminEntry,
 						},
 					},
@@ -1100,13 +1100,13 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"user1": true,
 								},
@@ -1137,8 +1137,8 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
@@ -1169,13 +1169,13 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
 							}),
-							constructUserForTest(t, "user2", nil, sampleVersion, &types.AccessControl{
+							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
 								ReadWriteUsers: map[string]bool{
 									"operatingUser": true,
 								},
@@ -1256,7 +1256,7 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, version1, nil),
+							constructUserForTest(t, "user1", nil, nil, version1, nil),
 						},
 					},
 				}
@@ -1284,8 +1284,8 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, version1, nil),
-							constructUserForTest(t, "user2", nil, version3, nil),
+							constructUserForTest(t, "user1", nil, nil, version1, nil),
+							constructUserForTest(t, "user2", nil, nil, version3, nil),
 						},
 					},
 				}
@@ -1313,8 +1313,8 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 					{
 						DBName: worldstate.UsersDBName,
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, version1, nil),
-							constructUserForTest(t, "user2", nil, version3, nil),
+							constructUserForTest(t, "user1", nil, nil, version1, nil),
+							constructUserForTest(t, "user2", nil, nil, version3, nil),
 						},
 					},
 				}
@@ -1398,11 +1398,11 @@ func setupClusterConfigCA(t *testing.T, env *validatorTestEnv, rootCACert *x509.
 	require.NotNil(t, configR)
 }
 
-func constructUserForTest(t *testing.T, userID string, certRaw []byte, version *types.Version, acl *types.AccessControl) *worldstate.KVWithMetadata {
+func constructUserForTest(t *testing.T, userID string, certRaw []byte, priv *types.Privilege, version *types.Version, acl *types.AccessControl) *worldstate.KVWithMetadata {
 	user := &types.User{
 		ID:          userID,
 		Certificate: certRaw,
-		Privilege:   nil,
+		Privilege:   priv,
 	}
 	userSerialized, err := proto.Marshal(user)
 	require.NoError(t, err)

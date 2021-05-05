@@ -153,7 +153,12 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	require.NoError(t, err)
 	require.NoError(t, pemAdminKeyFile.Close())
 
-	adminSigner, err := crypto.NewSigner(&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, "admin.key")})
+	adminSigner, err := crypto.NewSigner(
+		&crypto.SignerOptions{
+			Identity:    "admin",
+			KeyFilePath: path.Join(tempDir, "admin.key"),
+		},
+	)
 	require.NoError(t, err)
 
 	basePortMutex.Lock()
@@ -296,8 +301,8 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	require.Nil(t, response.Value)
 
 	dataTx := &types.DataTx{
-		UserID: "admin",
-		TxID:   uuid.New().String(),
+		MustSignUserIDs: []string{"admin"},
+		TxID:            uuid.New().String(),
 		DBOperations: []*types.DBOperation{
 			{
 				DBName: worldstate.DefaultDBName,
@@ -313,8 +318,10 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 
 	_, err = env.client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
-			Payload:   dataTx,
-			Signature: testutils.SignatureFromTx(t, env.adminSigner, dataTx),
+			Payload: dataTx,
+			Signatures: map[string][]byte{
+				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
+			},
 		})
 	require.NoError(t, err)
 
@@ -500,8 +507,8 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	}, time.Minute, 100*time.Millisecond)
 
 	dataTx := &types.DataTx{
-		UserID: "admin",
-		TxID:   uuid.New().String(),
+		MustSignUserIDs: []string{"admin"},
+		TxID:            uuid.New().String(),
 		DBOperations: []*types.DBOperation{
 			{
 				DBName: "testDB",
@@ -518,8 +525,10 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	// Post transaction into new database
 	_, err = env.client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
-			Payload:   dataTx,
-			Signature: testutils.SignatureFromTx(t, env.adminSigner, dataTx),
+			Payload: dataTx,
+			Signatures: map[string][]byte{
+				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
+			},
 		})
 	require.NoError(t, err)
 

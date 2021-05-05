@@ -239,7 +239,10 @@ func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA .
 func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate, crypto.Signer) {
 	cert := getTestdataCert(t, path.Join(tempDir, name+".pem"))
 	signer, err := crypto.NewSigner(
-		&crypto.SignerOptions{KeyFilePath: path.Join(tempDir, name+".key")})
+		&crypto.SignerOptions{
+			Identity:    name,
+			KeyFilePath: path.Join(tempDir, name+".key"),
+		})
 	require.NoError(t, err)
 
 	return cert, signer
@@ -271,10 +274,14 @@ func SignatureFromQuery(t *testing.T, signner crypto.Signer, query interface{}) 
 	return sig
 }
 
-func SignedDataTxEnvelope(t *testing.T, signer crypto.Signer, tx *types.DataTx) *types.DataTxEnvelope {
+func SignedDataTxEnvelope(t *testing.T, signers []crypto.Signer, tx *types.DataTx) *types.DataTxEnvelope {
 	env := &types.DataTxEnvelope{
-		Payload:   tx,
-		Signature: SignatureFromTx(t, signer, tx),
+		Payload:    tx,
+		Signatures: map[string][]byte{},
+	}
+
+	for _, signer := range signers {
+		env.Signatures[signer.Identity()] = SignatureFromTx(t, signer, tx)
 	}
 	return env
 }

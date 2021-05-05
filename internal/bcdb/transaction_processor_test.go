@@ -231,9 +231,9 @@ func TestTransactionProcessor(t *testing.T) {
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
-		tx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
-			UserID: "testUser",
-			TxID:   "tx1",
+		tx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
+			MustSignUserIDs: []string{"testUser"},
+			TxID:            "tx1",
 			DBOperations: []*types.DBOperation{
 				{
 					DBName:    worldstate.DefaultDBName,
@@ -330,9 +330,9 @@ func TestTransactionProcessor(t *testing.T) {
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
-		tx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
-			UserID: "testUser",
-			TxID:   "tx1",
+		tx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
+			MustSignUserIDs: []string{"testUser"},
+			TxID:            "tx1",
 			DBOperations: []*types.DBOperation{
 				{
 					DBName:    worldstate.DefaultDBName,
@@ -424,9 +424,9 @@ func TestTransactionProcessor(t *testing.T) {
 
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
-		dataTx := testutils.SignedDataTxEnvelope(t, env.userSigner, &types.DataTx{
-			UserID: "testUser",
-			TxID:   "tx1",
+		dataTx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
+			MustSignUserIDs: []string{"testUser"},
+			TxID:            "tx1",
 			DBOperations: []*types.DBOperation{
 				{
 					DBName: worldstate.DefaultDBName,

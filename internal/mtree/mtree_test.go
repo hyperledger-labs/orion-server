@@ -127,8 +127,8 @@ func generateDataBlock(t *testing.T, txNum int) *types.Block {
 
 	for i := 0; i < txNum; i++ {
 		txPayload := &types.DataTx{
-			UserID: "testUser",
-			TxID:   fmt.Sprintf("%d", i),
+			MustSignUserIDs: []string{"testUser"},
+			TxID:            fmt.Sprintf("%d", i),
 			DBOperations: []*types.DBOperation{
 				{
 					DBName:      "testDB",
@@ -139,8 +139,10 @@ func generateDataBlock(t *testing.T, txNum int) *types.Block {
 			},
 		}
 		envelope := &types.DataTxEnvelope{
-			Payload:   txPayload,
-			Signature: []byte("signature"),
+			Payload: txPayload,
+			Signatures: map[string][]byte{
+				"testUser": []byte("singature"),
+			},
 		}
 		txEnvelopes = append(txEnvelopes, envelope)
 		validationInfo := &types.ValidationInfo{

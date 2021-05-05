@@ -3,6 +3,9 @@
 package blockprocessor
 
 import (
+	"sort"
+	"strings"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.ibm.com/blockchaindb/server/internal/identity"
@@ -22,12 +25,25 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 	var valRes *types.ValidationInfo
 	var err error
 
-	valRes, err = v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
-	if err != nil {
-		return nil, err
-	}
-	if valRes.Flag != types.Flag_VALID {
-		return valRes, err
+	var userIDsWithValidSign []string
+	for userID, signtature := range txEnv.Signatures {
+		valRes, err = v.sigValidator.validate(userID, signtature, txEnv.Payload)
+		if err != nil {
+			return nil, err
+		}
+		if valRes.Flag != types.Flag_VALID {
+			for _, mustSignUserID := range txEnv.Payload.MustSignUserIDs {
+				if userID == mustSignUserID {
+					return &types.ValidationInfo{
+						Flag:            types.Flag_INVALID_UNAUTHORISED,
+						ReasonIfInvalid: "signature of the must sign user [" + userID + "] is not valid (maybe the certifcate got changed)",
+					}, nil
+				}
+			}
+			continue
+		}
+
+		userIDsWithValidSign = append(userIDsWithValidSign, userID)
 	}
 
 	dbs := make(map[string]bool)
@@ -44,7 +60,40 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 	}
 
 	for _, ops := range txEnv.Payload.DBOperations {
-		valRes, err = v.validateOps(txEnv.Payload.UserID, ops, pendingOps)
+		valRes, err = v.validateDBName(ops.DBName)
+		if err != nil {
+			return nil, err
+		}
+		if valRes.Flag != types.Flag_VALID {
+			return valRes, nil
+		}
+
+		var usersWithDBAccess []string
+		sort.Strings(userIDsWithValidSign)
+
+		for _, userID := range userIDsWithValidSign {
+			// note that the transaction could have been signed by many users and a data tx can manipulate
+			// multiple databases. Not all users in the transaction might have read-write access on all databases
+			// manipulated by the transaction. Hence, while validating operations associated with a given database,
+			// we need to consider only users who have read-write access to it. If none of the user has a
+			// read-write permission on a given database, the transaction would be marked invalid.
+			hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, ops.DBName)
+			if err != nil {
+				return nil, err
+			}
+			if hasPerm {
+				usersWithDBAccess = append(usersWithDBAccess, userID)
+			}
+		}
+
+		if len(usersWithDBAccess) == 0 {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_NO_PERMISSION,
+				ReasonIfInvalid: "none of the user in [" + strings.Join(userIDsWithValidSign, ", ") + "] has read-write permission on the database [" + ops.DBName + "]",
+			}, nil
+		}
+
+		valRes, err = v.validateOps(usersWithDBAccess, ops, pendingOps)
 		if err != nil || valRes.Flag != types.Flag_VALID {
 			return valRes, err
 		}
@@ -53,13 +102,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 	return valRes, nil
 }
 
-func (v *dataTxValidator) validateOps(
-	userID string,
-	txOps *types.DBOperation,
-	pendingOps *pendingOperations,
-) (*types.ValidationInfo, error) {
-	dbName := txOps.DBName
-
+func (v *dataTxValidator) validateDBName(dbName string) (*types.ValidationInfo, error) {
 	switch {
 	case !v.db.ValidDBName(dbName):
 		return &types.ValidationInfo{
@@ -79,19 +122,19 @@ func (v *dataTxValidator) validateOps(
 			ReasonIfInvalid: "the database [" + dbName + "] is a system database and no user can write to a " +
 				"system database via data transaction. Use appropriate transaction type to modify the system database",
 		}, nil
-
-	default:
-		hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, dbName)
-		if err != nil {
-			return nil, err
-		}
-		if !hasPerm {
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + userID + "] has no read-write permission on the database [" + dbName + "]",
-			}, nil
-		}
 	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}, nil
+}
+
+func (v *dataTxValidator) validateOps(
+	userIDs []string,
+	txOps *types.DBOperation,
+	pendingOps *pendingOperations,
+) (*types.ValidationInfo, error) {
+	dbName := txOps.DBName
 
 	r, err := v.validateFieldsInDataWrites(txOps.DataWrites)
 	if err != nil {
@@ -114,7 +157,7 @@ func (v *dataTxValidator) validateOps(
 		return r, nil
 	}
 
-	r, err = v.validateACLOnDataReads(userID, dbName, txOps.DataReads)
+	r, err = v.validateACLOnDataReads(userIDs, dbName, txOps.DataReads)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +165,7 @@ func (v *dataTxValidator) validateOps(
 		return r, nil
 	}
 
-	r, err = v.validateACLOnDataWrites(userID, dbName, txOps.DataWrites)
+	r, err = v.validateACLOnDataWrites(userIDs, dbName, txOps.DataWrites)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +173,7 @@ func (v *dataTxValidator) validateOps(
 		return r, nil
 	}
 
-	r, err = v.validateACLOnDataDeletes(userID, dbName, txOps.DataDeletes)
+	r, err = v.validateACLOnDataDeletes(userIDs, dbName, txOps.DataDeletes)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +315,7 @@ func validateUniquenessInDataWritesAndDeletes(dataWrites []*types.DataWrite, dat
 	}
 }
 
-func (v *dataTxValidator) validateACLOnDataReads(userID, dbName string, reads []*types.DataRead) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) validateACLOnDataReads(userIDs []string, dbName string, reads []*types.DataRead) (*types.ValidationInfo, error) {
 	for _, r := range reads {
 		acl, err := v.db.GetACL(dbName, r.Key)
 		if err != nil {
@@ -282,12 +325,23 @@ func (v *dataTxValidator) validateACLOnDataReads(userID, dbName string, reads []
 			continue
 		}
 
-		if !acl.ReadUsers[userID] && !acl.ReadWriteUsers[userID] {
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + userID + "] has no read permission on key [" + r.Key + "] present in the database [" + dbName + "]",
-			}, nil
+		hasPerm := false
+		for _, userID := range userIDs {
+			if acl.ReadUsers[userID] || acl.ReadWriteUsers[userID] {
+				// even if a single user has read permission, it is adequate
+				hasPerm = true
+				break
+			}
 		}
+
+		if hasPerm {
+			continue
+		}
+
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_NO_PERMISSION,
+			ReasonIfInvalid: "none of the user in [" + strings.Join(userIDs, ",") + "] has a read permission on key [" + r.Key + "] present in the database [" + dbName + "]",
+		}, nil
 	}
 
 	return &types.ValidationInfo{
@@ -295,21 +349,18 @@ func (v *dataTxValidator) validateACLOnDataReads(userID, dbName string, reads []
 	}, nil
 }
 
-func (v *dataTxValidator) validateACLOnDataWrites(userID, dbName string, writes []*types.DataWrite) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) validateACLOnDataWrites(userIDs []string, dbName string, writes []*types.DataWrite) (*types.ValidationInfo, error) {
+	var valRes *types.ValidationInfo
+	var err error
+
 	for _, w := range writes {
-		acl, err := v.db.GetACL(dbName, w.Key)
+		valRes, err = v.validateACLForWriteOrDelete(userIDs, dbName, w.Key)
 		if err != nil {
 			return nil, err
 		}
-		if acl == nil {
-			continue
-		}
 
-		if !acl.ReadWriteUsers[userID] {
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + userID + "] has no write permission on key [" + w.Key + "] present in the database [" + dbName + "]",
-			}, nil
+		if valRes.Flag != types.Flag_VALID {
+			return valRes, nil
 		}
 	}
 
@@ -318,21 +369,86 @@ func (v *dataTxValidator) validateACLOnDataWrites(userID, dbName string, writes 
 	}, nil
 }
 
-func (v *dataTxValidator) validateACLOnDataDeletes(userID, dbName string, deletes []*types.DataDelete) (*types.ValidationInfo, error) {
+func (v *dataTxValidator) validateACLOnDataDeletes(userIDs []string, dbName string, deletes []*types.DataDelete) (*types.ValidationInfo, error) {
+	var valRes *types.ValidationInfo
+	var err error
+
 	for _, d := range deletes {
-		acl, err := v.db.GetACL(dbName, d.Key)
+		valRes, err = v.validateACLForWriteOrDelete(userIDs, dbName, d.Key)
 		if err != nil {
 			return nil, err
 		}
-		if acl == nil {
-			continue
+
+		if valRes.Flag != types.Flag_VALID {
+			return valRes, nil
+		}
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}, nil
+}
+
+func (v *dataTxValidator) validateACLForWriteOrDelete(userIDs []string, dbName, key string) (*types.ValidationInfo, error) {
+	acl, err := v.db.GetACL(dbName, key)
+	if err != nil {
+		return nil, err
+	}
+	if acl == nil {
+		return &types.ValidationInfo{
+			Flag: types.Flag_VALID,
+		}, nil
+	}
+
+	if len(acl.ReadWriteUsers) == 0 {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_NO_PERMISSION,
+			ReasonIfInvalid: "no user can write or delete the key [" + key + "]",
+		}, nil
+	}
+
+	switch acl.SignPolicyForWrite {
+	case types.AccessControl_ANY:
+		// even if a single user has a write permission, it is adequate
+		hasPerm := false
+		for _, userID := range userIDs {
+			if acl.ReadWriteUsers[userID] {
+				hasPerm = true
+				break
+			}
 		}
 
-		if !acl.ReadWriteUsers[userID] {
+		if !hasPerm {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + userID + "] has no write permission on key [" + d.Key + "] present in the database [" + dbName + "]. Hence, the user cannot delete the key",
+				ReasonIfInvalid: "none of the user in [" + strings.Join(userIDs, ",") + "] has a write/delete permission on key [" + key + "] present in the database [" + dbName + "]",
 			}, nil
+		}
+
+	case types.AccessControl_ALL:
+		// only if all users present in the ACL list is included in the userIDs,
+		// the operation is marked valid
+		for targetUserID := range acl.ReadWriteUsers {
+			found := false
+			for _, userID := range userIDs {
+				if targetUserID == userID {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				var targetUserIDs []string
+				for userID := range acl.ReadWriteUsers {
+					targetUserIDs = append(targetUserIDs, userID)
+				}
+
+				sort.Strings(targetUserIDs)
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_NO_PERMISSION,
+					ReasonIfInvalid: "not all required users in [" + strings.Join(targetUserIDs, ",") + "] have signed the transaction to write/delete key [" + key + "] present in the database [" + dbName + "]",
+				}, nil
+			}
 		}
 	}
 
