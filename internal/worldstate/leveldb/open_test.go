@@ -39,7 +39,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("open a new levelDB instance", func(t *testing.T) {
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -60,7 +60,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("open while partial leveldb instance exist with an empty dir", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -85,7 +85,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("open while partial leveldb instance exist with the creation flag", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -113,7 +113,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("reopen an empty leveldb", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -141,7 +141,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("reopen non-empty leveldb", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 

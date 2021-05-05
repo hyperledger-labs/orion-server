@@ -55,7 +55,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("open a new store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -73,7 +73,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("open while partial store exist with an empty dir", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -96,7 +96,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("open while partial store exist with a creation flag", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -125,7 +125,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("reopen an empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -153,7 +153,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("reopen non-empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "opentest")
+		testDir, err := ioutil.TempDir("", "opentest")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
