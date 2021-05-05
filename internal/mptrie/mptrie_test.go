@@ -23,10 +23,11 @@ func TestNewTrie(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, trie.store.(*trieStoreMock).inMemoryNodes, 1)
 	require.Len(t, trie.store.(*trieStoreMock).inMemoryValues, 0)
-	err = trie.Commit()
+	err = trie.Commit(1)
 	require.NoError(t, err)
 	require.Len(t, trie.store.(*trieStoreMock).inMemoryNodes, 0)
 	require.Len(t, trie.store.(*trieStoreMock).persistNodes, 1)
+	require.Equal(t, uint64(1), trie.store.(*trieStoreMock).lastBlock)
 }
 
 func TestUpdateTrieStructure(t *testing.T) {
@@ -729,10 +730,11 @@ func TestTrieCommit(t *testing.T) {
 				err = trie.Update(key, val)
 				require.NoError(t, err)
 			}
-			trie.Commit()
+			trie.Commit(1)
 			stat := &storeStatistic{}
 			stat.inMemoryNodes, stat.persistNodes, stat.inMemoryValues, stat.persistValues = trie.store.(*trieStoreMock).storeStatistic()
 			require.Equal(t, tt.afterFirstCommitStoreStat, stat)
+			require.Equal(t, uint64(1), trie.store.(*trieStoreMock).lastBlock)
 			fmt.Println("BEFORE CHECKPOINT")
 			printTrie(t, trie, 10)
 			checkTrie(t,
@@ -754,9 +756,10 @@ func TestTrieCommit(t *testing.T) {
 
 			stat.inMemoryNodes, stat.persistNodes, stat.inMemoryValues, stat.persistValues = trie.store.(*trieStoreMock).storeStatistic()
 			require.Equal(t, tt.afterUpdateStoreStat, stat)
-			trie.Commit()
+			trie.Commit(2)
 			stat.inMemoryNodes, stat.persistNodes, stat.inMemoryValues, stat.persistValues = trie.store.(*trieStoreMock).storeStatistic()
 			require.Equal(t, tt.afterSecondCommitStoreStat, stat)
+			require.Equal(t, uint64(2), trie.store.(*trieStoreMock).lastBlock)
 
 			fmt.Println("AFTER CHECKPOINT")
 			printTrie(t, trie, 10)
@@ -785,7 +788,7 @@ func validateValues(t *testing.T, trie *MPTrie, keys [][]byte, values [][]byte) 
 	}
 }
 
-func validateTrie(t *testing.T, store TrieStore, root TrieNode, isRoot bool) {
+func validateTrie(t *testing.T, store Store, root TrieNode, isRoot bool) {
 	switch root.(type) {
 	case *BranchNode:
 		var childrenCount int
@@ -839,6 +842,7 @@ type trieStoreMock struct {
 	inMemoryValues map[string][]byte
 	persistNodes   map[string]*nodeBytesWithType
 	persistValues  map[string][]byte
+	lastBlock      uint64
 }
 
 type nodeBytesWithType struct {
@@ -846,7 +850,7 @@ type nodeBytesWithType struct {
 	name      string
 }
 
-func newMockStore() TrieStore {
+func newMockStore() Store {
 	return &trieStoreMock{
 		inMemoryNodes:  make(map[string]*nodeBytesWithType),
 		inMemoryValues: make(map[string][]byte),
@@ -867,7 +871,7 @@ func (s *trieStoreMock) GetNode(nodePtr []byte) (TrieNode, error) {
 		branchNode := &BranchNode{
 			Children: make([][]byte, 16),
 		}
-		err := json.Unmarshal(nodeBytes.nodeBytes, branchNode)
+		err = json.Unmarshal(nodeBytes.nodeBytes, branchNode)
 		if err != nil {
 			return nil, err
 		}
@@ -926,34 +930,37 @@ func (s *trieStoreMock) PutValue(valuePtr, value []byte) error {
 	return nil
 }
 
-func (s *trieStoreMock) PersistNode(nodePtr []byte) error {
+func (s *trieStoreMock) PersistNode(nodePtr []byte) (bool, error) {
 	key := base64.StdEncoding.EncodeToString(nodePtr)
 	nb, ok := s.inMemoryNodes[key]
 	if ok {
 		s.persistNodes[key] = nb
 		delete(s.inMemoryNodes, key)
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
-func (s *trieStoreMock) PersistValue(valuePtr []byte) error {
+func (s *trieStoreMock) PersistValue(valuePtr []byte) (bool, error) {
 	key := base64.StdEncoding.EncodeToString(valuePtr)
 	vb, ok := s.inMemoryValues[key]
 	if ok {
 		s.persistValues[key] = vb
 		delete(s.inMemoryValues, key)
+		return true, nil
 	}
-	return nil
+	return false, nil
 }
 
-func (s *trieStoreMock) CommitPersistChanges() error {
-	return nil
-}
-
-func (s *trieStoreMock) CleanInMemory() error {
+func (s *trieStoreMock) CommitChanges(blockNum uint64) error {
+	s.lastBlock = blockNum
 	s.inMemoryNodes = make(map[string]*nodeBytesWithType)
 	s.inMemoryValues = make(map[string][]byte)
 	return nil
+}
+
+func (s *trieStoreMock) LastBlock() (uint64, error) {
+	return s.lastBlock, nil
 }
 
 func (s *trieStoreMock) storeStatistic() (inMemoryNodes, persistNodes, inMemoryValues, persistValues int) {

@@ -10,8 +10,8 @@ import (
 	"github.ibm.com/blockchaindb/server/pkg/crypto"
 )
 
-// TrieStore stores Trie nodes and values in way hash(node)->node bytes hash(value)->value bytes
-type TrieStore interface {
+// Store stores Trie nodes and values in way hash(node)->node bytes hash(value)->value bytes
+type Store interface {
 	// GetNode returns TrieNode associated with key/ptr. It may be temporal node
 	// created by PutNode, node market to persist after PersistNode or after executing
 	// CommitPersistChanges actually stored in backend storage node
@@ -23,26 +23,26 @@ type TrieStore interface {
 	// PutValue do the same as PutNode, but for value
 	PutValue(valuePtr, value []byte) error
 	// PersistNode mark temporal node to be persisted to backend storage in next call to CommitPersistChanges
-	PersistNode(nodePtr []byte) error
+	PersistNode(nodePtr []byte) (bool, error)
 	// PersistValue do same as PersistNode, but for value
-	PersistValue(valuePtr []byte) error
-	// CommitPersistChanges actually stores nodes and value marked to be persist by PersistNode and PersistValue
-	// in single backend store update
-	CommitPersistChanges() error
-	// CleanInMemory removes all temporal node and values
-	CleanInMemory() error
+	PersistValue(valuePtr []byte) (bool, error)
+	// LastBlock returns number of last block trie was persist for
+	LastBlock() (uint64, error)
+	// CommitChanges frees all inMemory nodes and actually stores nodes and value marked to be persist by
+	// PersistNode and PersistValue in single backend store update - usually used with block number
+	CommitChanges(blockNum uint64) error
 }
 
 // Merkle-Patricia Trie implementation. No node/value data stored inside trie, but in associated TrieStore
 type MPTrie struct {
 	root  TrieNode
-	store TrieStore
+	store Store
 	lock  sync.RWMutex
 }
 
 // NewTrie creates new Merkle-Patricia Trie, with backend store.
 // If root node hash is not nil, root node loaded from store, otherwise, empty trie is created
-func NewTrie(rootHash []byte, store TrieStore) (*MPTrie, error) {
+func NewTrie(rootHash []byte, store Store) (*MPTrie, error) {
 	res := &MPTrie{
 		store: store,
 	}
@@ -446,20 +446,25 @@ func (t *MPTrie) Delete(key []byte) ([]byte, error) {
 	return value, nil
 }
 
-func (t *MPTrie) Commit() error {
+func (t *MPTrie) Commit(blockNum uint64) error {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
 	if err := t.persistSubtrie(t.root); err != nil {
 		return err
 	}
-	if err := t.store.CommitPersistChanges(); err != nil {
-		return nil
-	}
-	return t.store.CleanInMemory()
+	return t.store.CommitChanges(blockNum)
 }
 
 func (t *MPTrie) persistSubtrie(n TrieNode) error {
+	wasChanged, err := t.persistNode(n)
+	if err != nil {
+		return err
+	}
+	// If node wasn't changed, no need to persist iт child nodes and can return
+	if !wasChanged {
+		return nil
+	}
 	switch n.(type) {
 	case *BranchNode:
 		for _, childPtr := range n.(*BranchNode).Children {
@@ -475,7 +480,7 @@ func (t *MPTrie) persistSubtrie(n TrieNode) error {
 			}
 		}
 		if n.(*BranchNode).ValuePtr != nil {
-			if err := t.store.PersistValue(n.(*BranchNode).ValuePtr); err != nil {
+			if _, err := t.store.PersistValue(n.(*BranchNode).ValuePtr); err != nil {
 				return err
 			}
 		}
@@ -489,14 +494,13 @@ func (t *MPTrie) persistSubtrie(n TrieNode) error {
 			return err
 		}
 	case *ValueNode:
-		if err := t.store.PersistValue(n.(*ValueNode).ValuePtr); err != nil {
+		if _, err := t.store.PersistValue(n.(*ValueNode).ValuePtr); err != nil {
 			return err
 		}
 	default:
 		return errors.New("unrecognized node type in trie")
 	}
 
-	_, err := t.persistNode(n)
 	return err
 }
 
@@ -571,16 +575,16 @@ func (t *MPTrie) saveNode(node TrieNode) ([]byte, error) {
 	return nodePtr, nil
 }
 
-func (t *MPTrie) persistNode(node TrieNode) ([]byte, error) {
+func (t *MPTrie) persistNode(node TrieNode) (bool, error) {
 	nodePtr, err := node.hash()
 	if err != nil {
-		return nil, err
+		return false, err
 	}
-
-	if err = t.store.PersistNode(nodePtr); err != nil {
-		return nil, err
+	isChanged, err := t.store.PersistNode(nodePtr)
+	if err != nil {
+		return false, err
 	}
-	return nodePtr, nil
+	return isChanged, nil
 }
 
 func convertByteToHex(b []byte) []byte {
