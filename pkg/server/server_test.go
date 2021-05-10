@@ -577,25 +577,6 @@ func TestServerWithFailureScenarios(t *testing.T) {
 		expectedError    string
 		skip             bool
 	}{
-		//{
-		//	testName: "do not have db access",
-		//	envelopeProvider: func(signer crypto.Signer) *types.GetDataQueryEnvelope {
-		//		getKeyQuery := &types.GetDataQuery{
-		//			UserID: "admin",
-		//			DBName: worldstate.DefaultDBName,
-		//			Key:    "test",
-		//		}
-		//
-		//		sig, err := cryptoservice.SignQuery(signer, getKeyQuery)
-		//		require.NoError(t, err)
-		//
-		//		return &types.GetDataQueryEnvelope{
-		//			Payload:   getKeyQuery,
-		//			Signature: sig,
-		//		}
-		//	},
-		//	expectedError: "[admin] has no permission to read from database [bdb]",
-		//},
 		{
 			testName: "bad signature",
 			envelopeProvider: func(_ crypto.Signer) *types.GetDataQueryEnvelope {
@@ -634,7 +615,10 @@ func TestServerWithFailureScenarios(t *testing.T) {
 	}
 
 	for _, tt := range testCases {
+		tt := tt
 		t.Run(tt.testName, func(t *testing.T) {
+			t.Parallel()
+
 			env := newServerTestEnv(t)
 			defer env.cleanup(t)
 

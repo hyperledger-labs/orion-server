@@ -151,10 +151,10 @@ func newTestEnv(t *testing.T) *testEnv {
 									XXX_sizecache:    0,
 								},
 							},
-							RaftConfig:           &types.RaftConfig{
-								TickInterval:         "100ms",
-								ElectionTicks:        100,
-								HeartbeatTicks:       10,
+							RaftConfig: &types.RaftConfig{
+								TickInterval:   "100ms",
+								ElectionTicks:  100,
+								HeartbeatTicks: 10,
 							},
 							XXX_NoUnkeyedLiteral: struct{}{},
 							XXX_unrecognized:     nil,
@@ -555,7 +555,6 @@ func TestFailureAndRecovery(t *testing.T) {
 }
 
 func TestBlockCommitListener(t *testing.T) {
-
 	env := newTestEnv(t)
 	defer env.cleanup(true)
 
