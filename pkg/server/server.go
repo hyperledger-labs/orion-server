@@ -22,6 +22,7 @@ type BCDBHTTPServer struct {
 	db      bcdb.DB
 	handler http.Handler
 	listen  net.Listener
+	server  *http.Server
 	conf    *config.Configurations
 	logger  *logger.SugarLogger
 }
@@ -59,11 +60,13 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating a tcp listener")
 	}
+	server := &http.Server{Handler: mux}
 
 	return &BCDBHTTPServer{
 		db:      db,
 		handler: mux,
 		listen:  listen,
+		server:  server,
 		conf:    conf,
 		logger:  lg,
 	}, nil
@@ -101,37 +104,45 @@ func (s *BCDBHTTPServer) Start() error {
 		}
 	}
 
-	s.logger.Infof("Starting the server on %s", s.listen.Addr().String())
-
-	go func() {
-		if err := http.Serve(s.listen, s.handler); err != nil {
-			switch err.(type) {
-			case *net.OpError:
-				s.logger.Warn("network connection is closed")
-			default:
-				s.logger.Panicf("server stopped unexpectedly, %v", err)
-			}
-		}
-		s.logger.Infof("Finished serving requests on %s", s.listen.Addr().String())
-	}()
+	go s.serveRequests(s.listen)
 
 	return nil
 }
 
+func (s *BCDBHTTPServer) serveRequests(l net.Listener) {
+	s.logger.Infof("Starting to serve requests on: %s", s.listen.Addr().String())
+
+	if err := s.server.Serve(l); err != nil {
+		if err == http.ErrServerClosed {
+			s.logger.Infof("Server stopped: %s", err)
+		} else {
+			s.logger.Panicf("server stopped unexpectedly, %v", err)
+		}
+	}
+
+	s.logger.Infof("Finished serving requests on: %s", s.listen.Addr().String())
+}
 
 // Stop stops the server
 // TODO close or shutdown the HTTP server as well. See https://github.ibm.com/blockchaindb/server/issues/429
 func (s *BCDBHTTPServer) Stop() error {
-	if s == nil || s.listen == nil {
+	if s == nil || s.listen == nil || s.server == nil {
 		return nil
 	}
 
-	s.logger.Infof("Stopping the server listening on %s\n", s.listen.Addr().String())
-	if err := s.listen.Close(); err != nil {
-		return errors.Wrap(err, "error while closing the network listener")
+	var errR error
+
+	s.logger.Infof("Stopping the server listening on: %s\n", s.listen.Addr().String())
+	if err := s.server.Close(); err != nil {
+		s.logger.Errorf("Failure while closing the http server: %s", err)
+		errR = err
 	}
 
-	return s.db.Close()
+	if err := s.db.Close(); err != nil {
+		s.logger.Errorf("Failure while closing the database: %s", err)
+		errR = err
+	}
+	return errR
 }
 
 // Port returns port number server allocated to run on

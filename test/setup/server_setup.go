@@ -190,7 +190,7 @@ func (s *Server) createConfigFile() error {
 			"  snapDir: " + filepath.Join(s.configDir, "etcdraft", "snap") + "\n" + //TODO create path
 			"  network:\n" +
 			"    address: 127.0.0.1\n" +
-			"    port: 7050\n" + //TODO offset port by node number
+			"    port: " + strconv.FormatInt(int64(s.peerPort), 10) + "\n" +
 			"  tls:\n" + //TODO add rest of fields when security is supported
 			"    enabled: false\n" +
 			"bootstrap:\n" +
@@ -237,7 +237,7 @@ func (s *Server) start(timeout time.Duration) error {
 
 	g := gomega.NewWithT(&testFailure{})
 
-	if !g.Eventually(s.outBuffer, 10).Should(gbytes.Say("Starting the server on " + s.address + ":")) {
+	if !g.Eventually(s.outBuffer, 10).Should(gbytes.Say("Starting to serve requests on: " + s.address + ":")) {
 		return errors.New("failed to start the server: " + s.serverID)
 	}
 
@@ -267,7 +267,7 @@ func (s *Server) shutdown() error {
 }
 
 func retrievePort(output string, addr string) (int, error) {
-	toFind := "Starting the server on " + addr + ":"
+	toFind := "Starting to serve requests on: " + addr + ":"
 	index := strings.Index(output, toFind)
 	if index < 0 {
 		return 0, errors.New("server " + addr + " has not started successfully yet")
