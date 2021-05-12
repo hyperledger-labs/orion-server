@@ -1,4 +1,4 @@
-module github.ibm.com/blockchaindb/server
+module github.com/IBM-Blockchain/bcdb-server
 
 go 1.15
 
