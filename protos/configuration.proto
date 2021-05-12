@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 syntax = "proto3";
 
-option go_package = "github.ibm.com/blockchaindb/server/pkg/types";
+option go_package = "github.com/IBM-Blockchain/bcdb-server/pkg/types";
 
 package types;
 
@@ -98,7 +98,7 @@ message RaftConfig {
   // The number of Node.Tick invocations that must
   // pass between heartbeats. That is, a leader sends heartbeat
   // messages to maintain its leadership every HeartbeatTick ticks.
-   uint32 heartbeat_ticks = 3;
+  uint32 heartbeat_ticks = 3;
 }
 
 // Database configuration. Stores default read/write ACLs
@@ -124,8 +124,8 @@ message User {
 // user manipulation such as add/update/delete are allowed.
 message Privilege {
   enum Access {
-      Read = 0;
-      ReadWrite = 1;
+    Read = 0;
+    ReadWrite = 1;
   }
   map<string, Access> DB_permission = 1;
   // admin has privileges to submit a user administration transaction,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 syntax = "proto3";
 
-option go_package = "github.ibm.com/blockchaindb/server/pkg/types";
+option go_package = "github.com/IBM-Blockchain/bcdb-server/pkg/types";
 
 package types;
 
@@ -12,12 +12,12 @@ import "configuration.proto";
 message Block {
   BlockHeader header = 1;
   oneof Payload {
-      DataTxEnvelopes data_tx_envelopes = 2;
-      ConfigTxEnvelope config_tx_envelope = 3;
-      DBAdministrationTxEnvelope DB_administration_tx_envelope = 4;
-      UserAdministrationTxEnvelope user_administration_tx_envelope = 5;
+    DataTxEnvelopes data_tx_envelopes = 2;
+    ConfigTxEnvelope config_tx_envelope = 3;
+    DBAdministrationTxEnvelope DB_administration_tx_envelope = 4;
+    UserAdministrationTxEnvelope user_administration_tx_envelope = 5;
   }
-    repeated ValidationInfo tx_validation_info = 6;
+  repeated ValidationInfo tx_validation_info = 6;
 }
 
 // BlockHeaderBase holds the block metadata and the chain information
@@ -47,41 +47,41 @@ message BlockHeader {
 }
 
 message DataTxEnvelopes {
-    repeated DataTxEnvelope envelopes = 1;
+  repeated DataTxEnvelope envelopes = 1;
 }
 
 message DataTxEnvelope {
-    DataTx payload = 1;
-    map<string, bytes> signatures = 2;
+  DataTx payload = 1;
+  map<string, bytes> signatures = 2;
 }
 
 message ConfigTxEnvelope {
-    ConfigTx payload = 1;
-    bytes signature = 2;
+  ConfigTx payload = 1;
+  bytes signature = 2;
 }
 
 message DBAdministrationTxEnvelope {
-    DBAdministrationTx payload = 1;
-    bytes signature = 2;
+  DBAdministrationTx payload = 1;
+  bytes signature = 2;
 }
 
 message UserAdministrationTxEnvelope {
-    UserAdministrationTx payload = 1;
-    bytes signature = 2;
+  UserAdministrationTx payload = 1;
+  bytes signature = 2;
 }
 
 
 message DataTx {
-    repeated string mustSignUserIDs = 1;
-    string txID = 2;
-    repeated DBOperation DBOperations = 3;
+  repeated string mustSignUserIDs = 1;
+  string txID = 2;
+  repeated DBOperation DBOperations = 3;
 }
 
 message DBOperation {
-    string DB_name = 3;
-    repeated DataRead data_reads = 4;
-    repeated DataWrite data_writes = 5;
-    repeated DataDelete data_deletes = 6;
+  string DB_name = 3;
+  repeated DataRead data_reads = 4;
+  repeated DataWrite data_writes = 5;
+  repeated DataDelete data_deletes = 6;
 }
 
 
@@ -99,43 +99,43 @@ message DataWrite {
 }
 
 message DataDelete {
-    string key = 1;
+  string key = 1;
 }
 
 message ConfigTx {
-    string userID = 1;
-    string txID = 2;
-    Version read_old_config_version = 3;
-    ClusterConfig new_config = 4;
+  string userID = 1;
+  string txID = 2;
+  Version read_old_config_version = 3;
+  ClusterConfig new_config = 4;
 }
 
 message DBAdministrationTx {
-    string userID = 1;
-    string txID = 2;
-    repeated string createDBs = 3;
-    repeated string deleteDBs = 4;
+  string userID = 1;
+  string txID = 2;
+  repeated string createDBs = 3;
+  repeated string deleteDBs = 4;
 }
 
 message UserAdministrationTx {
-    string userID = 1;
-    string txID = 2;
-    repeated UserRead user_reads = 3;
-    repeated UserWrite user_writes = 4;
-    repeated UserDelete user_deletes = 5;
+  string userID = 1;
+  string txID = 2;
+  repeated UserRead user_reads = 3;
+  repeated UserWrite user_writes = 4;
+  repeated UserDelete user_deletes = 5;
 }
 
 message UserRead {
-    string userID = 1;
-    Version version = 2;
+  string userID = 1;
+  Version version = 2;
 }
 
 message UserWrite {
-    User user = 1;
-    AccessControl ACL = 2;
+  User user = 1;
+  AccessControl ACL = 2;
 }
 
 message UserDelete {
-    string userID = 1;
+  string userID = 1;
 }
 
 message Metadata {
@@ -152,8 +152,8 @@ message AccessControl {
   map<string, bool> read_users = 1;
   map<string, bool> read_write_users = 2;
   enum write_policy {
-      ANY = 0;
-      ALL = 1;
+    ANY = 0;
+    ALL = 1;
   }
   write_policy sign_policy_for_write = 3;
 }
