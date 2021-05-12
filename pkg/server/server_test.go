@@ -18,15 +18,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/config"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/certificateauthority"
-	"github.ibm.com/blockchaindb/server/pkg/constants"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
-	"github.ibm.com/blockchaindb/server/pkg/server/mock"
-	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/config"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/certificateauthority"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/server/mock"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 var basePort uint32 = 6090

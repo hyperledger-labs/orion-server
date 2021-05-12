@@ -9,16 +9,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockcreator"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockcreator/mocks"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate/leveldb"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/blockcreator"
-	"github.ibm.com/blockchaindb/server/internal/blockcreator/mocks"
-	"github.ibm.com/blockchaindb/server/internal/blockstore"
-	"github.ibm.com/blockchaindb/server/internal/queue"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type testEnv struct {

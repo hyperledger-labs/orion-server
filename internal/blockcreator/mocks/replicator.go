@@ -4,7 +4,7 @@ package mocks
 import (
 	"sync"
 
-	"github.ibm.com/blockchaindb/server/internal/blockcreator"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockcreator"
 )
 
 type Replicator struct {

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {

@@ -6,14 +6,14 @@ import (
 	"net/http"
 	"testing"
 
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/httphandler"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice/mocks"
-	"github.ibm.com/blockchaindb/server/pkg/server/testutils"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/internal/httphandler"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice/mocks"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 func TestSignQuery(t *testing.T) {

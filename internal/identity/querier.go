@@ -8,8 +8,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 // Querier provides method to query both user and

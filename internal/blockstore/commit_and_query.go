@@ -14,10 +14,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	interrors "github.ibm.com/blockchaindb/server/internal/errors"
-	"github.ibm.com/blockchaindb/server/internal/fileops"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 const (

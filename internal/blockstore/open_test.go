@@ -10,15 +10,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.ibm.com/blockchaindb/server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/errors"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/fileops"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 func TestMain(t *testing.M) {

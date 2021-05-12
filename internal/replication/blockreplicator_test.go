@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	ierrors "github.ibm.com/blockchaindb/server/internal/errors"
-	"github.ibm.com/blockchaindb/server/internal/queue"
-	"github.ibm.com/blockchaindb/server/internal/replication"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
+	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 )
 
 func TestBlockReplicator_StartClose(t *testing.T) {

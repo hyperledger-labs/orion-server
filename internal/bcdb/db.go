@@ -9,18 +9,18 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/config"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
+	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate/leveldb"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/config"
-	"github.ibm.com/blockchaindb/server/internal/blockstore"
-	"github.ibm.com/blockchaindb/server/internal/fileops"
-	"github.ibm.com/blockchaindb/server/internal/identity"
-	"github.ibm.com/blockchaindb/server/internal/provenance"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/internal/worldstate/leveldb"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 //go:generate mockery --dir . --name DB --case underscore --output mocks/

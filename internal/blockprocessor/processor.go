@@ -6,13 +6,13 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/blockstore"
-	"github.ibm.com/blockchaindb/server/internal/mtree"
-	"github.ibm.com/blockchaindb/server/internal/provenance"
-	"github.ibm.com/blockchaindb/server/internal/queue"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
+	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
+	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 // BlockProcessor holds block validator and committer

@@ -5,15 +5,15 @@ package bcdb
 import (
 	"fmt"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
+	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/blockstore"
-	interrors "github.ibm.com/blockchaindb/server/internal/errors"
-	"github.ibm.com/blockchaindb/server/internal/identity"
-	"github.ibm.com/blockchaindb/server/internal/mtree"
-	"github.ibm.com/blockchaindb/server/internal/provenance"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type ledgerQueryProcessor struct {

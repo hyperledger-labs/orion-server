@@ -9,9 +9,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/mptrie"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 )
 
 func TestPutAndPersist(t *testing.T) {

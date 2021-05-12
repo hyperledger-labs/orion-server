@@ -5,9 +5,9 @@ package cryptoservice
 import (
 	"crypto/x509"
 
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 )
 
 //go:generate counterfeiter -o mocks/user_db_querier.go --fake-name UserDBQuerier . UserDBQuerier

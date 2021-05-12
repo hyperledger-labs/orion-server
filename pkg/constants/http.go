@@ -7,7 +7,7 @@ import (
 	"path"
 	"strconv"
 
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 const (

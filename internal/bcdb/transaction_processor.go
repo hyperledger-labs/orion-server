@@ -8,19 +8,18 @@ import (
 	"sync"
 	"time"
 
-	"github.ibm.com/blockchaindb/server/internal/replication"
-
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockcreator"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	internalerror "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
+	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
+	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
+	"github.com/IBM-Blockchain/bcdb-server/internal/txreorderer"
+	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/blockcreator"
-	"github.ibm.com/blockchaindb/server/internal/blockprocessor"
-	"github.ibm.com/blockchaindb/server/internal/blockstore"
-	internalerror "github.ibm.com/blockchaindb/server/internal/errors"
-	"github.ibm.com/blockchaindb/server/internal/provenance"
-	"github.ibm.com/blockchaindb/server/internal/queue"
-	"github.ibm.com/blockchaindb/server/internal/txreorderer"
-	"github.ibm.com/blockchaindb/server/internal/worldstate"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 const (

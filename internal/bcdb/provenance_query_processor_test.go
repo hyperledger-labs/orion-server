@@ -7,10 +7,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/provenance"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 type provenanceQueryProcessorTestEnv struct {

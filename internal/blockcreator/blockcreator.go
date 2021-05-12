@@ -3,12 +3,12 @@
 package blockcreator
 
 import (
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/blockstore"
-	ierrors "github.ibm.com/blockchaindb/server/internal/errors"
-	"github.ibm.com/blockchaindb/server/internal/queue"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
 )
 
 //go:generate counterfeiter -o mocks/replicator.go --fake-name Replicator . Replicator

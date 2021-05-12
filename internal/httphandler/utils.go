@@ -12,13 +12,13 @@ import (
 	"strconv"
 	"time"
 
-	internalerror "github.ibm.com/blockchaindb/server/internal/errors"
+	internalerror "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 
 	"github.com/gorilla/mux"
-	"github.ibm.com/blockchaindb/server/internal/bcdb"
-	"github.ibm.com/blockchaindb/server/pkg/constants"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 func MarshalOrPanic(response interface{}) []byte {

@@ -10,12 +10,12 @@ import (
 	"path"
 	"testing"
 
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice/mocks"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice/mocks"
 )
 
 var lg *logger.SugarLogger

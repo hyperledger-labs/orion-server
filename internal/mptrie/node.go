@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package mptrie
 
-import "github.ibm.com/blockchaindb/server/pkg/crypto"
+import "github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 
 type TrieNode interface {
 	hash() ([]byte, error)

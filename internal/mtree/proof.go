@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	interrors "github.ibm.com/blockchaindb/server/internal/errors"
+	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 )
 
 // Proof calculate intermediate hashes between leaf with given index and root (caller node)

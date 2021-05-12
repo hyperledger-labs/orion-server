@@ -12,8 +12,8 @@ import (
 	db "github.com/cayleygraph/cayley/graph/kv/leveldb"
 	"github.com/hidal-go/hidalgo/kv/flat/leveldb"
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/internal/fileops"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 )
 
 func init() {

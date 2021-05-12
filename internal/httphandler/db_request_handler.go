@@ -8,11 +8,11 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	backend "github.ibm.com/blockchaindb/server/internal/bcdb"
-	"github.ibm.com/blockchaindb/server/pkg/constants"
-	"github.ibm.com/blockchaindb/server/pkg/cryptoservice"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	backend "github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 // dbRequestHandler handles query and transaction associated

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package mtree
 
-import "github.ibm.com/blockchaindb/server/pkg/crypto"
+import "github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 
 // Node struct keep data for Merkle tree node. For now, it is binary Merkle tree
 type Node struct {

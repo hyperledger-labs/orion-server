@@ -8,7 +8,7 @@ import (
 	"math"
 
 	"github.com/golang/protobuf/proto"
-	"github.ibm.com/blockchaindb/server/pkg/types"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.

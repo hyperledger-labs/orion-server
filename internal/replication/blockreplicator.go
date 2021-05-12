@@ -6,9 +6,9 @@ package replication
 import (
 	"sync"
 
-	ierrors "github.ibm.com/blockchaindb/server/internal/errors"
-	"github.ibm.com/blockchaindb/server/internal/queue"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 )
 
 type BlockReplicator struct {

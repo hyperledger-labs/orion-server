@@ -14,8 +14,8 @@ import (
 	"github.com/cayleygraph/quad"
 	"github.com/hidal-go/hidalgo/kv/flat/leveldb"
 	"github.com/stretchr/testify/require"
-	"github.ibm.com/blockchaindb/server/internal/fileops"
-	"github.ibm.com/blockchaindb/server/pkg/logger"
+	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 )
 
 func TestOpenStore(t *testing.T) {

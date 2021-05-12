@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.ibm.com/blockchaindb/server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 )
 
 // Store stores Trie nodes and values in way hash(node)->node bytes hash(value)->value bytes
