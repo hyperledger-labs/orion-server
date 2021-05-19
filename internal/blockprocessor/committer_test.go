@@ -9,15 +9,16 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	mptrieStore "github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate/leveldb"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 )
 
 type committerTestEnv struct {
@@ -78,6 +79,15 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 			Logger:   logger,
 		},
 	)
+
+	mptrieStorePath := filepath.Join(dir, "statetriestore")
+	mptrieStore, err := mptrieStore.Open(
+		&mptrieStore.Config{
+			StoreDir: mptrieStorePath,
+			Logger:   logger,
+		},
+	)
+
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, err)
@@ -104,12 +114,13 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	}
 
 	c := &Config{
-		DB:              db,
 		BlockStore:      blockStore,
+		DB:              db,
 		ProvenanceStore: provenanceStore,
+		StateTrieStore:  mptrieStore,
 		Logger:          logger,
 	}
-	return &committerTestEnv{
+	env := &committerTestEnv{
 		db:              db,
 		dbPath:          dbPath,
 		blockStore:      blockStore,
@@ -118,6 +129,9 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 		committer:       newCommitter(c),
 		cleanup:         cleanup,
 	}
+	_, _, env.committer.stateTrie, err = loadStateTrie(mptrieStore, blockStore)
+	require.NoError(t, err)
+	return env
 }
 
 func TestCommitter(t *testing.T) {
@@ -224,6 +238,9 @@ func TestCommitter(t *testing.T) {
 			require.True(t, proto.Equal(expectedMetadata, metadata))
 			require.Equal(t, val, []byte("value-1"))
 		}
+		stateTrieHash, err := env.committer.stateTrie.Hash()
+		require.NoError(t, err)
+		require.Equal(t, block.GetHeader().GetStateMerkelTreeRootHash(), stateTrieHash)
 	})
 }
 
@@ -809,7 +826,9 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 				},
 			}
 
-			require.NoError(t, env.committer.commitToDBs(block))
+			dbsUpdates, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToDBs(dbsUpdates, provenanceData, block))
 
 			for _, user := range tt.expectedUsersAfter {
 				exist, err := env.identityQuerier.DoesUserExist(user)
@@ -922,7 +941,9 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				},
 			}
 
-			require.NoError(t, env.committer.commitToDBs(block))
+			dbsUpdates, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToDBs(dbsUpdates, provenanceData, block))
 
 			for _, dbName := range tt.expectedDBsAfter {
 				require.True(t, env.db.Exist(dbName))
@@ -1098,13 +1119,17 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			}
 			blockNumber = 1
 			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx, tt.nodesInCommittedConfigTx, validationInfo)
-			require.NoError(t, env.committer.commitToDBs(configBlock))
+			dbsUpdates, provenanceData, err := env.committer.constructDBAndProvenanceEntries(configBlock)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToDBs(dbsUpdates, provenanceData, configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsBefore)
 			assertExpectedNodes(t, env.identityQuerier, tt.expectedNodesBefore)
 
 			blockNumber++
 			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx, tt.nodesInNewConfigTx, tt.valInfo)
-			require.NoError(t, env.committer.commitToDBs(configBlock))
+			dbsUpdates, provenanceData, err = env.committer.constructDBAndProvenanceEntries(configBlock)
+			require.NoError(t, err)
+			require.NoError(t, env.committer.commitToDBs(dbsUpdates, provenanceData, configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsAfter)
 			assertExpectedNodes(t, env.identityQuerier, tt.expectedNodesAfter)
 		})

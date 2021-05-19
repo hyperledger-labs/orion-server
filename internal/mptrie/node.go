@@ -94,7 +94,7 @@ func (m *ValueNode) isDeleted() bool {
 }
 
 func (m *EmptyNode) hash() ([]byte, error) {
-	panic("can't hash empty node")
+	panic("can't Hash empty node")
 }
 
 func (m *EmptyNode) bytes() [][]byte {

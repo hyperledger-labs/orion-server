@@ -58,7 +58,7 @@ func TestMPTrieGetProof(t *testing.T) {
 
 	fmt.Println("Trie before delete")
 	printTrie(t, trie, 20)
-	rootHashBeforeDelete, err := trie.hash()
+	rootHashBeforeDelete, err := trie.Hash()
 	require.NoError(t, err)
 	require.NotNil(t, rootHashBeforeDelete)
 
@@ -69,7 +69,7 @@ func TestMPTrieGetProof(t *testing.T) {
 
 	fmt.Println("Trie after delete")
 	printTrie(t, trie, 20)
-	rootHashAfterDelete, err := trie.hash()
+	rootHashAfterDelete, err := trie.Hash()
 	require.NoError(t, err)
 	require.NotNil(t, rootHashAfterDelete)
 
@@ -79,7 +79,7 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, false)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := calculateValuePtr(key, values[i])
+		valPtr, err := CalculateKeyValueHash(key, values[i])
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
 		isValid, err := proof.Validate(valPtr, rootHashBeforeDelete, false)
@@ -95,7 +95,7 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, false)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := calculateValuePtr(key, []byte("TO_DELETE"))
+		valPtr, err := CalculateKeyValueHash(key, []byte("TO_DELETE"))
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
 		isValid, err := proof.Validate(valPtr, rootHashBeforeDelete, false)
@@ -123,7 +123,7 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, false)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := calculateValuePtr(key, values[i])
+		valPtr, err := CalculateKeyValueHash(key, values[i])
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
 		isValid, err := proof.Validate(valPtr, rootHashAfterDelete, false)
@@ -139,7 +139,7 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, true)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := calculateValuePtr(key, []byte("TO_DELETE"))
+		valPtr, err := CalculateKeyValueHash(key, []byte("TO_DELETE"))
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
 		isValid, err := proof.Validate(valPtr, rootHashAfterDelete, true)
