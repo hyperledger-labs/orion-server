@@ -12,6 +12,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	internalerror "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
@@ -46,6 +47,7 @@ type txProcessorConfig struct {
 	db                 worldstate.DB
 	blockStore         *blockstore.Store
 	provenanceStore    *provenance.Store
+	stateTrieStore     mptrie.Store
 	txQueueLength      uint32
 	txBatchQueueLength uint32
 	blockQueueLength   uint32
@@ -98,6 +100,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			BlockOneQueueBarrier: p.blockOneQueueBarrier,
 			BlockStore:           conf.blockStore,
 			ProvenanceStore:      conf.provenanceStore,
+			StateTrieStore:       conf.stateTrieStore,
 			DB:                   conf.db,
 			Logger:               conf.logger,
 		},

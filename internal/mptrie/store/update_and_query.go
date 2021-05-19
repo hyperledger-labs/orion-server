@@ -8,8 +8,8 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 
-	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 const (
@@ -137,7 +137,7 @@ func (s *Store) PersistValue(valuePtr []byte) (bool, error) {
 	return false, nil
 }
 
-func (s *Store) LastBlock() (uint64, error) {
+func (s *Store) Height() (uint64, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	blockNumBytes, err := s.trieDataDB.Get(lastBlockNs, &opt.ReadOptions{})
@@ -171,6 +171,17 @@ func (s *Store) CommitChanges(blockNum uint64) error {
 	if err := s.trieDataDB.Write(batch, &opt.WriteOptions{}); err != nil {
 		return err
 	}
+	s.nodesToPersist = make(map[string]*NodeBytesWithType)
+	s.valuesToPersist = make(map[string][]byte)
+	s.inMemoryNodes = make(map[string]*NodeBytesWithType)
+	s.inMemoryValues = make(map[string][]byte)
+	return nil
+}
+
+func (s *Store) RollbackChanges() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.nodesToPersist = make(map[string]*NodeBytesWithType)
 	s.valuesToPersist = make(map[string][]byte)
 	s.inMemoryNodes = make(map[string]*NodeBytesWithType)

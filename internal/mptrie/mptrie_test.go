@@ -547,7 +547,7 @@ func TestHistoryAccess(t *testing.T) {
 				err = trie.Update(key, val)
 				require.NoError(t, err)
 			}
-			checkpointHash, err := trie.hash()
+			checkpointHash, err := trie.Hash()
 			require.NoError(t, err)
 			require.NotNil(t, checkpointHash)
 
@@ -959,7 +959,11 @@ func (s *trieStoreMock) CommitChanges(blockNum uint64) error {
 	return nil
 }
 
-func (s *trieStoreMock) LastBlock() (uint64, error) {
+func (s *trieStoreMock) RollbackChanges() error {
+	return nil
+}
+
+func (s *trieStoreMock) Height() (uint64, error) {
 	return s.lastBlock, nil
 }
 

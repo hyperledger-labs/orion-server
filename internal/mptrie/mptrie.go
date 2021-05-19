@@ -6,11 +6,11 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/pkg/errors"
 )
 
-// Store stores Trie nodes and values in way hash(node)->node bytes hash(value)->value bytes
+// Store stores Trie nodes and values in way Hash(node)->node bytes Hash(value)->value bytes
 type Store interface {
 	// GetNode returns TrieNode associated with key/ptr. It may be temporal node
 	// created by PutNode, node market to persist after PersistNode or after executing
@@ -26,11 +26,15 @@ type Store interface {
 	PersistNode(nodePtr []byte) (bool, error)
 	// PersistValue do same as PersistNode, but for value
 	PersistValue(valuePtr []byte) (bool, error)
-	// LastBlock returns number of last block trie was persist for
-	LastBlock() (uint64, error)
+	// Height returns number of last block trie was persist for
+	Height() (uint64, error)
 	// CommitChanges frees all inMemory nodes and actually stores nodes and value marked to be persist by
 	// PersistNode and PersistValue in single backend store update - usually used with block number
 	CommitChanges(blockNum uint64) error
+	// RollbackChanges free all in memory nodes and nodes marked to be persist, without storing anything in
+	// underlying database. Operation can cause to current MPTrie become invalid, so always reload trie
+	// after the call
+	RollbackChanges() error
 }
 
 // Merkle-Patricia Trie implementation. No node/value data stored inside trie, but in associated TrieStore
@@ -41,7 +45,7 @@ type MPTrie struct {
 }
 
 // NewTrie creates new Merkle-Patricia Trie, with backend store.
-// If root node hash is not nil, root node loaded from store, otherwise, empty trie is created
+// If root node Hash is not nil, root node loaded from store, otherwise, empty trie is created
 func NewTrie(rootHash []byte, store Store) (*MPTrie, error) {
 	res := &MPTrie{
 		store: store,
@@ -60,13 +64,13 @@ func NewTrie(rootHash []byte, store Store) (*MPTrie, error) {
 			return nil, err
 		}
 		if res.root == nil {
-			return nil, errors.New("invalid root hash provided, not found in store")
+			return nil, errors.New("invalid root Hash provided, not found in store")
 		}
 	}
 	return res, nil
 }
 
-func (t *MPTrie) hash() ([]byte, error) {
+func (t *MPTrie) Hash() ([]byte, error) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.root.hash()
@@ -99,7 +103,7 @@ func (t *MPTrie) Update(key, value []byte) error {
 	if len(key) == 0 {
 		errors.New("can't update element with empty key")
 	}
-	valuePtr, err := calculateValuePtr(key, value)
+	valuePtr, err := CalculateKeyValueHash(key, value)
 	if err != nil {
 		return err
 	}
@@ -610,7 +614,7 @@ func findCommonPrefix(hexKey1, hexKey2 []byte) []byte {
 	return res
 }
 
-func calculateValuePtr(key, value []byte) ([]byte, error) {
+func CalculateKeyValueHash(key, value []byte) ([]byte, error) {
 	bytesToHash := make([]byte, 0)
 	if len(key) > 0 {
 		bytesToHash = append(bytesToHash, key...)
@@ -630,4 +634,23 @@ func min(a, b int) int {
 		return b
 	}
 	return a
+}
+
+func ConstructCompositeKey(dbName, key string) ([]byte, error) {
+	bytesToHash := make([]byte, 0)
+	if len(dbName) > 0 {
+		dbNameHash, err := crypto.ComputeSHA256Hash([]byte(dbName))
+		if err != nil {
+			return nil, err
+		}
+		bytesToHash = append(bytesToHash, dbNameHash...)
+	}
+	if len(key) > 0 {
+		keyHash, err := crypto.ComputeSHA256Hash([]byte(key))
+		if err != nil {
+			return nil, err
+		}
+		bytesToHash = append(bytesToHash, keyHash...)
+	}
+	return crypto.ComputeSHA256Hash(bytesToHash)
 }

@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/config"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	mptrieStore "github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
@@ -27,12 +27,16 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 type txProcessorTestEnv struct {
 	dbPath         string
 	db             *leveldb.LevelDB
 	blockStore     *blockstore.Store
+	stateTrieStore mptrie.Store
 	blockStorePath string
 	txProcessor    *transactionProcessor
 	userID         string
@@ -89,11 +93,26 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 			Logger:   logger,
 		},
 	)
+
 	if err != nil {
 		if rmErr := os.RemoveAll(dir); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", dir, rmErr)
 		}
 		t.Fatalf("error while creating provenancestore, %v", err)
+	}
+
+	stateTrieStore, err := mptrieStore.Open(
+		&mptrieStore.Config{
+			StoreDir: constructStateTrieStorePath(dir),
+			Logger:   logger,
+		},
+	)
+
+	if err != nil {
+		if rmErr := os.RemoveAll(dir); rmErr != nil {
+			t.Errorf("error while removing directory %s, %v", dir, rmErr)
+		}
+		t.Fatalf("error while creating state trie store, %v", err)
 	}
 
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
@@ -105,6 +124,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 		db:                 db,
 		blockStore:         blockStore,
 		provenanceStore:    provenanceStore,
+		stateTrieStore:     stateTrieStore,
 		txQueueLength:      100,
 		txBatchQueueLength: 100,
 		blockQueueLength:   100,
@@ -128,6 +148,10 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 			t.Errorf("error while closing the db instance, %v", err)
 		}
 
+		if err := stateTrieStore.Close(); err != nil {
+			t.Errorf("error while closing the state trie store, %v", err)
+		}
+
 		if err := blockStore.Close(); err != nil {
 			t.Errorf("error while closing blockstore, %v", err)
 		}
@@ -140,8 +164,9 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 	return &txProcessorTestEnv{
 		dbPath:         dbPath,
 		db:             db,
-		blockStorePath: blockStorePath,
 		blockStore:     blockStore,
+		stateTrieStore: stateTrieStore,
+		blockStorePath: blockStorePath,
 		txProcessor:    txProcessor,
 		userID:         "testUser",
 		userCert:       userCert,
@@ -153,13 +178,15 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string) *txProcessorTestEnv {
 func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Configurations, dbName string) {
 	configTx, err := prepareConfigTx(conf)
 	require.NoError(t, err)
-	resp, err := env.txProcessor.submitTransaction(configTx, 5*time.Second)
-	require.NoError(t, err)
 
 	txHash, err := calculateTxHash(configTx, &types.ValidationInfo{Flag: types.Flag_VALID})
 	require.NoError(t, err)
 	txMerkelRootHash, err := crypto.ConcatenateHashes(txHash, nil)
 	require.NoError(t, err)
+
+	stateTrie, err := mptrie.NewTrie(nil, env.stateTrieStore)
+	require.NoError(t, err)
+	stateTrieRoot := applyTxsOnTrie(t, env, configTx, stateTrie)
 
 	expectedRespPayload := &types.TxResponse{
 		Receipt: &types.TxReceipt{
@@ -168,7 +195,8 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 					Number:                1,
 					LastCommittedBlockNum: 0,
 				},
-				TxMerkelTreeRootHash: txMerkelRootHash,
+				TxMerkelTreeRootHash:    txMerkelRootHash,
+				StateMerkelTreeRootHash: stateTrieRoot,
 				ValidationInfo: []*types.ValidationInfo{
 					{
 						Flag: types.Flag_VALID,
@@ -178,6 +206,10 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 			TxIndex: 0,
 		},
 	}
+
+	resp, err := env.txProcessor.submitTransaction(configTx, 5*time.Second)
+	require.NoError(t, err)
+
 	require.True(t, proto.Equal(expectedRespPayload, resp))
 	require.True(t, env.txProcessor.pendingTxs.isEmpty())
 
@@ -285,6 +317,9 @@ func TestTransactionProcessor(t *testing.T) {
 		genesisHashBase, err := env.blockStore.GetBaseHeaderHash(1)
 		require.NoError(t, err)
 		require.NotNil(t, genesisHashBase)
+		genesisHeader, err := env.blockStore.GetHeader(1)
+		require.NoError(t, err)
+		require.NotNil(t, genesisHeader)
 
 		expectedBlock := &types.Block{
 			Header: &types.BlockHeader{
@@ -313,6 +348,11 @@ func TestTransactionProcessor(t *testing.T) {
 		root, err := mtree.BuildTreeForBlockTx(expectedBlock)
 		require.NoError(t, err)
 		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+
+		stateTrie, err := mptrie.NewTrie(genesisHeader.StateMerkelTreeRootHash, env.stateTrieStore)
+		require.NoError(t, err)
+		expectedBlock.Header.StateMerkelTreeRootHash = applyTxsOnTrie(t, env, expectedBlock.Payload.(*types.Block_DataTxEnvelopes).DataTxEnvelopes, stateTrie)
+
 		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
 		require.True(t, proto.Equal(expectedBlock, block))
@@ -362,6 +402,10 @@ func TestTransactionProcessor(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, genesisHashBase)
 
+		genesisHeader, err := env.blockStore.GetHeader(1)
+		require.NoError(t, err)
+		require.NotNil(t, genesisHeader)
+
 		expectedBlockHeader := &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
 				Number:                 2,
@@ -387,6 +431,10 @@ func TestTransactionProcessor(t *testing.T) {
 				},
 			},
 		}
+
+		stateTrie, err := mptrie.NewTrie(genesisHeader.StateMerkelTreeRootHash, env.stateTrieStore)
+		require.NoError(t, err)
+		expectedBlock.Header.StateMerkelTreeRootHash = applyTxsOnTrie(t, env, expectedBlock.Payload.(*types.Block_DataTxEnvelopes).DataTxEnvelopes, stateTrie)
 
 		root, err := mtree.BuildTreeForBlockTx(expectedBlock)
 		require.NoError(t, err)
@@ -660,4 +708,73 @@ func calculateTxHash(msg proto.Message, valInfo proto.Message) ([]byte, error) {
 	}
 	finalBytes := append(payloadBytes, valBytes...)
 	return crypto.ComputeSHA256Hash(finalBytes)
+}
+
+func applyTxsOnTrie(t *testing.T, env *txProcessorTestEnv, payload interface{}, stateTrie *mptrie.MPTrie) []byte {
+	tempBlock := &types.Block{
+		Header: &types.BlockHeader{
+			ValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		},
+	}
+
+	switch payload.(type) {
+	case *types.DataTxEnvelopes:
+		tempBlock.Payload = &types.Block_DataTxEnvelopes{payload.(*types.DataTxEnvelopes)}
+		tempBlock.Header.ValidationInfo = make([]*types.ValidationInfo, len(payload.(*types.DataTxEnvelopes).Envelopes))
+		for i, _ := range payload.(*types.DataTxEnvelopes).Envelopes {
+			tempBlock.Header.ValidationInfo[i] = &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			}
+		}
+	case *types.ConfigTxEnvelope:
+		tempBlock.Payload = &types.Block_ConfigTxEnvelope{payload.(*types.ConfigTxEnvelope)}
+		tempBlock.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+	case *types.DBAdministrationTxEnvelope:
+		tempBlock.Payload = &types.Block_DBAdministrationTxEnvelope{payload.(*types.DBAdministrationTxEnvelope)}
+		tempBlock.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+	case *types.UserAdministrationTxEnvelope:
+		tempBlock.Payload = &types.Block_UserAdministrationTxEnvelope{payload.(*types.UserAdministrationTxEnvelope)}
+		tempBlock.Header.ValidationInfo = []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		}
+	}
+
+	dbUpdates, err := blockprocessor.ConstructDBUpdatesForBlock(tempBlock, env.txProcessor.blockProcessor)
+	require.NoError(t, err)
+
+	for _, update := range dbUpdates {
+		for _, dbwrite := range update.Writes {
+			key, err := mptrie.ConstructCompositeKey(update.DBName, dbwrite.Key)
+			require.NoError(t, err)
+			// TODO: should we add Metadata to value
+			value := dbwrite.Value
+			err = stateTrie.Update(key, value)
+			require.NoError(t, err)
+		}
+		for _, dbdelete := range update.Deletes {
+			key, err := mptrie.ConstructCompositeKey(update.DBName, dbdelete)
+			require.NoError(t, err)
+			_, err = stateTrie.Delete(key)
+			require.NoError(t, err)
+		}
+	}
+
+	stateTrieRoot, err := stateTrie.Hash()
+	require.NoError(t, err)
+	require.NoError(t, env.stateTrieStore.RollbackChanges())
+	return stateTrieRoot
 }
