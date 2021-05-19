@@ -5,14 +5,16 @@ package blockprocessor
 import (
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/pkg/errors"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // BlockProcessor holds block validator and committer
@@ -35,6 +37,7 @@ type Config struct {
 	BlockStore           *blockstore.Store
 	DB                   worldstate.DB
 	ProvenanceStore      *provenance.Store
+	StateTrieStore       mptrie.Store
 	Logger               *logger.SugarLogger
 }
 
@@ -60,6 +63,10 @@ func (b *BlockProcessor) Start() {
 
 	if err := b.recoverWorldStateDBIfNeeded(); err != nil {
 		panic(errors.WithMessage(err, "error while recovering node"))
+	}
+
+	if err := b.initAndRecoverStateTrieIfNeeded(); err != nil {
+		panic(errors.WithMessage(err, "error while recovering node state trie"))
 	}
 
 	b.logger.Debug("block processor has been started successfully")
@@ -102,6 +109,7 @@ func (b *BlockProcessor) Start() {
 			if err = b.committer.commitBlock(block); err != nil {
 				panic(err)
 			}
+
 			b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
 
 			//TODO detect config changes that affect the replication component and return an appropriate non-nil object
@@ -177,10 +185,48 @@ func (b *BlockProcessor) recoverWorldStateDBIfNeeded() error {
 		if err != nil {
 			return err
 		}
-
-		return b.committer.commitToDBs(block)
+		dbsUpdates, provenanceData, err := b.committer.constructDBAndProvenanceEntries(block)
+		if err != nil {
+			return err
+		}
+		return b.committer.commitToDBs(dbsUpdates, provenanceData, block)
 	}
 
+	return nil
+}
+
+func (b *BlockProcessor) initAndRecoverStateTrieIfNeeded() error {
+	trieStoreHeight, blockStoreHeight, stateTrie, err := loadStateTrie(b.committer.stateTrieStore, b.blockStore)
+	if err != nil {
+		return err
+	}
+	b.committer.stateTrie = stateTrie
+	if blockStoreHeight != trieStoreHeight {
+		switch {
+		case trieStoreHeight+1 == blockStoreHeight:
+			b.logger.Warnf("state trie store not updated, last block in block store is %d, last block in state trie is %d, updating trie", blockStoreHeight, trieStoreHeight)
+			block, err := b.blockStore.Get(blockStoreHeight)
+			if err != nil {
+				return err
+			}
+			dbsUpdates, _, err := b.committer.constructDBAndProvenanceEntries(block)
+			if err != nil {
+				return err
+			}
+			if err = b.committer.applyBlockOnStateTrie(dbsUpdates); err != nil {
+				return err
+			}
+			if err = b.committer.commitTrie(blockStoreHeight); err != nil {
+				return err
+			}
+		default:
+			return errors.Errorf(
+				"the difference between the height of the block store [%d] and the state trie store [%d] cannot be greater than 1 block. The node cannot be recovered",
+				blockStoreHeight,
+				trieStoreHeight,
+			)
+		}
+	}
 	return nil
 }
 
@@ -235,4 +281,39 @@ func (l *blockCommitListeners) invoke(block *types.Block) error {
 	}
 
 	return nil
+}
+
+func loadStateTrie(mpTrieStore mptrie.Store, blockStore *blockstore.Store) (uint64, uint64, *mptrie.MPTrie, error) {
+	blockStoreHeight, err := blockStore.Height()
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	if blockStoreHeight == 0 {
+		trie, err := mptrie.NewTrie(nil, mpTrieStore)
+		return 0, 0, trie, err
+	}
+
+	trieStoreHeight, err := mpTrieStore.Height()
+	if err == leveldb.ErrNotFound {
+		trie, err := mptrie.NewTrie(nil, mpTrieStore)
+		return 0, blockStoreHeight, trie, err
+	}
+
+	height := blockStoreHeight
+	if trieStoreHeight < height {
+		height = trieStoreHeight
+	} else if trieStoreHeight > height {
+		// Impossible situation, because commit to block store executed before commit to trie store
+		// this indicate problem with underline database
+		return trieStoreHeight, blockStoreHeight, nil, errors.Errorf("height of block store (%d) is smalled that height of trie store (%d), check underline database", blockStoreHeight, trieStoreHeight)
+	}
+
+	lastTrieBlockHeader, err := blockStore.GetHeader(height)
+	if err != nil {
+		return 0, blockStoreHeight, nil, err
+	}
+
+	trie, err := mptrie.NewTrie(lastTrieBlockHeader.GetStateMerkelTreeRootHash(), mpTrieStore)
+	return height, blockStoreHeight, trie, err
 }

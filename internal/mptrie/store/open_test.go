@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOpen(t *testing.T) {
@@ -144,7 +144,7 @@ func TestOpen(t *testing.T) {
 
 		assertStore(t, storeDir, s)
 		checkStoreContent(t, s, pointers, true, true, 0)
-		lastBlock, err := s.LastBlock()
+		lastBlock, err := s.Height()
 		require.NoError(t, err)
 		require.Equal(t, uint64(999), lastBlock)
 	})
