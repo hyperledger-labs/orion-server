@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -82,6 +83,14 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 			Logger:   logger,
 		},
 	)
+
+	trieStorePath := constructStateTrieStorePath(path)
+	trieStore, err := store.Open(
+		&store.Config{
+			StoreDir: trieStorePath,
+			Logger:   logger,
+		},
+	)
 	if err != nil {
 		if rmErr := os.RemoveAll(path); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", path, rmErr)
@@ -97,7 +106,10 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 			t.Errorf("error while closing blockstore, %v", err)
 		}
 		if err := provenanceStore.Close(); err != nil {
-			t.Errorf("error while closing blockstore, %v", err)
+			t.Errorf("error while closing provenancestore, %v", err)
+		}
+		if err := trieStore.Close(); err != nil {
+			t.Errorf("error while closing triestore, %v", err)
 		}
 		if err := os.RemoveAll(path); err != nil {
 			t.Fatalf("failed to remove %s due to %v", path, err)
@@ -108,6 +120,7 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		db:              db,
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,
+		trieStore:       trieStore,
 		identityQuerier: identity.NewQuerier(db),
 		logger:          logger,
 	}
@@ -580,7 +593,7 @@ func TestGetProof(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			payload, err := env.p.getProof(testCase.user, testCase.blockNumber, testCase.txIndex)
+			payload, err := env.p.getTxProof(testCase.user, testCase.blockNumber, testCase.txIndex)
 			if testCase.expectedErr == nil {
 				require.NoError(t, err)
 				txBytes, err := json.Marshal(testCase.expectedTx)

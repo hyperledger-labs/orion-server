@@ -61,6 +61,9 @@ type DB interface {
 	// GetTxProof returns intermediate hashes to recalculate merkle tree root from tx hash
 	GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.ResponseEnvelope, error)
 
+	// GetDataProof returns hashes path from value to root in merkle-patricia trie
+	GetDataProof(userID string, blockNum uint64, dbname string, key string, deleted bool) (*types.ResponseEnvelope, error)
+
 	// GetLedgerPath returns list of blocks that forms shortest path in skip list chain in ledger
 	GetLedgerPath(userID string, start, end uint64) (*types.ResponseEnvelope, error)
 
@@ -209,6 +212,7 @@ func NewDB(localConf *config.LocalConfiguration, logger *logger.SugarLogger) (DB
 		db:              levelDB,
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,
+		trieStore:       stateTrieStore,
 		identityQuerier: querier,
 		logger:          logger,
 	}
@@ -365,13 +369,23 @@ func (d *db) GetBlockHeader(userID string, blockNum uint64) (*types.ResponseEnve
 }
 
 func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.ResponseEnvelope, error) {
-	proofResponse, err := d.ledgerQueryProcessor.getProof(userID, blockNum, txIdx)
+	proofResponse, err := d.ledgerQueryProcessor.getTxProof(userID, blockNum, txIdx)
 	if err != nil {
 		return nil, err
 	}
 
 	return d.signedResponseEnvelope(proofResponse)
 }
+
+func (d *db) GetDataProof(userID string, blockNum uint64, dbname string, key string, deleted bool) (*types.ResponseEnvelope, error) {
+	proofResponse, err := d.ledgerQueryProcessor.getTxProof(userID, blockNum, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	return d.signedResponseEnvelope(proofResponse)
+}
+
 
 func (d *db) GetLedgerPath(userID string, start, end uint64) (*types.ResponseEnvelope, error) {
 	pathResponse, err := d.ledgerQueryProcessor.getPath(userID, start, end)

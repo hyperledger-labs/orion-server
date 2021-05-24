@@ -36,14 +36,18 @@ func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handle
 	handler.router.HandleFunc(constants.GetBlockHeader, handler.blockQuery).Methods(http.MethodGet)
 	// HTTP GET "/ledger/path?start={startId}&end={endId}" gets shortest path between blocks
 	handler.router.HandleFunc(constants.GetPath, handler.pathQuery).Methods(http.MethodGet).Queries("start", "{startId:[0-9]+}", "end", "{endId:[0-9]+}")
-	// HTTP GET "/ledger/proof/{blockId}?idx={idx}" gets proof for tx with idx index inside block blockId
+	// HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" gets proof for tx with idx index inside block blockId
 	handler.router.HandleFunc(constants.GetTxProof, handler.txProof).Methods(http.MethodGet).Queries("idx", "{idx:[0-9]+}")
+	// HTTP GET "/ledger/proof/data/{blockId}/{dbname}/{key}?deleted={true|false}" gets proof for tx with idx index inside block blockId
+	handler.router.HandleFunc(constants.GetDataProof, handler.dataProof).Methods(http.MethodGet).Queries("deleted", "{true|false}")
 	// HTTP GET "/ledger/tx/receipt/{txId}" gets transaction receipt
 	handler.router.HandleFunc(constants.GetTxReceipt, handler.txReceipt).Methods(http.MethodGet)
 	// HTTP GET "/ledger/path?start={startId}&end={endId}" with invalid query params
 	handler.router.HandleFunc(constants.GetPath, handler.invalidPathQuery).Methods(http.MethodGet)
-	// HTTP GET "/ledger/proof/{blockId}?idx={idx}" with invalid query params
+	// HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" with invalid query params
 	handler.router.HandleFunc(constants.GetTxProof, handler.invalidTxProof).Methods(http.MethodGet)
+	// HTTP GET "/ledger/proof/data/{blockId}/{dbname}/{key}" with invalid query params
+	handler.router.HandleFunc(constants.GetDataProof, handler.invalidDataProof).Methods(http.MethodGet)
 
 	return handler
 }
@@ -148,6 +152,38 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 	SendHTTPResponse(response, http.StatusOK, data)
 }
 
+func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetDataProof, p.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetTxProofQuery)
+
+	data, err := p.db.GetTxProof(query.UserID, query.BlockNumber, query.TxIndex)
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *errors.PermissionErr:
+			status = http.StatusForbidden
+		case *errors.NotFoundErr:
+			status = http.StatusNotFound
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		SendHTTPResponse(
+			response,
+			status,
+			&types.HttpResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	SendHTTPResponse(response, http.StatusOK, data)
+}
+
 func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *http.Request) {
 	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetTxReceipt, p.sigVerifier)
 	if respondedErr {
@@ -190,6 +226,13 @@ func (p *ledgerRequestHandler) invalidPathQuery(response http.ResponseWriter, re
 func (p *ledgerRequestHandler) invalidTxProof(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "query error - bad or missing tx index",
+	}
+	SendHTTPResponse(response, http.StatusBadRequest, err)
+}
+
+func (p *ledgerRequestHandler) invalidDataProof(response http.ResponseWriter, request *http.Request) {
+	err := &types.HttpResponseErr{
+		ErrMsg: "query error - bad or missing deleted parameter",
 	}
 	SendHTTPResponse(response, http.StatusBadRequest, err)
 }
