@@ -8,6 +8,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
@@ -20,6 +21,7 @@ type ledgerQueryProcessor struct {
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
+	trieStore       mptrie.Store
 	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
 }
@@ -28,6 +30,7 @@ type ledgerQueryProcessorConfig struct {
 	db              worldstate.DB
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
+	trieStore       mptrie.Store
 	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
 }
@@ -37,6 +40,7 @@ func newLedgerQueryProcessor(conf *ledgerQueryProcessorConfig) *ledgerQueryProce
 		db:              conf.db,
 		blockStore:      conf.blockStore,
 		provenanceStore: conf.provenanceStore,
+		trieStore:       conf.trieStore,
 		identityQuerier: conf.identityQuerier,
 		logger:          conf.logger,
 	}
@@ -95,7 +99,7 @@ func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx
 	}, nil
 }
 
-func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponse, error) {
+func (p *ledgerQueryProcessor) getTxProof(userId string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponse, error) {
 	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
 	if err != nil {
 		return nil, err
@@ -116,6 +120,50 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 	return &types.GetTxProofResponse{
 		Hashes: path,
 	}, nil
+}
+
+func (p *ledgerQueryProcessor) getDataProof(userId string, blockNum uint64, dbname string, key string, deleted bool) (*types.GetDataProofResponse, error) {
+	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasAccess {
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
+	}
+	block, err := p.blockStore.Get(blockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	trie, err := mptrie.NewTrie(block.Header.StateMerkelTreeRootHash, p.trieStore)
+	if err != nil {
+		return nil, err
+	}
+	trieKey, err := mptrie.ConstructCompositeKey(dbname, key)
+	if err != nil {
+		return nil, err
+	}
+
+	proof, err := trie.GetProof(trieKey, deleted)
+	if err != nil {
+		return nil, err
+	}
+
+	if proof == nil {
+		return nil, nil
+	}
+
+	resp := &types.GetDataProofResponse{
+		Path: make([]*types.MPTrieProofElement, 0),
+	}
+
+	for _, pathStep := range proof.GetPath() {
+		resp.Path = append(resp.Path, &types.MPTrieProofElement{
+			Hashes: pathStep,
+		})
+	}
+	return resp, nil
 }
 
 func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.TxResponse, error) {

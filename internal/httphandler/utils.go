@@ -133,6 +133,26 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			BlockNumber: blockNum,
 			TxIndex:     txIndex,
 		}
+	case constants.GetDataProof:
+		blockNum, err := getBlockNum(params)
+		if err != nil {
+			SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
+		deleted, err := strconv.ParseBool(params["deleted"])
+		if err != nil {
+			SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
+		payload = &types.GetDataProofQuery{
+			UserID:      querierUserID,
+			BlockNumber: blockNum,
+			DbName:      params["dbname"],
+			Key:         params["key"],
+			Deleted:     deleted,
+		}
 	case constants.GetTxReceipt:
 		payload = &types.GetTxReceiptQuery{
 			UserID: querierUserID,
@@ -293,6 +313,15 @@ func getBlockNumAndTxIndex(params map[string]string) (uint64, uint64, error) {
 	}
 
 	return blockNum, txIndex, nil
+}
+
+func getBlockNum(params map[string]string) (uint64, error) {
+	blockNum, err := getUintParam("blockId", params)
+	if err != nil {
+		return 0, err
+	}
+
+	return blockNum, nil
 }
 
 func getStartAndEndBlockNum(params map[string]string) (uint64, uint64, error) {

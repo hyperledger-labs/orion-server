@@ -78,7 +78,14 @@ func TestURLConstruction(t *testing.T) {
 			execute: func() string {
 				return URLTxProof(1, 2)
 			},
-			expectedURL: "/ledger/proof/1?idx=2",
+			expectedURL: "/ledger/proof/tx/1?idx=2",
+		},
+		{
+			name: "URLDataProof",
+			execute: func() string {
+				return URLDataProof(1, "db1", "key")
+			},
+			expectedURL: "/ledger/proof/data/1/db1/key",
 		},
 		{
 			name: "URLForGetHistoricalData",

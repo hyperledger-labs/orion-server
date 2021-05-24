@@ -36,7 +36,8 @@ const (
 	LedgerEndpoint = "/ledger/"
 	GetBlockHeader = "/ledger/block/{blockId:[0-9]+}"
 	GetPath        = "/ledger/path"
-	GetTxProof     = "/ledger/proof/{blockId:[0-9]+}"
+	GetTxProof     = "/ledger/proof/tx/{blockId:[0-9]+}"
+	GetDataProof   = "/ledger/proof/data/{blockId:[0-9]+}/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
 	GetTxReceipt   = "/ledger/tx/receipt/{txId}"
 
 	ProvenanceEndpoint      = "/provenance/"
@@ -83,7 +84,11 @@ func URLForLedgerPath(start, end uint64) string {
 }
 
 func URLTxProof(blockNum uint64, txIdx int) string {
-	return LedgerEndpoint + fmt.Sprintf("proof/%d?idx=%d", blockNum, txIdx)
+	return LedgerEndpoint + fmt.Sprintf("proof/tx/%d?idx=%d", blockNum, txIdx)
+}
+
+func URLDataProof(blockNum uint64, dbname, key string) string {
+	return LedgerEndpoint + fmt.Sprintf("proof/data/%d/%s/%s", blockNum, dbname, key)
 }
 
 func URLForNodeConfigPath(nodeID string) string {

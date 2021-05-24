@@ -498,13 +498,13 @@ func TestProofQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusNotFound,
-			expectedErr:        "error while processing 'GET /ledger/proof/2?idx=2' because block not found: 2",
+			expectedErr:        "error while processing 'GET /ledger/proof/tx/2?idx=2' because block not found: 2",
 		},
 		{
 			name:             "wrong url, idx not exist",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "2"), nil)
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "tx", "2"), nil)
 				if err != nil {
 					return nil, err
 				}

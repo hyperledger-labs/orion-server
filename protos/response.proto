@@ -59,6 +59,14 @@ message GetTxProofResponse {
   repeated bytes hashes = 1;
 }
 
+message GetDataProofResponse {
+  repeated MPTrieProofElement path = 1;
+}
+
+message MPTrieProofElement {
+  repeated bytes hashes = 1;
+}
+
 message GetHistoricalDataResponse {
   repeated ValueWithMetadata values = 1;
 }
