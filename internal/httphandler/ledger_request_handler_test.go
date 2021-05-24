@@ -361,7 +361,7 @@ func TestPathQuery(t *testing.T) {
 	}
 }
 
-func TestProofQuery(t *testing.T) {
+func TestTxProofQuery(t *testing.T) {
 	submittingUserName := "alice"
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
@@ -490,13 +490,13 @@ func TestProofQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusNotFound,
-			expectedErr:        "error while processing 'GET /ledger/proof/2?idx=2' because block not found: 2",
+			expectedErr:        "error while processing 'GET /ledger/proof/tx/2?idx=2' because block not found: 2",
 		},
 		{
-			name:             "wrong url, idx not exist",
+			name:             "wrong url, idx param doesn't exist",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "2"), nil)
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "tx", "2"), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -506,13 +506,29 @@ func TestProofQuery(t *testing.T) {
 			},
 			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("DoesUserExist", submittingUserName).
-					Return(true, nil)
-				db.On("GetTxProof", submittingUserName, uint64(2), uint64(2)).Return(response, errors.Errorf("query error - bad or missing tx index"))
 				return db
 			},
 			expectedStatusCode: http.StatusBadRequest,
-			expectedErr:        "query error - bad or missing tx index",
+			expectedErr:        "tx proof query error - bad or missing query parameter",
+		},
+		{
+			name:             "wrong url, blockId idx params doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "tx"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "tx proof query error - bad or missing query parameter",
 		},
 	}
 
@@ -541,6 +557,305 @@ func TestProofQuery(t *testing.T) {
 
 			if tt.expectedResponse != nil {
 				res := &types.GetTxProofResponseEnvelope{}
+				rr.Body.Bytes()
+				err = json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+			}
+		})
+	}
+}
+
+func TestDataProofQuery(t *testing.T) {
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() (*http.Request, error)
+		dbMockFactory      func(response *types.GetDataProofResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetDataProofResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "valid get proof request, deleted false",
+			expectedResponse: &types.GetDataProofResponseEnvelope{
+				Response: &types.GetDataProofResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					Path: []*types.MPTrieProofElement{
+						{
+							Hashes: [][]byte{[]byte("hash1"), []byte("hash2")},
+						},
+						{
+							Hashes: [][]byte{[]byte("hash3"), []byte("hash4")},
+						},
+						{
+							Hashes: [][]byte{[]byte("hash5")},
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLDataProof(2, "bdb", "key1", false), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataProofQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					DbName:      "bdb",
+					Key:         "key1",
+					IsDeleted:     false,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataProof", submittingUserName, uint64(2), "bdb", "key1", false).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get proof request, deleted true",
+			expectedResponse: &types.GetDataProofResponseEnvelope{
+				Response: &types.GetDataProofResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					Path: []*types.MPTrieProofElement{
+						{
+							Hashes: [][]byte{[]byte("hash1"), []byte("hash2")},
+						},
+						{
+							Hashes: [][]byte{[]byte("hash3"), []byte("hash4")},
+						},
+						{
+							Hashes: [][]byte{[]byte("hash5")},
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLDataProof(2, "bdb", "key1", true), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataProofQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					DbName:      "bdb",
+					Key:         "key1",
+					IsDeleted:     true,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataProof", submittingUserName, uint64(2), "bdb", "key1", true).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:             "user doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLDataProof(2, "bdb", "key1", true), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataProofQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					DbName:      "bdb",
+					Key:         "key1",
+					IsDeleted:     false,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				db.On("GetDataProof", submittingUserName, uint64(2), "bdb", "key1", false).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name:             "no key exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLDataProof(2, "bdb", "key1", false), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataProofQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					DbName:      "bdb",
+					Key:         "key1",
+					IsDeleted:     false,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataProof", submittingUserName, uint64(2), "bdb", "key1", false).Return(response, &interrors.NotFoundErr{Message: "no proof for block 2, db bdb, key key1, isDeleted false found"})
+				return db
+			},
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        "error while processing 'GET /ledger/proof/data/bdb/key1?block=2' because no proof for block 2, db bdb, key key1, isDeleted false found",
+		},
+		{
+			name:             "no key exist, deleted is true",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLDataProof(2, "bdb", "key1", true), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataProofQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					DbName:      "bdb",
+					Key:         "key1",
+					IsDeleted:     true,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataProof", submittingUserName, uint64(2), "bdb", "key1", true).Return(response, &interrors.NotFoundErr{Message: "no proof for block 2, db bdb, key key1, isDeleted true found"})
+				return db
+			},
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        "error while processing 'GET /ledger/proof/data/bdb/key1?block=2&deleted=true' because no proof for block 2, db bdb, key key1, isDeleted true found",
+		},
+		{
+			name:             "wrong url, block param missing",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "data", "bdb", "key"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "data proof query error - bad or missing query parameter",
+		},
+		{
+			name:             "wrong url, key param missing",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "data", "bdb"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "data proof query error - bad or missing query parameter",
+		},
+		{
+			name:             "wrong url, db and key param missing",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "data"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "data proof query error - bad or missing query parameter",
+		},
+		{
+			name:             "wrong url, blockId, db and key param missing",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "proof", "data"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataProofResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "data proof query error - bad or missing query parameter",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			rr := httptest.NewRecorder()
+			handler := NewLedgerRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &types.HttpResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.GetDataProofResponseEnvelope{}
 				rr.Body.Bytes()
 				err = json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)

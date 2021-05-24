@@ -60,6 +60,9 @@ type DB interface {
 	// GetTxProof returns intermediate hashes to recalculate merkle tree root from tx hash
 	GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error)
 
+	// GetDataProof returns hashes path from value to root in merkle-patricia trie
+	GetDataProof(userID string, blockNum uint64, dbname string, key string, deleted bool) (*types.GetDataProofResponseEnvelope, error)
+
 	// GetLedgerPath returns list of blocks that forms shortest path in skip list chain in ledger
 	GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
 
@@ -205,6 +208,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 		db:              levelDB,
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,
+		trieStore:       stateTrieStore,
 		identityQuerier: querier,
 		logger:          logger,
 	}
@@ -405,7 +409,7 @@ func (d *db) GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResp
 }
 
 func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error) {
-	proofResponse, err := d.ledgerQueryProcessor.getProof(userID, blockNum, txIdx)
+	proofResponse, err := d.ledgerQueryProcessor.getTxProof(userID, blockNum, txIdx)
 	if err != nil {
 		return nil, err
 	}
@@ -417,6 +421,24 @@ func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.Ge
 	}
 
 	return &types.GetTxProofResponseEnvelope{
+		Response:  proofResponse,
+		Signature: sign,
+	}, nil
+}
+
+func (d *db) GetDataProof(userID string, blockNum uint64, dbname string, key string, deleted bool) (*types.GetDataProofResponseEnvelope, error) {
+	proofResponse, err := d.ledgerQueryProcessor.getDataProof(userID, blockNum, dbname, key, deleted)
+	if err != nil {
+		return nil, err
+	}
+
+	proofResponse.Header = d.responseHeader()
+	sign, err := d.signature(proofResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetDataProofResponseEnvelope{
 		Response:  proofResponse,
 		Signature: sign,
 	}, nil

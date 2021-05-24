@@ -92,6 +92,19 @@ message GetTxProofQueryEnvelope {
   bytes signature = 2;
 }
 
+message GetDataProofQuery {
+  string user_id = 1;
+  uint64 block_number = 2;
+  string db_name = 3;
+  string key = 4;
+  bool is_deleted = 5;
+}
+
+message GetDataProofQueryEnvelope {
+  GetDataProofQuery payload = 1;
+  bytes signature = 2;
+}
+
 message GetHistoricalDataQuery {
   string user_id = 1;
   string db_name = 2;

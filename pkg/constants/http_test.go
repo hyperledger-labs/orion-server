@@ -78,7 +78,21 @@ func TestURLConstruction(t *testing.T) {
 			execute: func() string {
 				return URLTxProof(1, 2)
 			},
-			expectedURL: "/ledger/proof/1?idx=2",
+			expectedURL: "/ledger/proof/tx/1?idx=2",
+		},
+		{
+			name: "URLDataProof deleted false",
+			execute: func() string {
+				return URLDataProof(1, "db1", "key", false)
+			},
+			expectedURL: "/ledger/proof/data/db1/key?block=1",
+		},
+		{
+			name: "URLDataProof deleted true",
+			execute: func() string {
+				return URLDataProof(1, "db1", "key", true)
+			},
+			expectedURL: "/ledger/proof/data/db1/key?block=1&deleted=true",
 		},
 		{
 			name: "URLForGetHistoricalData",

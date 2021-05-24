@@ -5,6 +5,12 @@ package comm
 
 import (
 	"fmt"
+	"net"
+	"net/http"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
@@ -13,11 +19,6 @@ import (
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
 	etcd_types "go.etcd.io/etcd/pkg/types"
 	"go.etcd.io/etcd/raft/raftpb"
-	"net"
-	"net/http"
-	"strconv"
-	"sync"
-	"time"
 )
 
 //go:generate counterfeiter -o mocks/consensus_listener.go --fake-name ConsensusListener . ConsensusListener

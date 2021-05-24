@@ -33,11 +33,14 @@ const (
 	GetNodesConfig = "/config/node"
 	GetNodeConfig  = "/config/node/{nodeId}"
 
-	LedgerEndpoint = "/ledger/"
-	GetBlockHeader = "/ledger/block/{blockId:[0-9]+}"
-	GetPath        = "/ledger/path"
-	GetTxProof     = "/ledger/proof/{blockId:[0-9]+}"
-	GetTxReceipt   = "/ledger/tx/receipt/{txId}"
+	LedgerEndpoint     = "/ledger/"
+	GetBlockHeader     = "/ledger/block/{blockId:[0-9]+}"
+	GetPath            = "/ledger/path"
+	GetTxProofPrefix   = "/ledger/proof/tx"
+	GetTxProof         = "/ledger/proof/tx/{blockId:[0-9]+}"
+	GetDataProofPrefix = "/ledger/proof/data"
+	GetDataProof       = "/ledger/proof/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
+	GetTxReceipt       = "/ledger/tx/receipt/{txId}"
 
 	ProvenanceEndpoint      = "/provenance/"
 	GetHistoricalData       = "/provenance/data/history/{dbname}/{key}"
@@ -83,7 +86,14 @@ func URLForLedgerPath(start, end uint64) string {
 }
 
 func URLTxProof(blockNum uint64, txIdx int) string {
-	return LedgerEndpoint + fmt.Sprintf("proof/%d?idx=%d", blockNum, txIdx)
+	return LedgerEndpoint + fmt.Sprintf("proof/tx/%d?idx=%d", blockNum, txIdx)
+}
+
+func URLDataProof(blockNum uint64, dbname, key string, deleted bool) string {
+	if deleted {
+		return LedgerEndpoint + fmt.Sprintf("proof/data/%s/%s?block=%d&deleted=%t", dbname, key, blockNum, deleted)
+	}
+	return LedgerEndpoint + fmt.Sprintf("proof/data/%s/%s?block=%d", dbname, key, blockNum)
 }
 
 func URLForNodeConfigPath(nodeID string) string {
