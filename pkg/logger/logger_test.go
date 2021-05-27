@@ -5,6 +5,7 @@ package logger
 import (
 	"io/ioutil"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ func TestLogger(t *testing.T) {
 	}{
 		{
 			level:    "debug",
-			fileName: "/tmp/debug.txt",
+			fileName: "debug.txt",
 			expectedMessages: []string{
 				"debug message is logged",
 				"info message is logged",
@@ -40,7 +41,7 @@ func TestLogger(t *testing.T) {
 		},
 		{
 			level:    "info",
-			fileName: "/tmp/info.txt",
+			fileName: "info.txt",
 			expectedMessages: []string{
 				"info message is logged",
 				"warning message is logged",
@@ -52,7 +53,7 @@ func TestLogger(t *testing.T) {
 		},
 		{
 			level:    "warn",
-			fileName: "/tmp/warn.txt",
+			fileName: "warn.txt",
 			expectedMessages: []string{
 				"warning message is logged",
 				"error message is logged",
@@ -64,7 +65,7 @@ func TestLogger(t *testing.T) {
 		},
 		{
 			level:    "err",
-			fileName: "/tmp/err.txt",
+			fileName: "err.txt",
 			expectedMessages: []string{
 				"error message is logged",
 			},
@@ -76,7 +77,7 @@ func TestLogger(t *testing.T) {
 		},
 		{
 			level:            "panic",
-			fileName:         "/tmp/panic.txt",
+			fileName:         "panic.txt",
 			expectedMessages: []string{},
 			notExpectedMessages: []string{
 				"debug message is logged",
@@ -91,12 +92,17 @@ func TestLogger(t *testing.T) {
 		tt := tt
 		t.Run(tt.level, func(t *testing.T) {
 			t.Parallel()
-			defer os.RemoveAll(tt.fileName)
+
+			testDir, err := ioutil.TempDir("", "logger-test")
+			require.NoError(t, err)
+			defer os.RemoveAll(testDir)
+
+			logFile := path.Join(testDir, tt.fileName)
 
 			l, err := New(&Config{
 				Level:         tt.level,
-				OutputPath:    []string{tt.fileName},
-				ErrOutputPath: []string{tt.fileName},
+				OutputPath:    []string{logFile},
+				ErrOutputPath: []string{logFile},
 				Encoding:      "console",
 			})
 			require.NoError(t, err)
@@ -104,7 +110,7 @@ func TestLogger(t *testing.T) {
 			logStatements(l)
 			require.NoError(t, l.Sync())
 
-			content, err := ioutil.ReadFile(tt.fileName)
+			content, err := ioutil.ReadFile(logFile)
 			require.NoError(t, err)
 
 			for _, expected := range tt.expectedMessages {
@@ -139,7 +145,7 @@ func TestDynamicLogger(t *testing.T) {
 	}{
 		{
 			level:    "debug",
-			fileName: "/tmp/dynamic-debug.txt",
+			fileName: "dynamic-debug.txt",
 			expectedMessagesBefore: []string{
 				"debug message is logged",
 				"info message is logged",
@@ -159,7 +165,7 @@ func TestDynamicLogger(t *testing.T) {
 		},
 		{
 			level:                  "panic",
-			fileName:               "/tmp/dynamic-error.txt",
+			fileName:               "dynamic-error.txt",
 			expectedMessagesBefore: []string{},
 			notExpectedMessagesBefore: []string{
 				"debug message is logged",
@@ -182,12 +188,17 @@ func TestDynamicLogger(t *testing.T) {
 		tt := tt
 		t.Run(tt.level, func(t *testing.T) {
 			t.Parallel()
-			defer os.RemoveAll(tt.fileName)
+
+			testDir, err := ioutil.TempDir("", "logger-test")
+			require.NoError(t, err)
+			defer os.RemoveAll(testDir)
+
+			logFile := path.Join(testDir, tt.fileName)
 
 			l, err := New(&Config{
 				Level:         tt.level,
-				OutputPath:    []string{tt.fileName},
-				ErrOutputPath: []string{tt.fileName},
+				OutputPath:    []string{logFile},
+				ErrOutputPath: []string{logFile},
 				Encoding:      "console",
 			})
 			require.NoError(t, err)
@@ -195,7 +206,7 @@ func TestDynamicLogger(t *testing.T) {
 			logStatements(l)
 			require.NoError(t, l.Sync())
 
-			content, err := ioutil.ReadFile(tt.fileName)
+			content, err := ioutil.ReadFile(logFile)
 			require.NoError(t, err)
 
 			for _, expected := range tt.expectedMessagesBefore {
@@ -205,7 +216,7 @@ func TestDynamicLogger(t *testing.T) {
 			for _, unexpected := range tt.notExpectedMessagesBefore {
 				require.NotContains(t, string(content), unexpected)
 			}
-			require.NoError(t, os.Truncate(tt.fileName, 0))
+			require.NoError(t, os.Truncate(logFile, 0))
 
 			require.NoError(t, l.SetLogLevel(tt.newLevel))
 			level, _ := getZapLogLevel(tt.newLevel)
@@ -214,7 +225,7 @@ func TestDynamicLogger(t *testing.T) {
 			logStatements(l)
 			require.NoError(t, l.Sync())
 
-			content, err = ioutil.ReadFile(tt.fileName)
+			content, err = ioutil.ReadFile(logFile)
 			require.NoError(t, err)
 
 			for _, expected := range tt.expectedMessagesAfter {
@@ -297,4 +308,117 @@ func TestErrorPath(t *testing.T) {
 		require.EqualError(t, err, "error while creating a logger: no encoder name specified")
 		require.Nil(t, l)
 	})
+}
+
+func TestLoggerWith(t *testing.T) {
+	t.Parallel()
+
+	logStatements := func(l1 *SugarLogger) {
+		l1.Debug("debug message is logged")
+		l1.Info("info message is logged")
+		l1.Warn("warning message is logged")
+		l1.Error("error message is logged")
+	}
+
+	tests := []struct {
+		level               string
+		fileName            string
+		expectedMessages    []string
+		notExpectedMessages []string
+	}{
+		{
+			level:    "debug",
+			fileName: "debug.txt",
+			expectedMessages: []string{
+				"debug message is logged\t{\"id\": \"node1\"}",
+				"info message is logged\t{\"id\": \"node1\"}",
+				"warning message is logged\t{\"id\": \"node1\"}",
+				"error message is logged\t{\"id\": \"node1\"}",
+			},
+			notExpectedMessages: []string{},
+		},
+		{
+			level:    "info",
+			fileName: "info.txt",
+			expectedMessages: []string{
+				"info message is logged\t{\"id\": \"node1\"}",
+				"warning message is logged\t{\"id\": \"node1\"}",
+				"error message is logged\t{\"id\": \"node1\"}",
+			},
+			notExpectedMessages: []string{
+				"debug message is logged\t{\"id\": \"node1\"}",
+			},
+		},
+		{
+			level:    "warn",
+			fileName: "warn.txt",
+			expectedMessages: []string{
+				"warning message is logged\t{\"id\": \"node1\"}",
+				"error message is logged\t{\"id\": \"node1\"}",
+			},
+			notExpectedMessages: []string{
+				"debug message is logged\t{\"id\": \"node1\"}",
+				"info message is logged\t{\"id\": \"node1\"}",
+			},
+		},
+		{
+			level:    "err",
+			fileName: "err.txt",
+			expectedMessages: []string{
+				"error message is logged\t{\"id\": \"node1\"}",
+			},
+			notExpectedMessages: []string{
+				"debug message is logged\t{\"id\": \"node1\"}",
+				"info message is logged\t{\"id\": \"node1\"}",
+				"warning message is logged\t{\"id\": \"node1\"}",
+			},
+		},
+		{
+			level:            "panic",
+			fileName:         "panic.txt",
+			expectedMessages: []string{},
+			notExpectedMessages: []string{
+				"debug message is logged\t{\"id\": \"node1\"}",
+				"info message is logged\t{\"id\": \"node1\"}",
+				"warning message is logged\t{\"id\": \"node1\"}",
+				"error message is logged\t{\"id\": \"node1\"}",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.level, func(t *testing.T) {
+			t.Parallel()
+
+			testDir, err := ioutil.TempDir("", "logger-test")
+			require.NoError(t, err)
+			defer os.RemoveAll(testDir)
+
+			logFile := path.Join(testDir, tt.fileName)
+			l, err := New(&Config{
+				Level:         tt.level,
+				OutputPath:    []string{logFile},
+				ErrOutputPath: []string{logFile},
+				Encoding:      "console",
+			})
+			require.NoError(t, err)
+
+			l1 := l.With("id", "node1")
+
+			logStatements(l1)
+			require.NoError(t, l1.Sync())
+
+			content, err := ioutil.ReadFile(logFile)
+			require.NoError(t, err)
+
+			for _, expected := range tt.expectedMessages {
+				require.Contains(t, string(content), expected)
+			}
+
+			for _, unexpected := range tt.notExpectedMessages {
+				require.NotContains(t, string(content), unexpected)
+			}
+		})
+	}
 }

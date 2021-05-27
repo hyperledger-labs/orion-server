@@ -65,6 +65,12 @@ func New(c *Config) (*SugarLogger, error) {
 	}, nil
 }
 
+func (l *SugarLogger) With(args ...interface{}) *SugarLogger {
+	return &SugarLogger{
+		SugaredLogger: l.SugaredLogger.With(args...),
+	}
+}
+
 func (l *SugarLogger) SetLogLevel(level string) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
