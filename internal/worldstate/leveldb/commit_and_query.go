@@ -158,6 +158,11 @@ func (l *LevelDB) GetConfig() (*types.ClusterConfig, *types.Metadata, error) {
 	return config, metadata, nil
 }
 
+// GetIndexDefinition returns the index definition of a given database
+func (l *LevelDB) GetIndexDefinition(dbName string) ([]byte, *types.Metadata, error) {
+	return l.Get(worldstate.DatabasesDBName, dbName)
+}
+
 // Commit commits the updates to the database
 func (l *LevelDB) Commit(dbsUpdates map[string]*worldstate.DBUpdates, blockNumber uint64) error {
 	for dbName, updates := range dbsUpdates {
