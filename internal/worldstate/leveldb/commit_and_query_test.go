@@ -476,6 +476,7 @@ func TestCommitWithDBManagement(t *testing.T) {
 		preCreateDBs           []string
 		updates                *worldstate.DBUpdates
 		expectedDBsAfterCommit []string
+		expectedIndex          map[string][]byte
 	}{
 		{
 			name:         "only create DBs",
@@ -506,15 +507,21 @@ func TestCommitWithDBManagement(t *testing.T) {
 			updates: &worldstate.DBUpdates{
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key: "db1",
+						Key:   "db1",
+						Value: []byte("index-db1"),
 					},
 					{
-						Key: "db2",
+						Key:   "db2",
+						Value: []byte("index-db2"),
 					},
 				},
 				Deletes: []string{"db3", "db4"},
 			},
 			expectedDBsAfterCommit: []string{"db1", "db2"},
+			expectedIndex: map[string][]byte{
+				"db1": []byte("index-db1"),
+				"db2": []byte("index-db2"),
+			},
 		},
 		{
 			name:         "create already existing DBs and delete non-existing DBs -- applicable during node failure and reply of block",
@@ -522,15 +529,21 @@ func TestCommitWithDBManagement(t *testing.T) {
 			updates: &worldstate.DBUpdates{
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key: "db1",
+						Key:   "db1",
+						Value: []byte("index-db1"),
 					},
 					{
-						Key: "db2",
+						Key:   "db2",
+						Value: []byte("index-db2"),
 					},
 				},
 				Deletes: []string{"db3", "db4"},
 			},
 			expectedDBsAfterCommit: []string{"db1", "db2"},
+			expectedIndex: map[string][]byte{
+				"db1": []byte("index-db1"),
+				"db2": []byte("index-db2"),
+			},
 		},
 	}
 
@@ -558,6 +571,12 @@ func TestCommitWithDBManagement(t *testing.T) {
 			)
 
 			require.ElementsMatch(t, tt.expectedDBsAfterCommit, l.ListDBs())
+
+			for dbName, expectedIndex := range tt.expectedIndex {
+				index, _, err := l.GetIndexDefinition(dbName)
+				require.NoError(t, err)
+				require.Equal(t, expectedIndex, index)
+			}
 		})
 	}
 }

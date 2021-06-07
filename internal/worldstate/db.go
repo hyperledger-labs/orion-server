@@ -49,6 +49,8 @@ type DB interface {
 	Has(dbName, key string) (bool, error)
 	// GetConfig returns the cluster configuration
 	GetConfig() (*types.ClusterConfig, *types.Metadata, error)
+	// GetIndexDefinition returns the index definition of a given database
+	GetIndexDefinition(dbName string) ([]byte, *types.Metadata, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates map[string]*DBUpdates, blockNumber uint64) error
 	// Height returns the state database block height. In other
