@@ -14,6 +14,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
 	mptrieStore "github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
+	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate/leveldb"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -845,16 +846,20 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name              string
-		setup             func(db worldstate.DB)
-		expectedDBsBefore []string
-		dbAdminTx         *types.DBAdministrationTx
-		expectedDBsAfter  []string
-		expectedIndex     map[string]*types.DBIndex
-		valInfo           []*types.ValidationInfo
+		name                    string
+		setup                   func(db worldstate.DB)
+		expectedDBsBefore       []string
+		expectedIndexDBsBefore  []string
+		expectedIndexBefore     map[string]*types.DBIndex
+		dbAdminTx               *types.DBAdministrationTx
+		expectedDBsAfter        []string
+		expectedIndexAfter      map[string]*types.DBIndex
+		expectedIndexDBsAfter   []string
+		expectedNoIndexDBsAfter []string
+		valInfo                 []*types.ValidationInfo
 	}{
 		{
-			name: "create new DBss and delete existing DBs",
+			name: "create new DBs and delete existing DBs",
 			setup: func(db worldstate.DB) {
 				createDBs := map[string]*worldstate.DBUpdates{
 					worldstate.DatabasesDBName: {
@@ -872,6 +877,10 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				require.NoError(t, db.Commit(createDBs, 1))
 			},
 			expectedDBsBefore: []string{"db1", "db2"},
+			expectedIndexBefore: map[string]*types.DBIndex{
+				"db1": nil,
+				"db2": nil,
+			},
 			dbAdminTx: &types.DBAdministrationTx{
 				CreateDbs: []string{"db3", "db4"},
 				DeleteDbs: []string{"db1", "db2"},
@@ -885,7 +894,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				},
 			},
 			expectedDBsAfter: []string{"db3", "db4"},
-			expectedIndex: map[string]*types.DBIndex{
+			expectedIndexAfter: map[string]*types.DBIndex{
 				"db3": {
 					AttributeAndType: map[string]types.Type{
 						"attr1": types.Type_BOOLEAN,
@@ -894,6 +903,8 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				},
 				"db4": nil,
 			},
+			expectedIndexDBsAfter:   []string{"db3"},
+			expectedNoIndexDBsAfter: []string{"db1", "db2", "db4"},
 			valInfo: []*types.ValidationInfo{
 				{
 					Flag: types.Flag_VALID,
@@ -932,15 +943,46 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 								Key:   "db2",
 								Value: indexDB2,
 							},
+							{
+								Key: "db3",
+							},
+							{
+								Key: "db6",
+							},
+							{
+								Key: stateindex.IndexDBPrefix + "db1",
+							},
+							{
+								Key: stateindex.IndexDBPrefix + "db2",
+							},
 						},
 					},
 				}
 
 				require.NoError(t, db.Commit(createDBs, 1))
 			},
-			expectedDBsBefore: []string{"db1", "db2"},
+			expectedDBsBefore:      []string{"db1", "db2", "db3", "db6"},
+			expectedIndexDBsBefore: []string{"db1", "db2"},
+			expectedIndexBefore: map[string]*types.DBIndex{
+				"db1": {
+					AttributeAndType: map[string]types.Type{
+						"attr1-db1": types.Type_NUMBER,
+						"attr2-db1": types.Type_BOOLEAN,
+						"attr3-db1": types.Type_STRING,
+					},
+				},
+				"db2": {
+					AttributeAndType: map[string]types.Type{
+						"attr1-db2": types.Type_NUMBER,
+						"attr2-db2": types.Type_BOOLEAN,
+						"attr3-db2": types.Type_STRING,
+					},
+				},
+				"db3": nil,
+				"db6": nil,
+			},
 			dbAdminTx: &types.DBAdministrationTx{
-				CreateDbs: []string{"db3", "db4"},
+				CreateDbs: []string{"db4", "db5"},
 				DbsIndex: map[string]*types.DBIndex{
 					"db1": {
 						AttributeAndType: map[string]types.Type{
@@ -959,10 +1001,11 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 							"attr1": types.Type_NUMBER,
 						},
 					},
+					"db6": nil,
 				},
 			},
-			expectedDBsAfter: []string{"db1", "db2", "db3", "db4"},
-			expectedIndex: map[string]*types.DBIndex{
+			expectedDBsAfter: []string{"db1", "db2", "db3", "db4", "db5", "db6"},
+			expectedIndexAfter: map[string]*types.DBIndex{
 				"db1": {
 					AttributeAndType: map[string]types.Type{
 						"attr1": types.Type_BOOLEAN,
@@ -980,7 +1023,11 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 						"attr1": types.Type_NUMBER,
 					},
 				},
+				"db5": nil,
+				"db6": nil,
 			},
+			expectedIndexDBsAfter:   []string{"db1", "db3", "db4"},
+			expectedNoIndexDBsAfter: []string{"db2", "db5", "db6"},
 			valInfo: []*types.ValidationInfo{
 				{
 					Flag: types.Flag_VALID,
@@ -1006,11 +1053,15 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				require.NoError(t, db.Commit(createDBs, 1))
 			},
 			expectedDBsBefore: []string{"db1", "db2"},
+			expectedIndexBefore: map[string]*types.DBIndex{
+				"db1": nil,
+				"db2": nil,
+			},
 			dbAdminTx: &types.DBAdministrationTx{
 				DeleteDbs: []string{"db1", "db2"},
 			},
 			expectedDBsAfter: []string{"db1", "db2"},
-			expectedIndex: map[string]*types.DBIndex{
+			expectedIndexAfter: map[string]*types.DBIndex{
 				"db1": nil,
 				"db2": nil,
 			},
@@ -1034,6 +1085,19 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 
 			for _, dbName := range tt.expectedDBsBefore {
 				require.True(t, env.db.Exist(dbName))
+				index, _, err := env.db.GetIndexDefinition(dbName)
+				require.NoError(t, err)
+
+				var expectedIndex []byte
+				if tt.expectedIndexBefore[dbName] != nil {
+					expectedIndex, err = json.Marshal(tt.expectedIndexBefore[dbName].GetAttributeAndType())
+				}
+				require.NoError(t, err)
+				require.Equal(t, expectedIndex, index)
+			}
+
+			for _, dbName := range tt.expectedIndexDBsBefore {
+				require.True(t, env.db.Exist(stateindex.IndexDBPrefix+dbName))
 			}
 
 			block := &types.Block{
@@ -1056,15 +1120,23 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 
 			for _, dbName := range tt.expectedDBsAfter {
 				require.True(t, env.db.Exist(dbName))
-				index, _, err := env.db.Get(worldstate.DatabasesDBName, dbName)
+				index, _, err := env.db.GetIndexDefinition(dbName)
 				require.NoError(t, err)
 
 				var expectedIndex []byte
-				if tt.expectedIndex[dbName] != nil {
-					expectedIndex, err = json.Marshal(tt.expectedIndex[dbName].GetAttributeAndType())
+				if tt.expectedIndexAfter[dbName] != nil {
+					expectedIndex, err = json.Marshal(tt.expectedIndexAfter[dbName].GetAttributeAndType())
 				}
 				require.NoError(t, err)
 				require.Equal(t, expectedIndex, index)
+			}
+
+			for _, dbName := range tt.expectedIndexDBsAfter {
+				require.True(t, env.db.Exist(stateindex.IndexDBPrefix+dbName))
+			}
+
+			for _, dbName := range tt.expectedNoIndexDBsAfter {
+				require.False(t, env.db.Exist(stateindex.IndexDBPrefix+dbName))
 			}
 		})
 	}
