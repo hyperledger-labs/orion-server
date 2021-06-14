@@ -3,13 +3,13 @@
 package blockprocessor
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/certificateauthority"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 type userAdminTxValidator struct {

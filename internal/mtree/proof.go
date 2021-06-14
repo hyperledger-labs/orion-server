@@ -5,8 +5,8 @@ package mtree
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/pkg/errors"
 )
 
 // Proof calculate intermediate hashes between leaf with given index and root (caller node)

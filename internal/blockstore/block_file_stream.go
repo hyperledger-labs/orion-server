@@ -8,12 +8,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/snappy"
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
+	"github.com/pkg/errors"
 )
 
 // ErrUnexpectedEndOfBlockfile error used to indicate an unexpected end of a file segment

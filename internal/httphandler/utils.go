@@ -14,11 +14,11 @@ import (
 
 	internalerror "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 
-	"github.com/gorilla/mux"
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/gorilla/mux"
 )
 
 func MarshalOrPanic(response interface{}) []byte {

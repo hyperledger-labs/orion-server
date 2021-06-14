@@ -6,10 +6,10 @@ import (
 	"crypto/x509"
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 // Querier provides method to query both user and

@@ -6,11 +6,12 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/pkg/errors"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"net/http"
 	"net/url"
+
+	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/pkg/errors"
 )
 
 type Client struct {

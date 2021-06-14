@@ -5,8 +5,8 @@ package mtree
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNode_calcHash(t *testing.T) {

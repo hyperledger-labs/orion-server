@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/certificateauthority"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateConfigTx(t *testing.T) {
@@ -1106,7 +1106,7 @@ func TestValidateMembersNodesMatch(t *testing.T) {
 			nodes:   []*types.NodeConfig{node1, node2},
 			members: []*types.PeerConfig{peer2},
 			expectedResult: &types.ValidationInfo{
-				Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "ClusterConfig.Nodes must be the same length as ClusterConfig.ConsensusConfig.Members, and Nodes set must include all Members",
 			},
 		},

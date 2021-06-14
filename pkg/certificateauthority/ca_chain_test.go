@@ -7,8 +7,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewCACertCollection(t *testing.T) {

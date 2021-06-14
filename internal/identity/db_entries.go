@@ -5,11 +5,11 @@ package identity
 import (
 	"strings"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 var (
