@@ -9,15 +9,15 @@ import (
 	"io"
 	"os"
 
+	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 const (

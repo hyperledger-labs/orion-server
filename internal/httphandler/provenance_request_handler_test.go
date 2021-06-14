@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb/mocks"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
@@ -18,6 +17,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/stretchr/testify/require"
 )
 
 type testCase struct {

@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/IBM-Blockchain/bcdb-server/test/setup"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCluster(t *testing.T) {

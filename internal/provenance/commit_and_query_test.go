@@ -7,9 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/stretchr/testify/require"
 )
 
 type testEnv struct {

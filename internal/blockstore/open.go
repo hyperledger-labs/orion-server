@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 )
 
 var (

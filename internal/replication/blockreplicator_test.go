@@ -7,11 +7,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBlockReplicator_StartClose(t *testing.T) {

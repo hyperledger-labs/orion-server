@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNodeProof(t *testing.T) {

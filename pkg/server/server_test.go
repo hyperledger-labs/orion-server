@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/certificateauthority"
@@ -27,6 +25,8 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/mock"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 var basePort uint32 = 6090

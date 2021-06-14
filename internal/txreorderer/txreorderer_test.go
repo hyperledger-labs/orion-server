@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/stretchr/testify/require"
 )
 
 func newTxReordererForTest(t *testing.T, maxTxCountPerBatch uint32, blockTimeout time.Duration) *TxReorderer {

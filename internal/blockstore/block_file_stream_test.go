@@ -6,9 +6,9 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 func TestBlockFileStream(t *testing.T) {

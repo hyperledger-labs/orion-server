@@ -8,11 +8,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
+	"github.com/pkg/errors"
 )
 
 // Cluster holds bcdb servers present in a blockchainDB cluster

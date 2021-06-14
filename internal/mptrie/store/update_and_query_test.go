@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPutAndPersist(t *testing.T) {
