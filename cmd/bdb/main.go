@@ -8,9 +8,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/spf13/cobra"
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server"
+	"github.com/spf13/cobra"
 )
 
 var (

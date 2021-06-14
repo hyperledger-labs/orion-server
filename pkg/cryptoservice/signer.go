@@ -5,9 +5,9 @@ package cryptoservice
 import (
 	"encoding/json"
 
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/pkg/errors"
 )
 
 func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {

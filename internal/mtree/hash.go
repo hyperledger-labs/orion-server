@@ -5,10 +5,10 @@ package mtree
 import (
 	"encoding/json"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 )
 
 func calculateBlockTxHashes(block *types.Block) ([][]byte, error) {

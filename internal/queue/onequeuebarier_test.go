@@ -7,10 +7,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewOneQueueBarrier(t *testing.T) {

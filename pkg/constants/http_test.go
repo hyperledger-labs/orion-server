@@ -5,8 +5,8 @@ package constants
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestURLConstruction(t *testing.T) {

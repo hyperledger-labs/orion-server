@@ -12,13 +12,13 @@ import (
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/errors"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/snappy"
-	"github.com/stretchr/testify/require"
 	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMain(t *testing.M) {
