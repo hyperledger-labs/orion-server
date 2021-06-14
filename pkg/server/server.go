@@ -124,7 +124,6 @@ func (s *BCDBHTTPServer) serveRequests(l net.Listener) {
 }
 
 // Stop stops the server
-// TODO close or shutdown the HTTP server as well. See https://github.ibm.com/blockchaindb/server/issues/429
 func (s *BCDBHTTPServer) Stop() error {
 	if s == nil || s.listen == nil || s.server == nil {
 		return nil

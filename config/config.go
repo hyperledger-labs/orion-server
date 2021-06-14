@@ -71,8 +71,6 @@ type ServerConf struct {
 	Network NetworkConf
 	// The database configuration of the local node.
 	Database DatabaseConf
-	// The replication layer network, security, and local storage definition.
-	Replication ReplicationConf
 	// The lengths of various queues that buffer between internal components.
 	QueueLength QueueLengthConf
 	// Server logging level.
