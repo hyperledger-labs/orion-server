@@ -26,6 +26,7 @@ type ConsensusListener interface {
 	rafthttp.Raft
 }
 
+// HTTPTransport is bla bla bla bla
 type HTTPTransport struct {
 	localConf *config.LocalConfiguration
 
