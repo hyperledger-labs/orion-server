@@ -9,7 +9,7 @@ COVERAGE_MODE    = atomic
 COVERAGE_PROFILE = $(COVERAGE_DIR)/profile.out
 COVERAGE_XML     = $(COVERAGE_DIR)/coverage.xml
 COVERAGE_HTML    = $(COVERAGE_DIR)/index.html
-BIN = $(CURDIR)/.bin
+BIN = $(CURDIR)/bin
 
 $(BIN):
 	@mkdir -p $@
