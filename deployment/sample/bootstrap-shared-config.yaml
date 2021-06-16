@@ -1,0 +1,81 @@
+# 3node-shared-config-bootstrap.yml
+#
+# This file contains the the initial configuration that will be converted into the ledger's genesis block and
+# loaded into the database when the server starts with an empty ledger and database.
+#
+# This part of the configuration is replicated and is common to all nodes.
+# After the initial bootstrap, this part of the configuration can change only through configuration transactions.
+
+# nodes carry the identity, endpoint, and certificate of each database node that serves to clients.
+# The nodeId correlates the node definition here with the peer definition in the consensus section.
+# The host and port are those that are accessible from clients.
+# The certificate is the one used to authenticate with clients and sign blocks and transaction/query responses.
+nodes:
+  - nodeId: bdb-node-1
+    host: 127.0.0.1
+    port: 6001
+    certificatePath: ./deployment/sample/crypto/server/server.pem
+
+# consensus carries the definitions of the clustered consensus algorithm, members, and parameters.
+consensus:
+  # consensus.algorithm denotes the employed consensus
+  # algorithm. Currently, only raft consensus is supported
+  algorithm: raft
+  # members contains the set of servers that take part in consensus.
+  # The nodeId correlates the peer definition here with the node definition in the nodes section.
+  # The host and port are those that are accessible from other peers.
+  members:
+    - nodeId: bdb-node-1
+      raftId: 1
+      peerHost: 127.0.0.1
+      peerPort: 7050
+
+  # observers contains the set of servers that are allowed to communicate
+  # with consensus.members, and fetch their state.
+  observers: []
+
+  # consensus.raftConfig carries the configuration parameters that are specific to
+  # the etcd/raft library.
+  raftConfig:
+    # tickInterval is the time interval between two Node.Tick invocations.
+    tickInterval: 100ms
+
+    # electionTicks is the number of Node.Tick invocations that must pass
+    # between elections. That is, if a follower does not receive any
+    # message from the leader of current term before ElectionTick has
+    # elapsed, it will become candidate and start an election.
+    # electionTicks must be greater than heartbeatTicks.
+    electionTicks: 50
+
+    # heartbeatTicks is the number of Node.Tick invocations that must
+    # pass between heartbeats. That is, a leader sends heartbeat
+    # messages to maintain its leadership every HeartbeatTick ticks.
+    heartbeatTicks: 5
+
+    # maxInflightBlocks limits the max number of in-flight blocks (i.e. Raft messages).
+    maxInflightBlocks: 50
+
+    # snapshotIntervalSize is the cumulative data size in bytes since last snapshot,
+    # after which a new snapshot is taken.
+    snapshotIntervalSize: 1000000000000
+
+
+# caConfig defines the paths to the x509 certificates of the root and
+# intermediate certificate authorities that issued all the certificates used
+# for client facing communication, including signing transactions and blocks.
+caConfig:
+  # The paths to root certificates. At least one is required. for example:
+  #   rootCACertsPath: ./testdata/rootcaA.cert, ./testdata/rootcaB.cert
+  rootCACertsPath: ./deployment/sample/crypto/CA/CA.pem
+
+  # The paths to intermediate certificates. Optional. For example:
+  #   intermediateCACertsPath: ./testdata/midcaA.cert, ./testdata/midcaB.cert
+  intermediateCACertsPath: []
+
+# admin contains the name and certificate of the initial database administrator.
+admin:
+  # admin.id denotes the id of the cluster admin
+  id: admin
+  # identity.certificatePath denotes the path
+  # to the x509 certificate of the cluster admin
+  certificatePath: ./deployment/sample/crypto/admin/admin.pem

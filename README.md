@@ -1,201 +1,118 @@
-# This is proposed design of Blockchain based Database
+# Blockchain Database
 
-![High level architecture](figures/Architecture.gif)
+Blockchain DB is a **key-value/document database** with certain blockchain properties such as
 
-## Assumptions:
+  - **Tamper Evident**: Data cannot be tampered with, without it going unnoticed. At any point in time, a user can request the database to provide proof for an existance of a transaction or data, and verify the same to ensure data integrity.
+  - **Non-Repudiation**: A user who submitted a transaction to make changes to data cannot deny submitting the transaction later.
+  - **Crypto-based Authentication**: A user that submitted a query or transaction is always authenticated using digital signature.
+  - **Confidentiality and Access Control**: Each data item can have an access control list (ACL) to dictate which users can read from it and which users can write to it. Each user needs to authenticate themselves by providing their digital signature to read or write to data. Depending on the access rule defined for data, sometimes more than one users need to authenticate themselves together to read or write to data.
+  - **Serialization Isolation Level**: It ensures a safe and consistent transaction execution.
+  - **Provenance Queries**: All historical changes to the data are maintained separately in a persisted graph data structure so that a user can execute query on those historical changes to understand the lineage of each data item.
 
-- During PoC we expose a KV store APIs from the blockchain database.
-    - SQL store APIs and Document store APIs will be exposed at post-PoC stage
-- All API access from the client to the blockchain DB is synchronous as most existing databases support synchronous APIs. Further, it is hard to write an application using asynchronous database APIs. Having said that, we can also support asynchronous APIs but not considered in this doc. 
-- We support multy-statements transactions at PoC phase
+Blockchain DB **DOES NOT** have the following two blockchain properties:
 
-## Transaction Flow
+  - **Smart-Contracts**: A set of functions that manage data on the blockchain ledger. Transactions are invocations of one or more smart contract's functions.
+  - **Decentralization of Trust**: A permissioned setup of known but untrusted organizations each operating their own independent database nodes but connected together to form a blockchain network. As one node cannot trust the execution results of another node, ordering transaction must be done with a BFT protocol
+  and all transactions need to be independently executed on all nodes.
 
-The transaction flow in the above-proposed blockchain database consists of the following 8 steps. Not all those steps will be implemented at PoC phase. 
+## High Level Architecture
+Figure 1 presents the high level architecture of Blockchain Database.
+<img src="./docs/figures/high-level-architecture.png" alt="drawing" width="800"/>
 
-![Transaction Flow](figures/TxFlow.gif)
+Blockchain DB stores and manages the following five data elements:
 
-### Transaction creation/execution
+  1. **Users**: Storage of users' credentials such as digital certificate and their privileges. Only these users can access the database.
+  2. **Key-Value Pairs**: Storage of all current/active key-value pairs committed by users of the database.
+  3. **Historical Key-Value Pairs**: Storage of all past/inactive key-value pairs using a graph data structure with additional metadata
+  such as the user who modified the key-value pair, all previous and next values of the key, transactions which have read or written to
+  the key-value pair, etc... It helps to provide a complete data lineage.
+  4. **Authenticated Data Structure**: Storage of Merkle Patricia Tree where leaf node is nothing but a key-value pair. It helps in
+  creating proofs for the existance of a key-value pair.
+  5. **Hash chain of blocks**: Storage of cryptographically linked blocks, where each block holds a set of transactions submitted
+  by the user along with its commit status, summary of state changes in the form of Merkle Patricia's Root hash, etc... It helps in
+  creating a proof for the existance of a block or a transaction.
 
-Transaction creation/execution done in Client SDK and includes following steps
-- Creation Transaction Context during ```db.Begin()``` call 
-- Sending statement(s) from Client to Client SDK
-- Collecting RSets and MVCC data for each ```txCtx.Get()``` call
-- Calculating WSets for each ```txCtx.Put()``` call
-- Composing all this data to transaction
-- Passing result Tx to Sequencer
-- When an Sequencer receives a transaction envelope, it needs to check whether the signer is a member of the blockchain DB. When the envelope is signed by the valid signer, the transaction would be added to a queue. 
+The users of the database can query these five data elements provided that they have the required privileges and
+also can perform transactions to modify active key-value pairs. When a user submits a transaction, user receives a transaction receipt
+from the database after the commit of a block that includes the transaction. The user can then store the receipt locally for performing
+client side verification of proof of existance of a key-value pair or a transaction or a block.
 
-Transaction Isolation algorithm is part of Transaction creation/execution process
-- MVCC version for each key is composed from ledger height (block number) and Tx number, same as Fabric
-- During creation Tx context - ```db.Begin()``` call, ledger height (last known block number) is stored as part of context
-- During each ```txCtx.Get()``` call inside Transaction, RSet version validated again ledger height stored in context
-  - If block number in version is bigger that stored in context, Tx marked as invalid and will fail during call to ```txCtx.Commit()```
-  - We will not fail during after ```txCtx.Get()``` call not to mess with client side logic
-  - In diagram it marked as ```Early Fail Tx (1)```
+For a detailed architecture of the blockchain database, refer to [Detailed Architecture]()
 
-Same check should run during Transaction Serialization stage as well, but for latest known ledger height, before adding transaction to dependency graph
-- In case of MAXIMIZE_PARALLEL_VALIDATION serialization, the check should be executed upon block finalising
-- In diagram it marked as ```Early Fail Tx (2)```
+## Use-Cases
 
-### Early Transaction Serialization
+TODO
 
-- At the block timeout, the leader node would pick the next batch of transactions to be included in the next block. The leader can pick using one the following option provided by the user:
-  1. FIFO_ORDER -- fair to all clients
-  2. REORDER_FOR_CONFLICT_REDUCTION  -- trading fairness for the performance
-  3. MAXIMIZE_PARALLEL_VALIDATION -- trading fairness for the performance
+## Build and Start a Blockchain DB Node
 
-#### FIFO_ORDER
+Refer to [setup](./docs/curl/build.md) for building the needed executables and starting a blockchain database node.
 
-To construct the next block, the leader node would dequeue transactions from the txqueue till either the block size limit is reached, or the txqueue has become empty. In the same dequeued order, the transaction would be added to the block. Here, there is no unfairness to clients.
+## Access the Blockchain DB Through Go-SDK
 
-#### REORDER_FOR_CONFLICT_REDUCTION
+We have an [SDK](github.com/IBM-Blockchain/bcdb-sdk) built using Golang. Using APIs provided
+by this SDK, a user can perform queries and transactions. Refer to the [documentation]() of the SDK
+for samples and to build your first application.
 
-Similar to the FIFO_ORDER, the leader would dequeue transaction from txqueue. However, before putting these transactions into a block, it does reorder them based on the dependency to reduce the validation failures. Towards achieving this, we define a _rw-dependency rule_:
+## Access Blockchain DB Through REST APIs
 
-**_rw-dependency rule_**
-- If Ti writes a version of some state and Tj reads the previous version of that state, then we add a _rw-depdendency_ edge from Tj to Ti to denote that the transaction Ti must be validated and committed only after validating/committing the transaction Tj.
+Currently, we do not have an interactive shell to query the data and perform transaction. For now, we support REST APIs to enable users to
+interact with the node. Every user who issues a `GET` or `POST` request must be authenticated cryptographically through
+digital signature. To add a digital signature on the request payload, we have provided an utility called `signer`. Refer to
+[signer](./docs/curl/build.md#build-and-use-signer-utility) for building the needed executables and executing the same.
 
-For example, let’s take two transactions T1 and T2:
-<pre><code>T1: ReadSet = {A} WriteSet = {B}
-T2: ReadSet = {B} WriteSet = {C}</code></pre>
+Note that the SDK simplifies the developement by hiding much of the detail such as expected data format of the request payload,
+signing the query and transaction, verifying the digital signature of the database node on the response, etc...
+Hence, we recommend users to utilize our [SDK](github.com/IBM-Blockchain/bcdb-sdk). For learning/educational purpose, one can
+use the `signer` along with the `cURL` to perform query and submit transactions.
 
-Assume that both T1 and T2 are present in the txqueue. There is a rw-dependency between T1 and T2 because T1 writes B while T2 reads B. Hence, we would add a rw-dependency edge from T2 to T1. 
-![A Basic rw-dependency](figures/rw-dependency.png)
+### Queries
 
-**Why are we doing so?**
+Let's look at queries that we execute as soon as the BDB server is started. To pretty print the JSON output, we use `jq`.
+The installation steps for `jq` can be found [here](https://stedolan.github.io/jq/download/).
 
-If T1 commits first, the T2 would be aborted due to change in the read version of B. However, if T2 commits first, T1 would not be aborted. Hence, we have added an edge from T2 to T1 to denote that T2 must come first in the block ordering before T1 so that we can reduce the number of aborted transactions.
+For each `GET` request, we need to set two custom headers called `UserID` and `Signature` which will be included in the request while sending
+HTTP to the blockchain DB node.
 
-**Topological Sort**
+As every user who issues a `GET` or `POST` request must be authenticated cryptographically through digital signature, the submitting user must
+compute a signature on the query data or transaction data and set the signature in the `Signature` header. We use the [`signer`](./docs/curl/build.md#build-and-use-signer-utility) utility to
+compute the required digital signature.
 
-Once we have constructed a directed dependency graph for a bunch of transactions which are dequeued from the txqueue, we need to run the topological sort on them to find the ordering of transactions to be included in the block to reduce the conflict rates. However, if the directed dependency graph has a cycle, we cannot run topological sorting. Hence, first, we need to detect all occurrences of cycles and remove transactions to break it. 
+Queries can be used to fetch data stored/managed by the database. For example, we can perform the following:
 
-Let’s look at some examples:
+  1. [Querying the configuration](./docs/curl/query.md#querying-the-cluster-configuration)
+  2. [Querying a user information/credentials/privileges](./docs/curl/query.md#querying-the-user-information)
+  3. [Checking the existance of a database](./docs/curl/query.md#checking-the-database-existance)
+  4. [Querying data]()
+  5. [Querying provenance of data or user]()
+  6. [Querying a block](./docs/curl/query.md#querying-a-block-header)
+  7. [Querying a transaction]()
+  8. [Querying proof of existance of a transaction]
+  9. [Querying proof of existance of data]
 
-_Example 1:_
-<pre><code>T1: ReadSet = {A} WriteSet = {B}
-T2: ReadSet = {B} WriteSet = {A}</code></pre>
+Error cases are discussed in [queries resulting in errors](./docs/curl/errors.md)
 
-As per our rw-dependency rule, we would get a cycle in the dependency graph as shown below.
+### Transactions
 
-![A Basic rw-dependency](figures/cycle.png)
+We support four types of transactions:
 
-When a cycle occurs, it means that only either of the transaction can become valid. Further, we cannot run topology sort when the graph has a cycle. Hence, we need to break the cycle by aborting a transaction. ```Early Fail Tx (3)``` in diagram.
+  1. [Database administration transaction](docs/curl/dbtx.md)
+    - for creating and deleting databases.
+  2. [User administration transaction](docs/curl/usertx.md)
+    - for adding, deleting, updating users' credentials and privileges.
+  3. [Data transaction](docs/curl/datatx.md)
+    - for adding, deleting, updating the blockchain states, i.e., active key-value pairs.
+  4. [Cluser configuration transaction](docs/curl/configtx.md)
+    - for adding, deleting, updating nodes' and admins' configuration.
 
-_Example 2:_
-<pre><code>T1: ReadSet = {B} WriteSet = {C}
-T2: ReadSet = {A} WriteSet = {B}
-T3: ReadSet = {C} WriteSet = {D}</code></pre>
 
-The dependency graph for the above set of transactions is shown below:
+### Proofs
 
-![A Basic rw-dependency](figures/reorder.png)
+TODO
 
-When we add transactions to a block, if we aren't reordering them and instead storing it in the FIFO order, i.e., T1, T2, T3, the transaction T3 would get invalidated by the block processor for sure as the read version of key C would be different from the committed version given that T1 is committed and updated the key C. However, if we run the topology sorting on the dependency graph, we would get T3, T2, and T2 as the order. If we include the transactions in that order in the block, all three transactions would go through (assuming that the committed state is still same as the one read by these transactions). 
+## How to Contribute
 
-#### MAXIMIZE_PARALLEL_VALIDATION
+TODO
 
-In both FIFO_ORDER and REORDER_FOR_CONFLICT_REDUCTION, the block processor still needs to validate transaction serially as there is still a dependency between these transactions. However, if we include only non-dependent transactions within a block, the block processor can validate and commit all transactions in parallel. 
+## Community Mailing List & Rocket Chat
 
-Let's look at an example:
-<pre><code>T1: ReadSet = {B} WriteSet = {C}
-T2: ReadSet = {A} WriteSet = {B}
-T3: ReadSet = {C} WriteSet = {D}
-T4: ReadSet = {E} WriteSet = {G}
-T5: ReadSet = {H} WriteSet = {I}</code></pre>
-
-The dependency graph for all these five transactions are shown below.
-
-![A Basic rw-dependency](figures/parallel.png)
-
-If we decide to either defer T1 or abort T1 early, we can blindly include the rest of the transactions T2, T3, T4, and T5 in any order in the block. The block processor can validate and commit these transactions parallely. 
-
-We can also have a mix of dependent transactions and non-dependent transactions in a block to ensure that we reach the block size limit. As a result, our typical block would look like
-<pre><code>PARALLEL_VALIDATION { 
-  SERIAL_VALIDATION{T1, T2, T3}
-  SERIAL_VALIDATION{T7, T9, T11}
-  T4,
-  T5,
-  T6,
-  T8,
-  T10
-}</code></pre>
-
-As a result, the block processor can validate these rows of transaction parallely. Within a row, if there are many transaction with an identifier SERIAL_VALIDATION, then those transactions have to be validated serially. In other words, the block processor would first validate T1, T7, T4, T5, T6, T8, T10 in parallel. Once T1 is validated, the block processor would validate T2 immediately. Similarly, once T7 is validated, the block processor would validate T9 immediately. The same logic is applicable for T3 and T11. 
-
-While there is fairness in FIFO_ORDER, in REORDER_FOR_CONFLICT_REDUCTION and MAXIMIZE_PARALLEL_VALIDATION, we tradeoff fairness with performance.
-
-**Final remark** - to reduce amount of inter-block conflicts, block transactions RSets re-checked before block creation (before serialization) and block pipelining will be disabled (at least, for PoC), i.e. new block will start to form in leader only after previous block was applied to local database 
-### Consensus and block distribution
-Once a block is created, consensus would be executed across nodes. Once the majority of the nodes agree on the created block (as per the employed consensus algorithm), the block would be added to the block queue. 
-
-**From this point all operations executed sequentially on each network node, not only on Sequencer** 
-
-### Appending the Block to Block Store
-- As the block store is the source of truth, we maintain it in the file system similar to what Fabric v0.6 and v2.0 do. We can copy the block store code from the Fabric v2.0. 
-- Although Sequencer remove transaction conflicts, at least for REORDER_FOR_CONFLICT_REDUCTION and MAXIMIZE_PARALLEL_VALIDATION, so transaction should not fail during validation of RWSets and MVCC, but in byzantine environment we can have malicious leader and we need to store transaction status (OK/FAIL) after performing transaction execution
-  - For FIFO_ORDER, we should do it in CFT as well.
-
-### Transactions scheduling
-- Transaction scheduler tried to block transactions for parallel validation/execution
-  - For MAXIMIZE_PARALLEL_VALIDATION, Transactions already arranged in blocks for parallel execution
-  - For REORDER_FOR_CONFLICT_REDUCTION, _rw_ dependency graph for transaction in block is build and transaction executed based on BFS order
-  - For FIFO_ORDER, because _rw_ dependency graph may contain cycles, much simpler algorithm used
-    - Tx in block passed one by one, checking for access to same data entries
-    - Once suspect to any conflict appear, already accumulated (passed) Tx are sent to Executor and new Tx accumulation is started
- 
-
-### Provenance data creation and data integrity proofs
-At PoC phase, we will store provenance data in KV Store, as rest of the blockchaindb data
-
-Provenance data structure:
-- After Tx validation/execution, Provenance data Tx created from its RWSet. 
-  - This is done to add transaction execution status to provenance data.
-- For each entry in WSet, tuple ```{Key, newValue, BlockTime, BlockNumber, TxTime, TxId, ClientId, IsDelete, IsOk}``` added to database
-  - Key will be combination of ```Key || TxId```
-  - This data should be indexed by ```Key || BlockTime``` and ```Key || TxTime```, to search by ```Key``` and time
-- In addition, we will create reverse index that maps ```TxId``` to ```BlockNumber```  
-  - To easy find block that contains specific transaction
-  
-![Ledger Merkle tree](figures/LedgerMerkleTree.gif)
-
-The data in tuple used to create cryptographic proof:
-- ```TxId``` used to validate that transaction is part of block identified by ```BlockNumber```
-  - We assume that transactions stored in block as Merkle Tree and based on this is is easy to generate cryptographic proof that transaction with current ```TxId``` is part of block
-    - For example, to prove that ```Tx3``` is part of block Merkle tree with root B3.. , we need Tx3, its hash – 15.. and 78.. (hash of sibling transaction),  A2.. (sibling in Merkle tree), F5.. (sibling in Merkle tree).
-- In addition, like QLDB, we will build a continuously updating Merkle tree of ledger blocks     
-  - This tree will be used to generate proof that block is part of ledger
-  - To provide proof that block with Merkle root B3.. is part of ledger, we provide:
-   33.. (previous block hash), C3.. (next block hash), 15.. (sibling in Merkle tree), 76.. (sibling in Merkle tree) – more or less same procedure as proof for Tx in block
-- So, at the end, as proof, we provide Tx hash, siblings in block Merkle tree until root, prev block hash, next block hash, siblings in ledger Merkle tree until root
-  - For all entities with signatures, like Tx, Block, we will provide signatures as well
-
-- If we want to store more that one Merkle tree inside block, for example, to store all state changes in block, it is really simple to provide proofs for leaf in any of Merkle trees
-  - Lets mark root of Tx Merkle tree as TxTreeRoot and root of state changes Merkle tree as StateTreeRoot
-  - We store hash of TxTreeRoot||StateTreeRoot in block header, along/instead of TxTreeRoot and StateTreeRoot. Lets call it as MergedTreeRoot. This way we _merged_ both Merkle trees
-    - This way we can add any numbers of Merkle trees inside block, if we need
-  - To calculate block hash, we use PrevBlockHash||MergedTreeRoot
-  - To provide proof for transaction, we add StateTreeRoot in list of provided hashes before PrevBlockHash, to calculate MergedTreeRoot
-  - To provide proof for state change, we add TxTreeRoot in list of provided hashes before PrevBlockHash, to calculate MergedTreeRoot
-
-[Proof check example](PROOF.md)  
-
-**Final remark** - because we need ledger Merkle tree root for validations, we can return it, along with ledger height, as response to commit
-### Transaction validation/commit
-Basic assumption is no conflicting transactions send to be validated/committed in parallel
-- We revalidate Tx RSet correctness, by reading same values again and checking MVCC values
-- For database that support WSet apply, we just apply WSet
-- For database that not support WSet apply, we just execute Put statements in transaction, one by one 
-
-### Handling responses
-We have multiple network nodes that commit transactions. Some ot the nodes may fail, become byzantine, so how we should handle node responses to transaction
-- Each node that sends response to SDK, should sign this response.
-- SDK collect required number of responses, defined in ```TxOptions``` - per transaction or ```DBOptions``` - for database and only after that pass result of transaction execution to client
-  - For KV Store, only OK/FAIL responses are possible 
-
-We define multiple policies to handle responses
-- MAJORITY - more that 2/3*N nodes responded with same result
-- MIN_BFT - more that 1/3*N + 1 nodes responded with same result
-- MIN - just one node responded
-
+TODO
