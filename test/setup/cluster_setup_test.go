@@ -18,7 +18,7 @@ func TestCluster(t *testing.T) {
 	setupConfig := &setup.Config{
 		NumberOfServers:     3,
 		TestDirAbsolutePath: dir,
-		BDBBinaryPath:       "../../.bin/bdb",
+		BDBBinaryPath:       "../../bin/bdb",
 		CmdTimeout:          10 * time.Second,
 	}
 	c, err := setup.NewCluster(setupConfig)
