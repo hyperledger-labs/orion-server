@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"sync"
@@ -641,9 +642,11 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 					},
 				},
 				RaftConfig: &config.RaftConf{
-					TickInterval:   "100ms",
-					ElectionTicks:  100,
-					HeartbeatTicks: 10,
+					TickInterval:         "100ms",
+					ElectionTicks:        100,
+					HeartbeatTicks:       10,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: math.MaxUint64,
 				},
 			},
 			CAConfig: config.CAConfiguration{

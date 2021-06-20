@@ -60,9 +60,11 @@ var expectedSharedConfig = &SharedConfiguration{
 			},
 		},
 		RaftConfig: &RaftConf{
-			TickInterval:   "100ms",
-			ElectionTicks:  50,
-			HeartbeatTicks: 5,
+			TickInterval:         "100ms",
+			ElectionTicks:        50,
+			HeartbeatTicks:       5,
+			MaxInflightBlocks:    50,
+			SnapshotIntervalSize: 1000000000000,
 		},
 	},
 	CAConfig: CAConfiguration{

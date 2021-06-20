@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"runtime"
@@ -156,6 +157,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 
 	basePortMutex.Lock()
 	nodePort := basePort
+	peerPort := basePort + 10000
 	basePort += 1
 	basePortMutex.Unlock()
 
@@ -182,7 +184,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 					ReorderedTransactionBatch: 1,
 				},
 
-				LogLevel: "info",
+				LogLevel: "debug",
 			},
 			BlockCreation: config.BlockCreationConf{
 				BlockTimeout:                500 * time.Millisecond,
@@ -213,13 +215,15 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 						NodeId:   nodeID,
 						RaftId:   1,
 						PeerHost: "127.0.0.1",
-						PeerPort: nodePort + 1000,
+						PeerPort: peerPort,
 					},
 				},
 				RaftConfig: &config.RaftConf{
-					TickInterval:   "100ms",
-					ElectionTicks:  100,
-					HeartbeatTicks: 10,
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: math.MaxUint64,
 				},
 			},
 		},

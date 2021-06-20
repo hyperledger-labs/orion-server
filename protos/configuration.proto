@@ -99,6 +99,12 @@ message RaftConfig {
   // pass between heartbeats. That is, a leader sends heartbeat
   // messages to maintain its leadership every HeartbeatTick ticks.
   uint32 heartbeat_ticks = 3;
+
+  // Limits the max number of in-flight blocks (i.e. Raft messages).
+  uint32 max_inflight_blocks = 4;
+
+  // Take a snapshot when cumulative data since last snapshot exceeds a certain size in bytes.
+  uint64 snapshot_interval_size = 5;
 }
 
 // Database configuration. Stores default read/write ACLs

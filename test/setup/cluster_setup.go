@@ -372,6 +372,8 @@ func (c *Cluster) createBootstrapFile() error {
 		"    tickInterval: 100ms" + "\n" +
 		"    electionTicks: 50" + "\n" +
 		"    heartbeatTicks: 5" + "\n" +
+		"    maxInflightBlocks: 50" + "\n" +
+		"    snapshotIntervalSize: 1000000000000" + "\n" +
 		"admin:\n" +
 		"  id: admin\n" +
 		"  certificatePath: " + path.Join(c.testDirAbsPath, "users", "admin.pem") + "\n" +

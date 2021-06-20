@@ -77,6 +77,13 @@ consensus:
     # messages to maintain its leadership every HeartbeatTick ticks.
     heartbeatTicks: 5
 
+    # maxInflightBlocks limits the max number of in-flight blocks (i.e. Raft messages).
+    maxInflightBlocks: 50
+
+    # snapshotIntervalSize is the cumulative data size in bytes since last snapshot,
+    # after which a new snapshot is taken.
+    snapshotIntervalSize: 1000000000000
+
 
 # caConfig defines the paths to the x509 certificates of the root and
 # intermediate certificate authorities that issued all the certificates used
