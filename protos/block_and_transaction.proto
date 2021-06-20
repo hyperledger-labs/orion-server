@@ -18,6 +18,8 @@ message Block {
     UserAdministrationTxEnvelope user_administration_tx_envelope = 5;
   }
   repeated ValidationInfo tx_validation_info = 6;
+  // Consensus protocol metadata
+  ConsensusMetadata consensus_metadata = 7;
 }
 
 // BlockHeaderBase holds the block metadata and the chain information
@@ -216,4 +218,13 @@ enum Type {
   NUMBER = 0;
   STRING = 1;
   BOOLEAN = 2;
+}
+
+// ConsensusMetadata holds data specific to the consensus protocol ordering the block.
+// The field prefix indicated the protocil used, e.g. "raft_*".
+message ConsensusMetadata {
+  // The Raft term associated with the block
+  uint64 raft_term = 1;
+  // The Raft index associated with the block
+  uint64 raft_index = 2;
 }
