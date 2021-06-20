@@ -59,6 +59,11 @@ func (env *serverTestEnv) restart(t *testing.T) {
 	err = env.bcdbHTTPServer.Start()
 	require.NoError(t, err)
 
+	isLeaderCond := func () bool {
+		return env.bcdbHTTPServer.IsLeader() == nil
+	}
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
 	port, err := env.bcdbHTTPServer.Port()
 	require.NoError(t, err)
 	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
@@ -191,6 +196,12 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 				MaxBlockSize:                1,
 				MaxTransactionCountPerBlock: 1,
 			},
+			Replication: config.ReplicationConf{
+				WALDir:  path.Join(tempDir, "raft", "wal"),
+				SnapDir: path.Join(tempDir, "raft", "snap"),
+				Network: config.NetworkConf{Address: "127.0.0.1", Port: peerPort},
+				TLS:     config.TLSConf{Enabled: false},
+			},
 		},
 		SharedConfig: &config.SharedConfiguration{
 			Nodes: []config.NodeConf{
@@ -233,6 +244,12 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 
 	err = server.Start()
 	require.NoError(t, err)
+
+	isLeaderCond := func () bool {
+		return server.IsLeader() == nil
+	}
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
 	env := &serverTestEnv{
 		serverConfig:   serverConfig,
 		bcdbHTTPServer: server,

@@ -3,9 +3,10 @@
 package mocks
 
 import (
-	time "time"
-
+	errors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	mock "github.com/stretchr/testify/mock"
+
+	time "time"
 
 	types "github.com/IBM-Blockchain/bcdb-server/pkg/types"
 
@@ -611,6 +612,22 @@ func (_m *DB) IsDBExists(name string) bool {
 		r0 = rf(name)
 	} else {
 		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// IsLeader provides a mock function with given fields:
+func (_m *DB) IsLeader() *errors.NotLeaderError {
+	ret := _m.Called()
+
+	var r0 *errors.NotLeaderError
+	if rf, ok := ret.Get(0).(func() *errors.NotLeaderError); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*errors.NotLeaderError)
+		}
 	}
 
 	return r0

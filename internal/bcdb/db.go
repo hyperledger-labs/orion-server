@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"io/ioutil"
 	"time"
 
@@ -32,6 +33,9 @@ type DB interface {
 
 	// Height returns ledger height
 	Height() (uint64, error)
+
+	// IsLeader returns whether the this server is the leader
+	IsLeader() *ierrors.NotLeaderError
 
 	// DoesUserExist checks whenever user with given userID exists
 	DoesUserExist(userID string) (bool, error)
@@ -258,6 +262,11 @@ func (d *db) LedgerHeight() (uint64, error) {
 // Height returns ledger height
 func (d *db) Height() (uint64, error) {
 	return d.worldstateQueryProcessor.db.Height()
+}
+
+// IsLeader returns whether the current node is a leader
+func (d *db) IsLeader() *ierrors.NotLeaderError {
+	return d.txProcessor.IsLeader()
 }
 
 // DoesUserExist checks whenever userID exists

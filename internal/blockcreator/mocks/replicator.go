@@ -5,13 +5,14 @@ import (
 	"sync"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockcreator"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 type Replicator struct {
-	SubmitStub        func(interface{}) error
+	SubmitStub        func(*types.Block) error
 	submitMutex       sync.RWMutex
 	submitArgsForCall []struct {
-		arg1 interface{}
+		arg1 *types.Block
 	}
 	submitReturns struct {
 		result1 error
@@ -23,11 +24,11 @@ type Replicator struct {
 	invocationsMutex sync.RWMutex
 }
 
-func (fake *Replicator) Submit(arg1 interface{}) error {
+func (fake *Replicator) Submit(arg1 *types.Block) error {
 	fake.submitMutex.Lock()
 	ret, specificReturn := fake.submitReturnsOnCall[len(fake.submitArgsForCall)]
 	fake.submitArgsForCall = append(fake.submitArgsForCall, struct {
-		arg1 interface{}
+		arg1 *types.Block
 	}{arg1})
 	fake.recordInvocation("Submit", []interface{}{arg1})
 	fake.submitMutex.Unlock()
@@ -47,13 +48,13 @@ func (fake *Replicator) SubmitCallCount() int {
 	return len(fake.submitArgsForCall)
 }
 
-func (fake *Replicator) SubmitCalls(stub func(interface{}) error) {
+func (fake *Replicator) SubmitCalls(stub func(*types.Block) error) {
 	fake.submitMutex.Lock()
 	defer fake.submitMutex.Unlock()
 	fake.SubmitStub = stub
 }
 
-func (fake *Replicator) SubmitArgsForCall(i int) interface{} {
+func (fake *Replicator) SubmitArgsForCall(i int) *types.Block {
 	fake.submitMutex.RLock()
 	defer fake.submitMutex.RUnlock()
 	argsForCall := fake.submitArgsForCall[i]

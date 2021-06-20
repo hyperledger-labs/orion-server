@@ -107,3 +107,11 @@ func getZapLogLevel(level string) (zapcore.Level, error) {
 
 	return logLevel, nil
 }
+
+func (l *SugarLogger) Warning(v ...interface{}) {
+	l.Warn(v...)
+}
+
+func (l *SugarLogger) Warningf(format string, v ...interface{}) {
+	l.Warnf(format, v...)
+}

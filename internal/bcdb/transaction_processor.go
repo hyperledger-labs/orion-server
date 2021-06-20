@@ -133,15 +133,20 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		return nil, err
 	}
 
-	p.blockReplicator = replication.NewBlockReplicator(
+	p.blockReplicator, err = replication.NewBlockReplicator(
 		&replication.Config{
 			LocalConf:            localConfig,
 			ClusterConfig:        clusterConfig,
+			LedgerReader:         conf.blockStore,
 			Transport:            p.peerTransport,
 			BlockOneQueueBarrier: p.blockOneQueueBarrier,
 			Logger:               conf.logger,
 		},
 	)
+	if err != nil {
+		return nil, err
+	}
+
 	if err = p.peerTransport.SetConsensusListener(p.blockReplicator); err != nil {
 		return nil, err
 	}
@@ -292,9 +297,17 @@ func (t *transactionProcessor) close() error {
 	t.txReorderer.Stop()
 	t.blockCreator.Stop()
 	t.blockReplicator.Close()
+	t.peerTransport.Close()
 	t.blockProcessor.Stop()
 
 	return nil
+}
+
+func (t *transactionProcessor) IsLeader() *internalerror.NotLeaderError {
+	t.Lock()
+	defer t.Unlock()
+
+	return t.blockReplicator.IsLeader()
 }
 
 type pendingTxs struct {
