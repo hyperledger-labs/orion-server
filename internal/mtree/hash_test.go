@@ -53,11 +53,11 @@ func Test_calculateTxHash(t *testing.T) {
 			name: "Data tx",
 			tx: &types.DataTxEnvelope{
 				Payload: &types.DataTx{
-					MustSignUserIDs: []string{"testUser"},
-					TxID:            "DataTx1",
-					DBOperations: []*types.DBOperation{
+					MustSignUserIds: []string{"testUser"},
+					TxId:            "DataTx1",
+					DbOperations: []*types.DBOperation{
 						{
-							DBName:      "testDB",
+							DbName:      "testDB",
 							DataReads:   nil,
 							DataWrites:  nil,
 							DataDeletes: nil,
@@ -77,12 +77,12 @@ func Test_calculateTxHash(t *testing.T) {
 			name: "Data tx, no validation info",
 			tx: &types.DataTxEnvelope{
 				Payload: &types.DataTx{
-					MustSignUserIDs: []string{"testUser"},
-					TxID:            "DataTx1",
-					DBOperations: []*types.DBOperation{
+					MustSignUserIds: []string{"testUser"},
+					TxId:            "DataTx1",
+					DbOperations: []*types.DBOperation{
 						{
 
-							DBName:      "testDB",
+							DbName:      "testDB",
 							DataReads:   nil,
 							DataWrites:  nil,
 							DataDeletes: nil,

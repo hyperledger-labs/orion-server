@@ -135,13 +135,13 @@ func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Du
 	var txID string
 	switch tx.(type) {
 	case *types.DataTxEnvelope:
-		txID = tx.(*types.DataTxEnvelope).Payload.TxID
+		txID = tx.(*types.DataTxEnvelope).Payload.TxId
 	case *types.UserAdministrationTxEnvelope:
-		txID = tx.(*types.UserAdministrationTxEnvelope).Payload.TxID
+		txID = tx.(*types.UserAdministrationTxEnvelope).Payload.TxId
 	case *types.DBAdministrationTxEnvelope:
-		txID = tx.(*types.DBAdministrationTxEnvelope).Payload.TxID
+		txID = tx.(*types.DBAdministrationTxEnvelope).Payload.TxId
 	case *types.ConfigTxEnvelope:
-		txID = tx.(*types.ConfigTxEnvelope).Payload.TxID
+		txID = tx.(*types.ConfigTxEnvelope).Payload.TxId
 	default:
 		return nil, errors.Errorf("unexpected transaction type")
 	}
@@ -204,20 +204,20 @@ func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) err
 	case *types.Block_DataTxEnvelopes:
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
 		for _, tx := range dataTxEnvs {
-			txIDs = append(txIDs, tx.Payload.TxID)
+			txIDs = append(txIDs, tx.Payload.TxId)
 		}
 
 	case *types.Block_UserAdministrationTxEnvelope:
 		userTxEnv := block.GetUserAdministrationTxEnvelope()
-		txIDs = append(txIDs, userTxEnv.Payload.TxID)
+		txIDs = append(txIDs, userTxEnv.Payload.TxId)
 
-	case *types.Block_DBAdministrationTxEnvelope:
-		dbTxEnv := block.GetDBAdministrationTxEnvelope()
-		txIDs = append(txIDs, dbTxEnv.Payload.TxID)
+	case *types.Block_DbAdministrationTxEnvelope:
+		dbTxEnv := block.GetDbAdministrationTxEnvelope()
+		txIDs = append(txIDs, dbTxEnv.Payload.TxId)
 
 	case *types.Block_ConfigTxEnvelope:
 		configTxEnv := block.GetConfigTxEnvelope()
-		txIDs = append(txIDs, configTxEnv.Payload.TxID)
+		txIDs = append(txIDs, configTxEnv.Payload.TxId)
 
 	default:
 		return errors.Errorf("unexpected transaction envelope in the block")

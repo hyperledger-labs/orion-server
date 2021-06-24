@@ -75,28 +75,28 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 	switch queryType {
 	case constants.GetData:
 		payload = &types.GetDataQuery{
-			UserID: querierUserID,
-			DBName: params["dbname"],
+			UserId: querierUserID,
+			DbName: params["dbname"],
 			Key:    params["key"],
 		}
 	case constants.GetUser:
 		payload = &types.GetUserQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userid"],
+			UserId:       querierUserID,
+			TargetUserId: params["userid"],
 		}
 	case constants.GetDBStatus:
 		payload = &types.GetDBStatusQuery{
-			UserID: querierUserID,
-			DBName: params["dbname"],
+			UserId: querierUserID,
+			DbName: params["dbname"],
 		}
 	case constants.GetConfig:
 		payload = &types.GetConfigQuery{
-			UserID: querierUserID,
+			UserId: querierUserID,
 		}
 	case constants.GetNodeConfig:
 		payload = &types.GetNodeConfigQuery{
-			UserID: querierUserID,
-			NodeID: params["nodeId"],
+			UserId: querierUserID,
+			NodeId: params["nodeId"],
 		}
 	case constants.GetBlockHeader:
 		blockNum, err := getUintParam("blockId", params)
@@ -106,7 +106,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 
 		payload = &types.GetBlockQuery{
-			UserID:      querierUserID,
+			UserId:      querierUserID,
 			BlockNumber: blockNum,
 		}
 	case constants.GetPath:
@@ -117,7 +117,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 
 		payload = &types.GetLedgerPathQuery{
-			UserID:           querierUserID,
+			UserId:           querierUserID,
 			StartBlockNumber: startBlockNum,
 			EndBlockNumber:   endBlockNum,
 		}
@@ -129,14 +129,14 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 
 		payload = &types.GetTxProofQuery{
-			UserID:      querierUserID,
+			UserId:      querierUserID,
 			BlockNumber: blockNum,
 			TxIndex:     txIndex,
 		}
 	case constants.GetTxReceipt:
 		payload = &types.GetTxReceiptQuery{
-			UserID: querierUserID,
-			TxID:   params["txId"],
+			UserId: querierUserID,
+			TxId:   params["txId"],
 		}
 	case constants.GetHistoricalData:
 		version, err := getVersion(params)
@@ -156,8 +156,8 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		_, isMostRecentSet := params["mostrecent"]
 
 		payload = &types.GetHistoricalDataQuery{
-			UserID:      querierUserID,
-			DBName:      params["dbname"],
+			UserId:      querierUserID,
+			DbName:      params["dbname"],
 			Key:         params["key"],
 			Version:     version,
 			Direction:   params["direction"],
@@ -166,35 +166,35 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 	case constants.GetDataReaders:
 		payload = &types.GetDataReadersQuery{
-			UserID: querierUserID,
-			DBName: params["dbname"],
+			UserId: querierUserID,
+			DbName: params["dbname"],
 			Key:    params["key"],
 		}
 	case constants.GetDataWriters:
 		payload = &types.GetDataWritersQuery{
-			UserID: querierUserID,
-			DBName: params["dbname"],
+			UserId: querierUserID,
+			DbName: params["dbname"],
 			Key:    params["key"],
 		}
 	case constants.GetDataReadBy:
 		payload = &types.GetDataReadByQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userId"],
+			UserId:       querierUserID,
+			TargetUserId: params["userId"],
 		}
 	case constants.GetDataWrittenBy:
 		payload = &types.GetDataWrittenByQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userId"],
+			UserId:       querierUserID,
+			TargetUserId: params["userId"],
 		}
 	case constants.GetDataDeletedBy:
 		payload = &types.GetDataDeletedByQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userId"],
+			UserId:       querierUserID,
+			TargetUserId: params["userId"],
 		}
 	case constants.GetTxIDsSubmittedBy:
 		payload = &types.GetTxIDsSubmittedByQuery{
-			UserID:       querierUserID,
-			TargetUserID: params["userId"],
+			UserId:       querierUserID,
+			TargetUserId: params["userId"],
 		}
 	case constants.GetMostRecentUserOrNode:
 		version, err := getVersion(params)
@@ -212,8 +212,8 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 
 		payload = &types.GetMostRecentUserOrNodeQuery{
 			Type:    queryType,
-			UserID:  querierUserID,
-			ID:      params["id"],
+			UserId:  querierUserID,
+			Id:      params["id"],
 			Version: version,
 		}
 	}

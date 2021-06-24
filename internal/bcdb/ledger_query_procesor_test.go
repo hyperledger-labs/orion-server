@@ -137,19 +137,19 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 		Payload: &types.Block_ConfigTxEnvelope{
 			ConfigTxEnvelope: &types.ConfigTxEnvelope{
 				Payload: &types.ConfigTx{
-					UserID:               "adminUser",
+					UserId:               "adminUser",
 					ReadOldConfigVersion: nil,
 					NewConfig: &types.ClusterConfig{
 						Nodes: []*types.NodeConfig{
 							{
-								ID:          "node1",
+								Id:          "node1",
 								Address:     "127.0.0.1",
 								Certificate: instCert,
 							},
 						},
 						Admins: []*types.Admin{
 							{
-								ID:          "admin1",
+								Id:          "admin1",
 								Certificate: adminCert,
 							},
 						},
@@ -167,9 +167,9 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 	env.blockTx = []*types.DataTxEnvelopes{{}}
 
 	user := &types.User{
-		ID: "testUser",
+		Id: "testUser",
 		Privilege: &types.Privilege{
-			DBPermission: map[string]types.Privilege_Access{
+			DbPermission: map[string]types.Privilege_Access{
 				worldstate.DefaultDBName: types.Privilege_ReadWrite,
 			},
 		},
@@ -228,11 +228,11 @@ func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.
 	for i := 0; i < len(key); i++ {
 		e := &types.DataTxEnvelope{
 			Payload: &types.DataTx{
-				MustSignUserIDs: []string{"testUser"},
-				TxID:            fmt.Sprintf("Tx%d%s", blockNumber, key[i]),
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{"testUser"},
+				TxId:            fmt.Sprintf("Tx%d%s", blockNumber, key[i]),
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key:   key[i],
@@ -285,13 +285,13 @@ func createProvenanceDataFromBlock(block *types.Block, dirtyWriteKeyVersion map[
 }
 
 func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Version, dirtyWriteKeyVersion map[string]*types.Version) []*provenance.TxDataForProvenance {
-	txpData := make([]*provenance.TxDataForProvenance, len(tx.DBOperations))
+	txpData := make([]*provenance.TxDataForProvenance, len(tx.DbOperations))
 
-	for i, ops := range tx.DBOperations {
+	for i, ops := range tx.DbOperations {
 		txpData[i] = &provenance.TxDataForProvenance{
-			DBName:             ops.DBName,
-			UserID:             tx.MustSignUserIDs[0],
-			TxID:               tx.TxID,
+			DBName:             ops.DbName,
+			UserID:             tx.MustSignUserIds[0],
+			TxID:               tx.TxId,
 			OldVersionOfWrites: make(map[string]*types.Version),
 		}
 
@@ -309,7 +309,7 @@ func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Versio
 				Value: write.Value,
 				Metadata: &types.Metadata{
 					Version:       version,
-					AccessControl: write.ACL,
+					AccessControl: write.Acl,
 				},
 			}
 			txpData[i].Writes = append(txpData[i].Writes, kv)

@@ -86,7 +86,7 @@ func testQueryOnServer(t *testing.T, c *setup.Cluster) {
 		require.NoError(t, err)
 
 		query := &types.GetConfigQuery{
-			UserID: s.AdminID(),
+			UserId: s.AdminID(),
 		}
 		response, err := client.GetConfig(
 			&types.GetConfigQueryEnvelope{
@@ -104,7 +104,7 @@ func testConnectionRefused(t *testing.T, s *setup.Server) {
 	require.NoError(t, err)
 	_, err = client.GetDBStatus(&types.GetDBStatusQueryEnvelope{
 		Payload: &types.GetDBStatusQuery{
-			DBName: "abc",
+			DbName: "abc",
 		},
 	})
 	require.Contains(t, err.Error(), "connection refused")

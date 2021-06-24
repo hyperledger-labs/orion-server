@@ -31,8 +31,8 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
 
 	sigFoo := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataQuery{
-		UserID: submittingUserName,
-		DBName: dbName,
+		UserId: submittingUserName,
+		DbName: dbName,
 		Key:    "foo",
 	})
 
@@ -49,7 +49,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 			expectedResponse: &types.GetDataResponseEnvelope{
 				Response: &types.GetDataResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					Value: []byte("bar"),
 					Metadata: &types.Metadata{
@@ -153,8 +153,8 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sigFooBob := testutils.SignatureFromQuery(t, bobSigner, &types.GetDataQuery{
-					UserID: submittingUserName,
-					DBName: dbName,
+					UserId: submittingUserName,
+					DbName: dbName,
 					Key:    "foo",
 				})
 
@@ -249,11 +249,11 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 	_, charlieSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "charlie")
 
 	dataTx := &types.DataTx{
-		MustSignUserIDs: []string{alice, bob},
-		TxID:            "1",
-		DBOperations: []*types.DBOperation{
+		MustSignUserIds: []string{alice, bob},
+		TxId:            "1",
+		DbOperations: []*types.DBOperation{
 			{
-				DBName: "testDB",
+				DbName: "testDB",
 				DataDeletes: []*types.DataDelete{
 					{
 						Key: "foo",
@@ -272,7 +272,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					{
 						Key:   "xxx",
 						Value: []byte("yyy"),
-						ACL:   &types.AccessControl{},
+						Acl:   &types.AccessControl{},
 					},
 				},
 			},
@@ -420,7 +420,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DataTxEnvelope {
 				tx := &types.DataTx{}
 				*tx = *dataTx
-				tx.MustSignUserIDs = nil
+				tx.MustSignUserIds = nil
 				return &types.DataTxEnvelope{
 					Payload: tx,
 					Signatures: map[string][]byte{
@@ -443,7 +443,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DataTxEnvelope {
 				tx := &types.DataTx{}
 				*tx = *dataTx
-				tx.MustSignUserIDs = []string{"charlie", "bob", "alice"}
+				tx.MustSignUserIds = []string{"charlie", "bob", "alice"}
 				return &types.DataTxEnvelope{
 					Payload: tx,
 					Signatures: map[string][]byte{
@@ -466,7 +466,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DataTxEnvelope {
 				tx := &types.DataTx{}
 				*tx = *dataTx
-				tx.MustSignUserIDs = []string{""}
+				tx.MustSignUserIds = []string{""}
 				return &types.DataTxEnvelope{
 					Payload: tx,
 					Signatures: map[string][]byte{
@@ -543,7 +543,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DataTxEnvelope {
 				tx := &types.DataTx{}
 				*tx = *dataTx
-				tx.MustSignUserIDs[0] = "not-alice"
+				tx.MustSignUserIds[0] = "not-alice"
 				return &types.DataTxEnvelope{
 					Payload: tx,
 					Signatures: map[string][]byte{
@@ -569,7 +569,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DataTxEnvelope {
 				tx := &types.DataTx{}
 				*tx = *dataTx
-				tx.MustSignUserIDs[0] = alice
+				tx.MustSignUserIds[0] = alice
 				return &types.DataTxEnvelope{
 					Payload: dataTx,
 					Signatures: map[string][]byte{

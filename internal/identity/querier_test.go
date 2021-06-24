@@ -110,7 +110,7 @@ func TestQuerier(t *testing.T) {
 				DBName: worldstate.UsersDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key:      string(UserNamespace) + u.ID,
+						Key:      string(UserNamespace) + u.Id,
 						Value:    user,
 						Metadata: sampleMetadata,
 					},
@@ -133,10 +133,10 @@ func TestQuerier(t *testing.T) {
 		{
 			name: "less privilege",
 			user: &types.User{
-				ID:          "userWithLessPrivilege",
+				Id:          "userWithLessPrivilege",
 				Certificate: certRaw,
 				Privilege: &types.Privilege{
-					DBPermission: map[string]types.Privilege_Access{
+					DbPermission: map[string]types.Privilege_Access{
 						"db1": types.Privilege_Read,
 						"db2": types.Privilege_Read,
 						"db3": types.Privilege_ReadWrite,
@@ -154,7 +154,7 @@ func TestQuerier(t *testing.T) {
 		{
 			name: "more privilege",
 			user: &types.User{
-				ID:          "userWithMorePrivilege",
+				Id:          "userWithMorePrivilege",
 				Certificate: certRaw,
 				Privilege: &types.Privilege{
 					Admin: true,
@@ -169,7 +169,7 @@ func TestQuerier(t *testing.T) {
 		{
 			name: "no privilege",
 			user: &types.User{
-				ID:          "no Privilege",
+				Id:          "no Privilege",
 				Certificate: certRaw,
 				Privilege:   nil,
 			},
@@ -279,10 +279,10 @@ func TestQuerier(t *testing.T) {
 		defer env.cleanup()
 
 		user := &types.User{
-			ID:          "userWithBadCertificate",
+			Id:          "userWithBadCertificate",
 			Certificate: []byte("A bad certificate"),
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					"db1": types.Privilege_Read,
 				},
 				Admin: false,
@@ -290,7 +290,7 @@ func TestQuerier(t *testing.T) {
 		}
 		setup(env.db, user)
 
-		cert, err := env.q.GetCertificate(user.ID)
+		cert, err := env.q.GetCertificate(user.Id)
 		require.Contains(t, err.Error(), "asn1: structure error: tags don't match")
 		require.Nil(t, cert)
 	})

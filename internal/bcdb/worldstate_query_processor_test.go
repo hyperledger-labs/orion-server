@@ -124,9 +124,9 @@ func TestGetData(t *testing.T) {
 
 	setup := func(db worldstate.DB, userID, dbName string) {
 		user := &types.User{
-			ID: userID,
+			Id: userID,
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					dbName: types.Privilege_ReadWrite,
 				},
 			},
@@ -336,15 +336,15 @@ func TestGetUser(t *testing.T) {
 
 	t.Run("query existing user", func(t *testing.T) {
 		querierUser := &types.User{
-			ID: "querierUser",
+			Id: "querierUser",
 		}
 		querierUserSerialized, err := proto.Marshal(querierUser)
 		require.NoError(t, err)
 
 		targetUser := &types.User{
-			ID: "targetUser",
+			Id: "targetUser",
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					"db1": types.Privilege_ReadWrite,
 				},
 				Admin: true,
@@ -523,15 +523,15 @@ func TestGetUser(t *testing.T) {
 		t.Parallel()
 
 		querierUser := &types.User{
-			ID: "querierUser",
+			Id: "querierUser",
 		}
 		querierUserSerialized, err := proto.Marshal(querierUser)
 		require.NoError(t, err)
 
 		targetUser := &types.User{
-			ID: "targetUser",
+			Id: "targetUser",
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					"db1": types.Privilege_ReadWrite,
 				},
 				Admin: true,
@@ -615,13 +615,13 @@ func TestGetConfig(t *testing.T) {
 		clusterConfig := &types.ClusterConfig{
 			Nodes: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        1234,
 					Certificate: []byte("cert"),
 				},
 				{
-					ID:          "node2",
+					Id:          "node2",
 					Address:     "127.0.0.1",
 					Port:        2345,
 					Certificate: []byte("cert"),
@@ -629,7 +629,7 @@ func TestGetConfig(t *testing.T) {
 			},
 			Admins: []*types.Admin{
 				{
-					ID:          "admin",
+					Id:          "admin",
 					Certificate: []byte("cert"),
 				},
 			},
@@ -719,13 +719,13 @@ func TestGetConfig(t *testing.T) {
 		clusterConfig := &types.ClusterConfig{
 			Nodes: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        1234,
 					Certificate: []byte("cert"),
 				},
 				{
-					ID:          "node2",
+					Id:          "node2",
 					Address:     "127.0.0.1",
 					Port:        2345,
 					Certificate: []byte("cert"),
@@ -733,7 +733,7 @@ func TestGetConfig(t *testing.T) {
 			},
 			Admins: []*types.Admin{
 				{
-					ID:          "admin",
+					Id:          "admin",
 					Certificate: []byte("cert"),
 				},
 			},

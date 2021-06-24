@@ -38,10 +38,10 @@ func newTxReordererForTest(t *testing.T, maxTxCountPerBatch uint32, blockTimeout
 func TestTxReorderer(t *testing.T) {
 	dataTx1 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
-			MustSignUserIDs: []string{"user1"},
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"user1"},
+			DbOperations: []*types.DBOperation{
 				{
-					DBName: "db1",
+					DbName: "db1",
 					DataReads: []*types.DataRead{
 						{
 							Key: "key1",
@@ -64,10 +64,10 @@ func TestTxReorderer(t *testing.T) {
 
 	dataTx2 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
-			MustSignUserIDs: []string{"user1"},
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"user1"},
+			DbOperations: []*types.DBOperation{
 				{
-					DBName: "db1",
+					DbName: "db1",
 					DataDeletes: []*types.DataDelete{
 						{
 							Key: "key1",
@@ -80,10 +80,10 @@ func TestTxReorderer(t *testing.T) {
 
 	dataTx3 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
-			MustSignUserIDs: []string{"user2"},
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"user2"},
+			DbOperations: []*types.DBOperation{
 				{
-					DBName: "db2",
+					DbName: "db2",
 					DataDeletes: []*types.DataDelete{
 						{
 							Key: "key2",
@@ -96,10 +96,10 @@ func TestTxReorderer(t *testing.T) {
 
 	dataTx4 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
-			MustSignUserIDs: []string{"user2"},
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"user2"},
+			DbOperations: []*types.DBOperation{
 				{
-					DBName: "db2",
+					DbName: "db2",
 					DataDeletes: []*types.DataDelete{
 						{
 							Key: "key3",
@@ -112,10 +112,10 @@ func TestTxReorderer(t *testing.T) {
 
 	dataTx5 := &types.DataTxEnvelope{
 		Payload: &types.DataTx{
-			MustSignUserIDs: []string{"user2"},
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"user2"},
+			DbOperations: []*types.DBOperation{
 				{
-					DBName: "db2",
+					DbName: "db2",
 					DataDeletes: []*types.DataDelete{
 						{
 							Key: "key4",
@@ -128,16 +128,16 @@ func TestTxReorderer(t *testing.T) {
 
 	userAdminTx := &types.UserAdministrationTxEnvelope{
 		Payload: &types.UserAdministrationTx{
-			UserID: "user1",
+			UserId: "user1",
 			UserReads: []*types.UserRead{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 			},
 			UserWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID:          "user2",
+						Id:          "user2",
 						Certificate: []byte("certificate"),
 					},
 				},
@@ -147,24 +147,24 @@ func TestTxReorderer(t *testing.T) {
 
 	dbAdminTx := &types.DBAdministrationTxEnvelope{
 		Payload: &types.DBAdministrationTx{
-			UserID:    "user1",
-			CreateDBs: []string{"db1", "db2"},
-			DeleteDBs: []string{"db3", "db4"},
+			UserId:    "user1",
+			CreateDbs: []string{"db1", "db2"},
+			DeleteDbs: []string{"db3", "db4"},
 		},
 	}
 
 	configTx := &types.ConfigTxEnvelope{
 		Payload: &types.ConfigTx{
-			UserID: "user1",
+			UserId: "user1",
 			NewConfig: &types.ClusterConfig{
 				Nodes: []*types.NodeConfig{
 					{
-						ID: "node1",
+						Id: "node1",
 					},
 				},
 				Admins: []*types.Admin{
 					{
-						ID: "admin1",
+						Id: "admin1",
 					},
 				},
 				CertAuthConfig: &types.CAConfig{
@@ -213,8 +213,8 @@ func TestTxReorderer(t *testing.T) {
 						},
 					},
 				},
-				&types.Block_DBAdministrationTxEnvelope{
-					DBAdministrationTxEnvelope: dbAdminTx,
+				&types.Block_DbAdministrationTxEnvelope{
+					DbAdministrationTxEnvelope: dbAdminTx,
 				},
 				&types.Block_DataTxEnvelopes{
 					DataTxEnvelopes: &types.DataTxEnvelopes{

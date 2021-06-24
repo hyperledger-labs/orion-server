@@ -29,7 +29,7 @@ func TestSendHTTPResponse(t *testing.T) {
 		dbStatus := &types.GetDBStatusResponseEnvelope{
 			Response: &types.GetDBStatusResponse{
 				Header: &types.ResponseHeader{
-					NodeID: "testID",
+					NodeId: "testID",
 				},
 				Exist: false,
 			},
@@ -74,7 +74,7 @@ func TestVerifyRequestSignature(t *testing.T) {
 		db := &mocks.DB{}
 		verifier := cryptoservice.NewVerifier(db, lg)
 		db.On("GetCertificate", "alice").Return(aliceCert, nil)
-		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
+		payload := &types.UserAdministrationTx{UserId: "alice", TxId: "xxx"}
 		err, code := VerifyRequestSignature(verifier, "alice", testutils.SignatureFromTx(t, aliceSigner, payload), payload)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, code)
@@ -84,7 +84,7 @@ func TestVerifyRequestSignature(t *testing.T) {
 		db := &mocks.DB{}
 		verifier := cryptoservice.NewVerifier(db, lg)
 		db.On("GetCertificate", "alice").Return(nil, errors.New("no such user"))
-		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
+		payload := &types.UserAdministrationTx{UserId: "alice", TxId: "xxx"}
 		err, code := VerifyRequestSignature(verifier, "alice", testutils.SignatureFromTx(t, aliceSigner, payload), payload)
 		require.EqualError(t, err, "signature verification failed")
 		require.Equal(t, http.StatusUnauthorized, code)
@@ -94,7 +94,7 @@ func TestVerifyRequestSignature(t *testing.T) {
 		db := &mocks.DB{}
 		verifier := cryptoservice.NewVerifier(db, lg)
 		db.On("GetCertificate", "alice").Return(aliceCert, nil)
-		payload := &types.UserAdministrationTx{UserID: "alice", TxID: "xxx"}
+		payload := &types.UserAdministrationTx{UserId: "alice", TxId: "xxx"}
 		err, code := VerifyRequestSignature(verifier, "alice", []byte("bad-sig"), payload)
 		require.EqualError(t, err, "signature verification failed")
 		require.Equal(t, http.StatusUnauthorized, code)
@@ -116,7 +116,7 @@ func init() {
 	correctTxRespEnv = &types.TxReceiptResponseEnvelope{
 		Response: &types.TxReceiptResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "node1",
+				NodeId: "node1",
 			},
 			Receipt: &types.TxReceipt{
 				Header: &types.BlockHeader{

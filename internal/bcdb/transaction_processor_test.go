@@ -214,10 +214,10 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 	require.True(t, env.txProcessor.pendingTxs.isEmpty())
 
 	user := &types.User{
-		ID:          env.userID,
+		Id:          env.userID,
 		Certificate: env.userCert.Raw,
 		Privilege: &types.Privilege{
-			DBPermission: map[string]types.Privilege_Access{
+			DbPermission: map[string]types.Privilege_Access{
 				dbName: types.Privilege_ReadWrite,
 			},
 		},
@@ -264,11 +264,11 @@ func TestTransactionProcessor(t *testing.T) {
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
 		tx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
-			MustSignUserIDs: []string{"testUser"},
-			TxID:            "tx1",
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"testUser"},
+			TxId:            "tx1",
+			DbOperations: []*types.DBOperation{
 				{
-					DBName:    worldstate.DefaultDBName,
+					DbName:    worldstate.DefaultDBName,
 					DataReads: []*types.DataRead{},
 					DataWrites: []*types.DataWrite{
 						{
@@ -371,11 +371,11 @@ func TestTransactionProcessor(t *testing.T) {
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
 		tx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
-			MustSignUserIDs: []string{"testUser"},
-			TxID:            "tx1",
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"testUser"},
+			TxId:            "tx1",
+			DbOperations: []*types.DBOperation{
 				{
-					DBName:    worldstate.DefaultDBName,
+					DbName:    worldstate.DefaultDBName,
 					DataReads: []*types.DataRead{},
 					DataWrites: []*types.DataWrite{
 						{
@@ -473,11 +473,11 @@ func TestTransactionProcessor(t *testing.T) {
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
 		dataTx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
-			MustSignUserIDs: []string{"testUser"},
-			TxID:            "tx1",
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"testUser"},
+			TxId:            "tx1",
+			DbOperations: []*types.DBOperation{
 				{
-					DBName: worldstate.DefaultDBName,
+					DbName: worldstate.DefaultDBName,
 				},
 			},
 		})
@@ -491,8 +491,8 @@ func TestTransactionProcessor(t *testing.T) {
 		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
 
 		userTx := testutils.SignedUserAdministrationTxEnvelope(t, env.userSigner, &types.UserAdministrationTx{
-			UserID: "testUser",
-			TxID:   "tx1",
+			UserId: "testUser",
+			TxId:   "tx1",
 		})
 		resp, err = env.txProcessor.submitTransaction(userTx, 0)
 		require.EqualError(t, err, "the transaction has a duplicate txID [tx1]")
@@ -507,16 +507,16 @@ func TestTransactionProcessor(t *testing.T) {
 		setupTxProcessor(t, env, conf, worldstate.DefaultDBName)
 
 		dbTx := testutils.SignedDBAdministrationTxEnvelope(t, env.userSigner, &types.DBAdministrationTx{
-			UserID: "testUser",
-			TxID:   "tx1",
+			UserId: "testUser",
+			TxId:   "tx1",
 		})
 		configTx := testutils.SignedConfigTxEnvelope(t, env.userSigner, &types.ConfigTx{
-			UserID: "testUser",
-			TxID:   "tx1",
+			UserId: "testUser",
+			TxId:   "tx1",
 		})
 		userTx := testutils.SignedUserAdministrationTxEnvelope(t, env.userSigner, &types.UserAdministrationTx{
-			UserID: "testUser",
-			TxID:   "tx2",
+			UserId: "testUser",
+			TxId:   "tx2",
 		})
 
 		resp, err := env.txProcessor.submitTransaction(dbTx, 0)
@@ -738,7 +738,7 @@ func applyTxsOnTrie(t *testing.T, env *txProcessorTestEnv, payload interface{}, 
 			},
 		}
 	case *types.DBAdministrationTxEnvelope:
-		tempBlock.Payload = &types.Block_DBAdministrationTxEnvelope{payload.(*types.DBAdministrationTxEnvelope)}
+		tempBlock.Payload = &types.Block_DbAdministrationTxEnvelope{payload.(*types.DBAdministrationTxEnvelope)}
 		tempBlock.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,

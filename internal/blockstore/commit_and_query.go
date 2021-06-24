@@ -185,7 +185,7 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 		updateBatch := &leveldb.Batch{}
 
 		for txNum, tx := range dataTxs {
-			key := []byte(tx.Payload.TxID)
+			key := []byte(tx.Payload.TxId)
 			value, err := proto.Marshal(block.Header.ValidationInfo[txNum])
 			if err != nil {
 				return errors.Wrapf(err, "error while marshaling validation info of transaction %d in block %d", txNum, blockNum)
@@ -197,13 +197,13 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 		return s.txValidationInfoDB.Write(updateBatch, &opt.WriteOptions{Sync: true})
 
 	case *types.Block_ConfigTxEnvelope:
-		txID = block.GetConfigTxEnvelope().Payload.TxID
+		txID = block.GetConfigTxEnvelope().Payload.TxId
 
-	case *types.Block_DBAdministrationTxEnvelope:
-		txID = block.GetDBAdministrationTxEnvelope().Payload.TxID
+	case *types.Block_DbAdministrationTxEnvelope:
+		txID = block.GetDbAdministrationTxEnvelope().Payload.TxId
 
 	case *types.Block_UserAdministrationTxEnvelope:
-		txID = block.GetUserAdministrationTxEnvelope().Payload.TxID
+		txID = block.GetUserAdministrationTxEnvelope().Payload.TxId
 
 	default:
 		return errors.Errorf("unknown block payload")

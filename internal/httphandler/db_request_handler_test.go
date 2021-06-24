@@ -47,7 +47,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserId: submittingUserName, DbName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -61,7 +61,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 			expectedResponse: &types.GetDBStatusResponseEnvelope{
 				Response: &types.GetDBStatusResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					Exist: true,
 				},
@@ -76,7 +76,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserId: submittingUserName, DbName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -116,7 +116,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserId: submittingUserName, DbName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -138,7 +138,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetDBStatusQuery{UserId: submittingUserName, DbName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -160,7 +160,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserID: submittingUserName, DBName: dbName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBStatusQuery{UserId: submittingUserName, DbName: dbName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -218,10 +218,10 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	dbTx := &types.DBAdministrationTx{
-		TxID:      "1",
-		UserID:    userID,
-		CreateDBs: []string{"newDB"},
-		DeleteDBs: []string{"dbToDelete"},
+		TxId:      "1",
+		UserId:    userID,
+		CreateDbs: []string{"newDB"},
+		DeleteDbs: []string{"dbToDelete"},
 	}
 
 	aliceSig := testutils.SignatureFromTx(t, aliceSigner, dbTx)
@@ -345,7 +345,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
 				tx := &types.DBAdministrationTx{}
 				*tx = *dbTx
-				tx.UserID = ""
+				tx.UserId = ""
 				return &types.DBAdministrationTxEnvelope{Payload: tx, Signature: aliceSig}
 			},
 			txRespFactory: func() *types.TxReceiptResponseEnvelope {
@@ -398,7 +398,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
 				tx := &types.DBAdministrationTx{}
 				*tx = *dbTx
-				tx.UserID = "not-alice"
+				tx.UserId = "not-alice"
 				return &types.DBAdministrationTxEnvelope{
 					Payload:   tx,
 					Signature: aliceSig,

@@ -47,7 +47,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserId: submittingUserName, TargetUserId: targetUserID})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -61,7 +61,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 			expectedResponse: &types.GetUserResponseEnvelope{
 				Response: &types.GetUserResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					Metadata: &types.Metadata{
 						Version: &types.Version{
@@ -81,7 +81,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserId: submittingUserName, TargetUserId: targetUserID})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -121,7 +121,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserId: submittingUserName, TargetUserId: targetUserID})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -143,7 +143,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetUserQuery{UserId: submittingUserName, TargetUserId: targetUserID})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -165,7 +165,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserID: submittingUserName, TargetUserID: targetUserID})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetUserQuery{UserId: submittingUserName, TargetUserId: targetUserID})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 
 				return req, nil
@@ -227,17 +227,17 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	userTx := &types.UserAdministrationTx{
-		TxID:        "1",
-		UserID:      userID,
-		UserDeletes: []*types.UserDelete{{UserID: userToDelete}},
-		UserReads:   []*types.UserRead{{UserID: userGet}},
+		TxId:        "1",
+		UserId:      userID,
+		UserDeletes: []*types.UserDelete{{UserId: userToDelete}},
+		UserReads:   []*types.UserRead{{UserId: userGet}},
 		UserWrites: []*types.UserWrite{
 			{
 				User: &types.User{
-					ID:          userWrite,
+					Id:          userWrite,
 					Certificate: []byte{0, 0, 0},
 					Privilege: &types.Privilege{
-						DBPermission: map[string]types.Privilege_Access{
+						DbPermission: map[string]types.Privilege_Access{
 							"testDB": types.Privilege_ReadWrite,
 						},
 						Admin: true,
@@ -367,7 +367,7 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 			txEnvFactory: func() *types.UserAdministrationTxEnvelope {
 				tx := &types.UserAdministrationTx{}
 				*tx = *userTx
-				tx.UserID = ""
+				tx.UserId = ""
 				return &types.UserAdministrationTxEnvelope{Payload: tx, Signature: aliceSig}
 			},
 			txRespFactory: func() *types.TxReceiptResponseEnvelope {
@@ -420,7 +420,7 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 			txEnvFactory: func() *types.UserAdministrationTxEnvelope {
 				tx := &types.UserAdministrationTx{}
 				*tx = *userTx
-				tx.UserID = "not-alice"
+				tx.UserId = "not-alice"
 				return &types.UserAdministrationTxEnvelope{
 					Payload:   tx,
 					Signature: aliceSig,

@@ -188,10 +188,10 @@ func TestOpenStore(t *testing.T) {
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 						Payload: &types.UserAdministrationTx{
-							UserID: "user1",
+							UserId: "user1",
 							UserDeletes: []*types.UserDelete{
 								{
-									UserID: "user1",
+									UserId: "user1",
 								},
 							},
 						},
@@ -239,7 +239,7 @@ func TestRecovery(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NoError(t, env.s.storeIndexForBlock(1, blockLocation))
-		txID := block.GetUserAdministrationTxEnvelope().Payload.TxID
+		txID := block.GetUserAdministrationTxEnvelope().Payload.TxId
 
 		assertIndexExist(t, env.s, 1, blockLocation)
 		assertHashDoesNotExist(t, env.s, 1)
@@ -272,7 +272,7 @@ func TestRecovery(t *testing.T) {
 		blockLocation, err := env.s.appendBlock(1, content)
 		require.NoError(t, err)
 
-		txID := block.GetUserAdministrationTxEnvelope().Payload.TxID
+		txID := block.GetUserAdministrationTxEnvelope().Payload.TxId
 		assertBlockMetadataDoesNotExist(t, env.s, 1, txID)
 
 		env.closeAndReOpenStore(t)
@@ -311,7 +311,7 @@ func TestRecovery(t *testing.T) {
 		block2Location, err := env.s.appendBlock(1, content)
 		require.NoError(t, err)
 
-		txID2 := block2.GetUserAdministrationTxEnvelope().Payload.TxID
+		txID2 := block2.GetUserAdministrationTxEnvelope().Payload.TxId
 		assertBlockMetadataDoesNotExist(t, env.s, 2, txID2)
 
 		env.closeAndReOpenStore(t)
@@ -351,7 +351,7 @@ func TestRecovery(t *testing.T) {
 		_, err = env.s.appendBlock(1, content[:len(content)-5])
 		require.NoError(t, err)
 
-		txID2 := block2.GetUserAdministrationTxEnvelope().Payload.TxID
+		txID2 := block2.GetUserAdministrationTxEnvelope().Payload.TxId
 		assertBlockMetadataDoesNotExist(t, env.s, 2, txID2)
 
 		env.closeAndReOpenStore(t)
@@ -444,7 +444,7 @@ func TestRecovery(t *testing.T) {
 					_, err = env.s.appendBlock(1, content[:len(content)-5])
 					require.NoError(t, err)
 
-					txID := block.GetUserAdministrationTxEnvelope().Payload.TxID
+					txID := block.GetUserAdministrationTxEnvelope().Payload.TxId
 					assertBlockMetadataDoesNotExist(t, env.s, 45, txID)
 
 					env.closeAndReOpenStore(t)
@@ -458,7 +458,7 @@ func TestRecovery(t *testing.T) {
 				location, err := env.s.appendBlock(1, content)
 				require.NoError(t, err)
 
-				txID := block.GetUserAdministrationTxEnvelope().Payload.TxID
+				txID := block.GetUserAdministrationTxEnvelope().Payload.TxId
 				assertBlockMetadataDoesNotExist(t, env.s, 45, txID)
 
 				env.closeAndReOpenStore(t)
@@ -511,9 +511,9 @@ func TestRecovery(t *testing.T) {
 		_, err = env.s.appendBlock(1, content)
 		require.NoError(t, err)
 
-		txID1 := block1.GetUserAdministrationTxEnvelope().Payload.TxID
+		txID1 := block1.GetUserAdministrationTxEnvelope().Payload.TxId
 		assertBlockMetadataDoesNotExist(t, env.s, 1, txID1)
-		txID2 := block2.GetUserAdministrationTxEnvelope().Payload.TxID
+		txID2 := block2.GetUserAdministrationTxEnvelope().Payload.TxId
 		assertBlockMetadataDoesNotExist(t, env.s, 2, txID2)
 
 		require.NoError(t, env.s.Close())
@@ -619,7 +619,7 @@ func assertValidationInfoDoesNotExist(t *testing.T, s *Store, txID string) {
 
 func assertBlockMetadataExist(t *testing.T, s *Store, block *types.Block, expectedLocation *BlockLocation) {
 	blockNum := block.Header.BaseHeader.Number
-	txID := block.GetUserAdministrationTxEnvelope().Payload.TxID
+	txID := block.GetUserAdministrationTxEnvelope().Payload.TxId
 
 	assertIndexExist(t, s, blockNum, expectedLocation)
 	assertHashExist(t, s, block)

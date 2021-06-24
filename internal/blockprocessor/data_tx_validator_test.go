@@ -26,10 +26,10 @@ func TestValidateDataTx(t *testing.T) {
 
 	addUserWithCorrectPrivilege := func(db worldstate.DB) {
 		a := &types.User{
-			ID:          alice,
+			Id:          alice,
 			Certificate: aliceCert.Raw,
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
 					"db1":                    types.Privilege_ReadWrite,
 				},
@@ -39,10 +39,10 @@ func TestValidateDataTx(t *testing.T) {
 		require.NoError(t, err)
 
 		b := &types.User{
-			ID:          bob,
+			Id:          bob,
 			Certificate: bobCert.Raw,
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
 					"db1":                    types.Privilege_ReadWrite,
 				},
@@ -83,10 +83,10 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: "db1/name",
+						DbName: "db1/name",
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -94,7 +94,7 @@ func TestValidateDataTx(t *testing.T) {
 						},
 					},
 					{
-						DBName: "db2",
+						DbName: "db2",
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -115,13 +115,13 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 					},
 					{
-						DBName: "db1",
+						DbName: "db1",
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -142,13 +142,13 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 					},
 					{
-						DBName: worldstate.ConfigDBName,
+						DbName: worldstate.ConfigDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -179,13 +179,13 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(user, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice, bob},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice, bob},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 					},
 					{
-						DBName: worldstate.ConfigDBName,
+						DbName: worldstate.ConfigDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -216,10 +216,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(user, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
-				MustSignUserIDs: []string{bob},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{bob},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 					},
 				},
 			}),
@@ -238,7 +238,7 @@ func TestValidateDataTx(t *testing.T) {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, alice, bogusCert.Raw, nil, nil, nil),
 							constructUserForTest(t, bob, bobCert.Raw, &types.Privilege{
-								DBPermission: map[string]types.Privilege_Access{
+								DbPermission: map[string]types.Privilege_Access{
 									worldstate.DefaultDBName: types.Privilege_ReadWrite,
 								},
 							}, nil, nil),
@@ -249,10 +249,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(user, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
-				MustSignUserIDs: []string{bob},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{bob},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 					},
 				},
 			}),
@@ -277,10 +277,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(user, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
-				MustSignUserIDs: []string{bob},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{bob},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -288,7 +288,7 @@ func TestValidateDataTx(t *testing.T) {
 						},
 					},
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key2",
@@ -319,10 +319,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(user, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -343,14 +343,14 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
-								ACL: &types.AccessControl{
+								Acl: &types.AccessControl{
 									ReadWriteUsers: map[string]bool{
 										"user1": true,
 									},
@@ -372,10 +372,10 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -420,10 +420,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -469,10 +469,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataReads: []*types.DataRead{
 							{
 								Key: "key1",
@@ -513,10 +513,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key: "key1",
@@ -557,10 +557,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataDeletes: []*types.DataDelete{
 							{
 								Key: "key1",
@@ -581,10 +581,10 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataReads: []*types.DataRead{
 							{
 								Key: "key1",
@@ -614,13 +614,13 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 					},
 					{
-						DBName: worldstate.UsersDBName,
+						DbName: worldstate.UsersDBName,
 					},
 				},
 			}),
@@ -724,10 +724,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataReads: []*types.DataRead{
 							{
 								Key: "key1",
@@ -750,7 +750,7 @@ func TestValidateDataTx(t *testing.T) {
 						},
 					},
 					{
-						DBName: "db1",
+						DbName: "db1",
 						DataReads: []*types.DataRead{
 							{
 								Key: "key3",
@@ -881,10 +881,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner, bobSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataReads: []*types.DataRead{
 							{
 								Key: "key1",
@@ -907,7 +907,7 @@ func TestValidateDataTx(t *testing.T) {
 						},
 					},
 					{
-						DBName: "db1",
+						DbName: "db1",
 						DataReads: []*types.DataRead{
 							{
 								Key: "key3",
@@ -968,10 +968,10 @@ func TestValidateDataTx(t *testing.T) {
 				require.NoError(t, db.Commit(data, 1))
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataReads: []*types.DataRead{
 							{
 								Key: "key1",
@@ -1002,10 +1002,10 @@ func TestValidateDataTx(t *testing.T) {
 				addUserWithCorrectPrivilege(db)
 			},
 			txEnv: testutils.SignedDataTxEnvelope(t, []crypto.Signer{aliceSigner}, &types.DataTx{
-				MustSignUserIDs: []string{alice},
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{alice},
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 					},
 				},
 			}),
@@ -1059,7 +1059,7 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 			dataWrites: []*types.DataWrite{
 				{
 					Key: "key1",
-					ACL: &types.AccessControl{
+					Acl: &types.AccessControl{
 						ReadUsers: map[string]bool{
 							"user1": true,
 						},
@@ -1077,7 +1077,7 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 			dataWrites: []*types.DataWrite{
 				{
 					Key: "key1",
-					ACL: &types.AccessControl{
+					Acl: &types.AccessControl{
 						ReadWriteUsers: map[string]bool{
 							"user1": true,
 						},
@@ -1107,7 +1107,7 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 			dataWrites: []*types.DataWrite{
 				{
 					Key: "key1",
-					ACL: &types.AccessControl{
+					Acl: &types.AccessControl{
 						ReadUsers: map[string]bool{
 							"user1": true,
 						},
@@ -1118,7 +1118,7 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 				},
 				{
 					Key: "key2",
-					ACL: &types.AccessControl{
+					Acl: &types.AccessControl{
 						ReadUsers: map[string]bool{
 							"user1": true,
 						},

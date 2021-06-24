@@ -119,13 +119,13 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 				continue
 			}
 
-			for _, ops := range txEnv.Payload.DBOperations {
+			for _, ops := range txEnv.Payload.DbOperations {
 				for _, w := range ops.DataWrites {
-					pendingOps.addWrite(ops.DBName, w.Key)
+					pendingOps.addWrite(ops.DbName, w.Key)
 				}
 
 				for _, d := range ops.DataDeletes {
-					pendingOps.addDelete(ops.DBName, d.Key)
+					pendingOps.addDelete(ops.DbName, d.Key)
 				}
 			}
 		}
@@ -147,8 +147,8 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 			valRes,
 		}, nil
 
-	case *types.Block_DBAdministrationTxEnvelope:
-		dbTxEnv := block.GetDBAdministrationTxEnvelope()
+	case *types.Block_DbAdministrationTxEnvelope:
+		dbTxEnv := block.GetDbAdministrationTxEnvelope()
 		valRes, err := v.dbAdminTxValidator.validate(dbTxEnv)
 		if err != nil {
 			return nil, errors.WithMessage(err, "error while validating db administrative transaction")

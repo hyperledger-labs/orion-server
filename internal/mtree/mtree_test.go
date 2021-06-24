@@ -100,8 +100,8 @@ func getTxs(block *types.Block) []proto.Message {
 		return res
 	case *types.Block_UserAdministrationTxEnvelope:
 		return []proto.Message{block.Payload.(*types.Block_UserAdministrationTxEnvelope).UserAdministrationTxEnvelope}
-	case *types.Block_DBAdministrationTxEnvelope:
-		return []proto.Message{block.Payload.(*types.Block_DBAdministrationTxEnvelope).DBAdministrationTxEnvelope}
+	case *types.Block_DbAdministrationTxEnvelope:
+		return []proto.Message{block.Payload.(*types.Block_DbAdministrationTxEnvelope).DbAdministrationTxEnvelope}
 	case *types.Block_ConfigTxEnvelope:
 		return []proto.Message{block.Payload.(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope}
 	}
@@ -127,11 +127,11 @@ func generateDataBlock(t *testing.T, txNum int) *types.Block {
 
 	for i := 0; i < txNum; i++ {
 		txPayload := &types.DataTx{
-			MustSignUserIDs: []string{"testUser"},
-			TxID:            fmt.Sprintf("%d", i),
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"testUser"},
+			TxId:            fmt.Sprintf("%d", i),
+			DbOperations: []*types.DBOperation{
 				{
-					DBName:      "testDB",
+					DbName:      "testDB",
 					DataReads:   nil,
 					DataWrites:  nil,
 					DataDeletes: nil,
@@ -170,8 +170,8 @@ func generateConfigBlock(t *testing.T) *types.Block {
 		Payload: &types.Block_ConfigTxEnvelope{
 			ConfigTxEnvelope: &types.ConfigTxEnvelope{
 				Payload: &types.ConfigTx{
-					UserID: "adminUsr",
-					TxID:   "1",
+					UserId: "adminUsr",
+					TxId:   "1",
 					ReadOldConfigVersion: &types.Version{
 						BlockNum: 1,
 						TxNum:    2,
@@ -180,7 +180,7 @@ func generateConfigBlock(t *testing.T) *types.Block {
 						Nodes: nil,
 						Admins: []*types.Admin{
 							{
-								ID:          "admin1",
+								Id:          "admin1",
 								Certificate: []byte("cert1"),
 							},
 						},
@@ -217,8 +217,8 @@ func generateUserAdminBlock(t *testing.T) *types.Block {
 		Payload: &types.Block_UserAdministrationTxEnvelope{
 			UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 				Payload: &types.UserAdministrationTx{
-					UserID:      "dbAdmin",
-					TxID:        "100",
+					UserId:      "dbAdmin",
+					TxId:        "100",
 					UserReads:   nil,
 					UserWrites:  nil,
 					UserDeletes: nil,
@@ -248,13 +248,13 @@ func generateDBAdminBlock(t *testing.T) *types.Block {
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{},
 		},
-		Payload: &types.Block_DBAdministrationTxEnvelope{
-			DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
+		Payload: &types.Block_DbAdministrationTxEnvelope{
+			DbAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
 				Payload: &types.DBAdministrationTx{
-					UserID:    "DBManager",
-					TxID:      "1000",
-					CreateDBs: nil,
-					DeleteDBs: nil,
+					UserId:    "DBManager",
+					TxId:      "1000",
+					CreateDbs: nil,
+					DeleteDbs: nil,
 				},
 				Signature: []byte("signature"),
 			},
@@ -265,7 +265,7 @@ func generateDBAdminBlock(t *testing.T) *types.Block {
 		Flag: types.Flag_VALID,
 	}
 	block.Header.ValidationInfo = append(block.Header.ValidationInfo, validationInfo)
-	txBytes, err := json.Marshal(block.Payload.(*types.Block_DBAdministrationTxEnvelope).DBAdministrationTxEnvelope)
+	txBytes, err := json.Marshal(block.Payload.(*types.Block_DbAdministrationTxEnvelope).DbAdministrationTxEnvelope)
 	require.NoError(t, err)
 	vBytes, err := json.Marshal(validationInfo)
 	require.NoError(t, err)

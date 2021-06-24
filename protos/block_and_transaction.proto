@@ -14,7 +14,7 @@ message Block {
   oneof Payload {
     DataTxEnvelopes data_tx_envelopes = 2;
     ConfigTxEnvelope config_tx_envelope = 3;
-    DBAdministrationTxEnvelope DB_administration_tx_envelope = 4;
+    DBAdministrationTxEnvelope db_administration_tx_envelope = 4;
     UserAdministrationTxEnvelope user_administration_tx_envelope = 5;
   }
   repeated ValidationInfo tx_validation_info = 6;
@@ -72,13 +72,13 @@ message UserAdministrationTxEnvelope {
 
 
 message DataTx {
-  repeated string mustSignUserIDs = 1;
-  string txID = 2;
-  repeated DBOperation DBOperations = 3;
+  repeated string must_sign_user_ids = 1;
+  string tx_id = 2;
+  repeated DBOperation db_operations = 3;
 }
 
 message DBOperation {
-  string DB_name = 3;
+  string db_name = 3;
   repeated DataRead data_reads = 4;
   repeated DataWrite data_writes = 5;
   repeated DataDelete data_deletes = 6;
@@ -95,7 +95,7 @@ message DataRead {
 message DataWrite {
   string key = 1;
   bytes value = 2;
-  AccessControl ACL = 3;
+  AccessControl acl = 3;
 }
 
 message DataDelete {
@@ -103,44 +103,44 @@ message DataDelete {
 }
 
 message ConfigTx {
-  string userID = 1;
-  string txID = 2;
+  string user_id = 1;
+  string tx_id = 2;
   Version read_old_config_version = 3;
   ClusterConfig new_config = 4;
 }
 
 message DBAdministrationTx {
-    string userID = 1;
-    string txID = 2;
-    repeated string createDBs = 3;
-    repeated string deleteDBs = 4;
-    map<string, DBIndex> DBsIndex = 5;
+    string user_id = 1;
+    string tx_id = 2;
+    repeated string create_dbs = 3;
+    repeated string delete_dbs = 4;
+    map<string, DBIndex> dbs_index = 5;
 }
 
 message DBIndex {
-    map<string, Type> attributeAndType = 1;
+    map<string, Type> attribute_and_type = 1;
 }
 
 message UserAdministrationTx {
-  string userID = 1;
-  string txID = 2;
+  string user_id = 1;
+  string tx_id = 2;
   repeated UserRead user_reads = 3;
   repeated UserWrite user_writes = 4;
   repeated UserDelete user_deletes = 5;
 }
 
 message UserRead {
-  string userID = 1;
+  string user_id = 1;
   Version version = 2;
 }
 
 message UserWrite {
   User user = 1;
-  AccessControl ACL = 2;
+  AccessControl acl = 2;
 }
 
 message UserDelete {
-  string userID = 1;
+  string user_id = 1;
 }
 
 message Metadata {

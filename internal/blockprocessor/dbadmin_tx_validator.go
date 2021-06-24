@@ -18,32 +18,32 @@ type dbAdminTxValidator struct {
 }
 
 func (v *dbAdminTxValidator) validate(txEnv *types.DBAdministrationTxEnvelope) (*types.ValidationInfo, error) {
-	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
+	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload)
 	if err != nil || valInfo.Flag != types.Flag_VALID {
 		return valInfo, err
 	}
 
 	tx := txEnv.Payload
-	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserID)
+	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserId)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "error while checking database administrative privilege for user [%s]", tx.UserID)
+		return nil, errors.WithMessagef(err, "error while checking database administrative privilege for user [%s]", tx.UserId)
 	}
 	if !hasPerm {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_NO_PERMISSION,
-			ReasonIfInvalid: "the user [" + tx.UserID + "] has no privilege to perform database administrative operations",
+			ReasonIfInvalid: "the user [" + tx.UserId + "] has no privilege to perform database administrative operations",
 		}, nil
 	}
 
-	if r := v.validateCreateDBEntries(tx.CreateDBs); r.Flag != types.Flag_VALID {
+	if r := v.validateCreateDBEntries(tx.CreateDbs); r.Flag != types.Flag_VALID {
 		return r, nil
 	}
 
-	if r := v.validateDeleteDBEntries(tx.DeleteDBs); r.Flag != types.Flag_VALID {
+	if r := v.validateDeleteDBEntries(tx.DeleteDbs); r.Flag != types.Flag_VALID {
 		return r, nil
 	}
 
-	return v.validateIndexEntries(tx.DBsIndex, tx.CreateDBs, tx.DeleteDBs), nil
+	return v.validateIndexEntries(tx.DbsIndex, tx.CreateDbs, tx.DeleteDbs), nil
 }
 
 func (v *dbAdminTxValidator) validateCreateDBEntries(toCreateDBs []string) *types.ValidationInfo {

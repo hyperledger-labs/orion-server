@@ -59,7 +59,7 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 	}
 	query := payload.(*types.GetBlockQuery)
 
-	data, err := p.db.GetBlockHeader(query.UserID, query.BlockNumber)
+	data, err := p.db.GetBlockHeader(query.UserId, query.BlockNumber)
 	if err != nil {
 		var status int
 
@@ -91,7 +91,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 	}
 	query := payload.(*types.GetLedgerPathQuery)
 
-	data, err := p.db.GetLedgerPath(query.UserID, query.StartBlockNumber, query.EndBlockNumber)
+	data, err := p.db.GetLedgerPath(query.UserId, query.StartBlockNumber, query.EndBlockNumber)
 	if err != nil {
 		var status int
 
@@ -123,7 +123,7 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 	}
 	query := payload.(*types.GetTxProofQuery)
 
-	data, err := p.db.GetTxProof(query.UserID, query.BlockNumber, query.TxIndex)
+	data, err := p.db.GetTxProof(query.UserId, query.BlockNumber, query.TxIndex)
 	if err != nil {
 		var status int
 
@@ -155,7 +155,7 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 	}
 	query := payload.(*types.GetTxReceiptQuery)
 
-	data, err := p.db.GetTxReceipt(query.UserID, query.TxID)
+	data, err := p.db.GetTxReceipt(query.UserId, query.TxId)
 	if err != nil {
 		var status int
 

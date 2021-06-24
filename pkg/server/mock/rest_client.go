@@ -51,8 +51,8 @@ func NewRESTClient(rawurl string) (*Client, error) {
 
 func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBStatusResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
-		constants.URLForGetDBStatus(e.Payload.DBName),
-		e.Payload.UserID,
+		constants.URLForGetDBStatus(e.Payload.DbName),
+		e.Payload.UserId,
 		e.Signature,
 	)
 	if err != nil {
@@ -68,8 +68,8 @@ func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBSta
 
 func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
-		constants.URLForGetData(e.Payload.DBName, e.Payload.Key),
-		e.Payload.UserID,
+		constants.URLForGetData(e.Payload.DbName, e.Payload.Key),
+		e.Payload.UserId,
 		e.Signature,
 	)
 	if err != nil {
@@ -85,8 +85,8 @@ func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseE
 
 func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
-		constants.URLForGetUser(e.Payload.TargetUserID),
-		e.Payload.UserID,
+		constants.URLForGetUser(e.Payload.TargetUserId),
+		e.Payload.UserId,
 		e.Signature,
 	)
 	if err != nil {
@@ -103,7 +103,7 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetConfig(),
-		e.Payload.UserID,
+		e.Payload.UserId,
 		e.Signature,
 	)
 	if err != nil {
@@ -119,8 +119,8 @@ func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigRes
 
 func (c *Client) GetNodeConfig(e *types.GetNodeConfigQueryEnvelope) (*types.GetNodeConfigResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
-		constants.URLForNodeConfigPath(e.Payload.NodeID),
-		e.Payload.UserID,
+		constants.URLForNodeConfigPath(e.Payload.NodeId),
+		e.Payload.UserId,
 		e.Signature,
 	)
 	if err != nil {
@@ -136,8 +136,8 @@ func (c *Client) GetNodeConfig(e *types.GetNodeConfigQueryEnvelope) (*types.GetN
 
 func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*types.GetHistoricalDataResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
-		constants.URLForGetHistoricalData(e.Payload.DBName, e.Payload.Key),
-		e.Payload.UserID,
+		constants.URLForGetHistoricalData(e.Payload.DbName, e.Payload.Key),
+		e.Payload.UserId,
 		e.Signature,
 	)
 	if err != nil {

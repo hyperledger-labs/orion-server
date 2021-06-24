@@ -107,7 +107,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 								NewConfig: &types.ClusterConfig{
 									Nodes: []*types.NodeConfig{
 										{
-											ID:          "node1",
+											Id:          "node1",
 											Address:     "127.0.0.1",
 											Port:        6090,
 											Certificate: nodeCert.Raw,
@@ -115,7 +115,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 									},
 									Admins: []*types.Admin{
 										{
-											ID:          "admin1",
+											Id:          "admin1",
 											Certificate: adminCert.Raw,
 										},
 									},
@@ -140,7 +140,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 								NewConfig: &types.ClusterConfig{
 									Nodes: []*types.NodeConfig{
 										{
-											ID:          "node1",
+											Id:          "node1",
 											Address:     "127.0.0.1",
 											Port:        6090,
 											Certificate: nodeCert.Raw,
@@ -148,7 +148,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 									},
 									Admins: []*types.Admin{
 										{
-											ID:          "admin1",
+											Id:          "admin1",
 											Certificate: adminCert.Raw,
 										},
 									},
@@ -176,7 +176,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 								NewConfig: &types.ClusterConfig{
 									Nodes: []*types.NodeConfig{
 										{
-											ID:          "node1",
+											Id:          "node1",
 											Address:     "127.0.0.1",
 											Port:        6090,
 											Certificate: nodeCert.Raw,
@@ -184,7 +184,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 									},
 									Admins: []*types.Admin{
 										{
-											ID:          "admin1",
+											Id:          "admin1",
 											Certificate: adminCert.Raw,
 										},
 									},
@@ -212,7 +212,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 								NewConfig: &types.ClusterConfig{
 									Nodes: []*types.NodeConfig{
 										{
-											ID:          "node1",
+											Id:          "node1",
 											Address:     "127.0.0.1",
 											Port:        6090,
 											Certificate: []byte("random"),
@@ -220,7 +220,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 									},
 									Admins: []*types.Admin{
 										{
-											ID:          "admin1",
+											Id:          "admin1",
 											Certificate: adminCert.Raw,
 										},
 									},
@@ -248,7 +248,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 								NewConfig: &types.ClusterConfig{
 									Nodes: []*types.NodeConfig{
 										{
-											ID:          "node1",
+											Id:          "node1",
 											Address:     "127.0.0.1",
 											Port:        6090,
 											Certificate: nodeCert.Raw,
@@ -256,7 +256,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 									},
 									Admins: []*types.Admin{
 										{
-											ID:          "admin1",
+											Id:          "admin1",
 											Certificate: []byte("random"),
 										},
 									},
@@ -301,7 +301,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 						NewConfig: &types.ClusterConfig{
 							Nodes: []*types.NodeConfig{
 								{
-									ID:          "node1",
+									Id:          "node1",
 									Address:     "127.0.0.1",
 									Port:        6090,
 									Certificate: nodeCert.Raw,
@@ -309,7 +309,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 							},
 							Admins: []*types.Admin{
 								{
-									ID:          "admin1",
+									Id:          "admin1",
 									Certificate: adminCert.Raw,
 								},
 							},
@@ -360,10 +360,10 @@ func TestValidateDataBlock(t *testing.T) {
 
 	addUserWithCorrectPrivilege := func(db worldstate.DB) {
 		user := &types.User{
-			ID:          "operatingUser",
+			Id:          "operatingUser",
 			Certificate: userCert.Raw,
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
 					"db1":                    types.Privilege_ReadWrite,
 				},
@@ -486,10 +486,10 @@ func TestValidateDataBlock(t *testing.T) {
 					DataTxEnvelopes: &types.DataTxEnvelopes{
 						Envelopes: []*types.DataTxEnvelope{
 							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
-								MustSignUserIDs: []string{"operatingUser"},
-								DBOperations: []*types.DBOperation{
+								MustSignUserIds: []string{"operatingUser"},
+								DbOperations: []*types.DBOperation{
 									{
-										DBName: worldstate.DefaultDBName,
+										DbName: worldstate.DefaultDBName,
 										DataReads: []*types.DataRead{
 											{
 												Key: "key1",
@@ -512,7 +512,7 @@ func TestValidateDataBlock(t *testing.T) {
 										},
 									},
 									{
-										DBName: "db1",
+										DbName: "db1",
 										DataReads: []*types.DataRead{
 											{
 												Key: "key1",
@@ -537,10 +537,10 @@ func TestValidateDataBlock(t *testing.T) {
 								},
 							}),
 							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
-								MustSignUserIDs: []string{"operatingUser"},
-								DBOperations: []*types.DBOperation{
+								MustSignUserIds: []string{"operatingUser"},
+								DbOperations: []*types.DBOperation{
 									{
-										DBName: worldstate.DefaultDBName,
+										DbName: worldstate.DefaultDBName,
 										DataReads: []*types.DataRead{
 											{
 												Key: "key1",
@@ -554,10 +554,10 @@ func TestValidateDataBlock(t *testing.T) {
 								},
 							}),
 							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
-								MustSignUserIDs: []string{"operatingUser"},
-								DBOperations: []*types.DBOperation{
+								MustSignUserIds: []string{"operatingUser"},
+								DbOperations: []*types.DBOperation{
 									{
-										DBName: worldstate.DefaultDBName,
+										DbName: worldstate.DefaultDBName,
 										DataReads: []*types.DataRead{
 											{
 												Key: "key2",
@@ -571,13 +571,13 @@ func TestValidateDataBlock(t *testing.T) {
 								},
 							}),
 							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
-								MustSignUserIDs: []string{"operatingUser"},
-								DBOperations: []*types.DBOperation{
+								MustSignUserIds: []string{"operatingUser"},
+								DbOperations: []*types.DBOperation{
 									{
-										DBName: worldstate.DefaultDBName,
+										DbName: worldstate.DefaultDBName,
 									},
 									{
-										DBName: "db2",
+										DbName: "db2",
 									},
 								},
 							}),
@@ -631,7 +631,7 @@ func TestValidateUserBlock(t *testing.T) {
 	require.True(t, caCert.IsCA)
 
 	adminUser := &types.User{
-		ID:          "adminUser",
+		Id:          "adminUser",
 		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
 			Admin: true,
@@ -682,10 +682,10 @@ func TestValidateUserBlock(t *testing.T) {
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 						&types.UserAdministrationTx{
-							UserID: "adminUser",
+							UserId: "adminUser",
 							UserReads: []*types.UserRead{
 								{
-									UserID: "user1",
+									UserId: "user1",
 									Version: &types.Version{
 										BlockNum: 100,
 										TxNum:    1000,
@@ -729,13 +729,13 @@ func TestValidateUserBlock(t *testing.T) {
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 						&types.UserAdministrationTx{
-							UserID: "adminUser",
+							UserId: "adminUser",
 							UserReads: []*types.UserRead{
 								{
-									UserID: "user1",
+									UserId: "user1",
 								},
 								{
-									UserID: "user2",
+									UserId: "user2",
 								},
 							},
 						},
@@ -775,7 +775,7 @@ func TestValidateDBBlock(t *testing.T) {
 
 	setup := func(db worldstate.DB) {
 		userWithMorePrivilege := &types.User{
-			ID:          "userWithMorePrivilege",
+			Id:          "userWithMorePrivilege",
 			Certificate: adminCert.Raw,
 			Privilege: &types.Privilege{
 				Admin: true,
@@ -832,11 +832,11 @@ func TestValidateDBBlock(t *testing.T) {
 						Number: 2,
 					},
 				},
-				Payload: &types.Block_DBAdministrationTxEnvelope{
-					DBAdministrationTxEnvelope: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
+				Payload: &types.Block_DbAdministrationTxEnvelope{
+					DbAdministrationTxEnvelope: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
 						&types.DBAdministrationTx{
-							UserID:    "userWithMorePrivilege",
-							DeleteDBs: []string{"db1"},
+							UserId:    "userWithMorePrivilege",
+							DeleteDbs: []string{"db1"},
 						}),
 				},
 			},
@@ -855,12 +855,12 @@ func TestValidateDBBlock(t *testing.T) {
 						Number: 2,
 					},
 				},
-				Payload: &types.Block_DBAdministrationTxEnvelope{
-					DBAdministrationTxEnvelope: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
+				Payload: &types.Block_DbAdministrationTxEnvelope{
+					DbAdministrationTxEnvelope: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
 						&types.DBAdministrationTx{
-							UserID:    "userWithMorePrivilege",
-							CreateDBs: []string{"db1", "db2"},
-							DeleteDBs: []string{"db3", "db4"},
+							UserId:    "userWithMorePrivilege",
+							CreateDbs: []string{"db1", "db2"},
+							DeleteDbs: []string{"db3", "db4"},
 						}),
 				},
 			},
@@ -900,7 +900,7 @@ func TestValidateConfigBlock(t *testing.T) {
 
 	setup := func(db worldstate.DB) {
 		adminUser := &types.User{
-			ID:          "adminUser",
+			Id:          "adminUser",
 			Certificate: userCert.Raw,
 			Privilege: &types.Privilege{
 				Admin: true,
@@ -940,7 +940,7 @@ func TestValidateConfigBlock(t *testing.T) {
 				Payload: &types.Block_ConfigTxEnvelope{
 					ConfigTxEnvelope: testutils.SignedConfigTxEnvelope(t, userSigner,
 						&types.ConfigTx{
-							UserID: "adminUser",
+							UserId: "adminUser",
 							ReadOldConfigVersion: &types.Version{
 								BlockNum: 100,
 								TxNum:    100,
@@ -948,7 +948,7 @@ func TestValidateConfigBlock(t *testing.T) {
 							NewConfig: &types.ClusterConfig{
 								Nodes: []*types.NodeConfig{
 									{
-										ID:          "node1",
+										Id:          "node1",
 										Address:     "127.0.0.1",
 										Port:        6090,
 										Certificate: nodeCert.Raw,
@@ -956,7 +956,7 @@ func TestValidateConfigBlock(t *testing.T) {
 								},
 								Admins: []*types.Admin{
 									{
-										ID:          "admin1",
+										Id:          "admin1",
 										Certificate: adminCert.Raw,
 									},
 								},
@@ -1001,12 +1001,12 @@ func TestValidateConfigBlock(t *testing.T) {
 				Payload: &types.Block_ConfigTxEnvelope{
 					ConfigTxEnvelope: testutils.SignedConfigTxEnvelope(t, userSigner,
 						&types.ConfigTx{
-							UserID:               "adminUser",
+							UserId:               "adminUser",
 							ReadOldConfigVersion: nil,
 							NewConfig: &types.ClusterConfig{
 								Nodes: []*types.NodeConfig{
 									{
-										ID:          "node1",
+										Id:          "node1",
 										Address:     "127.0.0.1",
 										Port:        6090,
 										Certificate: nodeCert.Raw,
@@ -1014,7 +1014,7 @@ func TestValidateConfigBlock(t *testing.T) {
 								},
 								Admins: []*types.Admin{
 									{
-										ID:          "admin1",
+										Id:          "admin1",
 										Certificate: adminCert.Raw,
 									},
 								},

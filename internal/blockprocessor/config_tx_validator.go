@@ -25,20 +25,20 @@ type configTxValidator struct {
 }
 
 func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
-	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
+	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload)
 	if err != nil || valInfo.Flag != types.Flag_VALID {
 		return valInfo, err
 	}
 
 	tx := txEnv.Payload
-	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserID)
+	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserId)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "error while checking cluster administrative privilege for user [%s]", tx.UserID)
+		return nil, errors.WithMessagef(err, "error while checking cluster administrative privilege for user [%s]", tx.UserId)
 	}
 	if !hasPerm {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_NO_PERMISSION,
-			ReasonIfInvalid: "the user [" + tx.UserID + "] has no privilege to perform cluster administrative operations",
+			ReasonIfInvalid: "the user [" + tx.UserId + "] has no privilege to perform cluster administrative operations",
 		}, nil
 	}
 
@@ -127,7 +127,7 @@ func validateNodeConfig(nodes []*types.NodeConfig, caCertCollection *certificate
 				ReasonIfInvalid: "there is an empty node entry in the node config",
 			}
 
-		case n.ID == "":
+		case n.Id == "":
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is a node in the node config with an empty ID. A valid nodeID must be an non-empty string",
@@ -136,39 +136,39 @@ func validateNodeConfig(nodes []*types.NodeConfig, caCertCollection *certificate
 		case n.Address == "":
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [" + n.ID + "] has an empty ip address",
+				ReasonIfInvalid: "the node [" + n.Id + "] has an empty ip address",
 			}
 
 		case net.ParseIP(n.Address) == nil:
 			// TODO allow host names for cluster nodes
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [" + n.ID + "] has an invalid ip address [" + n.Address + "]",
+				ReasonIfInvalid: "the node [" + n.Id + "] has an invalid ip address [" + n.Address + "]",
 			}
 
 		case n.Port == 0 || n.Port >= (1<<16):
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: fmt.Sprintf("the node [%s] has an invalid port number [%d]", n.ID, n.Port),
+				ReasonIfInvalid: fmt.Sprintf("the node [%s] has an invalid port number [%d]", n.Id, n.Port),
 			}
 
 		default:
 			if err := caCertCollection.VerifyLeafCert(n.Certificate); err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-					ReasonIfInvalid: "the node [" + n.ID + "] has an invalid certificate: " + err.Error(),
+					ReasonIfInvalid: "the node [" + n.Id + "] has an invalid certificate: " + err.Error(),
 				}
 			}
 		}
 
 		// node ID must be unique
-		if nodeIDsSet[n.ID] {
+		if nodeIDsSet[n.Id] {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "there are two nodes with the same ID [" + n.ID + "] in the node config. The node IDs must be unique",
+				ReasonIfInvalid: "there are two nodes with the same ID [" + n.Id + "] in the node config. The node IDs must be unique",
 			}
 		}
-		nodeIDsSet[n.ID] = true
+		nodeIDsSet[n.Id] = true
 
 		// node host:port must be unique as well
 		hostPort := fmt.Sprintf("%s:%d", n.Address, n.Port)
@@ -204,7 +204,7 @@ func validateAdminConfig(admins []*types.Admin, caCertCollection *certificateaut
 				ReasonIfInvalid: "there is an empty admin entry in the admin config",
 			}
 
-		case a.ID == "":
+		case a.Id == "":
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an admin in the admin config with an empty ID. A valid adminID must be an non-empty string",
@@ -213,18 +213,18 @@ func validateAdminConfig(admins []*types.Admin, caCertCollection *certificateaut
 			if err := caCertCollection.VerifyLeafCert(a.Certificate); err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-					ReasonIfInvalid: "the admin [" + a.ID + "] has an invalid certificate: " + err.Error(),
+					ReasonIfInvalid: "the admin [" + a.Id + "] has an invalid certificate: " + err.Error(),
 				}
 			}
 		}
 
-		if adminIDs[a.ID] {
+		if adminIDs[a.Id] {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "there are two admins with the same ID [" + a.ID + "] in the admin config. The admin IDs must be unique",
+				ReasonIfInvalid: "there are two admins with the same ID [" + a.Id + "] in the admin config. The admin IDs must be unique",
 			}
 		}
-		adminIDs[a.ID] = true
+		adminIDs[a.Id] = true
 	}
 
 	return &types.ValidationInfo{
@@ -417,7 +417,7 @@ func validateMembersNodesMatch(members []*types.PeerConfig, nodes []*types.NodeC
 
 	nodesMap := make(map[string]*types.NodeConfig)
 	for _, n := range nodes {
-		nodesMap[n.ID] = n
+		nodesMap[n.Id] = n
 	}
 
 	for _, m := range members {

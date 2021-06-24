@@ -115,7 +115,7 @@ func (b *BlockCreator) Start() {
 				block.Payload = batch
 				b.logger.Debugf("created block %d with a cluster config administrative transaction", blkNum)
 
-			case *types.Block_DBAdministrationTxEnvelope:
+			case *types.Block_DbAdministrationTxEnvelope:
 				block.Payload = batch
 				b.logger.Debugf("created block %d with a DB administrative transaction", blkNum)
 			}

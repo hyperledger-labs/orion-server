@@ -17,10 +17,10 @@ func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 
 	sampleUser := func(userID string) *types.User {
 		return &types.User{
-			ID:          userID,
+			Id:          userID,
 			Certificate: []byte("certificate-" + userID),
 			Privilege: &types.Privilege{
-				DBPermission: map[string]types.Privilege_Access{
+				DbPermission: map[string]types.Privilege_Access{
 					worldstate.DefaultDBName: types.Privilege_ReadWrite,
 				},
 				Admin: false,
@@ -91,10 +91,10 @@ func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 			transaction: &types.UserAdministrationTx{
 				UserDeletes: []*types.UserDelete{
 					{
-						UserID: "user3",
+						UserId: "user3",
 					},
 					{
-						UserID: "user4",
+						UserId: "user4",
 					},
 				},
 			},
@@ -121,10 +121,10 @@ func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 				},
 				UserDeletes: []*types.UserDelete{
 					{
-						UserID: "user3",
+						UserId: "user3",
 					},
 					{
-						UserID: "user4",
+						UserId: "user4",
 					},
 				},
 			},
@@ -186,7 +186,7 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 
 	sampleAdmin := func(adminID string, cert []byte) []byte {
 		user := &types.User{
-			ID:          adminID,
+			Id:          adminID,
 			Certificate: cert,
 			Privilege: &types.Privilege{
 				Admin: true,
@@ -209,21 +209,21 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 			name: "same set of admins, no changes",
 			adminsInCommittedConfigTx: []*types.Admin{
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: []byte("certificate 1"),
 				},
 				{
-					ID:          "admin2",
+					Id:          "admin2",
 					Certificate: []byte("certificate 2"),
 				},
 			},
 			adminsInNewConfigTx: []*types.Admin{
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: []byte("certificate 1"),
 				},
 				{
-					ID:          "admin2",
+					Id:          "admin2",
 					Certificate: []byte("certificate 2"),
 				},
 			},
@@ -234,29 +234,29 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 			name: "add, update, and delete admins",
 			adminsInCommittedConfigTx: []*types.Admin{
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: []byte("certificate 1"),
 				},
 				{
-					ID:          "admin2",
+					Id:          "admin2",
 					Certificate: []byte("certificate 2"),
 				},
 				{
-					ID:          "admin3",
+					Id:          "admin3",
 					Certificate: []byte("certificate 3"),
 				},
 			},
 			adminsInNewConfigTx: []*types.Admin{
 				{
-					ID:          "admin3",
+					Id:          "admin3",
 					Certificate: []byte("new certificate 3"),
 				},
 				{
-					ID:          "admin4",
+					Id:          "admin4",
 					Certificate: []byte("certificate 4"),
 				},
 				{
-					ID:          "admin5",
+					Id:          "admin5",
 					Certificate: []byte("certificate 5"),
 				},
 			},
@@ -346,10 +346,10 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 		TxNum:    1,
 	}
 	user1 := &types.User{
-		ID:          "user1",
+		Id:          "user1",
 		Certificate: []byte("rawcert"),
 		Privilege: &types.Privilege{
-			DBPermission: map[string]types.Privilege_Access{
+			DbPermission: map[string]types.Privilege_Access{
 				"db1": types.Privilege_Read,
 			},
 		},
@@ -358,10 +358,10 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 	require.NoError(t, err)
 
 	user2 := &types.User{
-		ID:          "user2",
+		Id:          "user2",
 		Certificate: []byte("rawcert"),
 		Privilege: &types.Privilege{
-			DBPermission: map[string]types.Privilege_Access{
+			DbPermission: map[string]types.Privilege_Access{
 				"db2": types.Privilege_ReadWrite,
 			},
 		},
@@ -370,10 +370,10 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 	require.NoError(t, err)
 
 	user2New := &types.User{
-		ID:          "user2",
+		Id:          "user2",
 		Certificate: []byte("rawcertNew"),
 		Privilege: &types.Privilege{
-			DBPermission: map[string]types.Privilege_Access{
+			DbPermission: map[string]types.Privilege_Access{
 				"db2": types.Privilege_ReadWrite,
 			},
 		},
@@ -401,17 +401,17 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 			},
 			tx: &types.UserAdministrationTx{
-				UserID:    "admin",
-				TxID:      "tx1",
+				UserId:    "admin",
+				TxId:      "tx1",
 				UserReads: nil,
 				UserWrites: []*types.UserWrite{
 					{
 						User: user1,
-						ACL:  acl,
+						Acl:  acl,
 					},
 					{
 						User: user2,
-						ACL:  nil,
+						Acl:  nil,
 					},
 				},
 				UserDeletes: nil,
@@ -471,15 +471,15 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(dbUpdates, 1))
 			},
 			tx: &types.UserAdministrationTx{
-				UserID:    "admin",
-				TxID:      "tx1",
+				UserId:    "admin",
+				TxId:      "tx1",
 				UserReads: nil,
 				UserDeletes: []*types.UserDelete{
 					{
-						UserID: "user1",
+						UserId: "user1",
 					},
 					{
-						UserID: "user2",
+						UserId: "user2",
 					},
 				},
 			},
@@ -517,11 +517,11 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(dbUpdates, 1))
 			},
 			tx: &types.UserAdministrationTx{
-				UserID: "admin",
-				TxID:   "tx1",
+				UserId: "admin",
+				TxId:   "tx1",
 				UserReads: []*types.UserRead{
 					{
-						UserID:  "user1",
+						UserId:  "user1",
 						Version: version,
 					},
 				},
@@ -596,7 +596,7 @@ func TestConstructProvenanceEntriesForClusterAdmins(t *testing.T) {
 		TxNum:    1,
 	}
 	admin1 := &types.User{
-		ID:          "admin1",
+		Id:          "admin1",
 		Certificate: []byte("rawcert-admin1"),
 		Privilege: &types.Privilege{
 			Admin: true,
@@ -606,7 +606,7 @@ func TestConstructProvenanceEntriesForClusterAdmins(t *testing.T) {
 	require.NoError(t, err)
 
 	admin2 := &types.User{
-		ID:          "admin2",
+		Id:          "admin2",
 		Certificate: []byte("rawcert-admin2"),
 		Privilege: &types.Privilege{
 			Admin: true,
@@ -616,7 +616,7 @@ func TestConstructProvenanceEntriesForClusterAdmins(t *testing.T) {
 	require.NoError(t, err)
 
 	admin2New := &types.User{
-		ID:          "admin2",
+		Id:          "admin2",
 		Certificate: []byte("rawcertNew-admin2"),
 		Privilege: &types.Privilege{
 			Admin: true,
@@ -794,7 +794,7 @@ func TestConstructDBEntriesForNodes(t *testing.T) {
 
 	sampleNode := func(nodeID string, addr string, port uint32, cert []byte) []byte {
 		user := &types.NodeConfig{
-			ID:          nodeID,
+			Id:          nodeID,
 			Address:     addr,
 			Port:        port,
 			Certificate: cert,
@@ -816,13 +816,13 @@ func TestConstructDBEntriesForNodes(t *testing.T) {
 			name: "same set of nodes, no changes",
 			nodesInCommittedConfigTx: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "192.168.0.1",
 					Port:        6000,
 					Certificate: []byte("certificate 1"),
 				},
 				{
-					ID:          "node2",
+					Id:          "node2",
 					Address:     "192.168.0.2",
 					Port:        6001,
 					Certificate: []byte("certificate 2"),
@@ -830,13 +830,13 @@ func TestConstructDBEntriesForNodes(t *testing.T) {
 			},
 			nodesInNewConfigTx: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "192.168.0.1",
 					Port:        6000,
 					Certificate: []byte("certificate 1"),
 				},
 				{
-					ID:          "node2",
+					Id:          "node2",
 					Address:     "192.168.0.2",
 					Port:        6001,
 					Certificate: []byte("certificate 2"),
@@ -849,19 +849,19 @@ func TestConstructDBEntriesForNodes(t *testing.T) {
 			name: "add, update, and delete nodes",
 			nodesInCommittedConfigTx: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "192.168.0.1",
 					Port:        6000,
 					Certificate: []byte("certificate 1"),
 				},
 				{
-					ID:          "node2",
+					Id:          "node2",
 					Address:     "192.168.0.2",
 					Port:        6001,
 					Certificate: []byte("certificate 2"),
 				},
 				{
-					ID:          "node3",
+					Id:          "node3",
 					Address:     "192.168.0.3",
 					Port:        6002,
 					Certificate: []byte("certificate 3"),
@@ -869,19 +869,19 @@ func TestConstructDBEntriesForNodes(t *testing.T) {
 			},
 			nodesInNewConfigTx: []*types.NodeConfig{
 				{
-					ID:          "node3",
+					Id:          "node3",
 					Address:     "192.168.0.3",
 					Port:        6002,
 					Certificate: []byte("new certificate 3"),
 				},
 				{
-					ID:          "node4",
+					Id:          "node4",
 					Address:     "192.168.0.4",
 					Port:        6003,
 					Certificate: []byte("certificate 4"),
 				},
 				{
-					ID:          "node5",
+					Id:          "node5",
 					Address:     "192.168.0.5",
 					Port:        6004,
 					Certificate: []byte("certificate 5"),
@@ -961,21 +961,21 @@ func TestConstructProvenanceEntriesForNodes(t *testing.T) {
 		TxNum:    1,
 	}
 	node1 := &types.NodeConfig{
-		ID:          "node1",
+		Id:          "node1",
 		Certificate: []byte("rawcert-node1"),
 	}
 	node1Serialized, err := proto.Marshal(node1)
 	require.NoError(t, err)
 
 	node2 := &types.NodeConfig{
-		ID:          "node2",
+		Id:          "node2",
 		Certificate: []byte("rawcert-node2"),
 	}
 	node2Serialized, err := proto.Marshal(node2)
 	require.NoError(t, err)
 
 	node2New := &types.NodeConfig{
-		ID:          "node2",
+		Id:          "node2",
 		Certificate: []byte("rawcertNew-node2"),
 	}
 	node2NewSerialized, err := proto.Marshal(node2New)

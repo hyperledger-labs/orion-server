@@ -193,7 +193,7 @@ func (q *Querier) hasPrivilege(userID, dbName string, privilege types.Privilege_
 		return true, nil
 	}
 
-	dbPermission := user.GetPrivilege().GetDBPermission()
+	dbPermission := user.GetPrivilege().GetDbPermission()
 	if dbPermission == nil {
 		return false, err
 	}

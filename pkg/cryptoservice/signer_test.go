@@ -34,10 +34,10 @@ func TestSignQuery(t *testing.T) {
 
 	t.Run("Sign correctly", func(t *testing.T) {
 		queries := []interface{}{
-			&types.GetConfigQuery{UserID: "id"},
-			&types.GetDataQuery{UserID: "id", DBName: "db", Key: "foo"},
-			&types.GetDBStatusQuery{UserID: "id", DBName: "db"},
-			&types.GetUserQuery{UserID: "id", TargetUserID: "target"},
+			&types.GetConfigQuery{UserId: "id"},
+			&types.GetDataQuery{UserId: "id", DbName: "db", Key: "foo"},
+			&types.GetDBStatusQuery{UserId: "id", DbName: "db"},
+			&types.GetUserQuery{UserId: "id", TargetUserId: "target"},
 		}
 
 		for _, q := range queries {
@@ -53,7 +53,7 @@ func TestSignQuery(t *testing.T) {
 
 	t.Run("Unknown type", func(t *testing.T) {
 		notQ := &types.GetConfigQueryEnvelope{
-			Payload:   &types.GetConfigQuery{UserID: "id"},
+			Payload:   &types.GetConfigQuery{UserId: "id"},
 			Signature: []byte("oops"),
 		}
 

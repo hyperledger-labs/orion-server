@@ -142,7 +142,7 @@ func newTestEnv(t *testing.T) *testEnv {
 					NewConfig: &types.ClusterConfig{
 						Nodes: []*types.NodeConfig{
 							{
-								ID:          "node1",
+								Id:          "node1",
 								Address:     "127.0.0.1",
 								Port:        6090,
 								Certificate: nodeCert.Raw,
@@ -150,7 +150,7 @@ func newTestEnv(t *testing.T) *testEnv {
 						},
 						Admins: []*types.Admin{
 							{
-								ID:          "admin1",
+								Id:          "admin1",
 								Certificate: adminCert.Raw,
 							},
 						},
@@ -240,10 +240,10 @@ func setup(t *testing.T, env *testEnv) {
 	require.Eventually(t, assertConfigHasCommitted, 2*time.Second, 100*time.Millisecond)
 
 	user := &types.User{
-		ID:          env.userID,
+		Id:          env.userID,
 		Certificate: env.userCert.Raw,
 		Privilege: &types.Privilege{
-			DBPermission: map[string]types.Privilege_Access{
+			DbPermission: map[string]types.Privilege_Access{
 				worldstate.DefaultDBName: types.Privilege_ReadWrite,
 			},
 		},
@@ -686,10 +686,10 @@ func createSampleTx(t *testing.T, key []string, value [][]byte, signer crypto.Si
 	envelopes := make([]*types.DataTxEnvelope, 0)
 	for i := 0; i < len(key); i++ {
 		e := testutils.SignedDataTxEnvelope(t, []crypto.Signer{signer}, &types.DataTx{
-			MustSignUserIDs: []string{"testUser"},
-			DBOperations: []*types.DBOperation{
+			MustSignUserIds: []string{"testUser"},
+			DbOperations: []*types.DBOperation{
 				{
-					DBName: worldstate.DefaultDBName,
+					DbName: worldstate.DefaultDBName,
 					DataWrites: []*types.DataWrite{
 						{
 							Key:   key[i],

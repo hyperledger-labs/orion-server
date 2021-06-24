@@ -45,7 +45,7 @@ func TestGetHistoricalData(t *testing.T) {
 	genericResponse := &types.GetHistoricalDataResponseEnvelope{
 		Response: &types.GetHistoricalDataResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			Values: []*types.ValueWithMetadata{
 				{
@@ -62,8 +62,8 @@ func TestGetHistoricalData(t *testing.T) {
 				t,
 				constants.URLForGetHistoricalData(dbName, key),
 				&types.GetHistoricalDataQuery{
-					UserID: submittingUserName,
-					DBName: dbName,
+					UserId: submittingUserName,
+					DbName: dbName,
 					Key:    key,
 				},
 				aliceSigner,
@@ -84,8 +84,8 @@ func TestGetHistoricalData(t *testing.T) {
 				t,
 				constants.URLForGetHistoricalDeletedData(dbName, key),
 				&types.GetHistoricalDataQuery{
-					UserID:      submittingUserName,
-					DBName:      dbName,
+					UserId:      submittingUserName,
+					DbName:      dbName,
 					Key:         key,
 					OnlyDeletes: true,
 				},
@@ -107,8 +107,8 @@ func TestGetHistoricalData(t *testing.T) {
 				t,
 				constants.URLForGetHistoricalDataAt(dbName, key, version),
 				&types.GetHistoricalDataQuery{
-					UserID:  submittingUserName,
-					DBName:  dbName,
+					UserId:  submittingUserName,
+					DbName:  dbName,
 					Key:     key,
 					Version: version,
 				},
@@ -130,8 +130,8 @@ func TestGetHistoricalData(t *testing.T) {
 				t,
 				constants.URLForGetHistoricalDataAtOrBelow(dbName, key, version),
 				&types.GetHistoricalDataQuery{
-					UserID:     submittingUserName,
-					DBName:     dbName,
+					UserId:     submittingUserName,
+					DbName:     dbName,
 					Key:        key,
 					Version:    version,
 					MostRecent: true,
@@ -154,8 +154,8 @@ func TestGetHistoricalData(t *testing.T) {
 				t,
 				constants.URLForGetPreviousHistoricalData(dbName, key, version),
 				&types.GetHistoricalDataQuery{
-					UserID:    submittingUserName,
-					DBName:    dbName,
+					UserId:    submittingUserName,
+					DbName:    dbName,
 					Key:       key,
 					Version:   version,
 					Direction: "previous",
@@ -178,8 +178,8 @@ func TestGetHistoricalData(t *testing.T) {
 				t,
 				constants.URLForGetNextHistoricalData(dbName, key, version),
 				&types.GetHistoricalDataQuery{
-					UserID:    submittingUserName,
-					DBName:    dbName,
+					UserId:    submittingUserName,
+					DbName:    dbName,
 					Key:       key,
 					Version:   version,
 					Direction: "next",
@@ -202,8 +202,8 @@ func TestGetHistoricalData(t *testing.T) {
 				t,
 				constants.URLForGetHistoricalData(dbName, key),
 				&types.GetHistoricalDataQuery{
-					UserID: submittingUserName,
-					DBName: dbName,
+					UserId: submittingUserName,
+					DbName: dbName,
 					Key:    key,
 				},
 				aliceSigner,
@@ -244,7 +244,7 @@ func TestGetDataReaders(t *testing.T) {
 	genericResponse := &types.GetDataReadersResponseEnvelope{
 		Response: &types.GetDataReadersResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			ReadBy: map[string]uint32{
 				"user1": 5,
@@ -257,8 +257,8 @@ func TestGetDataReaders(t *testing.T) {
 		t,
 		url,
 		&types.GetDataReadersQuery{
-			UserID: submittingUserName,
-			DBName: dbName,
+			UserId: submittingUserName,
+			DbName: dbName,
 			Key:    key,
 		},
 		aliceSigner,
@@ -312,7 +312,7 @@ func TestGetDataWriters(t *testing.T) {
 	genericResponse := &types.GetDataWritersResponseEnvelope{
 		Response: &types.GetDataWritersResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			WrittenBy: map[string]uint32{
 				"user1": 5,
@@ -325,8 +325,8 @@ func TestGetDataWriters(t *testing.T) {
 		t,
 		url,
 		&types.GetDataWritersQuery{
-			UserID: submittingUserName,
-			DBName: dbName,
+			UserId: submittingUserName,
+			DbName: dbName,
 			Key:    key,
 		},
 		aliceSigner,
@@ -379,7 +379,7 @@ func TestGetDataReadBy(t *testing.T) {
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
 		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			KVs: []*types.KVWithMetadata{
 				{
@@ -395,8 +395,8 @@ func TestGetDataReadBy(t *testing.T) {
 		t,
 		url,
 		&types.GetDataReadByQuery{
-			UserID:       submittingUserName,
-			TargetUserID: targetUserID,
+			UserId:       submittingUserName,
+			TargetUserId: targetUserID,
 		},
 		aliceSigner,
 		submittingUserName,
@@ -448,7 +448,7 @@ func TestGetDataWrittenBy(t *testing.T) {
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
 		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			KVs: []*types.KVWithMetadata{
 				{
@@ -464,8 +464,8 @@ func TestGetDataWrittenBy(t *testing.T) {
 		t,
 		url,
 		&types.GetDataWrittenByQuery{
-			UserID:       submittingUserName,
-			TargetUserID: targetUserID,
+			UserId:       submittingUserName,
+			TargetUserId: targetUserID,
 		},
 		aliceSigner,
 		submittingUserName,
@@ -517,7 +517,7 @@ func TestGetDataDeletedBy(t *testing.T) {
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
 		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			KVs: []*types.KVWithMetadata{
 				{
@@ -533,8 +533,8 @@ func TestGetDataDeletedBy(t *testing.T) {
 		t,
 		url,
 		&types.GetDataDeletedByQuery{
-			UserID:       submittingUserName,
-			TargetUserID: targetUserID,
+			UserId:       submittingUserName,
+			TargetUserId: targetUserID,
 		},
 		aliceSigner,
 		submittingUserName,
@@ -586,7 +586,7 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 	genericResponse := &types.GetTxIDsSubmittedByResponseEnvelope{
 		Response: &types.GetTxIDsSubmittedByResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			TxIDs: []string{"tx1", "tx5"},
 		},
@@ -597,8 +597,8 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 		t,
 		url,
 		&types.GetTxIDsSubmittedByQuery{
-			UserID:       submittingUserName,
-			TargetUserID: targetUserID,
+			UserId:       submittingUserName,
+			TargetUserId: targetUserID,
 		},
 		aliceSigner,
 		submittingUserName,
@@ -654,7 +654,7 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 	nodeResponse := &types.GetHistoricalDataResponseEnvelope{
 		Response: &types.GetHistoricalDataResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			Values: []*types.ValueWithMetadata{
 				{
@@ -669,7 +669,7 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 	userResponse := &types.GetHistoricalDataResponseEnvelope{
 		Response: &types.GetHistoricalDataResponse{
 			Header: &types.ResponseHeader{
-				NodeID: "testNodeID",
+				NodeId: "testNodeID",
 			},
 			Values: []*types.ValueWithMetadata{
 				{
@@ -690,8 +690,8 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 				constants.URLForGetMostRecentNodeConfig("node1", sampleVer),
 				&types.GetMostRecentUserOrNodeQuery{
 					Type:    types.GetMostRecentUserOrNodeQuery_NODE,
-					UserID:  submittingUserName,
-					ID:      "node1",
+					UserId:  submittingUserName,
+					Id:      "node1",
 					Version: sampleVer,
 				},
 				aliceSigner,
@@ -713,8 +713,8 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 				constants.URLForGetMostRecentUserInfo("user1", sampleVer),
 				&types.GetMostRecentUserOrNodeQuery{
 					Type:    types.GetMostRecentUserOrNodeQuery_USER,
-					UserID:  submittingUserName,
-					ID:      "user1",
+					UserId:  submittingUserName,
+					Id:      "user1",
 					Version: sampleVer,
 				},
 				aliceSigner,
@@ -736,8 +736,8 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 				constants.URLForGetMostRecentUserInfo("user1", sampleVer),
 				&types.GetMostRecentUserOrNodeQuery{
 					Type:    types.GetMostRecentUserOrNodeQuery_USER,
-					UserID:  submittingUserName,
-					ID:      "user1",
+					UserId:  submittingUserName,
+					Id:      "user1",
 					Version: sampleVer,
 				},
 				aliceSigner,
