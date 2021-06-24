@@ -4,6 +4,7 @@
 package replication_test
 
 import (
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"sync"
 	"testing"
 
@@ -13,6 +14,28 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/stretchr/testify/require"
 )
+
+var clusterConfig1node = &types.ClusterConfig{
+	Nodes: []*types.NodeConfig{{
+		Id:      "node1",
+		Address: "127.0.0.1",
+		Port:    9090,
+	}},
+	ConsensusConfig: &types.ConsensusConfig{
+		Algorithm: "raft",
+		Members: []*types.PeerConfig{{
+			NodeId:   "node1",
+			RaftId:   1,
+			PeerHost: "127.0.0.1",
+			PeerPort: 9091,
+		}},
+		RaftConfig: &types.RaftConfig{
+			TickInterval:   "100ms",
+			ElectionTicks:  100,
+			HeartbeatTicks: 10,
+		},
+	},
+}
 
 func TestBlockReplicator_StartClose(t *testing.T) {
 	lg := testLogger(t, "debug")

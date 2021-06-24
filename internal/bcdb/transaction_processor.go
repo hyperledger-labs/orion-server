@@ -8,9 +8,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockcreator"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
 	internalerror "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
@@ -20,6 +22,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -35,6 +38,7 @@ type transactionProcessor struct {
 	txReorderer          *txreorderer.TxReorderer
 	blockCreator         *blockcreator.BlockCreator
 	blockReplicator      *replication.BlockReplicator
+	peerTransport        *comm.HTTPTransport
 	blockProcessor       *blockprocessor.BlockProcessor
 	blockStore           *blockstore.Store
 	pendingTxs           *pendingTxs
@@ -43,57 +47,36 @@ type transactionProcessor struct {
 }
 
 type txProcessorConfig struct {
-	nodeID             string
-	db                 worldstate.DB
-	blockStore         *blockstore.Store
-	provenanceStore    *provenance.Store
-	stateTrieStore     mptrie.Store
-	txQueueLength      uint32
-	txBatchQueueLength uint32
-	blockQueueLength   uint32
-	maxTxCountPerBatch uint32
-	batchTimeout       time.Duration
-	logger             *logger.SugarLogger
+	config          *config.Configurations
+	db              worldstate.DB
+	blockStore      *blockstore.Store
+	provenanceStore *provenance.Store
+	stateTrieStore  mptrie.Store
+	logger          *logger.SugarLogger
 }
 
 func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, error) {
 	p := &transactionProcessor{}
 
-	p.nodeID = conf.nodeID
+	localConfig := conf.config.LocalConfig
+
+	p.nodeID = localConfig.Server.Identity.ID
 	p.logger = conf.logger
-	p.txQueue = queue.New(conf.txQueueLength)
-	p.txBatchQueue = queue.New(conf.txBatchQueueLength)
+	p.txQueue = queue.New(localConfig.Server.QueueLength.Transaction)
+	p.txBatchQueue = queue.New(localConfig.Server.QueueLength.ReorderedTransactionBatch)
 	p.blockOneQueueBarrier = queue.NewOneQueueBarrier(conf.logger)
 
 	p.txReorderer = txreorderer.New(
 		&txreorderer.Config{
 			TxQueue:            p.txQueue,
 			TxBatchQueue:       p.txBatchQueue,
-			MaxTxCountPerBatch: conf.maxTxCountPerBatch,
-			BatchTimeout:       conf.batchTimeout,
+			MaxTxCountPerBatch: localConfig.BlockCreation.MaxTransactionCountPerBlock,
+			BatchTimeout:       localConfig.BlockCreation.BlockTimeout,
 			Logger:             conf.logger,
 		},
 	)
 
 	var err error
-	if p.blockCreator, err = blockcreator.New(
-		&blockcreator.Config{
-			TxBatchQueue: p.txBatchQueue,
-			Logger:       conf.logger,
-			BlockStore:   conf.blockStore,
-		},
-	); err != nil {
-		return nil, err
-	}
-
-	p.blockReplicator = replication.NewBlockReplicator(
-		&replication.Config{
-			BlockOneQueueBarrier: p.blockOneQueueBarrier,
-			Logger:               conf.logger,
-		},
-	)
-
-	p.blockCreator.RegisterReplicator(p.blockReplicator)
 
 	p.blockProcessor = blockprocessor.New(
 		&blockprocessor.Config{
@@ -106,7 +89,67 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		},
 	)
 
-	_ = p.blockProcessor.RegisterBlockCommitListener(commitListenerName, p)
+	ledgerHeight, err := conf.blockStore.Height()
+	if err != nil {
+		return nil, err
+	}
+	if ledgerHeight == 0 {
+		p.logger.Info("Bootstrapping the ledger and database")
+		tx, err := PrepareBootstrapConfigTx(conf.config)
+		if err != nil {
+			return nil, err
+		}
+		bootBlock, err := blockcreator.BootstrapBlock(tx)
+		if err != nil {
+			return nil, err
+		}
+		if err = p.blockProcessor.Bootstrap(bootBlock); err != nil {
+			return nil, err
+		}
+	}
+
+	p.blockCreator, err = blockcreator.New(
+		&blockcreator.Config{
+			TxBatchQueue: p.txBatchQueue,
+			Logger:       conf.logger,
+			BlockStore:   conf.blockStore,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	p.peerTransport = comm.NewHTTPTransport(&comm.Config{
+		LocalConf: localConfig,
+		Logger:    conf.logger,
+	})
+
+	clusterConfig, _, err := conf.db.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	conf.logger.Debugf("cluster config: %+v", clusterConfig)
+	if err = p.peerTransport.UpdateClusterConfig(clusterConfig); err != nil {
+		return nil, err
+	}
+
+	p.blockReplicator = replication.NewBlockReplicator(
+		&replication.Config{
+			LocalConf:            localConfig,
+			ClusterConfig:        clusterConfig,
+			Transport:            p.peerTransport,
+			BlockOneQueueBarrier: p.blockOneQueueBarrier,
+			Logger:               conf.logger,
+		},
+	)
+	if err = p.peerTransport.SetConsensusListener(p.blockReplicator); err != nil {
+		return nil, err
+	}
+	p.blockCreator.RegisterReplicator(p.blockReplicator)
+
+	if err = p.blockProcessor.RegisterBlockCommitListener(commitListenerName, p); err != nil {
+		return nil, err
+	}
 
 	go p.txReorderer.Start()
 	p.txReorderer.WaitTillStart()
@@ -114,7 +157,9 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	go p.blockCreator.Start()
 	p.blockCreator.WaitTillStart()
 
-	p.blockReplicator.Start()
+	p.peerTransport.Start() // Starts internal goroutine
+
+	p.blockReplicator.Start() // Starts internal goroutine
 
 	go p.blockProcessor.Start()
 	p.blockProcessor.WaitTillStart()
@@ -334,4 +379,103 @@ func (s *promise) close() {
 
 	close(s.receipt)
 	s = nil
+}
+
+func PrepareBootstrapConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {
+	certs, err := readCerts(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	inNodes := false
+	var nodes []*types.NodeConfig
+	for _, node := range conf.SharedConfig.Nodes {
+		nc := &types.NodeConfig{
+			Id:      node.NodeID,
+			Address: node.Host,
+			Port:    node.Port,
+		}
+		if cert, ok := certs.nodeCertificates[node.NodeID]; ok {
+			nc.Certificate = cert
+		} else {
+			return nil, errors.Errorf("Cannot find certificate for node: %s", node.NodeID)
+		}
+		nodes = append(nodes, nc)
+
+		if node.NodeID == conf.LocalConfig.Server.Identity.ID {
+			inNodes = true
+		}
+	}
+	if !inNodes {
+		return nil, errors.Errorf("Cannot find local Server.Identity.ID [%s] in SharedConfig.Nodes: %v", conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Nodes)
+	}
+
+	clusterConfig := &types.ClusterConfig{
+		Nodes: nodes,
+		Admins: []*types.Admin{
+			{
+				Id:          conf.SharedConfig.Admin.ID,
+				Certificate: certs.adminCert,
+			},
+		},
+		CertAuthConfig: certs.caCerts,
+		ConsensusConfig: &types.ConsensusConfig{
+			Algorithm: conf.SharedConfig.Consensus.Algorithm,
+			Members:   make([]*types.PeerConfig, len(conf.SharedConfig.Consensus.Members)),
+			Observers: make([]*types.PeerConfig, len(conf.SharedConfig.Consensus.Observers)),
+			RaftConfig: &types.RaftConfig{
+				TickInterval:   conf.SharedConfig.Consensus.RaftConfig.TickInterval,
+				ElectionTicks:  conf.SharedConfig.Consensus.RaftConfig.ElectionTicks,
+				HeartbeatTicks: conf.SharedConfig.Consensus.RaftConfig.HeartbeatTicks,
+			},
+		},
+	}
+
+	inMembers := false
+	for i, m := range conf.SharedConfig.Consensus.Members {
+		clusterConfig.ConsensusConfig.Members[i] = &types.PeerConfig{
+			NodeId:   m.NodeId,
+			RaftId:   m.RaftId,
+			PeerHost: m.PeerHost,
+			PeerPort: m.PeerPort,
+		}
+		if m.NodeId == conf.LocalConfig.Server.Identity.ID {
+			inMembers = true
+		}
+	}
+
+	inObservers := false
+	for i, m := range conf.SharedConfig.Consensus.Observers {
+		clusterConfig.ConsensusConfig.Observers[i] = &types.PeerConfig{
+			NodeId:   m.NodeId,
+			RaftId:   m.RaftId,
+			PeerHost: m.PeerHost,
+			PeerPort: m.PeerPort,
+		}
+		if m.NodeId == conf.LocalConfig.Server.Identity.ID {
+			inObservers = true
+		}
+	}
+
+	if !inMembers && !inObservers {
+		return nil, errors.Errorf("Cannot find local Server.Identity.ID [%s] in SharedConfig.Consensus Members or Observers: %v",
+			conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Consensus)
+	}
+	if inObservers && inMembers {
+		return nil, errors.Errorf("local Server.Identity.ID [%s] cannot be in SharedConfig.Consensus both Members and Observers: %v",
+			conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Consensus)
+	}
+	// TODO add support for observers, see issue: https://github.ibm.com/blockchaindb/server/issues/403
+	if inObservers {
+		return nil, errors.Errorf("not supported yet: local Server.Identity.ID [%s] is in SharedConfig.Consensus.Observers: %v",
+			conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Consensus)
+	}
+
+	return &types.ConfigTxEnvelope{
+		Payload: &types.ConfigTx{
+			TxId:      uuid.New().String(),
+			NewConfig: clusterConfig,
+		},
+		// TODO: we can make the node itself sign the transaction
+	}, nil
 }

@@ -85,7 +85,22 @@ func (p *HTTPTransport) UpdateClusterConfig(clusterConfig *types.ClusterConfig) 
 		return errors.New("dynamic re-config of http transport is not supported yet")
 	}
 
+	//TODO export to a config util
+	var foundRaftID bool
+	for _, member := range clusterConfig.ConsensusConfig.Members {
+		if member.NodeId == p.localConf.Server.Identity.ID {
+			p.raftID = member.RaftId
+			foundRaftID = true
+			break
+		}
+	}
+	if !foundRaftID {
+		return errors.Errorf("local NodeID '%s' is not in Consensus members: %v",
+			p.localConf.Server.Identity.ID, clusterConfig.ConsensusConfig.Members)
+	}
+
 	p.clusterConfig = clusterConfig
+
 	return nil
 }
 
@@ -99,20 +114,6 @@ func (p *HTTPTransport) Start() error {
 
 	if p.clusterConfig == nil {
 		p.logger.Panic("Must update ClusterConfig before Start()")
-	}
-
-	//TODO export to a config util
-	var foundRaftID bool
-	for _, member := range p.clusterConfig.ConsensusConfig.Members {
-		if member.NodeId == p.localConf.Server.Identity.ID {
-			p.raftID = member.RaftId
-			foundRaftID = true
-			break
-		}
-	}
-	if !foundRaftID {
-		return errors.Errorf("local NodeID '%s' is not in Consensus members: %v",
-			p.localConf.Server.Identity.ID, p.clusterConfig.ConsensusConfig.Members)
 	}
 
 	netConf := p.localConf.Replication.Network

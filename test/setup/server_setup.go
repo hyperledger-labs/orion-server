@@ -189,7 +189,7 @@ func (s *Server) createConfigFile() error {
 			"  walDir: " + filepath.Join(s.configDir, "etcdraft", "wal") + "\n" + //TODO create path
 			"  snapDir: " + filepath.Join(s.configDir, "etcdraft", "snap") + "\n" + //TODO create path
 			"  network:\n" +
-			"    address: 127.0.0.1\n" +
+			"    address: " + s.address + "\n" +
 			"    port: " + strconv.FormatInt(int64(s.peerPort), 10) + "\n" +
 			"  tls:\n" + //TODO add rest of fields when security is supported
 			"    enabled: false\n" +

@@ -12,7 +12,6 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/httphandler"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/pkg/errors"
 )
 
@@ -40,7 +39,7 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		return nil, err
 	}
 
-	db, err := bcdb.NewDB(conf.LocalConfig, lg)
+	db, err := bcdb.NewDB(conf, lg)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating the database object")
 	}
@@ -73,22 +72,12 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 
 // Start starts the server
 func (s *BCDBHTTPServer) Start() error {
-	blockHeight, err := s.db.LedgerHeight()
-	if err != nil {
+	if blockHeight, err := s.db.LedgerHeight(); err != nil {
 		return err
-	}
-	if blockHeight == 0 {
-		s.logger.Infof("Bootstrapping DB for the first time")
-		resp, err := s.db.BootstrapDB(s.conf)
-		if err != nil {
-			return errors.Wrap(err, "error while preparing and committing config transaction")
-		}
-
-		txReceipt := resp.GetResponse().GetReceipt()
-		valInfo := txReceipt.GetHeader().GetValidationInfo()[txReceipt.TxIndex]
-		if valInfo.Flag != types.Flag_VALID {
-			return errors.Errorf("config transaction was not committed due to invalidation [" + valInfo.ReasonIfInvalid + "]")
-		}
+	} else if blockHeight == 0 {
+		return errors.New("ledger height == 0, bootstrap failed")
+	} else {
+		s.logger.Infof("Server starting at ledger height [%d]", blockHeight)
 	}
 
 	go s.serveRequests(s.listen)
