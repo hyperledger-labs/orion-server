@@ -9,76 +9,164 @@ package types;
 import "configuration.proto";
 import "block_and_transaction.proto";
 
-message ResponseEnvelope {
-  bytes payload = 1;
-  bytes signature = 2;
-}
-
-message Payload {
-  ResponseHeader header = 1;
-  bytes response = 2;
-}
 message ResponseHeader {
   string nodeID = 1;
 }
 
+// GetDBStatus
+message GetDBStatusResponseEnvelope {
+  GetDBStatusResponse response = 1;
+  bytes signature = 2;
+}
+
 message GetDBStatusResponse {
-  bool exist = 1;
+  ResponseHeader header = 1;
+  bool exist = 2;
+}
+
+// GetData
+message GetDataResponseEnvelope {
+  GetDataResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetDataResponse {
-  bytes value = 1;
-  Metadata metadata = 2;
+  ResponseHeader header = 1;
+  bytes value = 2;
+  Metadata metadata = 3;
+}
+
+// GetUser
+message GetUserResponseEnvelope {
+  GetUserResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetUserResponse {
-  User user = 1;
-  Metadata metadata = 2;
+  ResponseHeader header = 1;
+  User user = 2;
+  Metadata metadata = 3;
+}
+
+// GetConfig
+message GetConfigResponseEnvelope {
+  GetConfigResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetConfigResponse {
-  ClusterConfig config = 1;
-  Metadata metadata = 2;
+  ResponseHeader header = 1;
+  ClusterConfig config = 2;
+  Metadata metadata = 3;
+}
+
+// GetNodeConfig
+message GetNodeConfigResponseEnvelope {
+  GetNodeConfigResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetNodeConfigResponse {
-  NodeConfig node_config = 1;
+  ResponseHeader header = 1;
+  NodeConfig node_config = 2;
 }
 
 //========= Part II Provenance API responses
 
+// GetBlock
+message GetBlockResponseEnvelope {
+  GetBlockResponse response = 1;
+  bytes signature = 2;
+}
+
 message GetBlockResponse {
-  BlockHeader block_header = 1;
+  ResponseHeader header = 1;
+  BlockHeader block_header = 2;
+}
+
+// GetLedgerPath
+message GetLedgerPathResponseEnvelope {
+  GetLedgerPathResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetLedgerPathResponse {
-  repeated BlockHeader block_headers = 1;
+  ResponseHeader header = 1;
+  repeated BlockHeader block_headers = 2;
+}
+
+// GetTxProof
+message GetTxProofResponseEnvelope {
+  GetTxProofResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetTxProofResponse {
-  repeated bytes hashes = 1;
+  ResponseHeader header = 1;
+  repeated bytes hashes = 2;
+}
+
+// GetHistoricalData
+message GetHistoricalDataResponseEnvelope {
+  GetHistoricalDataResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetHistoricalDataResponse {
-  repeated ValueWithMetadata values = 1;
+  ResponseHeader header = 1;
+  repeated ValueWithMetadata values = 2;
+}
+
+// GetDataReaders
+message GetDataReadersResponseEnvelope {
+  GetDataReadersResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetDataReadersResponse {
-  map<string, uint32> read_by = 1;
+  ResponseHeader header = 1;
+  map<string, uint32> read_by = 2;
+}
+
+// GetDataWriters
+message GetDataWritersResponseEnvelope {
+  GetDataWritersResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetDataWritersResponse {
-  map<string, uint32> written_by = 1;
+  ResponseHeader header = 1;
+  map<string, uint32> written_by = 2;
+}
+
+// GetDataProvenance
+message GetDataProvenanceResponseEnvelope {
+  GetDataProvenanceResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetDataProvenanceResponse {
-  repeated KVWithMetadata KVs = 1;
+  ResponseHeader header = 1;
+  repeated KVWithMetadata KVs = 2;
+}
+
+// GetTxIDsSubmittedBy
+message GetTxIDsSubmittedByResponseEnvelope {
+  GetTxIDsSubmittedByResponse response = 1;
+  bytes signature = 2;
 }
 
 message GetTxIDsSubmittedByResponse {
-  repeated string txIDs = 1;
+  ResponseHeader header = 1;
+  repeated string txIDs = 2;
 }
 
-message TxResponse {
-  TxReceipt receipt = 1;
+message TxReceiptResponseEnvelope {
+  TxReceiptResponse response = 1;
+  bytes signature = 2;
+}
+
+message TxReceiptResponse {
+  ResponseHeader header = 1;
+  TxReceipt receipt = 2;
 }

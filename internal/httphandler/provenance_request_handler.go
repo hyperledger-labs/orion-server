@@ -79,7 +79,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 	}
 	query := payload.(*types.GetHistoricalDataQuery)
 
-	var response *types.ResponseEnvelope
+	var response *types.GetHistoricalDataResponseEnvelope
 	var err error
 
 	switch {

@@ -78,20 +78,12 @@ func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, er
 	})
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
-	require.NotNil(t, cfg.Payload)
+	require.NotNil(t, cfg.Response)
 
-	configPayload := &types.Payload{}
-	err = json.Unmarshal(cfg.Payload, configPayload)
+	err = env.certCol.VerifyLeafCert(cfg.GetResponse().GetNodeConfig().GetCertificate())
 	require.NoError(t, err)
 
-	nodeConfig := &types.GetNodeConfigResponse{}
-	err = json.Unmarshal(configPayload.Response, nodeConfig)
-	require.NoError(t, err)
-
-	err = env.certCol.VerifyLeafCert(nodeConfig.GetNodeConfig().GetCertificate())
-	require.NoError(t, err)
-
-	return crypto.NewVerifier(nodeConfig.GetNodeConfig().GetCertificate())
+	return crypto.NewVerifier(cfg.GetResponse().GetNodeConfig().GetCertificate())
 }
 
 func newServerTestEnv(t *testing.T) *serverTestEnv {
@@ -291,22 +283,14 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.NotNil(t, data)
-	require.NotNil(t, data.Payload)
+	require.NotNil(t, data.Response)
 
-	err = verifier.Verify(data.GetPayload(), data.GetSignature())
+	resp, err := json.Marshal(data.GetResponse())
+	require.NoError(t, err)
+	err = verifier.Verify(resp, data.GetSignature())
 	require.NoError(t, err)
 
-	payload := &types.Payload{}
-	err = json.Unmarshal(data.GetPayload(), payload)
-	require.NoError(t, err)
-
-	response := &types.GetDataResponse{}
-	err = json.Unmarshal(payload.GetResponse(), response)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	require.Nil(t, response.Value)
+	require.Nil(t, data.GetResponse().GetValue())
 
 	dataTx := &types.DataTx{
 		MustSignUserIDs: []string{"admin"},
@@ -346,29 +330,20 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 			return false
 		}
 
-		if data.GetPayload() == nil {
+		if data.GetResponse() == nil {
 			return false
 		}
 
-		err = verifier.Verify(data.GetPayload(), data.GetSignature())
+		dataB, err := json.Marshal(data.GetResponse())
+		require.NoError(t, err)
+
+		err = verifier.Verify(dataB, data.GetSignature())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		payload := &types.Payload{}
-		err = json.Unmarshal(data.Payload, payload)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		response := &types.GetDataResponse{}
-		err = json.Unmarshal(payload.Response, response)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		return response.GetValue() != nil &&
-			bytes.Equal(response.GetValue(), []byte("bar"))
+		return data.GetResponse().GetValue() != nil &&
+			bytes.Equal(data.GetResponse().GetValue(), []byte("bar"))
 	}, time.Minute, 100*time.Millisecond)
 
 	provenanceQuery := &types.GetHistoricalDataQuery{
@@ -385,19 +360,14 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = verifier.Verify(data.GetPayload(), data.GetSignature())
+	valuesB, err := json.Marshal(values.GetResponse())
 	require.NoError(t, err)
 
-	payload = &types.Payload{}
-	err = json.Unmarshal(values.GetPayload(), payload)
+	err = verifier.Verify(valuesB, values.GetSignature())
 	require.NoError(t, err)
 
-	historyResponse := &types.GetHistoricalDataResponse{}
-	err = json.Unmarshal(payload.GetResponse(), historyResponse)
-	require.NoError(t, err)
-
-	require.Len(t, historyResponse.GetValues(), 1)
-	require.Equal(t, historyResponse.Values[0].GetValue(), []byte("bar"))
+	require.Len(t, values.GetResponse().GetValues(), 1)
+	require.Equal(t, values.GetResponse().Values[0].GetValue(), []byte("bar"))
 }
 
 func TestServerWithUserAdminRequest(t *testing.T) {
@@ -448,24 +418,20 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 			return false
 		}
 
-		err = verifier.Verify(user.GetPayload(), user.GetSignature())
+		userB, err := json.Marshal(user.GetResponse())
+		require.NoError(t, err)
+
+		err = verifier.Verify(userB, user.GetSignature())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if user.GetPayload() == nil {
+		if user.GetResponse() == nil {
 			return false
 		}
 
-		payload := &types.Payload{}
-		err = json.Unmarshal(user.GetPayload(), payload)
-		require.NoError(t, err)
-
-		response := &types.GetUserResponse{}
-		err = json.Unmarshal(payload.GetResponse(), response)
-
-		return response.GetUser() != nil &&
-			response.GetUser().GetID() == "testUser"
+		return user.GetResponse().GetUser() != nil &&
+			user.GetResponse().GetUser().GetID() == "testUser"
 	}, time.Minute, 100*time.Millisecond)
 }
 
@@ -499,19 +465,15 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 			return false
 		}
 
-		err = verifier.Verify(db.GetPayload(), db.GetSignature())
+		dbB, err := json.Marshal(db.GetResponse())
+		require.NoError(t, err)
+
+		err = verifier.Verify(dbB, db.GetSignature())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		payload := &types.Payload{}
-		err = json.Unmarshal(db.GetPayload(), payload)
-		require.NoError(t, err)
-
-		response := &types.GetDBStatusResponse{}
-		err = json.Unmarshal(payload.GetResponse(), response)
-
-		return response.GetExist()
+		return db.GetResponse().GetExist()
 	}, time.Minute, 100*time.Millisecond)
 
 	dataTx := &types.DataTx{
@@ -554,19 +516,16 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 			return false
 		}
 
-		err = verifier.Verify(data.GetPayload(), data.GetSignature())
+		dataB, err := json.Marshal(data.GetResponse())
+		require.NoError(t, err)
+
+		err = verifier.Verify(dataB, data.GetSignature())
 		if err != nil {
 			t.Fatal(err)
 		}
-		payload := &types.Payload{}
-		err = json.Unmarshal(data.GetPayload(), payload)
-		require.NoError(t, err)
 
-		response := &types.GetDataResponse{}
-		err = json.Unmarshal(payload.GetResponse(), response)
-
-		return response.GetValue() != nil &&
-			bytes.Equal(response.GetValue(), []byte("bar"))
+		return data.GetResponse().GetValue() != nil &&
+			bytes.Equal(data.GetResponse().GetValue(), []byte("bar"))
 	}, time.Minute, 100*time.Millisecond)
 }
 
@@ -678,24 +637,20 @@ func TestServerWithRestart(t *testing.T) {
 			return false
 		}
 
-		err = verifier.Verify(user.GetPayload(), user.GetSignature())
+		userB, err := json.Marshal(user.GetResponse())
+		require.NoError(t, err)
+
+		err = verifier.Verify(userB, user.GetSignature())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if user.GetPayload() == nil {
+		if user.GetResponse() == nil {
 			return false
 		}
 
-		payload := &types.Payload{}
-		err = json.Unmarshal(user.GetPayload(), payload)
-		require.NoError(t, err)
-
-		response := &types.GetUserResponse{}
-		err = json.Unmarshal(payload.GetResponse(), response)
-
-		return response.GetUser() != nil &&
-			response.GetUser().GetID() == "testUser"
+		return user.GetResponse().GetUser() != nil &&
+			user.GetResponse().GetUser().GetID() == "testUser"
 	}, time.Minute, 100*time.Millisecond)
 
 	t.Log("Before restart")
@@ -716,24 +671,20 @@ func TestServerWithRestart(t *testing.T) {
 			return false
 		}
 
-		err = verifier.Verify(user.GetPayload(), user.GetSignature())
+		userB, err := json.Marshal(user.GetResponse())
+		require.NoError(t, err)
+
+		err = verifier.Verify(userB, user.GetSignature())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if user.GetPayload() == nil {
+		if user.GetResponse() == nil {
 			t.Log("nil payload")
 			return false
 		}
 
-		payload := &types.Payload{}
-		err = json.Unmarshal(user.GetPayload(), payload)
-		require.NoError(t, err)
-
-		response := &types.GetUserResponse{}
-		err = json.Unmarshal(payload.GetResponse(), response)
-
-		return response.GetUser() != nil &&
-			response.GetUser().GetID() == "testUser"
+		return user.GetResponse().GetUser() != nil &&
+			user.GetResponse().GetUser().GetID() == "testUser"
 	}, 10*time.Second, 100*time.Millisecond)
 }

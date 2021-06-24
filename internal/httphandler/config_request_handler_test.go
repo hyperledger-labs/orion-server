@@ -45,8 +45,8 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() *http.Request
-		dbMockFactory      func(response *types.ResponseEnvelope) bcdb.DB
-		expectedResponse   *types.ResponseEnvelope
+		dbMockFactory      func(response *types.GetConfigResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetConfigResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
 	}{
@@ -59,39 +59,37 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetConfig").Return(response, nil)
 				return db
 			},
-			expectedResponse: &types.ResponseEnvelope{
-				Payload: MarshalOrPanic(&types.Payload{
+			expectedResponse: &types.GetConfigResponseEnvelope{
+				Response: &types.GetConfigResponse{
 					Header: &types.ResponseHeader{
 						NodeID: "testNodeId",
 					},
-					Response: MarshalOrPanic(&types.GetConfigResponse{
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								TxNum:    1,
-								BlockNum: 1,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							TxNum:    1,
+							BlockNum: 1,
+						},
+					},
+					Config: &types.ClusterConfig{
+						CertAuthConfig: &types.CAConfig{
+							Roots: [][]byte{{0, 0, 0}},
+						},
+						Nodes: []*types.NodeConfig{
+							{
+								ID:          "testNodeId",
+								Address:     "http://localhost",
+								Port:        8080,
+								Certificate: []byte{0, 0, 0},
 							},
 						},
-						Config: &types.ClusterConfig{
-							CertAuthConfig: &types.CAConfig{
-								Roots: [][]byte{{0, 0, 0}},
-							},
-							Nodes: []*types.NodeConfig{
-								{
-									ID:          "testNodeId",
-									Address:     "http://localhost",
-									Port:        8080,
-									Certificate: []byte{0, 0, 0},
-								},
-							},
-						},
-					}),
-				}),
+					},
+				},
 			},
 			expectedStatusCode: http.StatusOK,
 			expectedErr:        "",
@@ -103,7 +101,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -117,7 +115,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -133,7 +131,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
@@ -151,7 +149,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
@@ -169,7 +167,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetConfig").Return(nil, errors.New("failed to get configuration"))
@@ -205,7 +203,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.ResponseEnvelope{}
+				res := &types.GetConfigResponseEnvelope{}
 				err := json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResponse, res)
@@ -249,7 +247,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 	type testCase struct {
 		name                    string
 		txEnvFactory            func() *types.ConfigTxEnvelope
-		txRespFactory           func() *types.ResponseEnvelope
+		txRespFactory           func() *types.TxReceiptResponseEnvelope
 		createMockAndInstrument func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB
 		timeoutStr              string
 		expectedCode            int
@@ -265,7 +263,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return correctTxRespEnv
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -290,7 +288,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -317,7 +315,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -336,7 +334,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -352,7 +350,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				return &types.ConfigTxEnvelope{Payload: nil, Signature: sigAdmin}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -370,7 +368,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 				tx.UserID = ""
 				return &types.ConfigTxEnvelope{Payload: tx, Signature: sigAdmin}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -385,7 +383,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				return &types.ConfigTxEnvelope{Payload: configTx, Signature: nil}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -403,7 +401,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: []byte("bad-sig"),
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -426,7 +424,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -446,7 +444,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 					Signature: sigAdmin,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, configTx *types.ConfigTxEnvelope, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -500,7 +498,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 
 			require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode == http.StatusOK {
-				resp := &types.ResponseEnvelope{}
+				resp := &types.TxReceiptResponseEnvelope{}
 				err := json.NewDecoder(rr.Body).Decode(resp)
 				require.NoError(t, err)
 				require.Equal(t, txResp, resp)
@@ -524,8 +522,8 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() *http.Request
-		dbMockFactory      func(response *types.ResponseEnvelope) bcdb.DB
-		expectedResponse   *types.ResponseEnvelope
+		dbMockFactory      func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetNodeConfigResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
 	}{
@@ -541,26 +539,24 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetNodeConfig", "node1").Return(response, nil)
 				return db
 			},
-			expectedResponse: &types.ResponseEnvelope{
-				Payload: MarshalOrPanic(&types.Payload{
+			expectedResponse: &types.GetNodeConfigResponseEnvelope{
+				Response: &types.GetNodeConfigResponse{
 					Header: &types.ResponseHeader{
 						NodeID: "testNodeId",
 					},
-					Response: MarshalOrPanic(&types.GetNodeConfigResponse{
-						NodeConfig: &types.NodeConfig{
-							ID:          "node1",
-							Address:     "http://localhost",
-							Port:        8080,
-							Certificate: []byte{0, 0, 0},
-						},
-					}),
-				}),
+					NodeConfig: &types.NodeConfig{
+						ID:          "node1",
+						Address:     "http://localhost",
+						Port:        8080,
+						Certificate: []byte{0, 0, 0},
+					},
+				},
 			},
 			expectedStatusCode: http.StatusOK,
 			expectedErr:        "",
@@ -572,7 +568,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -586,7 +582,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedResponse:   nil,
@@ -605,7 +601,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetNodeConfig", "node1").Return(nil, nil)
@@ -624,7 +620,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				db.On("GetNodeConfig", "node1").Return(nil, nil)
@@ -646,7 +642,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetNodeConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetNodeConfig", "node1").Return(nil, errors.New("failed to get configuration"))
@@ -682,7 +678,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.ResponseEnvelope{}
+				res := &types.GetNodeConfigResponseEnvelope{}
 				err := json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResponse, res)

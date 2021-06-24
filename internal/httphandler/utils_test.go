@@ -26,18 +26,18 @@ func TestSendHTTPResponse(t *testing.T) {
 		t.Parallel()
 
 		w := httptest.NewRecorder()
-		dbStatus := &types.ResponseEnvelope{
-			Payload: MarshalOrPanic(&types.Payload{
+		dbStatus := &types.GetDBStatusResponseEnvelope{
+			Response: &types.GetDBStatusResponse{
 				Header: &types.ResponseHeader{
 					NodeID: "testID",
 				},
-				Response: MarshalOrPanic(&types.GetDBStatusResponse{}),
-			}),
+				Exist: false,
+			},
 		}
 		SendHTTPResponse(w, http.StatusOK, dbStatus)
 
 		require.Equal(t, http.StatusOK, w.Code)
-		actualDBStatus := &types.ResponseEnvelope{}
+		actualDBStatus := &types.GetDBStatusResponseEnvelope{}
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), actualDBStatus))
 		require.True(t, proto.Equal(dbStatus, actualDBStatus))
 	})
@@ -110,24 +110,22 @@ func TestVerifyRequestSignature(t *testing.T) {
 	})
 }
 
-var correctTxRespEnv *types.ResponseEnvelope
+var correctTxRespEnv *types.TxReceiptResponseEnvelope
 
 func init() {
-	correctTxRespEnv = &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	correctTxRespEnv = &types.TxReceiptResponseEnvelope{
+		Response: &types.TxReceiptResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "node1",
 			},
-			Response: MarshalOrPanic(&types.TxResponse{
-				Receipt: &types.TxReceipt{
-					Header: &types.BlockHeader{
-						BaseHeader: &types.BlockHeaderBase{
-							Number: 1,
-						},
+			Receipt: &types.TxReceipt{
+				Header: &types.BlockHeader{
+					BaseHeader: &types.BlockHeaderBase{
+						Number: 1,
 					},
-					TxIndex: 1,
 				},
-			}),
-		}),
+				TxIndex: 1,
+			},
+		},
 	}
 }
