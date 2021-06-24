@@ -32,7 +32,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 			return nil, err
 		}
 		if valRes.Flag != types.Flag_VALID {
-			for _, mustSignUserID := range txEnv.Payload.MustSignUserIDs {
+			for _, mustSignUserID := range txEnv.Payload.MustSignUserIds {
 				if userID == mustSignUserID {
 					return &types.ValidationInfo{
 						Flag:            types.Flag_INVALID_UNAUTHORISED,
@@ -47,20 +47,20 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 	}
 
 	dbs := make(map[string]bool)
-	for _, ops := range txEnv.Payload.DBOperations {
-		if !dbs[ops.DBName] {
-			dbs[ops.DBName] = true
+	for _, ops := range txEnv.Payload.DbOperations {
+		if !dbs[ops.DbName] {
+			dbs[ops.DbName] = true
 			continue
 		}
 
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-			ReasonIfInvalid: "the database [" + ops.DBName + "] occurs more than once in the operations. The database present in the operations should be unique",
+			ReasonIfInvalid: "the database [" + ops.DbName + "] occurs more than once in the operations. The database present in the operations should be unique",
 		}, nil
 	}
 
-	for _, ops := range txEnv.Payload.DBOperations {
-		valRes, err = v.validateDBName(ops.DBName)
+	for _, ops := range txEnv.Payload.DbOperations {
+		valRes, err = v.validateDBName(ops.DbName)
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 			// manipulated by the transaction. Hence, while validating operations associated with a given database,
 			// we need to consider only users who have read-write access to it. If none of the user has a
 			// read-write permission on a given database, the transaction would be marked invalid.
-			hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, ops.DBName)
+			hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, ops.DbName)
 			if err != nil {
 				return nil, err
 			}
@@ -89,7 +89,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 		if len(usersWithDBAccess) == 0 {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "none of the user in [" + strings.Join(userIDsWithValidSign, ", ") + "] has read-write permission on the database [" + ops.DBName + "]",
+				ReasonIfInvalid: "none of the user in [" + strings.Join(userIDsWithValidSign, ", ") + "] has read-write permission on the database [" + ops.DbName + "]",
 			}, nil
 		}
 
@@ -134,7 +134,7 @@ func (v *dataTxValidator) validateOps(
 	txOps *types.DBOperation,
 	pendingOps *pendingOperations,
 ) (*types.ValidationInfo, error) {
-	dbName := txOps.DBName
+	dbName := txOps.DbName
 
 	r, err := v.validateFieldsInDataWrites(txOps.DataWrites)
 	if err != nil {
@@ -144,7 +144,7 @@ func (v *dataTxValidator) validateOps(
 		return r, nil
 	}
 
-	r, err = v.validateFieldsInDataDeletes(txOps.DBName, txOps.DataDeletes, pendingOps)
+	r, err = v.validateFieldsInDataDeletes(txOps.DbName, txOps.DataDeletes, pendingOps)
 	if err != nil {
 		return nil, err
 	}
@@ -195,20 +195,20 @@ func (v *dataTxValidator) validateFieldsInDataWrites(DataWrites []*types.DataWri
 			}, nil
 		}
 
-		if w.ACL == nil {
+		if w.Acl == nil {
 			continue
 		}
 
 		userToCheck := make(map[string]struct{})
 
-		for user := range w.ACL.ReadUsers {
+		for user := range w.Acl.ReadUsers {
 			if existingUser[user] {
 				continue
 			}
 			userToCheck[user] = struct{}{}
 		}
 
-		for user := range w.ACL.ReadWriteUsers {
+		for user := range w.Acl.ReadWriteUsers {
 			if existingUser[user] {
 				continue
 			}

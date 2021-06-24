@@ -32,18 +32,18 @@ func ConstructDBEntriesForUserAdminTx(tx *types.UserAdministrationTx, version *t
 		}
 
 		kv := &worldstate.KVWithMetadata{
-			Key:   string(UserNamespace) + w.User.ID,
+			Key:   string(UserNamespace) + w.User.Id,
 			Value: userSerialized,
 			Metadata: &types.Metadata{
 				Version:       version,
-				AccessControl: w.ACL,
+				AccessControl: w.Acl,
 			},
 		}
 		userWrites = append(userWrites, kv)
 	}
 
 	for _, d := range tx.UserDeletes {
-		userDeletes = append(userDeletes, string(UserNamespace)+d.UserID)
+		userDeletes = append(userDeletes, string(UserNamespace)+d.UserId)
 	}
 
 	return &worldstate.DBUpdates{
@@ -63,15 +63,15 @@ func ConstructProvenanceEntriesForUserAdminTx(
 	txData := &provenance.TxDataForProvenance{
 		IsValid:            true,
 		DBName:             worldstate.UsersDBName,
-		UserID:             tx.UserID,
-		TxID:               tx.TxID,
+		UserID:             tx.UserId,
+		TxID:               tx.TxId,
 		Deletes:            make(map[string]*types.Version),
 		OldVersionOfWrites: make(map[string]*types.Version),
 	}
 
 	for _, read := range tx.UserReads {
 		k := &provenance.KeyWithVersion{
-			Key:     read.UserID,
+			Key:     read.UserId,
 			Version: read.Version,
 		}
 		txData.Reads = append(txData.Reads, k)
@@ -84,16 +84,16 @@ func ConstructProvenanceEntriesForUserAdminTx(
 		}
 
 		kv := &types.KVWithMetadata{
-			Key:   write.User.ID,
+			Key:   write.User.Id,
 			Value: userSerialized,
 			Metadata: &types.Metadata{
 				Version:       version,
-				AccessControl: write.ACL,
+				AccessControl: write.Acl,
 			},
 		}
 		txData.Writes = append(txData.Writes, kv)
 
-		v, err := identityQuerier.GetUserVersion(write.User.ID)
+		v, err := identityQuerier.GetUserVersion(write.User.Id)
 		if err != nil {
 			if _, ok := err.(*NotFoundErr); ok {
 				continue
@@ -102,18 +102,18 @@ func ConstructProvenanceEntriesForUserAdminTx(
 			return nil, err
 		}
 
-		txData.OldVersionOfWrites[write.User.ID] = v
+		txData.OldVersionOfWrites[write.User.Id] = v
 	}
 
 	for _, d := range tx.UserDeletes {
-		v, err := identityQuerier.GetUserVersion(d.UserID)
+		v, err := identityQuerier.GetUserVersion(d.UserId)
 		if err != nil {
 			return nil, err
 		}
 
 		// for a delete to be valid, the value must exist and hence, the version will
 		// never be nil
-		txData.Deletes[d.UserID] = v
+		txData.Deletes[d.UserId] = v
 	}
 
 	return txData, nil
@@ -126,23 +126,23 @@ func ConstructDBEntriesForClusterAdmins(oldAdmins, newAdmins []*types.Admin, ver
 
 	newAdms := make(map[string]*types.Admin)
 	for _, newAdm := range newAdmins {
-		newAdms[newAdm.ID] = newAdm
+		newAdms[newAdm.Id] = newAdm
 	}
 
 	for _, oldAdm := range oldAdmins {
-		if _, ok := newAdms[oldAdm.ID]; ok {
-			if proto.Equal(oldAdm, newAdms[oldAdm.ID]) {
-				delete(newAdms, oldAdm.ID)
+		if _, ok := newAdms[oldAdm.Id]; ok {
+			if proto.Equal(oldAdm, newAdms[oldAdm.Id]) {
+				delete(newAdms, oldAdm.Id)
 			}
 			continue
 		}
 
-		deletes = append(deletes, string(UserNamespace)+oldAdm.ID)
+		deletes = append(deletes, string(UserNamespace)+oldAdm.Id)
 	}
 
 	for _, admin := range newAdms {
 		u := &types.User{
-			ID:          admin.ID,
+			Id:          admin.Id,
 			Certificate: admin.Certificate,
 			Privilege: &types.Privilege{
 				Admin: true,
@@ -157,7 +157,7 @@ func ConstructDBEntriesForClusterAdmins(oldAdmins, newAdmins []*types.Admin, ver
 		kvWrites = append(
 			kvWrites,
 			&worldstate.KVWithMetadata{
-				Key:   string(UserNamespace) + admin.ID,
+				Key:   string(UserNamespace) + admin.Id,
 				Value: value,
 				Metadata: &types.Metadata{
 					Version: version,
@@ -240,18 +240,18 @@ func ConstructDBEntriesForNodes(oldNodes, newNodes []*types.NodeConfig, version 
 
 	nodes := make(map[string]*types.NodeConfig)
 	for _, newNode := range newNodes {
-		nodes[newNode.ID] = newNode
+		nodes[newNode.Id] = newNode
 	}
 
 	for _, oldNode := range oldNodes {
-		if _, ok := nodes[oldNode.ID]; ok {
-			if proto.Equal(oldNode, nodes[oldNode.ID]) {
-				delete(nodes, oldNode.ID)
+		if _, ok := nodes[oldNode.Id]; ok {
+			if proto.Equal(oldNode, nodes[oldNode.Id]) {
+				delete(nodes, oldNode.Id)
 			}
 			continue
 		}
 
-		deletes = append(deletes, string(NodeNamespace)+oldNode.ID)
+		deletes = append(deletes, string(NodeNamespace)+oldNode.Id)
 	}
 
 	for _, n := range nodes {
@@ -263,7 +263,7 @@ func ConstructDBEntriesForNodes(oldNodes, newNodes []*types.NodeConfig, version 
 		kvWrites = append(
 			kvWrites,
 			&worldstate.KVWithMetadata{
-				Key:   string(NodeNamespace) + n.ID,
+				Key:   string(NodeNamespace) + n.Id,
 				Value: value,
 				Metadata: &types.Metadata{
 					Version: version,

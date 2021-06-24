@@ -580,7 +580,7 @@ func TestGetConfig(t *testing.T) {
 		clusterConfig := &types.ClusterConfig{
 			Nodes: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        1234,
 					Certificate: []byte("cert"),
@@ -588,7 +588,7 @@ func TestGetConfig(t *testing.T) {
 			},
 			Admins: []*types.Admin{
 				{
-					ID:          "admin",
+					Id:          "admin",
 					Certificate: []byte("cert"),
 				},
 			},

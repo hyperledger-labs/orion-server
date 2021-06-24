@@ -14,8 +14,8 @@ message GetDBStatusQueryEnvelope {
 }
 
 message GetDBStatusQuery {
-  string userID = 1;
-  string DBName = 2;
+  string user_id = 1;
+  string db_name = 2;
 }
 
 message GetDataQueryEnvelope {
@@ -24,8 +24,8 @@ message GetDataQueryEnvelope {
 }
 
 message GetDataQuery {
-  string userID = 1;
-  string DBName = 2;
+  string user_id = 1;
+  string db_name = 2;
   string key = 3;
 }
 
@@ -35,8 +35,8 @@ message GetUserQueryEnvelope {
 }
 
 message GetUserQuery {
-  string userID = 1;
-  string targetUserID = 2;
+  string user_id = 1;
+  string target_user_id = 2;
 }
 
 message GetConfigQueryEnvelope {
@@ -45,7 +45,7 @@ message GetConfigQueryEnvelope {
 }
 
 message GetConfigQuery {
-  string userID = 1;
+  string user_id = 1;
 }
 
 message GetNodeConfigQueryEnvelope {
@@ -54,14 +54,14 @@ message GetNodeConfigQueryEnvelope {
 }
 
 message GetNodeConfigQuery {
-  string userID = 1;
-  string nodeID = 2;
+  string user_id = 1;
+  string node_id = 2;
 }
 
 //========= Part II Provenance API queries
 
 message GetBlockQuery {
-  string userID = 1;
+  string user_id = 1;
   uint64 block_number = 2;
 }
 
@@ -71,7 +71,7 @@ message GetBlockQueryEnvelope {
 }
 
 message GetLedgerPathQuery {
-  string userID = 1;
+  string user_id = 1;
   uint64 start_block_number = 2;
   uint64 end_block_number = 3;
 }
@@ -82,7 +82,7 @@ message GetLedgerPathQueryEnvelope {
 }
 
 message GetTxProofQuery {
-  string userID = 1;
+  string user_id = 1;
   uint64 block_number = 2;
   uint64 tx_index = 3;
 }
@@ -93,13 +93,13 @@ message GetTxProofQueryEnvelope {
 }
 
 message GetHistoricalDataQuery {
-  string userID = 1;
-  string DBName = 2;
+  string user_id = 1;
+  string db_name = 2;
   string key = 3;
   Version version = 4;
   string direction = 5;
-  bool onlyDeletes = 6;
-  bool mostRecent = 7;
+  bool only_deletes = 6;
+  bool most_recent = 7;
 }
 
 message GetHistoricalDataQueryEnvelope {
@@ -108,8 +108,8 @@ message GetHistoricalDataQueryEnvelope {
 }
 
 message GetDataReadersQuery {
-  string userID = 1;
-  string DBName = 2;
+  string user_id = 1;
+  string db_name = 2;
   string key = 3;
 }
 
@@ -119,8 +119,8 @@ message GetDataReadersQueryEnvelope {
 }
 
 message GetDataWritersQuery {
-  string userID = 1;
-  string DBName = 2;
+  string user_id = 1;
+  string db_name = 2;
   string key = 3;
 }
 
@@ -130,8 +130,8 @@ message GetDataWritersQueryEnvelope {
 }
 
 message GetDataReadByQuery {
-  string userID = 1;
-  string target_userID = 2;
+  string user_id = 1;
+  string target_user_id = 2;
 }
 
 message GetDataReadByQueryEnvelope {
@@ -140,13 +140,13 @@ message GetDataReadByQueryEnvelope {
 }
 
 message GetDataWrittenByQuery {
-  string userID = 1;
-  string target_userID = 2;
+  string user_id = 1;
+  string target_user_id = 2;
 }
 
 message GetDataDeletedByQuery {
-  string userID = 1;
-  string target_userID = 2;
+  string user_id = 1;
+  string target_user_id = 2;
 }
 
 message GetDataDeletedByQueryEnvelope {
@@ -160,8 +160,8 @@ message GetDataWrittenByQueryEnvelope {
 }
 
 message GetTxIDsSubmittedByQuery {
-  string userID = 1;
-  string target_userID = 2;
+  string user_id = 1;
+  string target_user_id = 2;
 }
 
 message GetTxIDsSubmittedByQueryEnvelope {
@@ -170,8 +170,8 @@ message GetTxIDsSubmittedByQueryEnvelope {
 }
 
 message GetTxReceiptQuery {
-  string userID = 1;
-  string txID = 2;
+  string user_id = 1;
+  string tx_id = 2;
 }
 
 message GetTxReceiptQueryEnvelope {
@@ -185,7 +185,7 @@ message GetMostRecentUserOrNodeQuery {
         NODE = 1;
     }
     Type type = 1;
-    string userID = 2;
-    string ID = 3;
+    string user_id = 2;
+    string id = 3;
     Version  version = 4;
 }

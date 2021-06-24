@@ -84,17 +84,17 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 
 	switch {
 	case query.OnlyDeletes:
-		response, err = p.db.GetDeletedValues(query.DBName, query.Key)
+		response, err = p.db.GetDeletedValues(query.DbName, query.Key)
 	case query.Version == nil:
-		response, err = p.db.GetValues(query.DBName, query.Key)
+		response, err = p.db.GetValues(query.DbName, query.Key)
 	case query.Direction == "" && query.MostRecent:
-		response, err = p.db.GetMostRecentValueAtOrBelow(query.DBName, query.Key, query.Version)
+		response, err = p.db.GetMostRecentValueAtOrBelow(query.DbName, query.Key, query.Version)
 	case query.Direction == "":
-		response, err = p.db.GetValueAt(query.DBName, query.Key, query.Version)
+		response, err = p.db.GetValueAt(query.DbName, query.Key, query.Version)
 	case query.Direction == "previous":
-		response, err = p.db.GetPreviousValues(query.DBName, query.Key, query.Version)
+		response, err = p.db.GetPreviousValues(query.DbName, query.Key, query.Version)
 	case query.Direction == "next":
-		response, err = p.db.GetNextValues(query.DBName, query.Key, query.Version)
+		response, err = p.db.GetNextValues(query.DbName, query.Key, query.Version)
 	default:
 		SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "direction must be either [previous] or [next]",
@@ -116,7 +116,7 @@ func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http
 	}
 	query := payload.(*types.GetDataReadersQuery)
 
-	response, err := p.db.GetReaders(query.DBName, query.Key)
+	response, err := p.db.GetReaders(query.DbName, query.Key)
 	if err != nil {
 		processInternalError(w, r, err)
 		return
@@ -132,7 +132,7 @@ func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http
 	}
 	query := payload.(*types.GetDataWritersQuery)
 
-	response, err := p.db.GetWriters(query.DBName, query.Key)
+	response, err := p.db.GetWriters(query.DbName, query.Key)
 	if err != nil {
 		processInternalError(w, r, err)
 		return
@@ -148,7 +148,7 @@ func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *h
 	}
 	query := payload.(*types.GetDataReadByQuery)
 
-	response, err := p.db.GetValuesReadByUser(query.TargetUserID)
+	response, err := p.db.GetValuesReadByUser(query.TargetUserId)
 	if err != nil {
 		processInternalError(w, r, err)
 		return
@@ -164,7 +164,7 @@ func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r
 	}
 	query := payload.(*types.GetDataWrittenByQuery)
 
-	response, err := p.db.GetValuesWrittenByUser(query.TargetUserID)
+	response, err := p.db.GetValuesWrittenByUser(query.TargetUserId)
 	if err != nil {
 		processInternalError(w, r, err)
 		return
@@ -180,7 +180,7 @@ func (p *provenanceRequestHandler) getDataDeletedByUser(w http.ResponseWriter, r
 	}
 	query := payload.(*types.GetDataDeletedByQuery)
 
-	response, err := p.db.GetValuesDeletedByUser(query.TargetUserID)
+	response, err := p.db.GetValuesDeletedByUser(query.TargetUserId)
 	if err != nil {
 		processInternalError(w, r, err)
 		return
@@ -196,7 +196,7 @@ func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r 
 	}
 	query := payload.(*types.GetTxIDsSubmittedByQuery)
 
-	response, err := p.db.GetTxIDsSubmittedByUser(query.TargetUserID)
+	response, err := p.db.GetTxIDsSubmittedByUser(query.TargetUserId)
 	if err != nil {
 		processInternalError(w, r, err)
 		return
@@ -229,7 +229,7 @@ func (p *provenanceRequestHandler) getMostRecentUserOrNode(w http.ResponseWriter
 		dbName = worldstate.UsersDBName
 	}
 
-	response, err := p.db.GetMostRecentValueAtOrBelow(dbName, query.ID, query.Version)
+	response, err := p.db.GetMostRecentValueAtOrBelow(dbName, query.Id, query.Version)
 	if err != nil {
 		processInternalError(w, r, err)
 		return

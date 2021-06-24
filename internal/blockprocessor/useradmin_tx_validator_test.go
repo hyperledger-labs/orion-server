@@ -24,14 +24,14 @@ func TestValidateUsedAdminTx(t *testing.T) {
 	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
 
 	nonAdminUser := &types.User{
-		ID:          "nonAdminUser",
+		Id:          "nonAdminUser",
 		Certificate: nonAdminCert.Raw,
 	}
 	nonAdminUserSerialized, err := proto.Marshal(nonAdminUser)
 	require.NoError(t, err)
 
 	adminUser := &types.User{
-		ID:          "adminUser",
+		Id:          "adminUser",
 		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
 			Admin: true,
@@ -69,13 +69,13 @@ func TestValidateUsedAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, nonAdminSigner, &types.UserAdministrationTx{
-				UserID: "adminUser",
+				UserId: "adminUser",
 				UserReads: []*types.UserRead{
 					{
-						UserID: "user1",
+						UserId: "user1",
 					},
 					{
-						UserID: "user2",
+						UserId: "user2",
 					},
 				},
 			}),
@@ -103,7 +103,7 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, nonAdminSigner,
 				&types.UserAdministrationTx{
-					UserID: "nonAdminUser",
+					UserId: "nonAdminUser",
 				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
@@ -129,11 +129,11 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 				&types.UserAdministrationTx{
-					UserID: "adminUser",
+					UserId: "adminUser",
 					UserWrites: []*types.UserWrite{
 						{
 							User: &types.User{
-								ID: "",
+								Id: "",
 							},
 						},
 					},
@@ -162,10 +162,10 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 				&types.UserAdministrationTx{
-					UserID: "adminUser",
+					UserId: "adminUser",
 					UserDeletes: []*types.UserDelete{
 						{
-							UserID: "",
+							UserId: "",
 						},
 					},
 				}),
@@ -193,13 +193,13 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 				&types.UserAdministrationTx{
-					UserID: "adminUser",
+					UserId: "adminUser",
 					UserDeletes: []*types.UserDelete{
 						{
-							UserID: "user1",
+							UserId: "user1",
 						},
 						{
-							UserID: "user1",
+							UserId: "user1",
 						},
 					},
 				}),
@@ -232,10 +232,10 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 				&types.UserAdministrationTx{
-					UserID: "adminUser",
+					UserId: "adminUser",
 					UserReads: []*types.UserRead{
 						{
-							UserID: "user1",
+							UserId: "user1",
 						},
 					},
 				}),
@@ -268,11 +268,11 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 				&types.UserAdministrationTx{
-					UserID: "adminUser",
+					UserId: "adminUser",
 					UserWrites: []*types.UserWrite{
 						{
 							User: &types.User{
-								ID:          "user1",
+								Id:          "user1",
 								Certificate: user1Cert.Raw,
 							},
 						},
@@ -307,10 +307,10 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 				&types.UserAdministrationTx{
-					UserID: "adminUser",
+					UserId: "adminUser",
 					UserDeletes: []*types.UserDelete{
 						{
-							UserID: "user1",
+							UserId: "user1",
 						},
 					},
 				}),
@@ -343,10 +343,10 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
 				&types.UserAdministrationTx{
-					UserID: "adminUser",
+					UserId: "adminUser",
 					UserReads: []*types.UserRead{
 						{
-							UserID: "user1",
+							UserId: "user1",
 							Version: &types.Version{
 								BlockNum: 100,
 								TxNum:    1000,
@@ -377,13 +377,13 @@ func TestValidateUsedAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(newUsers, 1))
 			},
 			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner, &types.UserAdministrationTx{
-				UserID: "adminUser",
+				UserId: "adminUser",
 				UserReads: []*types.UserRead{
 					{
-						UserID: "user1",
+						UserId: "user1",
 					},
 					{
-						UserID: "user2",
+						UserId: "user2",
 					},
 				},
 			}),
@@ -451,7 +451,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "",
+						Id: "",
 					},
 				},
 			},
@@ -465,7 +465,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 						Privilege: &types.Privilege{
 							Admin: true,
 						},
@@ -482,9 +482,9 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 						Privilege: &types.Privilege{
-							DBPermission: map[string]types.Privilege_Access{
+							DbPermission: map[string]types.Privilege_Access{
 								"db1": types.Privilege_Read,
 							},
 						},
@@ -501,7 +501,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID:          "user1",
+						Id:          "user1",
 						Certificate: []byte("random"),
 					},
 				},
@@ -516,7 +516,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID:          userID,
+						Id:          userID,
 						Certificate: untrustedAliceCert.Raw,
 					},
 				},
@@ -531,7 +531,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID:          userID,
+						Id:          userID,
 						Certificate: aliceCert.Raw,
 					},
 				},
@@ -545,9 +545,9 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: userID,
+						Id: userID,
 						Privilege: &types.Privilege{
-							DBPermission: map[string]types.Privilege_Access{
+							DbPermission: map[string]types.Privilege_Access{
 								"bdb": types.Privilege_Read,
 							},
 						},
@@ -607,7 +607,7 @@ func TestValidateEntryFieldsInDeletes(t *testing.T) {
 			name: "invalid: a userID in the delete list is empty",
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "",
+					UserId: "",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -619,7 +619,7 @@ func TestValidateEntryFieldsInDeletes(t *testing.T) {
 			name: "valid: entries are correct",
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -661,12 +661,12 @@ func TestValidateUniquenessInEntries(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 					},
 				},
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 					},
 				},
 			},
@@ -679,10 +679,10 @@ func TestValidateUniquenessInEntries(t *testing.T) {
 			name: "invalid: duplicate userID in the delete list",
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -695,13 +695,13 @@ func TestValidateUniquenessInEntries(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 					},
 				},
 			},
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -714,13 +714,13 @@ func TestValidateUniquenessInEntries(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 					},
 				},
 			},
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -790,10 +790,10 @@ func TestValidateACLOnUserReads(t *testing.T) {
 			},
 			userReads: []*types.UserRead{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -828,16 +828,16 @@ func TestValidateACLOnUserReads(t *testing.T) {
 			},
 			userReads: []*types.UserRead{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 				{
-					UserID: "user3",
+					UserId: "user3",
 				},
 				{
-					UserID: "user4",
+					UserId: "user4",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -914,7 +914,7 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "admin",
+						Id: "admin",
 					},
 				},
 			},
@@ -950,12 +950,12 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 					},
 				},
 				{
 					User: &types.User{
-						ID: "user2",
+						Id: "user2",
 					},
 				},
 			},
@@ -992,22 +992,22 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
-						ID: "user1",
+						Id: "user1",
 					},
 				},
 				{
 					User: &types.User{
-						ID: "user2",
+						Id: "user2",
 					},
 				},
 				{
 					User: &types.User{
-						ID: "user3",
+						Id: "user3",
 					},
 				},
 				{
 					User: &types.User{
-						ID: "user4",
+						Id: "user4",
 					},
 				},
 			},
@@ -1084,7 +1084,7 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			},
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "admin",
+					UserId: "admin",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -1118,10 +1118,10 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			},
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -1150,10 +1150,10 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			},
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -1187,10 +1187,10 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			},
 			userDeletes: []*types.UserDelete{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 				{
-					UserID: "user2",
+					UserId: "user2",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -1264,11 +1264,11 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 			},
 			userReads: []*types.UserRead{
 				{
-					UserID:  "user1",
+					UserId:  "user1",
 					Version: version1,
 				},
 				{
-					UserID:  "user2",
+					UserId:  "user2",
 					Version: version1,
 				},
 			},
@@ -1293,11 +1293,11 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 			},
 			userReads: []*types.UserRead{
 				{
-					UserID:  "user1",
+					UserId:  "user1",
 					Version: version1,
 				},
 				{
-					UserID:  "user2",
+					UserId:  "user2",
 					Version: version2,
 				},
 			},
@@ -1322,11 +1322,11 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 			},
 			userReads: []*types.UserRead{
 				{
-					UserID:  "user1",
+					UserId:  "user1",
 					Version: version1,
 				},
 				{
-					UserID:  "user2",
+					UserId:  "user2",
 					Version: version3,
 				},
 			},
@@ -1339,7 +1339,7 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 			setup: func(db worldstate.DB) {},
 			userReads: []*types.UserRead{
 				{
-					UserID: "user1",
+					UserId: "user1",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -1400,7 +1400,7 @@ func setupClusterConfigCA(t *testing.T, env *validatorTestEnv, rootCACert *x509.
 
 func constructUserForTest(t *testing.T, userID string, certRaw []byte, priv *types.Privilege, version *types.Version, acl *types.AccessControl) *worldstate.KVWithMetadata {
 	user := &types.User{
-		ID:          userID,
+		Id:          userID,
 		Certificate: certRaw,
 		Privilege:   priv,
 	}

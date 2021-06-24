@@ -31,8 +31,8 @@ func calculateBlockTxHashes(block *types.Block) ([][]byte, error) {
 			return nil, errors.Wrapf(err, "can't calculate msg hash %v", userTx.GetPayload())
 		}
 		return [][]byte{h}, nil
-	case *types.Block_DBAdministrationTxEnvelope:
-		dbTx := block.GetDBAdministrationTxEnvelope()
+	case *types.Block_DbAdministrationTxEnvelope:
+		dbTx := block.GetDbAdministrationTxEnvelope()
 		h, err := calculateTxHash(dbTx, block.GetHeader().GetValidationInfo()[0])
 		if err != nil {
 			return nil, errors.Wrapf(err, "can't calculate msg hash %v", dbTx.GetPayload())

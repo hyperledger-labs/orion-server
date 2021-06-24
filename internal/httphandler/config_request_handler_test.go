@@ -55,7 +55,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserId: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -68,7 +68,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			expectedResponse: &types.GetConfigResponseEnvelope{
 				Response: &types.GetConfigResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeId",
+						NodeId: "testNodeId",
 					},
 					Metadata: &types.Metadata{
 						Version: &types.Version{
@@ -82,7 +82,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 						},
 						Nodes: []*types.NodeConfig{
 							{
-								ID:          "testNodeId",
+								Id:          "testNodeId",
 								Address:     "http://localhost",
 								Port:        8080,
 								Certificate: []byte{0, 0, 0},
@@ -127,7 +127,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetConfigQuery{UserId: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -145,7 +145,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserId: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -163,7 +163,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.GetConfig, nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserId: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -219,18 +219,18 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "admin")
 
 	configTx := &types.ConfigTx{
-		UserID: submittingUserName,
-		TxID:   "1",
+		UserId: submittingUserName,
+		TxId:   "1",
 		NewConfig: &types.ClusterConfig{
 			Admins: []*types.Admin{
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: []byte("bogus"),
 				},
 			},
 			Nodes: []*types.NodeConfig{
 				{
-					ID:          "testNode",
+					Id:          "testNode",
 					Certificate: []byte("fake"),
 					Address:     "http://localhost",
 					Port:        8080,
@@ -365,7 +365,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				tx := &types.ConfigTx{}
 				*tx = *configTx
-				tx.UserID = ""
+				tx.UserId = ""
 				return &types.ConfigTxEnvelope{Payload: tx, Signature: sigAdmin}
 			},
 			txRespFactory: func() *types.TxReceiptResponseEnvelope {
@@ -418,7 +418,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 			txEnvFactory: func() *types.ConfigTxEnvelope {
 				tx := &types.ConfigTx{}
 				*tx = *configTx
-				tx.UserID = "not-admin"
+				tx.UserId = "not-admin"
 				return &types.ConfigTxEnvelope{
 					Payload:   tx,
 					Signature: sigAdmin,
@@ -533,8 +533,8 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{
-					UserID: submittingUserName,
-					NodeID: "node1",
+					UserId: submittingUserName,
+					NodeId: "node1",
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
@@ -548,10 +548,10 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 			expectedResponse: &types.GetNodeConfigResponseEnvelope{
 				Response: &types.GetNodeConfigResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeId",
+						NodeId: "testNodeId",
 					},
 					NodeConfig: &types.NodeConfig{
-						ID:          "node1",
+						Id:          "node1",
 						Address:     "http://localhost",
 						Port:        8080,
 						Certificate: []byte{0, 0, 0},
@@ -595,8 +595,8 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetNodeConfigQuery{
-					UserID: submittingUserName,
-					NodeID: "node1",
+					UserId: submittingUserName,
+					NodeId: "node1",
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
@@ -616,7 +616,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 			requestFactory: func() *http.Request {
 				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{UserID: submittingUserName})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{UserId: submittingUserName})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req
 			},
@@ -636,8 +636,8 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 				req := httptest.NewRequest(http.MethodGet, constants.URLForNodeConfigPath("node1"), nil)
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetNodeConfigQuery{
-					UserID: submittingUserName,
-					NodeID: "node1",
+					UserId: submittingUserName,
+					NodeId: "node1",
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req

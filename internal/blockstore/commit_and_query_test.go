@@ -218,10 +218,10 @@ func TestCommitAndQuery(t *testing.T) {
 			Payload: &types.Block_UserAdministrationTxEnvelope{
 				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 					Payload: &types.UserAdministrationTx{
-						UserID: "user1",
+						UserId: "user1",
 						UserDeletes: []*types.UserDelete{
 							{
-								UserID: "user1",
+								UserId: "user1",
 							},
 						},
 					},
@@ -288,17 +288,17 @@ func TestTxValidationInfo(t *testing.T) {
 							Envelopes: []*types.DataTxEnvelope{
 								{
 									Payload: &types.DataTx{
-										TxID: "data-tx1",
+										TxId: "data-tx1",
 									},
 								},
 								{
 									Payload: &types.DataTx{
-										TxID: "data-tx2",
+										TxId: "data-tx2",
 									},
 								},
 								{
 									Payload: &types.DataTx{
-										TxID: "data-tx3",
+										TxId: "data-tx3",
 									},
 								},
 							},
@@ -323,7 +323,7 @@ func TestTxValidationInfo(t *testing.T) {
 					Payload: &types.Block_ConfigTxEnvelope{
 						ConfigTxEnvelope: &types.ConfigTxEnvelope{
 							Payload: &types.ConfigTx{
-								TxID: "config-tx1",
+								TxId: "config-tx1",
 							},
 						},
 					},
@@ -343,10 +343,10 @@ func TestTxValidationInfo(t *testing.T) {
 							},
 						},
 					},
-					Payload: &types.Block_DBAdministrationTxEnvelope{
-						DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
+					Payload: &types.Block_DbAdministrationTxEnvelope{
+						DbAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
 							Payload: &types.DBAdministrationTx{
-								TxID: "db-tx1",
+								TxId: "db-tx1",
 							},
 						},
 					},
@@ -369,7 +369,7 @@ func TestTxValidationInfo(t *testing.T) {
 					Payload: &types.Block_UserAdministrationTxEnvelope{
 						UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 							Payload: &types.UserAdministrationTx{
-								TxID: "user-tx1",
+								TxId: "user-tx1",
 							},
 						},
 					},
@@ -451,11 +451,11 @@ func createSampleUserTxBlock(blockNumber uint64, preBlockBaseHash []byte, preBlo
 		Payload: &types.Block_UserAdministrationTxEnvelope{
 			UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 				Payload: &types.UserAdministrationTx{
-					UserID: "user1",
-					TxID:   fmt.Sprintf("txid-%d", blockNumber),
+					UserId: "user1",
+					TxId:   fmt.Sprintf("txid-%d", blockNumber),
 					UserDeletes: []*types.UserDelete{
 						{
-							UserID: "user1",
+							UserId: "user1",
 						},
 					},
 				},

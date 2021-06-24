@@ -39,7 +39,7 @@ func TestBlockQuery(t *testing.T) {
 			expectedResponse: &types.GetBlockResponseEnvelope{
 				Response: &types.GetBlockResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					BlockHeader: &types.BlockHeader{
 						BaseHeader: &types.BlockHeaderBase{
@@ -54,7 +54,7 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserId: submittingUserName, BlockNumber: 1})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
@@ -75,7 +75,7 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserId: submittingUserName, BlockNumber: 1})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
@@ -95,7 +95,7 @@ func TestBlockQuery(t *testing.T) {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserID: submittingUserName, BlockNumber: 1})
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserId: submittingUserName, BlockNumber: 1})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
@@ -162,7 +162,7 @@ func TestPathQuery(t *testing.T) {
 			expectedResponse: &types.GetLedgerPathResponseEnvelope{
 				Response: &types.GetLedgerPathResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					BlockHeaders: []*types.BlockHeader{
 						{
@@ -186,7 +186,7 @@ func TestPathQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
-					UserID:           submittingUserName,
+					UserId:           submittingUserName,
 					StartBlockNumber: 1,
 					EndBlockNumber:   2,
 				})
@@ -211,7 +211,7 @@ func TestPathQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
-					UserID:           submittingUserName,
+					UserId:           submittingUserName,
 					StartBlockNumber: 1,
 					EndBlockNumber:   2,
 				})
@@ -237,7 +237,7 @@ func TestPathQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
-					UserID:           submittingUserName,
+					UserId:           submittingUserName,
 					StartBlockNumber: 1,
 					EndBlockNumber:   2,
 				})
@@ -263,7 +263,7 @@ func TestPathQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
-					UserID:           submittingUserName,
+					UserId:           submittingUserName,
 					StartBlockNumber: 1,
 					EndBlockNumber:   10,
 				})
@@ -311,7 +311,7 @@ func TestPathQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLedgerPathQuery{
-					UserID:           submittingUserName,
+					UserId:           submittingUserName,
 					StartBlockNumber: 10,
 					EndBlockNumber:   1,
 				})
@@ -379,7 +379,7 @@ func TestProofQuery(t *testing.T) {
 			expectedResponse: &types.GetTxProofResponseEnvelope{
 				Response: &types.GetTxProofResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					Hashes: [][]byte{[]byte("hash1"), []byte("hash2")},
 				},
@@ -392,7 +392,7 @@ func TestProofQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
-					UserID:      submittingUserName,
+					UserId:      submittingUserName,
 					BlockNumber: 2,
 					TxIndex:     1,
 				})
@@ -412,7 +412,7 @@ func TestProofQuery(t *testing.T) {
 			expectedResponse: &types.GetTxProofResponseEnvelope{
 				Response: &types.GetTxProofResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					Hashes: [][]byte{[]byte("hash1"), []byte("hash2")},
 				},
@@ -425,7 +425,7 @@ func TestProofQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
-					UserID:      submittingUserName,
+					UserId:      submittingUserName,
 					BlockNumber: 22,
 					TxIndex:     11,
 				})
@@ -450,7 +450,7 @@ func TestProofQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
-					UserID:      submittingUserName,
+					UserId:      submittingUserName,
 					BlockNumber: 2,
 					TxIndex:     1,
 				})
@@ -476,7 +476,7 @@ func TestProofQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxProofQuery{
-					UserID:      submittingUserName,
+					UserId:      submittingUserName,
 					BlockNumber: 2,
 					TxIndex:     2,
 				})
@@ -568,7 +568,7 @@ func TestTxReceiptQuery(t *testing.T) {
 			expectedResponse: &types.TxReceiptResponseEnvelope{
 				Response: &types.TxReceiptResponse{
 					Header: &types.ResponseHeader{
-						NodeID: "testNodeID",
+						NodeId: "testNodeID",
 					},
 					Receipt: &types.TxReceipt{
 						Header: &types.BlockHeader{
@@ -588,8 +588,8 @@ func TestTxReceiptQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxReceiptQuery{
-					UserID: submittingUserName,
-					TxID:   "tx1",
+					UserId: submittingUserName,
+					TxId:   "tx1",
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
@@ -612,8 +612,8 @@ func TestTxReceiptQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxReceiptQuery{
-					UserID: submittingUserName,
-					TxID:   "tx1",
+					UserId: submittingUserName,
+					TxId:   "tx1",
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
@@ -637,8 +637,8 @@ func TestTxReceiptQuery(t *testing.T) {
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
 				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxReceiptQuery{
-					UserID: submittingUserName,
-					TxID:   "tx1",
+					UserId: submittingUserName,
+					TxId:   "tx1",
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil

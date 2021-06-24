@@ -739,7 +739,7 @@ func (d *db) Close() error {
 
 func (d *db) responseHeader() *types.ResponseHeader {
 	return &types.ResponseHeader{
-		NodeID: d.nodeID,
+		NodeId: d.nodeID,
 	}
 }
 
@@ -762,7 +762,7 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 	var nodes []*types.NodeConfig
 	for _, node := range conf.SharedConfig.Nodes {
 		nc := &types.NodeConfig{
-			ID:      node.NodeID,
+			Id:      node.NodeID,
 			Address: node.Host,
 			Port:    node.Port,
 		}
@@ -785,7 +785,7 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 		Nodes: nodes,
 		Admins: []*types.Admin{
 			{
-				ID:          conf.SharedConfig.Admin.ID,
+				Id:          conf.SharedConfig.Admin.ID,
 				Certificate: certs.adminCert,
 			},
 		},
@@ -844,7 +844,7 @@ func prepareConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, erro
 
 	return &types.ConfigTxEnvelope{
 		Payload: &types.ConfigTx{
-			TxID:      uuid.New().String(), // TODO: we need to change TxID to string
+			TxId:      uuid.New().String(), // TODO: we need to change TxID to string
 			NewConfig: clusterConfig,
 		},
 		// TODO: we can make the node itself sign the transaction

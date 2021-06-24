@@ -10,7 +10,7 @@ import "configuration.proto";
 import "block_and_transaction.proto";
 
 message ResponseHeader {
-  string nodeID = 1;
+  string node_id = 1;
 }
 
 // GetDBStatus

@@ -68,8 +68,8 @@ func (env *serverTestEnv) restart(t *testing.T) {
 
 func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, error) {
 	configQuery := &types.GetNodeConfigQuery{
-		NodeID: env.bcdbHTTPServer.conf.LocalConfig.Server.Identity.ID,
-		UserID: "admin",
+		NodeId: env.bcdbHTTPServer.conf.LocalConfig.Server.Identity.ID,
+		UserId: "admin",
 	}
 
 	cfg, err := env.client.GetNodeConfig(&types.GetNodeConfigQueryEnvelope{
@@ -271,8 +271,8 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	require.NoError(t, err)
 
 	dataQuery := &types.GetDataQuery{
-		DBName: worldstate.DefaultDBName,
-		UserID: "admin",
+		DbName: worldstate.DefaultDBName,
+		UserId: "admin",
 		Key:    "foo",
 	}
 	data, err := env.client.GetData(
@@ -293,11 +293,11 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	require.Nil(t, data.GetResponse().GetValue())
 
 	dataTx := &types.DataTx{
-		MustSignUserIDs: []string{"admin"},
-		TxID:            uuid.New().String(),
-		DBOperations: []*types.DBOperation{
+		MustSignUserIds: []string{"admin"},
+		TxId:            uuid.New().String(),
+		DbOperations: []*types.DBOperation{
 			{
-				DBName: worldstate.DefaultDBName,
+				DbName: worldstate.DefaultDBName,
 				DataWrites: []*types.DataWrite{
 					{
 						Key:   "foo",
@@ -320,8 +320,8 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	require.Eventually(t, func() bool {
 		data, err := env.client.GetData(&types.GetDataQueryEnvelope{
 			Payload: &types.GetDataQuery{
-				DBName: worldstate.DefaultDBName,
-				UserID: "admin",
+				DbName: worldstate.DefaultDBName,
+				UserId: "admin",
 				Key:    "foo",
 			},
 			Signature: testutils.SignatureFromQuery(t, env.adminSigner, dataQuery),
@@ -347,8 +347,8 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	}, time.Minute, 100*time.Millisecond)
 
 	provenanceQuery := &types.GetHistoricalDataQuery{
-		UserID: "admin",
-		DBName: worldstate.DefaultDBName,
+		UserId: "admin",
+		DbName: worldstate.DefaultDBName,
 		Key:    "foo",
 	}
 
@@ -379,14 +379,14 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 	certBlock, _ := pem.Decode(userCert)
 
 	userTx := &types.UserAdministrationTx{
-		TxID:   uuid.New().String(),
-		UserID: "admin",
+		TxId:   uuid.New().String(),
+		UserId: "admin",
 		UserWrites: []*types.UserWrite{
 			{
 				User: &types.User{
-					ID: "testUser",
+					Id: "testUser",
 					Privilege: &types.Privilege{
-						DBPermission: map[string]types.Privilege_Access{
+						DbPermission: map[string]types.Privilege_Access{
 							worldstate.DefaultDBName: types.Privilege_ReadWrite,
 						},
 					},
@@ -405,7 +405,7 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 	verifier, err := env.getNodeSigVerifier(t)
 	require.NoError(t, err)
 
-	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "testUser"}
+	query := &types.GetUserQuery{UserId: "admin", TargetUserId: "testUser"}
 	querySig, err := cryptoservice.SignQuery(env.adminSigner, query)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
@@ -431,7 +431,7 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 		}
 
 		return user.GetResponse().GetUser() != nil &&
-			user.GetResponse().GetUser().GetID() == "testUser"
+			user.GetResponse().GetUser().GetId() == "testUser"
 	}, time.Minute, 100*time.Millisecond)
 }
 
@@ -440,9 +440,9 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	defer env.cleanup(t)
 
 	dbTx := &types.DBAdministrationTx{
-		TxID:      uuid.New().String(),
-		UserID:    "admin",
-		CreateDBs: []string{"testDB"},
+		TxId:      uuid.New().String(),
+		UserId:    "admin",
+		CreateDbs: []string{"testDB"},
 	}
 	// Create new database
 	_, err := env.client.SubmitTransaction(constants.PostDBTx,
@@ -455,7 +455,7 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	verifier, err := env.getNodeSigVerifier(t)
 	require.NoError(t, err)
 
-	dbStatusQuery := &types.GetDBStatusQuery{UserID: "admin", DBName: "testDB"}
+	dbStatusQuery := &types.GetDBStatusQuery{UserId: "admin", DbName: "testDB"}
 	require.Eventually(t, func() bool {
 		db, err := env.client.GetDBStatus(&types.GetDBStatusQueryEnvelope{
 			Payload:   dbStatusQuery,
@@ -477,11 +477,11 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	}, time.Minute, 100*time.Millisecond)
 
 	dataTx := &types.DataTx{
-		MustSignUserIDs: []string{"admin"},
-		TxID:            uuid.New().String(),
-		DBOperations: []*types.DBOperation{
+		MustSignUserIds: []string{"admin"},
+		TxId:            uuid.New().String(),
+		DbOperations: []*types.DBOperation{
 			{
-				DBName: "testDB",
+				DbName: "testDB",
 				DataWrites: []*types.DataWrite{
 					{
 						Key:   "foo",
@@ -503,7 +503,7 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make sure key was created and we can query it
-	dataQuery := &types.GetDataQuery{DBName: "testDB", UserID: "admin", Key: "foo"}
+	dataQuery := &types.GetDataQuery{DbName: "testDB", UserId: "admin", Key: "foo"}
 	dataQuerySig, err := cryptoservice.SignQuery(env.adminSigner, dataQuery)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
@@ -540,8 +540,8 @@ func TestServerWithFailureScenarios(t *testing.T) {
 			testName: "bad signature",
 			envelopeProvider: func(_ crypto.Signer) *types.GetDataQueryEnvelope {
 				getKeyQuery := &types.GetDataQuery{
-					UserID: "admin",
-					DBName: worldstate.DefaultDBName,
+					UserId: "admin",
+					DbName: worldstate.DefaultDBName,
 					Key:    "test",
 				}
 
@@ -556,8 +556,8 @@ func TestServerWithFailureScenarios(t *testing.T) {
 			testName: "missing database",
 			envelopeProvider: func(signer crypto.Signer) *types.GetDataQueryEnvelope {
 				getKeyQuery := &types.GetDataQuery{
-					UserID: "admin",
-					DBName: "testDB",
+					UserId: "admin",
+					DbName: "testDB",
 					Key:    "test",
 				}
 
@@ -598,14 +598,14 @@ func TestServerWithRestart(t *testing.T) {
 	certBlock, _ := pem.Decode(userCert)
 
 	userTx := &types.UserAdministrationTx{
-		TxID:   uuid.New().String(),
-		UserID: "admin",
+		TxId:   uuid.New().String(),
+		UserId: "admin",
 		UserWrites: []*types.UserWrite{
 			{
 				User: &types.User{
-					ID: "testUser",
+					Id: "testUser",
 					Privilege: &types.Privilege{
-						DBPermission: map[string]types.Privilege_Access{
+						DbPermission: map[string]types.Privilege_Access{
 							worldstate.DefaultDBName: types.Privilege_ReadWrite,
 						},
 					},
@@ -624,7 +624,7 @@ func TestServerWithRestart(t *testing.T) {
 	verifier, err := env.getNodeSigVerifier(t)
 	require.NoError(t, err)
 
-	query := &types.GetUserQuery{UserID: "admin", TargetUserID: "testUser"}
+	query := &types.GetUserQuery{UserId: "admin", TargetUserId: "testUser"}
 	querySig, err := cryptoservice.SignQuery(env.adminSigner, query)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
@@ -650,7 +650,7 @@ func TestServerWithRestart(t *testing.T) {
 		}
 
 		return user.GetResponse().GetUser() != nil &&
-			user.GetResponse().GetUser().GetID() == "testUser"
+			user.GetResponse().GetUser().GetId() == "testUser"
 	}, time.Minute, 100*time.Millisecond)
 
 	t.Log("Before restart")
@@ -685,6 +685,6 @@ func TestServerWithRestart(t *testing.T) {
 		}
 
 		return user.GetResponse().GetUser() != nil &&
-			user.GetResponse().GetUser().GetID() == "testUser"
+			user.GetResponse().GetUser().GetId() == "testUser"
 	}, 10*time.Second, 100*time.Millisecond)
 }

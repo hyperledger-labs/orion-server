@@ -54,7 +54,7 @@ func (d *dbRequestHandler) dbStatus(response http.ResponseWriter, request *http.
 	}
 	query := payload.(*types.GetDBStatusQuery)
 
-	dbStatus, err := d.db.GetDBStatus(query.DBName)
+	dbStatus, err := d.db.GetDBStatus(query.DbName)
 	if err != nil {
 		SendHTTPResponse(
 			response,
@@ -91,7 +91,7 @@ func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *
 		return
 	}
 
-	if txEnv.Payload.UserID == "" {
+	if txEnv.Payload.UserId == "" {
 		SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
@@ -103,7 +103,7 @@ func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *
 		return
 	}
 
-	if err, code := VerifyRequestSignature(d.sigVerifier, txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload); err != nil {
+	if err, code := VerifyRequestSignature(d.sigVerifier, txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload); err != nil {
 		SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}

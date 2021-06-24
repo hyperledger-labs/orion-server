@@ -105,8 +105,8 @@ func (r *TxReorderer) Start() {
 
 				r.logger.Debug("enqueueing db administrative transaction")
 				r.txBatchQueue.Enqueue(
-					&types.Block_DBAdministrationTxEnvelope{
-						DBAdministrationTxEnvelope: env,
+					&types.Block_DbAdministrationTxEnvelope{
+						DbAdministrationTxEnvelope: env,
 					},
 				)
 				ticker.Reset(r.batchTimeout)

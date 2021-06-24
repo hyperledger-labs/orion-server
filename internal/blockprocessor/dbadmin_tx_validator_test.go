@@ -28,7 +28,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 	}
 
 	userWithLessPrivilege := &types.User{
-		ID:          "userWithLessPrivilege",
+		Id:          "userWithLessPrivilege",
 		Certificate: nonAdminCert.Raw,
 	}
 	userWithLessPrivilegeSerialized, err := proto.Marshal(userWithLessPrivilege)
@@ -48,7 +48,7 @@ func TestValidateDBAdminTx(t *testing.T) {
 	}
 
 	userWithMorePrivilege := &types.User{
-		ID:          "userWithMorePrivilege",
+		Id:          "userWithMorePrivilege",
 		Certificate: adminCert.Raw,
 		Privilege: &types.Privilege{
 			Admin: true,
@@ -82,9 +82,9 @@ func TestValidateDBAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, nonAdminSigner, &types.DBAdministrationTx{
-				UserID:    "userWithMorePrivilege",
-				CreateDBs: []string{"db1", "db2"},
-				DeleteDBs: []string{"db3", "db4"},
+				UserId:    "userWithMorePrivilege",
+				CreateDbs: []string{"db1", "db2"},
+				DeleteDbs: []string{"db3", "db4"},
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_UNAUTHORISED,
@@ -98,8 +98,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, nonAdminSigner,
 				&types.DBAdministrationTx{
-					UserID:    "userWithLessPrivilege",
-					CreateDBs: []string{"db1"},
+					UserId:    "userWithLessPrivilege",
+					CreateDbs: []string{"db1"},
 				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
@@ -113,8 +113,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
 				&types.DBAdministrationTx{
-					UserID:    "userWithMorePrivilege",
-					CreateDBs: []string{"db1", "db1"},
+					UserId:    "userWithMorePrivilege",
+					CreateDbs: []string{"db1", "db1"},
 				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -127,8 +127,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
-				UserID:    "userWithMorePrivilege",
-				DeleteDBs: []string{"db1", "db1"},
+				UserId:    "userWithMorePrivilege",
+				DeleteDbs: []string{"db1", "db1"},
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -142,8 +142,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner,
 				&types.DBAdministrationTx{
-					UserID:    "userWithMorePrivilege",
-					CreateDBs: []string{"db1", "db1/abc"},
+					UserId:    "userWithMorePrivilege",
+					CreateDbs: []string{"db1", "db1/abc"},
 				}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -156,8 +156,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
-				UserID:    "userWithMorePrivilege",
-				DeleteDBs: []string{"db1/abc/def", "db1"},
+				UserId:    "userWithMorePrivilege",
+				DeleteDbs: []string{"db1/abc/def", "db1"},
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
@@ -170,8 +170,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
-				UserID: "userWithMorePrivilege",
-				DBsIndex: map[string]*types.DBIndex{
+				UserId: "userWithMorePrivilege",
+				DbsIndex: map[string]*types.DBIndex{
 					"db1": {
 						AttributeAndType: map[string]types.Type{
 							"attr1": types.Type_STRING,
@@ -205,10 +205,10 @@ func TestValidateDBAdminTx(t *testing.T) {
 				require.NoError(t, db.Commit(createDB, 1))
 			},
 			txEnv: testutils.SignedDBAdministrationTxEnvelope(t, adminSigner, &types.DBAdministrationTx{
-				UserID:    "userWithMorePrivilege",
-				CreateDBs: []string{"db1", "db2"},
-				DeleteDBs: []string{"db3", "db4"},
-				DBsIndex: map[string]*types.DBIndex{
+				UserId:    "userWithMorePrivilege",
+				CreateDbs: []string{"db1", "db2"},
+				DeleteDbs: []string{"db3", "db4"},
+				DbsIndex: map[string]*types.DBIndex{
 					"db1": {
 						AttributeAndType: map[string]types.Type{
 							"attr1": types.Type_STRING,

@@ -128,7 +128,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 					provenanceData,
 					&provenance.TxDataForProvenance{
 						IsValid: false,
-						TxID:    txsEnvelopes[txNum].Payload.TxID,
+						TxID:    txsEnvelopes[txNum].Payload.TxId,
 					},
 				)
 				continue
@@ -176,7 +176,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			return nil, []*provenance.TxDataForProvenance{
 				{
 					IsValid: false,
-					TxID:    block.GetUserAdministrationTxEnvelope().GetPayload().GetTxID(),
+					TxID:    block.GetUserAdministrationTxEnvelope().GetPayload().GetTxId(),
 				},
 			}, nil
 		}
@@ -202,7 +202,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		c.logger.Debugf("constructed user admin update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
 
-	case *types.Block_DBAdministrationTxEnvelope:
+	case *types.Block_DbAdministrationTxEnvelope:
 		if blockValidationInfo[dbAdminTxIndex].Flag != types.Flag_VALID {
 			return nil, nil, nil
 		}
@@ -212,7 +212,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			TxNum:    dbAdminTxIndex,
 		}
 
-		tx := block.GetDBAdministrationTxEnvelope().GetPayload()
+		tx := block.GetDbAdministrationTxEnvelope().GetPayload()
 		var err error
 		dbsUpdates, err = constructDBEntriesForDBAdminTx(tx, version)
 		if err != nil {
@@ -226,7 +226,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			return nil, []*provenance.TxDataForProvenance{
 				{
 					IsValid: false,
-					TxID:    block.GetConfigTxEnvelope().GetPayload().GetTxID(),
+					TxID:    block.GetConfigTxEnvelope().GetPayload().GetTxId(),
 				},
 			}, nil
 		}
@@ -300,9 +300,9 @@ func (c *committer) commitTrie(height uint64) error {
 }
 
 func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*worldstate.DBUpdates {
-	dbsUpdates := make([]*worldstate.DBUpdates, len(tx.DBOperations))
+	dbsUpdates := make([]*worldstate.DBUpdates, len(tx.DbOperations))
 
-	for i, ops := range tx.DBOperations {
+	for i, ops := range tx.DbOperations {
 		var kvWrites []*worldstate.KVWithMetadata
 		var kvDeletes []string
 
@@ -312,7 +312,7 @@ func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*wo
 				Value: write.Value,
 				Metadata: &types.Metadata{
 					Version:       version,
-					AccessControl: write.ACL,
+					AccessControl: write.Acl,
 				},
 			}
 			kvWrites = append(kvWrites, kv)
@@ -323,7 +323,7 @@ func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*wo
 		}
 
 		dbsUpdates[i] = &worldstate.DBUpdates{
-			DBName:  ops.DBName,
+			DBName:  ops.DbName,
 			Writes:  kvWrites,
 			Deletes: kvDeletes,
 		}
@@ -336,9 +336,9 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 	var toCreateDBs []*worldstate.KVWithMetadata
 	var indexForExistingDBs []*worldstate.KVWithMetadata
 
-	for _, dbName := range tx.CreateDBs {
+	for _, dbName := range tx.CreateDbs {
 		var value []byte
-		dbIndex, ok := tx.DBsIndex[dbName]
+		dbIndex, ok := tx.DbsIndex[dbName]
 		if ok {
 			v, err := json.Marshal(dbIndex.GetAttributeAndType())
 			if err != nil {
@@ -346,7 +346,7 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 			}
 			value = v
 
-			delete(tx.DBsIndex, dbName)
+			delete(tx.DbsIndex, dbName)
 		}
 
 		db := &worldstate.KVWithMetadata{
@@ -359,7 +359,7 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 		toCreateDBs = append(toCreateDBs, db)
 	}
 
-	for dbName, dbIndex := range tx.DBsIndex {
+	for dbName, dbIndex := range tx.DbsIndex {
 		var value []byte
 		if dbIndex != nil && dbIndex.GetAttributeAndType() != nil {
 			v, err := json.Marshal(dbIndex.GetAttributeAndType())
@@ -383,7 +383,7 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 		{
 			DBName:  worldstate.DatabasesDBName,
 			Writes:  toCreateDBs,
-			Deletes: tx.DeleteDBs,
+			Deletes: tx.DeleteDbs,
 		},
 		{
 			DBName: worldstate.DatabasesDBName,
@@ -440,14 +440,14 @@ func constructProvenanceEntriesForDataTx(
 	version *types.Version,
 	dirtyWriteKeyVersion map[string]*types.Version,
 ) ([]*provenance.TxDataForProvenance, error) {
-	txpData := make([]*provenance.TxDataForProvenance, len(tx.DBOperations))
+	txpData := make([]*provenance.TxDataForProvenance, len(tx.DbOperations))
 
-	for i, ops := range tx.DBOperations {
+	for i, ops := range tx.DbOperations {
 		pData := &provenance.TxDataForProvenance{
 			IsValid:            true,
-			DBName:             ops.DBName,
-			UserID:             tx.MustSignUserIDs[0],
-			TxID:               tx.TxID,
+			DBName:             ops.DbName,
+			UserID:             tx.MustSignUserIds[0],
+			TxID:               tx.TxId,
 			Deletes:            make(map[string]*types.Version),
 			OldVersionOfWrites: make(map[string]*types.Version),
 		}
@@ -466,7 +466,7 @@ func constructProvenanceEntriesForDataTx(
 				Value: write.Value,
 				Metadata: &types.Metadata{
 					Version:       version,
-					AccessControl: write.ACL,
+					AccessControl: write.Acl,
 				},
 			}
 			pData.Writes = append(pData.Writes, kv)
@@ -476,7 +476,7 @@ func constructProvenanceEntriesForDataTx(
 			// to ensure that the old version is the one
 			// written by the last transaction and not the
 			// one present in the worldstate
-			v, err := getVersion(ops.DBName, write.Key, dirtyWriteKeyVersion, db)
+			v, err := getVersion(ops.DbName, write.Key, dirtyWriteKeyVersion, db)
 			if err != nil {
 				return nil, err
 			}
@@ -496,7 +496,7 @@ func constructProvenanceEntriesForDataTx(
 			// in the same block writing the value, we need to first
 			// consider the dirty set before fetching the version from
 			// the worldstate
-			v, err := getVersion(ops.DBName, d.Key, dirtyWriteKeyVersion, db)
+			v, err := getVersion(ops.DbName, d.Key, dirtyWriteKeyVersion, db)
 			if err != nil {
 				return nil, err
 			}
@@ -526,8 +526,8 @@ func constructProvenanceEntriesForConfigTx(
 	configTxPData := &provenance.TxDataForProvenance{
 		IsValid: true,
 		DBName:  worldstate.ConfigDBName,
-		UserID:  tx.UserID,
-		TxID:    tx.TxID,
+		UserID:  tx.UserId,
+		TxID:    tx.TxId,
 		Writes: []*types.KVWithMetadata{
 			{
 				Key:   worldstate.ConfigKey,
@@ -544,12 +544,12 @@ func constructProvenanceEntriesForConfigTx(
 		configTxPData.OldVersionOfWrites[worldstate.ConfigKey] = tx.ReadOldConfigVersion
 	}
 
-	adminsPData, err := identity.ConstructProvenanceEntriesForClusterAdmins(tx.UserID, tx.TxID, updates.adminUpdates, db)
+	adminsPData, err := identity.ConstructProvenanceEntriesForClusterAdmins(tx.UserId, tx.TxId, updates.adminUpdates, db)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while constructing provenance entries for cluster admins")
 	}
 
-	nodesPData, err := identity.ConstructProvenanceEntriesForNodes(tx.UserID, tx.TxID, updates.nodeUpdates, db)
+	nodesPData, err := identity.ConstructProvenanceEntriesForNodes(tx.UserId, tx.TxId, updates.nodeUpdates, db)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while constructing provenance entries for nodes")
 	}

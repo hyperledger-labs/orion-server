@@ -178,10 +178,10 @@ func TestCommitter(t *testing.T) {
 					Envelopes: []*types.DataTxEnvelope{
 						{
 							Payload: &types.DataTx{
-								MustSignUserIDs: []string{"testUser"},
-								DBOperations: []*types.DBOperation{
+								MustSignUserIds: []string{"testUser"},
+								DbOperations: []*types.DBOperation{
 									{
-										DBName: "db1",
+										DbName: "db1",
 										DataWrites: []*types.DataWrite{
 											{
 												Key:   "db1-key1",
@@ -190,7 +190,7 @@ func TestCommitter(t *testing.T) {
 										},
 									},
 									{
-										DBName: "db2",
+										DbName: "db2",
 										DataWrites: []*types.DataWrite{
 											{
 												Key:   "db2-key1",
@@ -199,7 +199,7 @@ func TestCommitter(t *testing.T) {
 										},
 									},
 									{
-										DBName: "db3",
+										DbName: "db3",
 										DataWrites: []*types.DataWrite{
 											{
 												Key:   "db3-key1",
@@ -268,9 +268,9 @@ func TestBlockStoreCommitter(t *testing.T) {
 					Envelopes: []*types.DataTxEnvelope{
 						{
 							Payload: &types.DataTx{
-								DBOperations: []*types.DBOperation{
+								DbOperations: []*types.DBOperation{
 									{
-										DBName: "db1",
+										DbName: "db1",
 										DataWrites: []*types.DataWrite{
 											{
 												Key:   fmt.Sprintf("db1-key%d", number),
@@ -283,9 +283,9 @@ func TestBlockStoreCommitter(t *testing.T) {
 						},
 						{
 							Payload: &types.DataTx{
-								DBOperations: []*types.DBOperation{
+								DbOperations: []*types.DBOperation{
 									{
-										DBName: "db2",
+										DbName: "db2",
 										DataWrites: []*types.DataWrite{
 											{
 												Key:   fmt.Sprintf("db2-key%d", number),
@@ -424,15 +424,15 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"testUser"},
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"testUser"},
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key2",
 										Value: []byte("new-value2"),
-										ACL: &types.AccessControl{
+										Acl: &types.AccessControl{
 											ReadUsers: map[string]bool{
 												"user1": true,
 											},
@@ -444,12 +444,12 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key2",
 										Value: []byte("new-value2"),
-										ACL: &types.AccessControl{
+										Acl: &types.AccessControl{
 											ReadUsers: map[string]bool{
 												"user1": true,
 											},
@@ -465,10 +465,10 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"testUser"},
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"testUser"},
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key3",
@@ -477,7 +477,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key3",
@@ -490,10 +490,10 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"testUser"},
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"testUser"},
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key4",
@@ -502,7 +502,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key4",
@@ -515,10 +515,10 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"testUser"},
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"testUser"},
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key1",
@@ -526,7 +526,7 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key1",
@@ -538,10 +538,10 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"testUser"},
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"testUser"},
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key2",
@@ -719,34 +719,34 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 			},
 			expectedUsersBefore: []string{"user1", "user2", "user3", "user4"},
 			tx: &types.UserAdministrationTx{
-				UserID: "user0",
-				TxID:   "tx1",
+				UserId: "user0",
+				TxId:   "tx1",
 				UserWrites: []*types.UserWrite{
 					{
 						User: &types.User{
-							ID:          "user4",
+							Id:          "user4",
 							Certificate: []byte("new-certificate~user4"),
 						},
 					},
 					{
 						User: &types.User{
-							ID:          "user5",
+							Id:          "user5",
 							Certificate: []byte("certificate~user5"),
 						},
 					},
 					{
 						User: &types.User{
-							ID:          "user6",
+							Id:          "user6",
 							Certificate: []byte("certificate~user6"),
 						},
 					},
 				},
 				UserDeletes: []*types.UserDelete{
 					{
-						UserID: "user1",
+						UserId: "user1",
 					},
 					{
-						UserID: "user2",
+						UserId: "user2",
 					},
 				},
 			},
@@ -772,19 +772,19 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 			},
 			expectedUsersBefore: []string{"user1"},
 			tx: &types.UserAdministrationTx{
-				UserID: "user0",
-				TxID:   "tx1",
+				UserId: "user0",
+				TxId:   "tx1",
 				UserWrites: []*types.UserWrite{
 					{
 						User: &types.User{
-							ID:          "user2",
+							Id:          "user2",
 							Certificate: []byte("new-certificate~user2"),
 						},
 					},
 				},
 				UserDeletes: []*types.UserDelete{
 					{
-						UserID: "user1",
+						UserId: "user1",
 					},
 				},
 			},
@@ -873,9 +873,9 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			},
 			expectedDBsBefore: []string{"db1", "db2"},
 			dbAdminTx: &types.DBAdministrationTx{
-				CreateDBs: []string{"db3", "db4"},
-				DeleteDBs: []string{"db1", "db2"},
-				DBsIndex: map[string]*types.DBIndex{
+				CreateDbs: []string{"db3", "db4"},
+				DeleteDbs: []string{"db1", "db2"},
+				DbsIndex: map[string]*types.DBIndex{
 					"db3": {
 						AttributeAndType: map[string]types.Type{
 							"attr1": types.Type_BOOLEAN,
@@ -941,8 +941,8 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			},
 			expectedDBsBefore: []string{"db1", "db2"},
 			dbAdminTx: &types.DBAdministrationTx{
-				CreateDBs: []string{"db3", "db4"},
-				DBsIndex: map[string]*types.DBIndex{
+				CreateDbs: []string{"db3", "db4"},
+				DbsIndex: map[string]*types.DBIndex{
 					"db1": {
 						AttributeAndType: map[string]types.Type{
 							"attr1": types.Type_BOOLEAN,
@@ -1009,7 +1009,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			},
 			expectedDBsBefore: []string{"db1", "db2"},
 			dbAdminTx: &types.DBAdministrationTx{
-				DeleteDBs: []string{"db1", "db2"},
+				DeleteDbs: []string{"db1", "db2"},
 			},
 			expectedDBsAfter: []string{"db1", "db2"},
 			expectedIndex: map[string]*types.DBIndex{
@@ -1045,8 +1045,8 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 					},
 					ValidationInfo: tt.valInfo,
 				},
-				Payload: &types.Block_DBAdministrationTxEnvelope{
-					DBAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
+				Payload: &types.Block_DbAdministrationTxEnvelope{
+					DbAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
 						Payload: tt.dbAdminTx,
 					},
 				},
@@ -1079,7 +1079,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 		var admins []*types.Admin
 		for _, id := range adminsID {
 			admins = append(admins, &types.Admin{
-				ID:          id,
+				Id:          id,
 				Certificate: []byte("certificate~" + id),
 			})
 		}
@@ -1118,7 +1118,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 
 	assertExpectedUsers := func(t *testing.T, q *identity.Querier, expectedUsers []*types.User) {
 		for _, expectedUser := range expectedUsers {
-			user, _, err := q.GetUser(expectedUser.ID)
+			user, _, err := q.GetUser(expectedUser.Id)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedUser, user))
 		}
@@ -1126,7 +1126,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 
 	assertExpectedNodes := func(t *testing.T, q *identity.Querier, expectedNodes []*types.NodeConfig) {
 		for _, expectedNode := range expectedNodes {
-			node, _, err := q.GetNode(expectedNode.ID)
+			node, _, err := q.GetNode(expectedNode.Id)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedNode, node))
 		}
@@ -1350,11 +1350,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx1",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx1",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key1",
@@ -1363,7 +1363,7 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key1",
@@ -1376,11 +1376,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx2",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx2",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key1",
@@ -1389,7 +1389,7 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key1",
@@ -1437,11 +1437,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx1",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx1",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key0",
@@ -1450,7 +1450,7 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key0",
@@ -1495,11 +1495,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx1",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx1",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataReads: []*types.DataRead{
 									{
 										Key: "key0",
@@ -1561,11 +1561,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx1",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx1",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key0",
@@ -1573,7 +1573,7 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key0",
@@ -1612,11 +1612,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx1",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx1",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key0",
@@ -1625,7 +1625,7 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key0",
@@ -1638,11 +1638,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx2",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx2",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key0",
@@ -1650,7 +1650,7 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key0",
@@ -1662,11 +1662,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx3",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx3",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key0",
@@ -1675,7 +1675,7 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 								},
 							},
 							{
-								DBName: "db1",
+								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key0",
@@ -1739,11 +1739,11 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 			txs: []*types.DataTxEnvelope{
 				{
 					Payload: &types.DataTx{
-						MustSignUserIDs: []string{"user1"},
-						TxID:            "tx1",
-						DBOperations: []*types.DBOperation{
+						MustSignUserIds: []string{"user1"},
+						TxId:            "tx1",
+						DbOperations: []*types.DBOperation{
 							{
-								DBName: worldstate.DefaultDBName,
+								DbName: worldstate.DefaultDBName,
 								DataReads: []*types.DataRead{
 									{
 										Key: "key0",
@@ -1831,7 +1831,7 @@ func TestProvenanceStoreCommitterForUserBlockWithValidTxs(t *testing.T) {
 	}
 	user1 := constructUserForTest(t, "user1", []byte("rawcert-user1"), nil, sampleVersion, nil)
 	rawUser1New := &types.User{
-		ID:          "user1",
+		Id:          "user1",
 		Certificate: []byte("rawcert-user1-new"),
 	}
 
@@ -1878,8 +1878,8 @@ func TestProvenanceStoreCommitterForUserBlockWithValidTxs(t *testing.T) {
 			},
 			tx: &types.UserAdministrationTxEnvelope{
 				Payload: &types.UserAdministrationTx{
-					UserID: "user1",
-					TxID:   "tx1",
+					UserId: "user1",
+					TxId:   "tx1",
 					UserWrites: []*types.UserWrite{
 						{
 							User: rawUser1New,
@@ -1910,11 +1910,11 @@ func TestProvenanceStoreCommitterForUserBlockWithValidTxs(t *testing.T) {
 			name: "delete user1",
 			tx: &types.UserAdministrationTxEnvelope{
 				Payload: &types.UserAdministrationTx{
-					UserID: "user1",
-					TxID:   "tx1",
+					UserId: "user1",
+					TxId:   "tx1",
 					UserDeletes: []*types.UserDelete{
 						{
-							UserID: "user1",
+							UserId: "user1",
 						},
 					},
 				},
@@ -1981,7 +1981,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 	clusterConfigWithOneNode := &types.ClusterConfig{
 		Nodes: []*types.NodeConfig{
 			{
-				ID:          "bdb-node-1",
+				Id:          "bdb-node-1",
 				Certificate: []byte("node-cert"),
 				Address:     "127.0.0.1",
 				Port:        0,
@@ -1989,7 +1989,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 		},
 		Admins: []*types.Admin{
 			{
-				ID:          "admin1",
+				Id:          "admin1",
 				Certificate: []byte("cert-admin1"),
 			},
 		},
@@ -2000,7 +2000,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 
 	clusterConfigWithTwoNodes := proto.Clone(clusterConfigWithOneNode).(*types.ClusterConfig)
 	clusterConfigWithTwoNodes.Nodes = append(clusterConfigWithTwoNodes.Nodes, &types.NodeConfig{
-		ID:          "bdb-node-2",
+		Id:          "bdb-node-2",
 		Certificate: []byte("node-2-cert"),
 		Address:     "127.0.0.2",
 		Port:        0,
@@ -2011,7 +2011,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 
 	admin1Serialized, err := proto.Marshal(
 		&types.User{
-			ID:          "admin1",
+			Id:          "admin1",
 			Certificate: []byte("cert-admin1"),
 			Privilege: &types.Privilege{
 				Admin: true,
@@ -2021,7 +2021,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 	require.NoError(t, err)
 	admin1NewSerialized, err := proto.Marshal(
 		&types.User{
-			ID:          "admin1",
+			Id:          "admin1",
 			Certificate: []byte("cert-new-admin1"),
 			Privilege: &types.Privilege{
 				Admin: true,
@@ -2032,7 +2032,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 
 	node1Serialized, err := proto.Marshal(
 		&types.NodeConfig{
-			ID:          "bdb-node-1",
+			Id:          "bdb-node-1",
 			Certificate: []byte("cert-node"),
 			Address:     "127.0.0.1",
 			Port:        0,
@@ -2041,7 +2041,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 	require.NoError(t, err)
 	node2Serialized, err := proto.Marshal(
 		&types.NodeConfig{
-			ID:          "bdb-node-2",
+			Id:          "bdb-node-2",
 			Certificate: []byte("node-2-cert"),
 			Address:     "127.0.0.2",
 			Port:        0,
@@ -2183,8 +2183,8 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 		{
 			name: "previous link with the already committed config tx; get deleted value of bdb-node-2 config",
 			tx: &types.ConfigTx{
-				UserID: "user1",
-				TxID:   "tx1",
+				UserId: "user1",
+				TxId:   "tx1",
 				ReadOldConfigVersion: &types.Version{
 					BlockNum: 1,
 					TxNum:    0,
@@ -2237,8 +2237,8 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 		{
 			name: "next link with the admin present in committed config tx; get bdb-node-1 config",
 			tx: &types.ConfigTx{
-				UserID: "user1",
-				TxID:   "tx1",
+				UserId: "user1",
+				TxId:   "tx1",
 				ReadOldConfigVersion: &types.Version{
 					BlockNum: 1,
 					TxNum:    0,
@@ -2371,22 +2371,22 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 						Envelopes: []*types.DataTxEnvelope{
 							{
 								Payload: &types.DataTx{
-									MustSignUserIDs: []string{"user1"},
-									TxID:            "tx1",
-									DBOperations: []*types.DBOperation{
+									MustSignUserIds: []string{"user1"},
+									TxId:            "tx1",
+									DbOperations: []*types.DBOperation{
 										{
-											DBName: worldstate.DefaultDBName,
+											DbName: worldstate.DefaultDBName,
 										},
 									},
 								},
 							},
 							{
 								Payload: &types.DataTx{
-									MustSignUserIDs: []string{"user1"},
-									TxID:            "tx2",
-									DBOperations: []*types.DBOperation{
+									MustSignUserIds: []string{"user1"},
+									TxId:            "tx2",
+									DbOperations: []*types.DBOperation{
 										{
-											DBName: worldstate.DefaultDBName,
+											DbName: worldstate.DefaultDBName,
 										},
 									},
 								},
@@ -2419,8 +2419,8 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 				Payload: &types.Block_UserAdministrationTxEnvelope{
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 						Payload: &types.UserAdministrationTx{
-							UserID: "user1",
-							TxID:   "tx1",
+							UserId: "user1",
+							TxId:   "tx1",
 						},
 					},
 				},
@@ -2449,8 +2449,8 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 				Payload: &types.Block_ConfigTxEnvelope{
 					ConfigTxEnvelope: &types.ConfigTxEnvelope{
 						Payload: &types.ConfigTx{
-							UserID: "user1",
-							TxID:   "tx1",
+							UserId: "user1",
+							TxId:   "tx1",
 						},
 					},
 				},
@@ -2481,11 +2481,11 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 						Envelopes: []*types.DataTxEnvelope{
 							{
 								Payload: &types.DataTx{
-									MustSignUserIDs: []string{"user1"},
-									TxID:            "tx1",
-									DBOperations: []*types.DBOperation{
+									MustSignUserIds: []string{"user1"},
+									TxId:            "tx1",
+									DbOperations: []*types.DBOperation{
 										{
-											DBName: worldstate.DefaultDBName,
+											DbName: worldstate.DefaultDBName,
 										},
 									},
 								},
@@ -2536,11 +2536,11 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 		{
 			name: "tx with only reads",
 			tx: &types.DataTx{
-				MustSignUserIDs: []string{"user1"},
-				TxID:            "tx1",
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{"user1"},
+				TxId:            "tx1",
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataReads: []*types.DataRead{
 							{
 								Key: "key1",
@@ -2559,7 +2559,7 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 						},
 					},
 					{
-						DBName: "db1",
+						DbName: "db1",
 						DataReads: []*types.DataRead{
 							{
 								Key: "key3",
@@ -2624,11 +2624,11 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 		{
 			name: "tx with writes and previous version",
 			tx: &types.DataTx{
-				MustSignUserIDs: []string{"user2"},
-				TxID:            "tx2",
-				DBOperations: []*types.DBOperation{
+				MustSignUserIds: []string{"user2"},
+				TxId:            "tx2",
+				DbOperations: []*types.DBOperation{
 					{
-						DBName: worldstate.DefaultDBName,
+						DbName: worldstate.DefaultDBName,
 						DataWrites: []*types.DataWrite{
 							{
 								Key:   "key1",
@@ -2645,7 +2645,7 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 						},
 					},
 					{
-						DBName: "db1",
+						DbName: "db1",
 						DataWrites: []*types.DataWrite{
 							{
 								Key:   "key1",
@@ -2842,7 +2842,7 @@ func TestConstructProvenanceEntriesForConfigTx(t *testing.T) {
 	clusterConfig := &types.ClusterConfig{
 		Nodes: []*types.NodeConfig{
 			{
-				ID:          "bdb-node-1",
+				Id:          "bdb-node-1",
 				Certificate: []byte("node-cert"),
 				Address:     "127.0.0.1",
 				Port:        0,
@@ -2850,7 +2850,7 @@ func TestConstructProvenanceEntriesForConfigTx(t *testing.T) {
 		},
 		Admins: []*types.Admin{
 			{
-				ID:          "admin1",
+				Id:          "admin1",
 				Certificate: []byte("cert-admin1"),
 			},
 		},
@@ -2870,8 +2870,8 @@ func TestConstructProvenanceEntriesForConfigTx(t *testing.T) {
 		{
 			name: "first cluster config tx",
 			tx: &types.ConfigTx{
-				UserID:    "user1",
-				TxID:      "tx1",
+				UserId:    "user1",
+				TxId:      "tx1",
 				NewConfig: clusterConfig,
 			},
 			version: &types.Version{
@@ -2901,8 +2901,8 @@ func TestConstructProvenanceEntriesForConfigTx(t *testing.T) {
 		{
 			name: "updating existing cluster config",
 			tx: &types.ConfigTx{
-				UserID: "user1",
-				TxID:   "tx1",
+				UserId: "user1",
+				TxId:   "tx1",
 				ReadOldConfigVersion: &types.Version{
 					BlockNum: 1,
 					TxNum:    0,
@@ -2960,7 +2960,7 @@ func constructDataEntryForTest(key string, value []byte, metadata *types.Metadat
 
 func constructAdminEntryForTest(userID string) *types.User {
 	return &types.User{
-		ID:          userID,
+		Id:          userID,
 		Certificate: []byte("certificate~" + userID),
 		Privilege: &types.Privilege{
 			Admin: true,
@@ -2970,7 +2970,7 @@ func constructAdminEntryForTest(userID string) *types.User {
 
 func constructNodeEntryForTest(nodeID string) *types.NodeConfig {
 	return &types.NodeConfig{
-		ID:          nodeID,
+		Id:          nodeID,
 		Address:     "192.168.0.5",
 		Port:        1234,
 		Certificate: []byte("certificate~" + nodeID),

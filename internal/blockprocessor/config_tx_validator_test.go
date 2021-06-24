@@ -28,14 +28,14 @@ func TestValidateConfigTx(t *testing.T) {
 
 	setup := func(db worldstate.DB) {
 		nonAdminUser := &types.User{
-			ID:          "nonAdminUser",
+			Id:          "nonAdminUser",
 			Certificate: nonAdminCert.Raw,
 		}
 		nonAdminUserSerialized, err := proto.Marshal(nonAdminUser)
 		require.NoError(t, err)
 
 		adminUser := &types.User{
-			ID:          userID,
+			Id:          userID,
 			Certificate: adminCert.Raw,
 			Privilege: &types.Privilege{
 				Admin: true,
@@ -71,7 +71,7 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: submitter does not have cluster admin privilege",
 			txEnv: testutils.SignedConfigTxEnvelope(t, nonAdminSigner, &types.ConfigTx{
-				UserID: "nonAdminUser",
+				UserId: "nonAdminUser",
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
@@ -81,7 +81,7 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: signature verification failure",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID: "nonAdminUser",
+				UserId: "nonAdminUser",
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_UNAUTHORISED,
@@ -91,7 +91,7 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: new config is empty",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID:    "adminUser",
+				UserId:    "adminUser",
 				NewConfig: nil,
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -102,7 +102,7 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: CA config is empty",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID:    "adminUser",
+				UserId:    "adminUser",
 				NewConfig: &types.ClusterConfig{},
 			}),
 			expectedResult: &types.ValidationInfo{
@@ -113,7 +113,7 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: node config is empty",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID: "adminUser",
+				UserId: "adminUser",
 				NewConfig: &types.ClusterConfig{
 					CertAuthConfig: &types.CAConfig{
 						Roots: [][]byte{caCert.Raw},
@@ -128,11 +128,11 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: admin config is empty",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID: "adminUser",
+				UserId: "adminUser",
 				NewConfig: &types.ClusterConfig{
 					Nodes: []*types.NodeConfig{
 						{
-							ID:          "node1",
+							Id:          "node1",
 							Address:     "127.0.0.1",
 							Port:        6090,
 							Certificate: nodeCert.Raw,
@@ -151,7 +151,7 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "invalid: mvcc conflict",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID: "adminUser",
+				UserId: "adminUser",
 				ReadOldConfigVersion: &types.Version{
 					BlockNum: 100,
 					TxNum:    100,
@@ -159,7 +159,7 @@ func TestValidateConfigTx(t *testing.T) {
 				NewConfig: &types.ClusterConfig{
 					Nodes: []*types.NodeConfig{
 						{
-							ID:          "node1",
+							Id:          "node1",
 							Address:     "127.0.0.1",
 							Port:        6090,
 							Certificate: nodeCert.Raw,
@@ -167,7 +167,7 @@ func TestValidateConfigTx(t *testing.T) {
 					},
 					Admins: []*types.Admin{
 						{
-							ID:          "admin1",
+							Id:          "admin1",
 							Certificate: adminCert.Raw,
 						},
 					},
@@ -201,12 +201,12 @@ func TestValidateConfigTx(t *testing.T) {
 		{
 			name: "valid",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserID:               "adminUser",
+				UserId:               "adminUser",
 				ReadOldConfigVersion: nil,
 				NewConfig: &types.ClusterConfig{
 					Nodes: []*types.NodeConfig{
 						{
-							ID:          "node1",
+							Id:          "node1",
 							Address:     "127.0.0.1",
 							Port:        6090,
 							Certificate: nodeCert.Raw,
@@ -214,7 +214,7 @@ func TestValidateConfigTx(t *testing.T) {
 					},
 					Admins: []*types.Admin{
 						{
-							ID:          "admin1",
+							Id:          "admin1",
 							Certificate: adminCert.Raw,
 						},
 					},
@@ -383,7 +383,7 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "invalid: empty nodeID",
 			nodes: []*types.NodeConfig{
 				{
-					ID: "",
+					Id: "",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -395,7 +395,7 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "invalid: node IP address is empty",
 			nodes: []*types.NodeConfig{
 				{
-					ID:      "node1",
+					Id:      "node1",
 					Address: "",
 				},
 			},
@@ -408,7 +408,7 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "invalid: node IP address is not valid",
 			nodes: []*types.NodeConfig{
 				{
-					ID:      "node1",
+					Id:      "node1",
 					Address: "127.0.0",
 				},
 			},
@@ -421,7 +421,7 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "invalid: node certificate is not valid",
 			nodes: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        6090,
 					Certificate: []byte("random"),
@@ -436,13 +436,13 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "invalid: duplicate node IDs in the node config",
 			nodes: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        6090,
 					Certificate: nodeCert.Raw,
 				},
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        6091,
 					Certificate: nodeCert.Raw,
@@ -457,13 +457,13 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "invalid: duplicate node EPs in the node config",
 			nodes: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        6090,
 					Certificate: nodeCert.Raw,
 				},
 				{
-					ID:          "node2",
+					Id:          "node2",
 					Address:     "127.0.0.1",
 					Port:        6090,
 					Certificate: nodeCert.Raw,
@@ -478,7 +478,7 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "valid",
 			nodes: []*types.NodeConfig{
 				{
-					ID:          "node1",
+					Id:          "node1",
 					Address:     "127.0.0.1",
 					Port:        6090,
 					Certificate: nodeCert.Raw,
@@ -537,7 +537,7 @@ func TestValidateAdminConfig(t *testing.T) {
 			name: "invalid: the adminID cannot be empty",
 			admins: []*types.Admin{
 				{
-					ID: "",
+					Id: "",
 				},
 			},
 			expectedResult: &types.ValidationInfo{
@@ -549,11 +549,11 @@ func TestValidateAdminConfig(t *testing.T) {
 			name: "invalid: admin certificate is not valid",
 			admins: []*types.Admin{
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: adminCert.Raw,
 				},
 				{
-					ID:          "admin2",
+					Id:          "admin2",
 					Certificate: []byte("random"),
 				},
 			},
@@ -566,11 +566,11 @@ func TestValidateAdminConfig(t *testing.T) {
 			name: "invalid: dulplicate adminID in the admin config",
 			admins: []*types.Admin{
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: adminCert.Raw,
 				},
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: adminCert.Raw,
 				},
 			},
@@ -583,11 +583,11 @@ func TestValidateAdminConfig(t *testing.T) {
 			name: "valid",
 			admins: []*types.Admin{
 				{
-					ID:          "admin1",
+					Id:          "admin1",
 					Certificate: adminCert.Raw,
 				},
 				{
-					ID:          "admin2",
+					Id:          "admin2",
 					Certificate: adminCert.Raw,
 				},
 			},
@@ -1068,7 +1068,7 @@ func TestValidateMembersNodesMatch(t *testing.T) {
 		PeerPort: 6090,
 	}
 	node1 := &types.NodeConfig{
-		ID:          "node1",
+		Id:          "node1",
 		Address:     "11.11.11.11",
 		Port:        7090,
 		Certificate: []byte{1, 2, 3, 4},
@@ -1081,7 +1081,7 @@ func TestValidateMembersNodesMatch(t *testing.T) {
 		PeerPort: 6091,
 	}
 	node2 := &types.NodeConfig{
-		ID:          "node2",
+		Id:          "node2",
 		Address:     "11.11.11.11",
 		Port:        7091,
 		Certificate: []byte{1, 2, 3, 4},

@@ -57,14 +57,14 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 	}
 	query := payload.(*types.GetDataQuery)
 
-	if !d.db.IsDBExists(query.DBName) {
+	if !d.db.IsDBExists(query.DbName) {
 		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
-			ErrMsg: "error db '" + query.DBName + "' doesn't exist",
+			ErrMsg: "error db '" + query.DbName + "' doesn't exist",
 		})
 		return
 	}
 
-	data, err := d.db.GetData(query.DBName, query.UserID, query.Key)
+	data, err := d.db.GetData(query.DbName, query.UserId, query.Key)
 	if err != nil {
 		var status int
 
@@ -109,14 +109,14 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		return
 	}
 
-	if len(txEnv.Payload.MustSignUserIDs) == 0 {
+	if len(txEnv.Payload.MustSignUserIds) == 0 {
 		SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	var notSigned []string
-	for _, user := range txEnv.Payload.MustSignUserIDs {
+	for _, user := range txEnv.Payload.MustSignUserIds {
 		if user == "" {
 			SendHTTPResponse(response, http.StatusBadRequest,
 				&types.HttpResponseErr{ErrMsg: "an empty UserID in MustSignUserIDs list present in the transaction envelope"})
@@ -134,7 +134,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		return
 	}
 
-	for _, userID := range txEnv.Payload.MustSignUserIDs {
+	for _, userID := range txEnv.Payload.MustSignUserIds {
 		if err, code := VerifyRequestSignature(d.sigVerifier, userID, txEnv.Signatures[userID], txEnv.Payload); err != nil {
 			SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return

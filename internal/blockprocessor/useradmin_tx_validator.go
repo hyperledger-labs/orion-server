@@ -20,20 +20,20 @@ type userAdminTxValidator struct {
 }
 
 func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelope) (*types.ValidationInfo, error) {
-	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserID, txEnv.Signature, txEnv.Payload)
+	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload)
 	if err != nil || valInfo.Flag != types.Flag_VALID {
 		return valInfo, err
 	}
 
 	tx := txEnv.Payload
-	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserID)
+	hasPerm, err := v.identityQuerier.HasAdministrationPrivilege(tx.UserId)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "error while checking user administrative privilege for user [%s]", tx.UserID)
+		return nil, errors.WithMessagef(err, "error while checking user administrative privilege for user [%s]", tx.UserId)
 	}
 	if !hasPerm {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_NO_PERMISSION,
-			ReasonIfInvalid: "the user [" + tx.UserID + "] has no privilege to perform user administrative operations",
+			ReasonIfInvalid: "the user [" + tx.UserId + "] has no privilege to perform user administrative operations",
 		}, nil
 	}
 
@@ -53,7 +53,7 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 		return r, nil
 	}
 
-	r, err = v.validateACLOnUserReads(tx.UserID, tx.UserReads)
+	r, err = v.validateACLOnUserReads(tx.UserId, tx.UserReads)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while validating ACL on reads")
 	}
@@ -61,7 +61,7 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 		return r, nil
 	}
 
-	r, err = v.validateACLOnUserWrites(tx.UserID, tx.UserWrites)
+	r, err = v.validateACLOnUserWrites(tx.UserId, tx.UserWrites)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while validating ACL on writes")
 	}
@@ -69,7 +69,7 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 		return r, nil
 	}
 
-	r, err = v.validateACLOnUserDeletes(tx.UserID, tx.UserDeletes)
+	r, err = v.validateACLOnUserDeletes(tx.UserId, tx.UserDeletes)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while validating ACL on deletes")
 	}
@@ -107,7 +107,7 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 				ReasonIfInvalid: "there is an empty user entry in the write list",
 			}, nil
 
-		case w.User.ID == "":
+		case w.User.Id == "":
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an user in the write list with an empty ID. A valid userID must be an non-empty string",
@@ -118,11 +118,11 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 				if w.User.Privilege.Admin {
 					return &types.ValidationInfo{
 						Flag:            types.Flag_INVALID_NO_PERMISSION,
-						ReasonIfInvalid: "the user [" + w.User.ID + "] is marked as admin user. Only via a cluster configuration transaction, the [" + w.User.ID + "] can be added as admin",
+						ReasonIfInvalid: "the user [" + w.User.Id + "] is marked as admin user. Only via a cluster configuration transaction, the [" + w.User.Id + "] can be added as admin",
 					}, nil
 				}
 
-				dbPerm := w.User.Privilege.DBPermission
+				dbPerm := w.User.Privilege.DbPermission
 				for dbName := range dbPerm {
 					if v.db.Exist(dbName) {
 						continue
@@ -138,7 +138,7 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 			if err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-					ReasonIfInvalid: "the user [" + w.User.ID + "] in the write list has an invalid certificate: Error = " + err.Error(),
+					ReasonIfInvalid: "the user [" + w.User.Id + "] in the write list has an invalid certificate: Error = " + err.Error(),
 				}, nil
 			}
 		}
@@ -158,7 +158,7 @@ func validateFieldsInUserDeletes(userDeletes []*types.UserDelete) *types.Validat
 				ReasonIfInvalid: "there is an empty entry in the delete list",
 			}
 
-		case d.UserID == "":
+		case d.UserId == "":
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "there is an user in the delete list with an empty ID. A valid userID must be an non-empty string",
@@ -176,32 +176,32 @@ func validateUniquenessInUserWritesAndDeletes(userWrites []*types.UserWrite, use
 	deleteUserIDs := make(map[string]bool)
 
 	for _, w := range userWrites {
-		if writeUserIDs[w.User.ID] {
+		if writeUserIDs[w.User.Id] {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "there are two users with the same userID [" + w.User.ID + "] in the write list. The userIDs in the write list must be unique",
+				ReasonIfInvalid: "there are two users with the same userID [" + w.User.Id + "] in the write list. The userIDs in the write list must be unique",
 			}
 		}
 
-		writeUserIDs[w.User.ID] = true
+		writeUserIDs[w.User.Id] = true
 	}
 
 	for _, d := range userDeletes {
 		switch {
-		case deleteUserIDs[d.UserID]:
+		case deleteUserIDs[d.UserId]:
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "there are two users with the same userID [" + d.UserID + "] in the delete list. The userIDs in the delete list must be unique",
+				ReasonIfInvalid: "there are two users with the same userID [" + d.UserId + "] in the delete list. The userIDs in the delete list must be unique",
 			}
 
-		case writeUserIDs[d.UserID]:
+		case writeUserIDs[d.UserId]:
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the user [" + d.UserID + "] is present in both write and delete list. Only one operation per key is allowed within a transaction",
+				ReasonIfInvalid: "the user [" + d.UserId + "] is present in both write and delete list. Only one operation per key is allowed within a transaction",
 			}
 		}
 
-		deleteUserIDs[d.UserID] = true
+		deleteUserIDs[d.UserId] = true
 	}
 
 	return &types.ValidationInfo{
@@ -211,7 +211,7 @@ func validateUniquenessInUserWritesAndDeletes(userWrites []*types.UserWrite, use
 
 func (v *userAdminTxValidator) validateACLOnUserReads(operatingUser string, reads []*types.UserRead) (*types.ValidationInfo, error) {
 	for _, r := range reads {
-		targetUser := r.UserID
+		targetUser := r.UserId
 
 		hasPerm, err := v.identityQuerier.HasReadAccessOnTargetUser(operatingUser, targetUser)
 		if err != nil {
@@ -237,7 +237,7 @@ func (v *userAdminTxValidator) validateACLOnUserReads(operatingUser string, read
 
 func (v *userAdminTxValidator) validateACLOnUserWrites(operatingUser string, writes []*types.UserWrite) (*types.ValidationInfo, error) {
 	for _, w := range writes {
-		targetUser := w.User.ID
+		targetUser := w.User.Id
 
 		admin, err := v.identityQuerier.HasAdministrationPrivilege(targetUser)
 		if err != nil {
@@ -274,7 +274,7 @@ func (v *userAdminTxValidator) validateACLOnUserWrites(operatingUser string, wri
 
 func (v *userAdminTxValidator) validateACLOnUserDeletes(operatingUser string, deletes []*types.UserDelete) (*types.ValidationInfo, error) {
 	for _, d := range deletes {
-		targetUser := d.UserID
+		targetUser := d.UserId
 
 		admin, err := v.identityQuerier.HasAdministrationPrivilege(targetUser)
 		if err != nil {
@@ -315,7 +315,7 @@ func (v *userAdminTxValidator) validateACLOnUserDeletes(operatingUser string, de
 
 func (v *userAdminTxValidator) mvccValidation(userReads []*types.UserRead) (*types.ValidationInfo, error) {
 	for _, r := range userReads {
-		committedVersion, err := v.identityQuerier.GetUserVersion(r.UserID)
+		committedVersion, err := v.identityQuerier.GetUserVersion(r.UserId)
 		if err != nil {
 			if _, ok := err.(*identity.NotFoundErr); !ok {
 				return nil, err
@@ -328,7 +328,7 @@ func (v *userAdminTxValidator) mvccValidation(userReads []*types.UserRead) (*typ
 
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
-			ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the user [" + r.UserID + "] has changed",
+			ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the user [" + r.UserId + "] has changed",
 		}, nil
 	}
 
