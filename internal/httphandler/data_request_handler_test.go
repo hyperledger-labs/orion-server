@@ -39,30 +39,27 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.ResponseEnvelope) bcdb.DB
-		expectedResponse   *types.ResponseEnvelope
+		dbMockFactory      func(response *types.GetDataResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetDataResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
 	}{
 		{
 			name: "valid get data request",
-			expectedResponse: &types.ResponseEnvelope{
-				Signature: []byte{0, 0, 0},
-				Payload: MarshalOrPanic(&types.Payload{
+			expectedResponse: &types.GetDataResponseEnvelope{
+				Response: &types.GetDataResponse{
 					Header: &types.ResponseHeader{
 						NodeID: "testNodeID",
 					},
-
-					Response: MarshalOrPanic(&types.GetDataResponse{
-						Value: []byte("bar"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								TxNum:    1,
-								BlockNum: 1,
-							},
+					Value: []byte("bar"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							TxNum:    1,
+							BlockNum: 1,
 						},
-					}),
-				}),
+					},
+				},
+				Signature: []byte{0, 0, 0},
 			},
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "foo"), nil)
@@ -73,7 +70,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetData", dbName, submittingUserName, "foo").Return(response, nil)
@@ -93,7 +90,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
@@ -115,7 +112,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
@@ -138,7 +135,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
@@ -164,7 +161,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooBob))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
@@ -182,7 +179,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				}
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedStatusCode: http.StatusBadRequest,
@@ -200,7 +197,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				return &mocks.DB{}
 			},
 			expectedStatusCode: http.StatusBadRequest,
@@ -232,7 +229,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.ResponseEnvelope{}
+				res := &types.GetDataResponseEnvelope{}
 				err = json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResponse, res)
@@ -287,7 +284,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		txEnvFactory            func() *types.DataTxEnvelope
-		txRespFactory           func() *types.ResponseEnvelope
+		txRespFactory           func() *types.TxReceiptResponseEnvelope
 		createMockAndInstrument func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB
 		timeoutStr              string
 		expectedCode            int
@@ -305,7 +302,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return correctTxRespEnv
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -334,7 +331,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -365,7 +362,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -387,7 +384,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -408,7 +405,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -431,7 +428,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -454,7 +451,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -477,7 +474,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -498,7 +495,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -523,7 +520,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return correctTxRespEnv
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -555,7 +552,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -581,7 +578,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 					},
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dataTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -637,7 +634,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 
 			// require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode == http.StatusOK {
-				resp := &types.ResponseEnvelope{}
+				resp := &types.TxReceiptResponseEnvelope{}
 				err := json.NewDecoder(rr.Body).Decode(resp)
 				require.NoError(t, err)
 				require.Equal(t, txResp, resp)

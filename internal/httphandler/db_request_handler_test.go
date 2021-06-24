@@ -34,8 +34,8 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.ResponseEnvelope) bcdb.DB
-		expectedResponse   *types.ResponseEnvelope
+		dbMockFactory      func(response *types.GetDBStatusResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetDBStatusResponseEnvelope
 		expectedStatusCode int
 		expectedErr        string
 	}{
@@ -52,21 +52,19 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetDBStatus", dbName).Return(response, nil)
 				return db
 			},
-			expectedResponse: &types.ResponseEnvelope{
-				Payload: MarshalOrPanic(&types.Payload{
+			expectedResponse: &types.GetDBStatusResponseEnvelope{
+				Response: &types.GetDBStatusResponse{
 					Header: &types.ResponseHeader{
 						NodeID: "testNodeID",
 					},
-					Response: MarshalOrPanic(&types.GetDBStatusResponse{
-						Exist: true,
-					}),
-				}),
+					Exist: true,
+				},
 				Signature: []byte{0, 0, 0},
 			},
 			expectedStatusCode: http.StatusOK,
@@ -83,7 +81,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -102,7 +100,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				return db
 			},
@@ -123,7 +121,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
@@ -145,7 +143,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				return db
@@ -167,7 +165,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 
 				return req, nil
 			},
-			dbMockFactory: func(response *types.ResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response *types.GetDBStatusResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetDBStatus", dbName).Return(nil, errors.New("failed to retrieve db status"))
@@ -204,7 +202,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.ResponseEnvelope{}
+				res := &types.GetDBStatusResponseEnvelope{}
 				err := json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 
@@ -231,7 +229,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 	testCases := []struct {
 		name                    string
 		txEnvFactory            func() *types.DBAdministrationTxEnvelope
-		txRespFactory           func() *types.ResponseEnvelope
+		txRespFactory           func() *types.TxReceiptResponseEnvelope
 		createMockAndInstrument func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB
 		timeoutStr              string
 		expectedCode            int
@@ -245,7 +243,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return correctTxRespEnv
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -270,7 +268,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -297,7 +295,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -316,7 +314,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -332,7 +330,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
 				return &types.DBAdministrationTxEnvelope{Payload: nil, Signature: aliceSig}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -350,7 +348,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 				tx.UserID = ""
 				return &types.DBAdministrationTxEnvelope{Payload: tx, Signature: aliceSig}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -365,7 +363,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 			txEnvFactory: func() *types.DBAdministrationTxEnvelope {
 				return &types.DBAdministrationTxEnvelope{Payload: dbTx, Signature: nil}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -383,7 +381,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 					Signature: []byte("bad-sig"),
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -406,7 +404,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -426,7 +424,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 					Signature: aliceSig,
 				}
 			},
-			txRespFactory: func() *types.ResponseEnvelope {
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
 				return nil
 			},
 			createMockAndInstrument: func(t *testing.T, dbTxEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
@@ -481,11 +479,10 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 
 			require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode == http.StatusOK {
-				resp := &types.ResponseEnvelope{}
+				resp := &types.TxReceiptResponseEnvelope{}
 				err := json.NewDecoder(rr.Body).Decode(resp)
 				require.NoError(t, err)
 				require.Equal(t, txResp, resp)
-
 			} else {
 				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)

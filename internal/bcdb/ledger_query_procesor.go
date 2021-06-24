@@ -118,7 +118,7 @@ func (p *ledgerQueryProcessor) getProof(userId string, blockNum uint64, txIdx ui
 	}, nil
 }
 
-func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.TxResponse, error) {
+func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.TxReceiptResponse, error) {
 	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
 	if err != nil {
 		return nil, err
@@ -137,7 +137,7 @@ func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.
 		return nil, err
 	}
 
-	return &types.TxResponse{
+	return &types.TxReceiptResponse{
 		Receipt: &types.TxReceipt{
 			Header:  blockHeader,
 			TxIndex: uint64(txLoc.TxIndex),

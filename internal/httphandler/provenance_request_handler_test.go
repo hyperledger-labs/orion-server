@@ -42,19 +42,17 @@ func TestGetHistoricalData(t *testing.T) {
 		BlockNum: 1,
 		TxNum:    1,
 	}
-	genericResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	genericResponse := &types.GetHistoricalDataResponseEnvelope{
+		Response: &types.GetHistoricalDataResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetHistoricalDataResponse{
-				Values: []*types.ValueWithMetadata{
-					{
-						Value: []byte("value1"),
-					},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value1"),
 				},
-			}),
-		}),
+			},
+		},
 	}
 
 	testCases := []testCase{
@@ -229,7 +227,7 @@ func TestGetHistoricalData(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetHistoricalDataResponseEnvelope{})
 		})
 	}
 }
@@ -243,18 +241,16 @@ func TestGetDataReaders(t *testing.T) {
 
 	dbName := "db1"
 	key := "key1"
-	genericResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	genericResponse := &types.GetDataReadersResponseEnvelope{
+		Response: &types.GetDataReadersResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetDataReadersResponse{
-				ReadBy: map[string]uint32{
-					"user1": 5,
-					"user2": 6,
-				},
-			}),
-		}),
+			ReadBy: map[string]uint32{
+				"user1": 5,
+				"user2": 6,
+			},
+		},
 	}
 	url := constants.URLForGetDataReaders(dbName, key)
 	req := constructRequestForTestCase(
@@ -299,7 +295,7 @@ func TestGetDataReaders(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetDataReadersResponseEnvelope{})
 		})
 	}
 }
@@ -313,18 +309,16 @@ func TestGetDataWriters(t *testing.T) {
 
 	dbName := "db1"
 	key := "key1"
-	genericResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	genericResponse := &types.GetDataWritersResponseEnvelope{
+		Response: &types.GetDataWritersResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetDataWritersResponse{
-				WrittenBy: map[string]uint32{
-					"user1": 5,
-					"user2": 6,
-				},
-			}),
-		}),
+			WrittenBy: map[string]uint32{
+				"user1": 5,
+				"user2": 6,
+			},
+		},
 	}
 	url := constants.URLForGetDataWriters(dbName, key)
 	req := constructRequestForTestCase(
@@ -369,7 +363,7 @@ func TestGetDataWriters(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetDataWritersResponseEnvelope{})
 		})
 	}
 }
@@ -382,20 +376,18 @@ func TestGetDataReadBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	genericResponse := &types.GetDataProvenanceResponseEnvelope{
+		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("value1"),
-					},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value1"),
 				},
-			}),
-		}),
+			},
+		},
 	}
 
 	url := constants.URLForGetDataReadBy(targetUserID)
@@ -440,7 +432,7 @@ func TestGetDataReadBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetDataProvenanceResponseEnvelope{})
 		})
 	}
 }
@@ -453,20 +445,18 @@ func TestGetDataWrittenBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	genericResponse := &types.GetDataProvenanceResponseEnvelope{
+		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("value1"),
-					},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value1"),
 				},
-			}),
-		}),
+			},
+		},
 	}
 
 	url := constants.URLForGetDataWrittenBy(targetUserID)
@@ -511,7 +501,7 @@ func TestGetDataWrittenBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetDataProvenanceResponseEnvelope{})
 		})
 	}
 }
@@ -524,20 +514,18 @@ func TestGetDataDeletedBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	genericResponse := &types.GetDataProvenanceResponseEnvelope{
+		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("value1"),
-					},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value1"),
 				},
-			}),
-		}),
+			},
+		},
 	}
 
 	url := constants.URLForGetDataDeletedBy(targetUserID)
@@ -582,7 +570,7 @@ func TestGetDataDeletedBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetDataProvenanceResponseEnvelope{})
 		})
 	}
 }
@@ -595,15 +583,13 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
-	genericResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	genericResponse := &types.GetTxIDsSubmittedByResponseEnvelope{
+		Response: &types.GetTxIDsSubmittedByResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetTxIDsSubmittedByResponse{
-				TxIDs: []string{"tx1", "tx5"},
-			}),
-		}),
+			TxIDs: []string{"tx1", "tx5"},
+		},
 	}
 
 	url := constants.URLForGetTxIDsSubmittedBy(targetUserID)
@@ -648,7 +634,7 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetTxIDsSubmittedByResponseEnvelope{})
 		})
 	}
 }
@@ -665,41 +651,35 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 		TxNum:    10,
 	}
 
-	nodeResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	nodeResponse := &types.GetHistoricalDataResponseEnvelope{
+		Response: &types.GetHistoricalDataResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "node1",
-						Value: []byte("value1"),
-						Metadata: &types.Metadata{
-							Version: sampleVer,
-						},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value1"),
+					Metadata: &types.Metadata{
+						Version: sampleVer,
 					},
 				},
-			}),
-		}),
+			},
+		},
 	}
-	userResponse := &types.ResponseEnvelope{
-		Payload: MarshalOrPanic(&types.Payload{
+	userResponse := &types.GetHistoricalDataResponseEnvelope{
+		Response: &types.GetHistoricalDataResponse{
 			Header: &types.ResponseHeader{
 				NodeID: "testNodeID",
 			},
-			Response: MarshalOrPanic(&types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "user1",
-						Value: []byte("value1"),
-						Metadata: &types.Metadata{
-							Version: sampleVer,
-						},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("value1"),
+					Metadata: &types.Metadata{
+						Version: sampleVer,
 					},
 				},
-			}),
-		}),
+			},
+		},
 	}
 
 	testCases := []testCase{
@@ -777,7 +757,7 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
-			assertTestCase(t, tt, &types.ResponseEnvelope{})
+			assertTestCase(t, tt, &types.GetHistoricalDataResponseEnvelope{})
 		})
 	}
 }

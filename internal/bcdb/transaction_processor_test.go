@@ -188,7 +188,7 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, conf *config.Config
 	require.NoError(t, err)
 	stateTrieRoot := applyTxsOnTrie(t, env, configTx, stateTrie)
 
-	expectedRespPayload := &types.TxResponse{
+	expectedRespPayload := &types.TxReceiptResponse{
 		Receipt: &types.TxReceipt{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{
@@ -443,7 +443,7 @@ func TestTransactionProcessor(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, proto.Equal(expectedBlock, block))
 
-		expectedRespPayload := &types.TxResponse{
+		expectedRespPayload := &types.TxReceiptResponse{
 			Receipt: &types.TxReceipt{
 				Header:  expectedBlockHeader,
 				TxIndex: 0,
