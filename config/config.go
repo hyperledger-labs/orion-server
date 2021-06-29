@@ -114,7 +114,7 @@ type QueueLengthConf struct {
 // BlockCreationConf holds the block creation parameters.
 // TODO consider moving this to shared-config if we want to have it consistent across nodes
 type BlockCreationConf struct {
-	MaxBlockSize                uint32
+	MaxBlockSize                uint64
 	MaxTransactionCountPerBlock uint32
 	BlockTimeout                time.Duration
 }

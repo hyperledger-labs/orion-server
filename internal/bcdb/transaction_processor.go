@@ -424,9 +424,11 @@ func PrepareBootstrapConfigTx(conf *config.Configurations) (*types.ConfigTxEnvel
 			Members:   make([]*types.PeerConfig, len(conf.SharedConfig.Consensus.Members)),
 			Observers: make([]*types.PeerConfig, len(conf.SharedConfig.Consensus.Observers)),
 			RaftConfig: &types.RaftConfig{
-				TickInterval:   conf.SharedConfig.Consensus.RaftConfig.TickInterval,
-				ElectionTicks:  conf.SharedConfig.Consensus.RaftConfig.ElectionTicks,
-				HeartbeatTicks: conf.SharedConfig.Consensus.RaftConfig.HeartbeatTicks,
+				TickInterval:         conf.SharedConfig.Consensus.RaftConfig.TickInterval,
+				ElectionTicks:        conf.SharedConfig.Consensus.RaftConfig.ElectionTicks,
+				HeartbeatTicks:       conf.SharedConfig.Consensus.RaftConfig.HeartbeatTicks,
+				MaxInflightBlocks:    conf.SharedConfig.Consensus.RaftConfig.MaxInflightBlocks,
+				SnapshotIntervalSize: conf.SharedConfig.Consensus.RaftConfig.SnapshotIntervalSize,
 			},
 		},
 	}

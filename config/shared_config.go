@@ -59,6 +59,10 @@ type RaftConf struct {
 	// pass between heartbeats. That is, a leader sends heartbeat
 	// messages to maintain its leadership every HeartbeatTick ticks.
 	HeartbeatTicks uint32
+	// Limits the max number of in-flight blocks (i.e. Raft messages).
+	MaxInflightBlocks uint32
+	// Take a snapshot when cumulative data since last snapshot exceeds a certain size in bytes.
+	SnapshotIntervalSize uint64
 }
 
 // PeerConf defines a server that takes part in consensus, or an observer.
