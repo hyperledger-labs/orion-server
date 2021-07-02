@@ -1,5 +1,8 @@
 TIMEOUT  = 20m
 GO      = go
+DOCKER  = docker
+DOCKER_IMAGE = bcdb-container
+DOCKERFILE = images/Dockerfile
 PKGS     = $(or $(PKG),$(shell env GO111MODULE=on $(GO) list ./...))
 TESTPKGS = $(shell env GO111MODULE=on $(GO) list -f \
 		   '{{ if or .TestGoFiles .XTestGoFiles }}{{ .ImportPath }}{{ end }}' \
@@ -57,6 +60,10 @@ clean:
 	@rm -rf $(BIN)
 	@rm -rf test/tests.* test/coverage.*
 
+.PHONY: docker-clean
+docker-clean:
+	$(DOCKER) rmi $(DOCKER_IMAGE)
+
 .PHONY: protos
 protos:
 	docker run -it -v `pwd`:`pwd` -w `pwd` sykesm/fabric-protos:0.2 scripts/compile_go_protos.sh
@@ -84,3 +91,7 @@ test-coverage: test-coverage-tools
 		-coverprofile="$(COVERAGE_PROFILE)" $(TESTPKGS)
 	$(GO) tool cover -html=$(COVERAGE_PROFILE) -o $(COVERAGE_HTML)
 	$(GOCOV) convert $(COVERAGE_PROFILE) | $(GOCOVXML) > $(COVERAGE_XML)
+
+.PHONY: docker
+docker:
+	$(DOCKER) build -t $(DOCKER_IMAGE) --no-cache -f $(DOCKERFILE) .
