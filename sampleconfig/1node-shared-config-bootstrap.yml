@@ -1,4 +1,4 @@
-# 3node-shared-config-bootstrap.yml
+# 1node-shared-config-bootstrap.yml
 #
 # This file contains the the initial configuration that will be converted into the ledger's genesis block and
 # loaded into the database when the server starts with an empty ledger and database.
@@ -81,4 +81,4 @@ admin:
   id: admin
   # identity.certificatePath denotes the path
   # to the x509 certificate of the cluster admin
-  certificatePath: /etc/bcdb-server/pki/node/node.cert
+  certificatePath: /etc/bcdb-server/pki/admin/admin.cert
