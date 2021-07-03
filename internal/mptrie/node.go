@@ -24,9 +24,8 @@ func (m *BranchNode) hash() ([]byte, error) {
 
 func (m *BranchNode) bytes() [][]byte {
 	bytes := make([][]byte, 0)
-	for _, child := range m.Children {
-		bytes = append(bytes, child)
-	}
+	bytes = append(bytes, m.Children...)
+
 	if len(m.ValuePtr) > 0 {
 		bytes = append(bytes, m.ValuePtr)
 	}
