@@ -22,7 +22,7 @@ func (t *MPTrie) GetProof(key []byte, isDeleted bool) (*Proof, error) {
 	hexKey := convertByteToHex(key)
 	path, node, err := t.getPath(hexKey)
 
-	if err != err {
+	if err != nil {
 		return nil, err
 	}
 

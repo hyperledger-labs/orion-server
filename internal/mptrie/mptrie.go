@@ -101,7 +101,7 @@ func (t *MPTrie) Update(key, value []byte) error {
 	defer t.lock.Unlock()
 
 	if len(key) == 0 {
-		errors.New("can't update element with empty key")
+		return errors.New("can't update element with empty key")
 	}
 	valuePtr, err := CalculateKeyValueHash(key, value)
 	if err != nil {
