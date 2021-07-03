@@ -117,13 +117,13 @@ func (t *MPTrie) Update(key, value []byte) error {
 }
 
 func (t *MPTrie) update(node TrieNode, hexKey, valuePtr []byte, isDeleted bool) (TrieNode, []byte, error) {
-	switch node.(type) {
+	switch node := node.(type) {
 	case *BranchNode:
-		return t.updateBranchNode(node.(*BranchNode), hexKey, valuePtr, isDeleted)
+		return t.updateBranchNode(node, hexKey, valuePtr, isDeleted)
 	case *ExtensionNode:
-		return t.updateExtensionNode(node.(*ExtensionNode), hexKey, valuePtr, isDeleted)
+		return t.updateExtensionNode(node, hexKey, valuePtr, isDeleted)
 	case *ValueNode:
-		return t.updateValueNode(node.(*ValueNode), hexKey, valuePtr, isDeleted)
+		return t.updateValueNode(node, hexKey, valuePtr, isDeleted)
 	case *EmptyNode:
 		return t.updateEmptyNode(hexKey, valuePtr)
 	default:
@@ -469,9 +469,9 @@ func (t *MPTrie) persistSubtrie(n TrieNode) error {
 	if !wasChanged {
 		return nil
 	}
-	switch n.(type) {
+	switch n := n.(type) {
 	case *BranchNode:
-		for _, childPtr := range n.(*BranchNode).Children {
+		for _, childPtr := range n.Children {
 			if childPtr != nil {
 				child, err := t.store.GetNode(childPtr)
 				if err != nil {
@@ -483,13 +483,13 @@ func (t *MPTrie) persistSubtrie(n TrieNode) error {
 				}
 			}
 		}
-		if n.(*BranchNode).ValuePtr != nil {
-			if _, err := t.store.PersistValue(n.(*BranchNode).ValuePtr); err != nil {
+		if n.ValuePtr != nil {
+			if _, err := t.store.PersistValue(n.ValuePtr); err != nil {
 				return err
 			}
 		}
 	case *ExtensionNode:
-		child, err := t.store.GetNode(n.(*ExtensionNode).Child)
+		child, err := t.store.GetNode(n.Child)
 		if err != nil {
 			return err
 		}
@@ -498,7 +498,7 @@ func (t *MPTrie) persistSubtrie(n TrieNode) error {
 			return err
 		}
 	case *ValueNode:
-		if _, err := t.store.PersistValue(n.(*ValueNode).ValuePtr); err != nil {
+		if _, err := t.store.PersistValue(n.ValuePtr); err != nil {
 			return err
 		}
 	default:
