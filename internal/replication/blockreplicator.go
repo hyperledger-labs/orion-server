@@ -418,6 +418,13 @@ func (br *BlockReplicator) IsLeader() *ierrors.NotLeaderError {
 	return &ierrors.NotLeaderError{LeaderID: br.lastKnownLeader}
 }
 
+func (br *BlockReplicator) GetLeaderID() uint64 {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	return br.lastKnownLeader
+}
+
 func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfig) error {
 	br.lg.Infof("New cluster config committed, going to apply to block replicator: %+v", clusterConfig)
 

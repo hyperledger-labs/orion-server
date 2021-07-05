@@ -6,27 +6,21 @@ package replication_test
 import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"math"
 	"os"
-	"path"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/config"
 	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBlockReplicator_StartClose_Fast(t *testing.T) {
-	env := testEnv1node(t, "info")
+	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
 	defer os.RemoveAll(env.testDir)
 
@@ -47,7 +41,7 @@ func TestBlockReplicator_StartClose_Fast(t *testing.T) {
 }
 
 func TestBlockReplicator_StartClose_Slow(t *testing.T) {
-	env := testEnv1node(t, "info")
+	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
 	defer os.RemoveAll(env.testDir)
 
@@ -74,7 +68,7 @@ func TestBlockReplicator_StartClose_Slow(t *testing.T) {
 }
 
 func TestBlockReplicator_Restart(t *testing.T) {
-	env := testEnv1node(t, "info")
+	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
 	defer os.RemoveAll(env.testDir)
 
@@ -116,7 +110,7 @@ func TestBlockReplicator_Restart(t *testing.T) {
 
 func TestBlockReplicator_Submit(t *testing.T) {
 	t.Run("normal flow", func(t *testing.T) {
-		env := testEnv1node(t, "debug")
+		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
 		defer os.RemoveAll(env.testDir)
 
@@ -177,7 +171,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	})
 
 	t.Run("normal flow: close before commit reply", func(t *testing.T) {
-		env := testEnv1node(t, "debug")
+		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
 		defer os.RemoveAll(env.testDir)
 
@@ -213,7 +207,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	})
 
 	t.Run("normal flow: blocked submit", func(t *testing.T) {
-		env := testEnv1node(t, "debug")
+		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
 		defer os.RemoveAll(env.testDir)
 
@@ -271,7 +265,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	})
 
 	t.Run("restart", func(t *testing.T) {
-		env := testEnv1node(t, "debug")
+		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
 		defer os.RemoveAll(env.testDir)
 
@@ -367,161 +361,3 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	})
 }
 
-var clusterConfig1node = &types.ClusterConfig{
-	Nodes: []*types.NodeConfig{&types.NodeConfig{
-		Id:          "node1",
-		Address:     "127.0.0.1",
-		Port:        22001,
-		Certificate: []byte("bogus-cert"),
-	}},
-	ConsensusConfig: &types.ConsensusConfig{
-		Algorithm: "raft",
-		Members: []*types.PeerConfig{{
-			NodeId:   "node1",
-			RaftId:   1,
-			PeerHost: "127.0.0.1",
-			PeerPort: 23001,
-		}},
-		RaftConfig: &types.RaftConfig{
-			TickInterval:         "20ms",
-			ElectionTicks:        100,
-			HeartbeatTicks:       10,
-			MaxInflightBlocks:    50,
-			SnapshotIntervalSize: math.MaxUint64,
-		},
-	},
-}
-
-type testEnv struct {
-	testDir         string
-	conf            *replication.Config
-	blockReplicator *replication.BlockReplicator
-	ledger          *memLedger
-}
-
-func testEnv1node(t *testing.T, level string) *testEnv {
-	lg := testLogger(t, level)
-
-	testDir, err := ioutil.TempDir("", "replication-test")
-	require.NoError(t, err)
-
-	localConf := &config.LocalConfiguration{
-		Server: config.ServerConf{
-			Identity: config.IdentityConf{
-				ID: "node1",
-			},
-		},
-		Replication: config.ReplicationConf{
-			WALDir:  path.Join(testDir, "wal"),
-			SnapDir: path.Join(testDir, "snap"),
-			Network: config.NetworkConf{
-				Address: "127.0.0.1",
-				Port:    23001,
-			},
-			TLS: config.TLSConf{
-				Enabled: false,
-			},
-		},
-	}
-
-	peerTransport := comm.NewHTTPTransport(&comm.Config{
-		LocalConf: localConf,
-		Logger:    lg,
-	})
-
-	qBarrier := queue.NewOneQueueBarrier(lg)
-
-	ledger := &memLedger{}
-	proposedBlock := &types.Block{
-		Header: &types.BlockHeader{
-			BaseHeader: &types.BlockHeaderBase{
-				Number: 1,
-			},
-		},
-	}
-	err = ledger.Append(proposedBlock) //genesis block
-	require.NoError(t, err)
-
-	conf := &replication.Config{
-		LocalConf:            localConf,
-		ClusterConfig:        clusterConfig1node,
-		LedgerReader:         ledger,
-		Transport:            peerTransport,
-		BlockOneQueueBarrier: qBarrier,
-		Logger:               lg,
-	}
-
-	blockReplicator, err := replication.NewBlockReplicator(conf)
-	if err != nil {
-		os.RemoveAll(testDir)
-		return nil
-	}
-
-	err = conf.Transport.SetConsensusListener(blockReplicator)
-	if err != nil {
-		os.RemoveAll(testDir)
-		return nil
-	}
-
-	err = conf.Transport.UpdateClusterConfig(conf.ClusterConfig)
-	if err != nil {
-		os.RemoveAll(testDir)
-		return nil
-	}
-
-	return &testEnv{
-		testDir:         testDir,
-		conf:            conf,
-		blockReplicator: blockReplicator,
-		ledger:          ledger,
-	}
-}
-
-func testLogger(t *testing.T, level string) *logger.SugarLogger {
-	c := &logger.Config{
-		Level:         level,
-		OutputPath:    []string{"stdout"},
-		ErrOutputPath: []string{"stderr"},
-		Encoding:      "console",
-	}
-	lg, err := logger.New(c)
-	require.NoError(t, err)
-	return lg
-}
-
-type memLedger struct {
-	mutex  sync.Mutex
-	ledger []*types.Block
-}
-
-func (l *memLedger) Height() (uint64, error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	return uint64(len(l.ledger)), nil
-}
-
-func (l *memLedger) Append(block *types.Block) error {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	if h := len(l.ledger); h > 0 {
-		if l.ledger[h-1].GetHeader().GetBaseHeader().GetNumber()+1 != block.GetHeader().GetBaseHeader().Number {
-			return errors.Errorf("block number [%d] out of sequence, expected [%d]",
-				block.GetHeader().GetBaseHeader().Number, l.ledger[h-1].GetHeader().GetBaseHeader().GetNumber()+1)
-		}
-	}
-
-	l.ledger = append(l.ledger, block)
-	return nil
-}
-
-func (l *memLedger) Get(blockNum uint64) (*types.Block, error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-
-	if blockNum-1 >= uint64(len(l.ledger)) {
-		return nil, errors.Errorf("block number out of bounds: %d, len: %d", blockNum, len(l.ledger))
-	}
-	return l.ledger[blockNum-1], nil
-}
