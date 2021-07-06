@@ -34,7 +34,7 @@ func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 		return nil, errors.Errorf("unknown query type: %T", v)
 	}
 
-	return signPayload(querySigner, query)
+	return SignPayload(querySigner, query)
 }
 
 func SignTx(txSigner crypto.Signer, tx interface{}) ([]byte, error) {
@@ -48,10 +48,10 @@ func SignTx(txSigner crypto.Signer, tx interface{}) ([]byte, error) {
 		return nil, errors.Errorf("unknown transaction type: %T", v)
 	}
 
-	return signPayload(txSigner, tx)
+	return SignPayload(txSigner, tx)
 }
 
-func signPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
+func SignPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err

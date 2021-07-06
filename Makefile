@@ -50,6 +50,7 @@ goimports:
 .PHONY: binary
 binary:
 	go build -o $(BIN)/bdb cmd/bdb/main.go
+	go build -o $(BIN)/signer cmd/signer/signer.go
 
 .PHONY: test
 test-script: 
