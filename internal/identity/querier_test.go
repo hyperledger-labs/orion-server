@@ -105,9 +105,8 @@ func TestQuerier(t *testing.T) {
 		user, err := proto.Marshal(u)
 		require.NoError(t, err)
 
-		dbUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      string(UserNamespace) + u.Id,

@@ -44,9 +44,8 @@ func TestValidateConfigTx(t *testing.T) {
 		adminUserSerialized, err := proto.Marshal(adminUser)
 		require.NoError(t, err)
 
-		newUsers := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
+		newUsers := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(identity.UserNamespace) + "nonAdminUser",
@@ -1172,9 +1171,8 @@ func TestMVCCOnConfigTx(t *testing.T) {
 		{
 			name: "invalid: readVersion does not match committed version",
 			setup: func(db worldstate.DB) {
-				config := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.ConfigDBName,
+				config := map[string]*worldstate.DBUpdates{
+					worldstate.ConfigDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: worldstate.ConfigKey,
@@ -1203,9 +1201,8 @@ func TestMVCCOnConfigTx(t *testing.T) {
 		{
 			name: "valid as the read and committed version are the same",
 			setup: func(db worldstate.DB) {
-				config := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.ConfigDBName,
+				config := map[string]*worldstate.DBUpdates{
+					worldstate.ConfigDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: worldstate.ConfigKey,

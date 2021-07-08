@@ -54,9 +54,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: signature verification failure",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -87,9 +86,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: submitter does not have user admin privilege",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "nonAdminUser",
@@ -113,9 +111,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: userID in the write list is empty",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -146,9 +143,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: userID in the delete list is empty",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -177,9 +173,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: duplicate userID in the delete list",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -211,9 +206,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: acl on reads does not pass",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -247,9 +241,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: acl on write does not pass",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -286,9 +279,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: acl on deletes does not pass",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -322,9 +314,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "invalid: mvcc validation does not pass",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -362,9 +353,8 @@ func TestValidateUsedAdminTx(t *testing.T) {
 		{
 			name: "valid",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -768,9 +758,8 @@ func TestValidateACLOnUserReads(t *testing.T) {
 			name:          "invalid: operatingUser does not have read permission on user2",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
@@ -805,9 +794,8 @@ func TestValidateACLOnUserReads(t *testing.T) {
 			name:          "valid: acl check passes",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
@@ -900,9 +888,8 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 			name:          "invalid: targetUser is an admin",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							adminEntry,
@@ -927,9 +914,8 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 			name:          "invalid: operatingUser does not have write permission on user2",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
@@ -968,9 +954,8 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 			name:          "valid: acl check passes",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
@@ -1071,9 +1056,8 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			name:          "invalid: targetUser is an admin",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							adminEntry,
@@ -1096,9 +1080,8 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			name:          "invalid: operatingUser does not have write permission on user2",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
@@ -1133,9 +1116,8 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			name:          "invalid: user2 present in the delete list does not exist",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
@@ -1165,9 +1147,8 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			name:          "valid: acl check passes",
 			operatingUser: "operatingUser",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
 							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
@@ -1252,9 +1233,8 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 		{
 			name: "invalid: no committed state for user2",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "user1", nil, nil, version1, nil),
 						},
@@ -1280,9 +1260,8 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 		{
 			name: "invalid: committed state does not match",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "user1", nil, nil, version1, nil),
 							constructUserForTest(t, "user2", nil, nil, version3, nil),
@@ -1309,9 +1288,8 @@ func TestMVCCOnUserAdminTx(t *testing.T) {
 		{
 			name: "valid: reads matches committed version",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "user1", nil, nil, version1, nil),
 							constructUserForTest(t, "user2", nil, nil, version3, nil),
@@ -1381,9 +1359,8 @@ func setupClusterConfigCA(t *testing.T, env *validatorTestEnv, rootCACert *x509.
 	}
 	configSerialized, err := proto.Marshal(config)
 	require.NoError(t, err)
-	newConfig := []*worldstate.DBUpdates{
-		{
-			DBName: worldstate.ConfigDBName,
+	newConfig := map[string]*worldstate.DBUpdates{
+		worldstate.ConfigDBName: {
 			Writes: []*worldstate.KVWithMetadata{
 				{
 					Key:   worldstate.ConfigKey,

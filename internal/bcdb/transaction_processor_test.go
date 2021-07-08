@@ -185,9 +185,8 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, dbName string) {
 	u, err := proto.Marshal(user)
 	require.NoError(t, err)
 
-	createUser := []*worldstate.DBUpdates{
-		{
-			DBName: worldstate.UsersDBName,
+	createUser := map[string]*worldstate.DBUpdates{
+		worldstate.UsersDBName: {
 			Writes: []*worldstate.KVWithMetadata{
 				{
 					Key:   string(identity.UserNamespace) + env.userID,
@@ -704,9 +703,9 @@ func applyTxsOnTrie(t *testing.T, env *txProcessorTestEnv, payload interface{}, 
 	dbUpdates, err := blockprocessor.ConstructDBUpdatesForBlock(tempBlock, env.txProcessor.blockProcessor)
 	require.NoError(t, err)
 
-	for _, update := range dbUpdates {
+	for dbName, update := range dbUpdates {
 		for _, dbwrite := range update.Writes {
-			key, err := mptrie.ConstructCompositeKey(update.DBName, dbwrite.Key)
+			key, err := mptrie.ConstructCompositeKey(dbName, dbwrite.Key)
 			require.NoError(t, err)
 			// TODO: should we add Metadata to value
 			value := dbwrite.Value
@@ -714,7 +713,7 @@ func applyTxsOnTrie(t *testing.T, env *txProcessorTestEnv, payload interface{}, 
 			require.NoError(t, err)
 		}
 		for _, dbdelete := range update.Deletes {
-			key, err := mptrie.ConstructCompositeKey(update.DBName, dbdelete)
+			key, err := mptrie.ConstructCompositeKey(dbName, dbdelete)
 			require.NoError(t, err)
 			_, err = stateTrie.Delete(key)
 			require.NoError(t, err)

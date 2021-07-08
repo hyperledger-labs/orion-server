@@ -84,9 +84,8 @@ func TestGetDBStatus(t *testing.T) {
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
-		createDB := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.DatabasesDBName,
+		createDB := map[string]*worldstate.DBUpdates{
+			worldstate.DatabasesDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key: "test-db",
@@ -135,9 +134,8 @@ func TestGetData(t *testing.T) {
 		u, err := proto.Marshal(user)
 		require.NoError(t, err)
 
-		createUser := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
+		createUser := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(identity.UserNamespace) + userID,
@@ -154,9 +152,8 @@ func TestGetData(t *testing.T) {
 		}
 		require.NoError(t, db.Commit(createUser, 2))
 
-		createDB := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.DatabasesDBName,
+		createDB := map[string]*worldstate.DBUpdates{
+			worldstate.DatabasesDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key: dbName,
@@ -194,9 +191,8 @@ func TestGetData(t *testing.T) {
 			},
 		}
 
-		dbsUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: "test-db",
+		dbsUpdates := map[string]*worldstate.DBUpdates{
+			"test-db": {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      "key1",
@@ -267,9 +263,8 @@ func TestGetData(t *testing.T) {
 			},
 		}
 
-		dbsUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: "test-db",
+		dbsUpdates := map[string]*worldstate.DBUpdates{
+			"test-db": {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      "key1",
@@ -394,9 +389,8 @@ func TestGetUser(t *testing.T) {
 			{
 				name: "querierUser has read permission on targetUser",
 				setup: func(db worldstate.DB) {
-					addUser := []*worldstate.DBUpdates{
-						{
-							DBName: worldstate.UsersDBName,
+					addUser := map[string]*worldstate.DBUpdates{
+						worldstate.UsersDBName: {
 							Writes: []*worldstate.KVWithMetadata{
 								{
 									Key:   string(identity.UserNamespace) + "querierUser",
@@ -423,9 +417,8 @@ func TestGetUser(t *testing.T) {
 			{
 				name: "querierUser has read-write permission on targetUser",
 				setup: func(db worldstate.DB) {
-					addUser := []*worldstate.DBUpdates{
-						{
-							DBName: worldstate.UsersDBName,
+					addUser := map[string]*worldstate.DBUpdates{
+						worldstate.UsersDBName: {
 							Writes: []*worldstate.KVWithMetadata{
 								{
 									Key:   string(identity.UserNamespace) + "querierUser",
@@ -452,9 +445,8 @@ func TestGetUser(t *testing.T) {
 			{
 				name: "target user has no ACL",
 				setup: func(db worldstate.DB) {
-					addUser := []*worldstate.DBUpdates{
-						{
-							DBName: worldstate.UsersDBName,
+					addUser := map[string]*worldstate.DBUpdates{
+						worldstate.UsersDBName: {
 							Writes: []*worldstate.KVWithMetadata{
 								{
 									Key:   string(identity.UserNamespace) + "querierUser",
@@ -481,9 +473,8 @@ func TestGetUser(t *testing.T) {
 			{
 				name: "target user does not exist",
 				setup: func(db worldstate.DB) {
-					addUser := []*worldstate.DBUpdates{
-						{
-							DBName: worldstate.UsersDBName,
+					addUser := map[string]*worldstate.DBUpdates{
+						worldstate.UsersDBName: {
 							Writes: []*worldstate.KVWithMetadata{
 								{
 									Key:   string(identity.UserNamespace) + "querierUser",
@@ -562,9 +553,8 @@ func TestGetUser(t *testing.T) {
 			{
 				name: "querierUser has no read permission on the target user",
 				setup: func(db worldstate.DB) {
-					addUser := []*worldstate.DBUpdates{
-						{
-							DBName: worldstate.UsersDBName,
+					addUser := map[string]*worldstate.DBUpdates{
+						worldstate.UsersDBName: {
 							Writes: []*worldstate.KVWithMetadata{
 								{
 									Key:   string(identity.UserNamespace) + "querierUser",
@@ -648,9 +638,8 @@ func TestGetConfig(t *testing.T) {
 			},
 		}
 
-		dbUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.ConfigDBName,
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.ConfigDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      worldstate.ConfigKey,
@@ -668,7 +657,8 @@ func TestGetConfig(t *testing.T) {
 				TxNum:    5,
 			},
 		)
-		dbUpdates = append(dbUpdates, dbUpdate)
+		dbUpdates[worldstate.ConfigDBName].Writes = append(dbUpdates[worldstate.ConfigDBName].Writes, dbUpdate.Writes...)
+		dbUpdates[worldstate.ConfigDBName].Deletes = append(dbUpdates[worldstate.ConfigDBName].Deletes, dbUpdate.Deletes...)
 		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
 		configEnvelope, err := env.q.getConfig()
@@ -692,9 +682,8 @@ func TestGetConfig(t *testing.T) {
 			},
 		}
 
-		dbUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.ConfigDBName,
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.ConfigDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      worldstate.ConfigKey,
@@ -752,9 +741,8 @@ func TestGetConfig(t *testing.T) {
 			},
 		}
 
-		dbUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.ConfigDBName,
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.ConfigDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      worldstate.ConfigKey,
@@ -772,7 +760,8 @@ func TestGetConfig(t *testing.T) {
 				TxNum:    5,
 			},
 		)
-		dbUpdates = append(dbUpdates, dbUpdate)
+		dbUpdates[worldstate.ConfigDBName].Writes = append(dbUpdates[worldstate.ConfigDBName].Writes, dbUpdate.Writes...)
+		dbUpdates[worldstate.ConfigDBName].Deletes = append(dbUpdates[worldstate.ConfigDBName].Deletes, dbUpdate.Deletes...)
 		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
 		singleNodeConfigEnvelope, err := env.q.getNodeConfig("node1")

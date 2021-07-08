@@ -50,7 +50,7 @@ type DB interface {
 	// GetConfig returns the cluster configuration
 	GetConfig() (*types.ClusterConfig, *types.Metadata, error)
 	// Commit commits the updates to each database
-	Commit(dbsUpdates []*DBUpdates, blockNumber uint64) error
+	Commit(dbsUpdates map[string]*DBUpdates, blockNumber uint64) error
 	// Height returns the state database block height. In other
 	// words, it returns the last committed block number
 	Height() (uint64, error)
@@ -70,7 +70,6 @@ type KVWithMetadata struct {
 // DBUpdates holds writes of KV pairs and deletes of
 // keys for each database
 type DBUpdates struct {
-	DBName  string
 	Writes  []*KVWithMetadata
 	Deletes []string
 }

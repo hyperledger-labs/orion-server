@@ -60,7 +60,6 @@ func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 				TxNum:    5,
 			},
 			expectedDBUpdates: &worldstate.DBUpdates{
-				DBName: worldstate.UsersDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(UserNamespace) + "user1",
@@ -100,7 +99,6 @@ func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 			},
 			version: nil,
 			expectedDBUpdates: &worldstate.DBUpdates{
-				DBName: worldstate.UsersDBName,
 				Writes: nil,
 				Deletes: []string{
 					string(UserNamespace) + "user3",
@@ -133,7 +131,6 @@ func TestConstructDBEntriesForUserAdminTx(t *testing.T) {
 				TxNum:    2,
 			},
 			expectedDBUpdates: &worldstate.DBUpdates{
-				DBName: worldstate.UsersDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(UserNamespace) + "user1",
@@ -262,7 +259,6 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 			},
 			version: sampleVersion,
 			expectedUpdates: &worldstate.DBUpdates{
-				DBName: worldstate.UsersDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(UserNamespace) + "admin3",
@@ -315,7 +311,6 @@ func TestConstructDBEntriesForClusterAdmins(t *testing.T) {
 				return
 			}
 
-			require.Equal(t, tt.expectedUpdates.DBName, updates.DBName)
 			require.Equal(t, tt.expectedUpdates.Deletes, updates.Deletes)
 
 			expectedWrites := make(map[string]*worldstate.KVWithMetadata)
@@ -446,9 +441,8 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 		{
 			name: "delete existing users",
 			setup: func(db worldstate.DB) {
-				dbUpdates := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				dbUpdates := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(UserNamespace) + "user1",
@@ -499,9 +493,8 @@ func TestConstructProvenanceEntriesForUserAdminTx(t *testing.T) {
 		{
 			name: "read users and write existing users",
 			setup: func(db worldstate.DB) {
-				dbUpdates := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				dbUpdates := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(UserNamespace) + "user2",
@@ -672,7 +665,6 @@ func TestConstructProvenanceEntriesForClusterAdmins(t *testing.T) {
 			name: "update and delete admins",
 			setup: func(db worldstate.DB) {
 				adminUpdates := &worldstate.DBUpdates{
-					DBName: worldstate.UsersDBName,
 					Writes: []*worldstate.KVWithMetadata{
 						{
 							Key:   string(UserNamespace) + "admin1",
@@ -691,7 +683,12 @@ func TestConstructProvenanceEntriesForClusterAdmins(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit([]*worldstate.DBUpdates{adminUpdates}, 1))
+				require.NoError(t, db.Commit(
+					map[string]*worldstate.DBUpdates{
+						worldstate.UsersDBName: adminUpdates,
+					},
+					1,
+				))
 			},
 			userID: "admin",
 			txID:   "tx1",
@@ -889,7 +886,6 @@ func TestConstructDBEntriesForNodes(t *testing.T) {
 			},
 			version: sampleVersion,
 			expectedUpdates: &worldstate.DBUpdates{
-				DBName: worldstate.ConfigDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(NodeNamespace) + "node3",
@@ -930,7 +926,6 @@ func TestConstructDBEntriesForNodes(t *testing.T) {
 				return
 			}
 
-			require.Equal(t, tt.expectedUpdates.DBName, updates.DBName)
 			require.Equal(t, tt.expectedUpdates.Deletes, updates.Deletes)
 
 			expectedWrites := make(map[string]*worldstate.KVWithMetadata)
@@ -1028,7 +1023,6 @@ func TestConstructProvenanceEntriesForNodes(t *testing.T) {
 			name: "update and delete nodes",
 			setup: func(db worldstate.DB) {
 				adminUpdates := &worldstate.DBUpdates{
-					DBName: worldstate.ConfigDBName,
 					Writes: []*worldstate.KVWithMetadata{
 						{
 							Key:   string(NodeNamespace) + "node1",
@@ -1047,7 +1041,12 @@ func TestConstructProvenanceEntriesForNodes(t *testing.T) {
 					},
 				}
 
-				require.NoError(t, db.Commit([]*worldstate.DBUpdates{adminUpdates}, 1))
+				require.NoError(t, db.Commit(
+					map[string]*worldstate.DBUpdates{
+						worldstate.ConfigDBName: adminUpdates,
+					},
+					1,
+				))
 			},
 			userID: "admin",
 			txID:   "tx1",

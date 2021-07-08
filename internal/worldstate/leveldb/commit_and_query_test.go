@@ -245,9 +245,8 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		dbsUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: "db1",
+		dbsUpdates := map[string]*worldstate.DBUpdates{
+			"db1": {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      "db1-key1",
@@ -261,8 +260,7 @@ func TestCommitAndQuery(t *testing.T) {
 					},
 				},
 			},
-			{
-				DBName: "db2",
+			"db2": {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      "db2-key1",
@@ -409,9 +407,8 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		dbsUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: "db1",
+		dbsUpdates := map[string]*worldstate.DBUpdates{
+			"db1": {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      "db1-key1",
@@ -421,8 +418,7 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 				Deletes: []string{"db1-key2"},
 			},
-			{
-				DBName: "db2",
+			"db2": {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      "db2-key1",
@@ -485,7 +481,6 @@ func TestCommitWithDBManagement(t *testing.T) {
 			name:         "only create DBs",
 			preCreateDBs: nil,
 			updates: &worldstate.DBUpdates{
-				DBName: worldstate.DatabasesDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key: "db1",
@@ -501,7 +496,6 @@ func TestCommitWithDBManagement(t *testing.T) {
 			name:         "only delete DBs",
 			preCreateDBs: []string{"db1", "db2"},
 			updates: &worldstate.DBUpdates{
-				DBName:  worldstate.DatabasesDBName,
 				Deletes: []string{"db1", "db2"},
 			},
 			expectedDBsAfterCommit: nil,
@@ -510,7 +504,6 @@ func TestCommitWithDBManagement(t *testing.T) {
 			name:         "create and delete DBs",
 			preCreateDBs: []string{"db3", "db4"},
 			updates: &worldstate.DBUpdates{
-				DBName: worldstate.DatabasesDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key: "db1",
@@ -527,7 +520,6 @@ func TestCommitWithDBManagement(t *testing.T) {
 			name:         "create already existing DBs and delete non-existing DBs -- applicable during node failure and reply of block",
 			preCreateDBs: []string{"db1", "db3"},
 			updates: &worldstate.DBUpdates{
-				DBName: worldstate.DatabasesDBName,
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key: "db1",
@@ -558,8 +550,8 @@ func TestCommitWithDBManagement(t *testing.T) {
 			require.NoError(
 				t,
 				l.Commit(
-					[]*worldstate.DBUpdates{
-						tt.updates,
+					map[string]*worldstate.DBUpdates{
+						worldstate.DatabasesDBName: tt.updates,
 					},
 					1,
 				),
@@ -607,9 +599,8 @@ func TestGetConfig(t *testing.T) {
 			},
 		}
 
-		dbUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.ConfigDBName,
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.ConfigDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      worldstate.ConfigKey,
@@ -637,9 +628,8 @@ func TestGetConfig(t *testing.T) {
 				TxNum:    5,
 			},
 		}
-		dbUpdates := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.ConfigDBName,
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.ConfigDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:      worldstate.ConfigKey,
@@ -664,7 +654,7 @@ func TestHeight(t *testing.T) {
 	tests := []struct {
 		name           string
 		blockNumber    uint64
-		dbsUpdates     []*worldstate.DBUpdates
+		dbsUpdates     map[string]*worldstate.DBUpdates
 		expectedHeight uint64
 	}{
 		{
@@ -676,9 +666,8 @@ func TestHeight(t *testing.T) {
 		{
 			name:        "block 10 with non-empty updates",
 			blockNumber: 10,
-			dbsUpdates: []*worldstate.DBUpdates{
-				{
-					DBName:  worldstate.DefaultDBName,
+			dbsUpdates: map[string]*worldstate.DBUpdates{
+				worldstate.DefaultDBName: {
 					Deletes: []string{"key1"},
 				},
 			},
