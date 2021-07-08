@@ -372,9 +372,8 @@ func TestValidateDataBlock(t *testing.T) {
 		userSerialized, err := proto.Marshal(user)
 		require.NoError(t, err)
 
-		userAdd := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
+		userAdd := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(identity.UserNamespace) + "operatingUser",
@@ -397,9 +396,8 @@ func TestValidateDataBlock(t *testing.T) {
 			name: "data block with valid and invalid transactions",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
-				db1 := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				db1 := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db1",
@@ -415,9 +413,8 @@ func TestValidateDataBlock(t *testing.T) {
 				}
 				require.NoError(t, db.Commit(db1, 1))
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -449,8 +446,7 @@ func TestValidateDataBlock(t *testing.T) {
 							},
 						},
 					},
-					{
-						DBName: "db1",
+					"db1": {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -654,9 +650,8 @@ func TestValidateUserBlock(t *testing.T) {
 		{
 			name: "user block with an invalid transaction",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -706,9 +701,8 @@ func TestValidateUserBlock(t *testing.T) {
 		{
 			name: "user block with an valid transaction",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key:   string(identity.UserNamespace) + "adminUser",
@@ -784,9 +778,8 @@ func TestValidateDBBlock(t *testing.T) {
 		userWithMorePrivilegeSerialized, err := proto.Marshal(userWithMorePrivilege)
 		require.NoError(t, err)
 
-		privilegedUser := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
+		privilegedUser := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(identity.UserNamespace) + "userWithMorePrivilege",
@@ -803,9 +796,8 @@ func TestValidateDBBlock(t *testing.T) {
 		}
 		require.NoError(t, db.Commit(privilegedUser, 1))
 
-		dbs := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.DatabasesDBName,
+		dbs := map[string]*worldstate.DBUpdates{
+			worldstate.DatabasesDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key: "db3",
@@ -909,9 +901,8 @@ func TestValidateConfigBlock(t *testing.T) {
 		adminUserSerialized, err := proto.Marshal(adminUser)
 		require.NoError(t, err)
 
-		newUsers := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
+		newUsers := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(identity.UserNamespace) + "adminUser",

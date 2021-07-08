@@ -51,9 +51,8 @@ func TestValidateDataTx(t *testing.T) {
 		bobSerialized, err := proto.Marshal(b)
 		require.NoError(t, err)
 
-		userAdd := []*worldstate.DBUpdates{
-			{
-				DBName: worldstate.UsersDBName,
+		userAdd := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
 						Key:   string(identity.UserNamespace) + alice,
@@ -166,9 +165,8 @@ func TestValidateDataTx(t *testing.T) {
 		{
 			name: "Invalid signature from must sign user",
 			setup: func(db worldstate.DB) {
-				user := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				user := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, alice, bogusCert.Raw, nil, nil, nil),
 							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
@@ -203,9 +201,8 @@ func TestValidateDataTx(t *testing.T) {
 		{
 			name: "Invalid signature from non-must sign user and bob does not have rw access on the db",
 			setup: func(db worldstate.DB) {
-				user := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				user := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, alice, bogusCert.Raw, nil, nil, nil),
 							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
@@ -232,9 +229,8 @@ func TestValidateDataTx(t *testing.T) {
 		{
 			name: "Invalid signature from non-must sign user but the transaction would be marked valid",
 			setup: func(db worldstate.DB) {
-				user := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				user := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, alice, bogusCert.Raw, nil, nil, nil),
 							constructUserForTest(t, bob, bobCert.Raw, &types.Privilege{
@@ -264,9 +260,8 @@ func TestValidateDataTx(t *testing.T) {
 		{
 			name: "invalid: duplicate database entry in operations",
 			setup: func(db worldstate.DB) {
-				user := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				user := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, alice, aliceCert.Raw, nil, nil, nil),
 							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
@@ -306,9 +301,8 @@ func TestValidateDataTx(t *testing.T) {
 		{
 			name: "invalid: user does not have rw permission on the db1",
 			setup: func(db worldstate.DB) {
-				user := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				user := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, alice, aliceCert.Raw, nil, nil, nil),
 							constructUserForTest(t, bob, bobCert.Raw, nil, nil, nil),
@@ -400,9 +394,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -448,9 +441,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -492,9 +484,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -536,9 +527,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -634,9 +624,8 @@ func TestValidateDataTx(t *testing.T) {
 			name: "valid (has extra sign)",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
-				db1 := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				db1 := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db1",
@@ -652,9 +641,8 @@ func TestValidateDataTx(t *testing.T) {
 				}
 				require.NoError(t, db.Commit(db1, 1))
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -686,8 +674,7 @@ func TestValidateDataTx(t *testing.T) {
 							},
 						},
 					},
-					{
-						DBName: "db1",
+					"db1": {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key3",
@@ -783,9 +770,8 @@ func TestValidateDataTx(t *testing.T) {
 			name: "valid (mix of write policy)",
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
-				db1 := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				db1 := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db1",
@@ -801,9 +787,8 @@ func TestValidateDataTx(t *testing.T) {
 				}
 				require.NoError(t, db.Commit(db1, 1))
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -839,8 +824,7 @@ func TestValidateDataTx(t *testing.T) {
 							},
 						},
 					},
-					{
-						DBName: "db1",
+					"db1": {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key3",
@@ -941,9 +925,8 @@ func TestValidateDataTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				addUserWithCorrectPrivilege(db)
 
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1092,9 +1075,8 @@ func TestValidateFieldsInDataWrites(t *testing.T) {
 		{
 			name: "valid",
 			setup: func(db worldstate.DB) {
-				newUsers := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.UsersDBName,
+				newUsers := map[string]*worldstate.DBUpdates{
+					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							constructUserForTest(t, "user1", nil, nil, nil, nil),
 							constructUserForTest(t, "user2", nil, nil, nil, nil),
@@ -1208,9 +1190,8 @@ func TestValidateFieldsInDataDeletes(t *testing.T) {
 		{
 			name: "valid",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1359,9 +1340,8 @@ func TestValidateAClOnDataReads(t *testing.T) {
 		{
 			name: "invalid: user does not have the permission",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1394,9 +1374,8 @@ func TestValidateAClOnDataReads(t *testing.T) {
 		{
 			name: "valid: acl check passes as the user has read permission",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1428,9 +1407,8 @@ func TestValidateAClOnDataReads(t *testing.T) {
 		{
 			name: "valid: acl check passes as the user has read-write permission itself",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1462,9 +1440,8 @@ func TestValidateAClOnDataReads(t *testing.T) {
 		{
 			name: "valid: no acl",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1534,9 +1511,8 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 		{
 			name: "invalid: user does not have the permission - ANY write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1570,9 +1546,8 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 		{
 			name: "invalid: user does not have the permission - ALL write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1608,9 +1583,8 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 		{
 			name: "invalid: no user has permission to modify read-only key",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1643,9 +1617,8 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 		{
 			name: "valid: acl check passes - ANY write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1679,9 +1652,8 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 		{
 			name: "valid: acl check passes - ALL write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1715,9 +1687,8 @@ func TestValidateAClOnDataWrites(t *testing.T) {
 		{
 			name: "valid: no acl",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1787,9 +1758,8 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 		{
 			name: "invalid: user does not have the permission - ANY write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1823,9 +1793,8 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 		{
 			name: "invalid: user does not have the permission - ALL write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1861,9 +1830,8 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 		{
 			name: "invalid: no user has permission to modify read-only key",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1896,9 +1864,8 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 		{
 			name: "valid: acl check passes - ANY write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1932,9 +1899,8 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 		{
 			name: "valid: acl check passes - ALL write policy",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -1968,9 +1934,8 @@ func TestValidateAClOnDataDeletes(t *testing.T) {
 		{
 			name: "valid: no acl",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -2105,9 +2070,8 @@ func TestMVCCOnDataTx(t *testing.T) {
 		{
 			name: "invalid: committed version does not match the read version",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",
@@ -2146,9 +2110,8 @@ func TestMVCCOnDataTx(t *testing.T) {
 		{
 			name: "valid",
 			setup: func(db worldstate.DB) {
-				data := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DefaultDBName,
+				data := map[string]*worldstate.DBUpdates{
+					worldstate.DefaultDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "key1",

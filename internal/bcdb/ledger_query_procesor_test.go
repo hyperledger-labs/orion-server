@@ -6,17 +6,16 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
-	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
-
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
 	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
@@ -194,9 +193,8 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 	u, err := proto.Marshal(user)
 	require.NoError(t, err)
 
-	createUser := []*worldstate.DBUpdates{
-		{
-			DBName: worldstate.UsersDBName,
+	createUser := map[string]*worldstate.DBUpdates{
+		worldstate.UsersDBName: {
 			Writes: []*worldstate.KVWithMetadata{
 				{
 					Key:   string(identity.UserNamespace) + "testUser",
@@ -355,8 +353,8 @@ func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Versio
 	return txpData
 }
 
-func createDataUpdatesFromBlock(block *types.Block) []*worldstate.DBUpdates {
-	var dataUpdate []*worldstate.DBUpdates
+func createDataUpdatesFromBlock(block *types.Block) map[string]*worldstate.DBUpdates {
+	dataUpdate := make(map[string]*worldstate.DBUpdates)
 	txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
 
 	for txNum, tx := range txsEnvelopes {
@@ -365,8 +363,7 @@ func createDataUpdatesFromBlock(block *types.Block) []*worldstate.DBUpdates {
 			TxNum:    uint64(txNum),
 		}
 
-		txData := blockprocessor.ConstructDBEntriesForDataTx(tx.GetPayload(), version)
-		dataUpdate = append(dataUpdate, txData...)
+		blockprocessor.AddDBEntriesForDataTxAndUpdateDirtyWrites(tx.GetPayload(), version, dataUpdate, nil)
 	}
 
 	return dataUpdate

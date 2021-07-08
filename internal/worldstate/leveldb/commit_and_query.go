@@ -159,22 +159,22 @@ func (l *LevelDB) GetConfig() (*types.ClusterConfig, *types.Metadata, error) {
 }
 
 // Commit commits the updates to the database
-func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates, blockNumber uint64) error {
-	for _, updates := range dbsUpdates {
+func (l *LevelDB) Commit(dbsUpdates map[string]*worldstate.DBUpdates, blockNumber uint64) error {
+	for dbName, updates := range dbsUpdates {
 		l.dbsList.RLock()
-		db := l.dbs[updates.DBName]
+		db := l.dbs[dbName]
 		l.dbsList.RUnlock()
 
 		if db == nil {
-			l.logger.Errorf("database %s does not exist", updates.DBName)
-			return errors.Errorf("database %s does not exist", updates.DBName)
+			l.logger.Errorf("database %s does not exist", dbName)
+			return errors.Errorf("database %s does not exist", dbName)
 		}
 
 		start := time.Now()
-		if err := l.commitToDB(db, updates); err != nil {
+		if err := l.commitToDB(dbName, db, updates); err != nil {
 			return err
 		}
-		l.logger.Debugf("changes committed to the database %s, took %d ms, available dbs are [%s]", updates.DBName, time.Since(start).Milliseconds(), l.dbs)
+		l.logger.Debugf("changes committed to the database %s, took %d ms, available dbs are [%s]", dbName, time.Since(start).Milliseconds(), l.dbs)
 	}
 
 	l.dbsList.RLock()
@@ -197,7 +197,7 @@ func (l *LevelDB) Commit(dbsUpdates []*worldstate.DBUpdates, blockNumber uint64)
 	return nil
 }
 
-func (l *LevelDB) commitToDB(db *db, updates *worldstate.DBUpdates) error {
+func (l *LevelDB) commitToDB(dbName string, db *db, updates *worldstate.DBUpdates) error {
 	batch := &leveldb.Batch{}
 
 	for _, kv := range updates.Writes {
@@ -225,7 +225,7 @@ func (l *LevelDB) commitToDB(db *db, updates *worldstate.DBUpdates) error {
 		return errors.Wrapf(err, "error while writing an update batch to database [%s]", db.name)
 	}
 
-	if updates.DBName != worldstate.DatabasesDBName {
+	if dbName != worldstate.DatabasesDBName {
 		return nil
 	}
 

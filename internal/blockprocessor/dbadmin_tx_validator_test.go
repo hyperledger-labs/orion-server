@@ -34,9 +34,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 	userWithLessPrivilegeSerialized, err := proto.Marshal(userWithLessPrivilege)
 	require.NoError(t, err)
 
-	underPrivilegedUser := []*worldstate.DBUpdates{
-		{
-			DBName: worldstate.UsersDBName,
+	underPrivilegedUser := map[string]*worldstate.DBUpdates{
+		worldstate.UsersDBName: {
 			Writes: []*worldstate.KVWithMetadata{
 				{
 					Key:      string(identity.UserNamespace) + "userWithLessPrivilege",
@@ -57,9 +56,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 	userWithMorePrivilegeSerialized, err := proto.Marshal(userWithMorePrivilege)
 	require.NoError(t, err)
 
-	privilegedUser := []*worldstate.DBUpdates{
-		{
-			DBName: worldstate.UsersDBName,
+	privilegedUser := map[string]*worldstate.DBUpdates{
+		worldstate.UsersDBName: {
 			Writes: []*worldstate.KVWithMetadata{
 				{
 					Key:      string(identity.UserNamespace) + "userWithMorePrivilege",
@@ -189,9 +187,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 			setup: func(db worldstate.DB) {
 				require.NoError(t, db.Commit(privilegedUser, 1))
 
-				createDB := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				createDB := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db3",
@@ -276,9 +273,8 @@ func TestValidateCreateDBEntries(t *testing.T) {
 			name:        "invalid: existing database cannot be created",
 			toCreateDBs: []string{"db1"},
 			setup: func(db worldstate.DB) {
-				createDB := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				createDB := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db1",
@@ -371,9 +367,8 @@ func TestValidateDeleteDBEntries(t *testing.T) {
 		{
 			name: "invalid: database is duplicated in the delete list",
 			setup: func(db worldstate.DB) {
-				createDB := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				createDB := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db1",
@@ -392,9 +387,8 @@ func TestValidateDeleteDBEntries(t *testing.T) {
 		{
 			name: "valid",
 			setup: func(db worldstate.DB) {
-				createDB := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				createDB := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db1",
@@ -475,9 +469,8 @@ func TestValidateIndexDBEntries(t *testing.T) {
 		{
 			name: "invalid: db exist but appears in the deleteDB list too",
 			setup: func(db worldstate.DB) {
-				createDB := []*worldstate.DBUpdates{
-					{
-						DBName: worldstate.DatabasesDBName,
+				createDB := map[string]*worldstate.DBUpdates{
+					worldstate.DatabasesDBName: {
 						Writes: []*worldstate.KVWithMetadata{
 							{
 								Key: "db1",

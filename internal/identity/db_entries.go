@@ -47,7 +47,6 @@ func ConstructDBEntriesForUserAdminTx(tx *types.UserAdministrationTx, version *t
 	}
 
 	return &worldstate.DBUpdates{
-		DBName:  worldstate.UsersDBName,
 		Writes:  userWrites,
 		Deletes: userDeletes,
 	}, nil
@@ -171,7 +170,6 @@ func ConstructDBEntriesForClusterAdmins(oldAdmins, newAdmins []*types.Admin, ver
 	}
 
 	return &worldstate.DBUpdates{
-		DBName:  worldstate.UsersDBName,
 		Writes:  kvWrites,
 		Deletes: deletes,
 	}, nil
@@ -277,7 +275,6 @@ func ConstructDBEntriesForNodes(oldNodes, newNodes []*types.NodeConfig, version 
 	}
 
 	return &worldstate.DBUpdates{
-		DBName:  worldstate.ConfigDBName,
 		Writes:  kvWrites,
 		Deletes: deletes,
 	}, nil

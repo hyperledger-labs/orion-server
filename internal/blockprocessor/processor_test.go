@@ -256,9 +256,8 @@ func setup(t *testing.T, env *testEnv) {
 	u, err := proto.Marshal(user)
 	require.NoError(t, err)
 
-	createUser := []*worldstate.DBUpdates{
-		{
-			DBName: worldstate.UsersDBName,
+	createUser := map[string]*worldstate.DBUpdates{
+		worldstate.UsersDBName: {
 			Writes: []*worldstate.KVWithMetadata{
 				{
 					Key:   string(identity.UserNamespace) + env.userID,

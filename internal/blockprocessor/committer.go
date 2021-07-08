@@ -85,7 +85,7 @@ func (c *committer) commitToBlockStore(block *types.Block) error {
 	return nil
 }
 
-func (c *committer) commitToDBs(dbsUpdates []*worldstate.DBUpdates, provenanceData []*provenance.TxDataForProvenance, block *types.Block) error {
+func (c *committer) commitToDBs(dbsUpdates map[string]*worldstate.DBUpdates, provenanceData []*provenance.TxDataForProvenance, block *types.Block) error {
 	blockNum := block.GetHeader().GetBaseHeader().GetNumber()
 
 	if err := c.commitToProvenanceStore(blockNum, provenanceData); err != nil {
@@ -103,7 +103,7 @@ func (c *committer) commitToProvenanceStore(blockNum uint64, provenanceData []*p
 	return nil
 }
 
-func (c *committer) commitToStateDB(blockNum uint64, dbsUpdates []*worldstate.DBUpdates) error {
+func (c *committer) commitToStateDB(blockNum uint64, dbsUpdates map[string]*worldstate.DBUpdates) error {
 	if err := c.db.Commit(dbsUpdates, blockNum); err != nil {
 		return errors.WithMessagef(err, "failed to commit block %d to state database", blockNum)
 	}
@@ -111,8 +111,8 @@ func (c *committer) commitToStateDB(blockNum uint64, dbsUpdates []*worldstate.DB
 	return nil
 }
 
-func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worldstate.DBUpdates, []*provenance.TxDataForProvenance, error) {
-	var dbsUpdates []*worldstate.DBUpdates
+func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[string]*worldstate.DBUpdates, []*provenance.TxDataForProvenance, error) {
+	dbsUpdates := make(map[string]*worldstate.DBUpdates)
 	var provenanceData []*provenance.TxDataForProvenance
 	dirtyWriteKeyVersion := make(map[string]*types.Version)
 	blockValidationInfo := block.Header.ValidationInfo
@@ -149,23 +149,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			}
 			provenanceData = append(provenanceData, pData...)
 
-			toProcessUpdatesFromIndex := len(dbsUpdates)
-			dbsUpdates = append(
-				dbsUpdates,
-				ConstructDBEntriesForDataTx(tx, version)...,
-			)
-
-			// after constructing entries for each transaction, we update the
-			// dirty write set which holds the to be committed version of the key.
-			// when more than one transaction in a block performs write to the
-			// same key (through blind writes), the existing value in the dirty
-			// set would get updated to reflect the new version
-			for i := toProcessUpdatesFromIndex; i <= len(dbsUpdates)-1; i++ {
-				dbUpdates := dbsUpdates[i]
-				for _, w := range dbsUpdates[len(dbsUpdates)-1].Writes {
-					dirtyWriteKeyVersion[constructCompositeKey(dbUpdates.DBName, w.Key)] = w.Metadata.Version
-				}
-			}
+			AddDBEntriesForDataTxAndUpdateDirtyWrites(tx, version, dbsUpdates, dirtyWriteKeyVersion)
 		}
 		c.logger.Debugf("constructed %d, updates for data transactions, block number %d",
 			len(blockValidationInfo),
@@ -191,7 +175,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while creating entries for the user admin transaction")
 		}
-		dbsUpdates = []*worldstate.DBUpdates{entries}
+		dbsUpdates[worldstate.UsersDBName] = entries
 
 		pData, err := identity.ConstructProvenanceEntriesForUserAdminTx(tx, version, c.db)
 		if err != nil {
@@ -214,7 +198,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 
 		tx := block.GetDbAdministrationTxEnvelope().GetPayload()
 		var err error
-		dbsUpdates, err = constructDBEntriesForDBAdminTx(tx, version)
+		dbsUpdates[worldstate.DatabasesDBName], err = constructDBEntriesForDBAdminTx(tx, version)
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while creating entries for db admin transaction")
 		}
@@ -246,12 +230,13 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 		if err != nil {
 			return nil, nil, errors.WithMessage(err, "error while constructing entries for the config transaction")
 		}
-		dbsUpdates = append(dbsUpdates, entries.configUpdates)
+		dbsUpdates[worldstate.ConfigDBName] = entries.configUpdates
 		if entries.adminUpdates != nil {
-			dbsUpdates = append(dbsUpdates, entries.adminUpdates)
+			dbsUpdates[worldstate.UsersDBName] = entries.adminUpdates
 		}
 		if entries.nodeUpdates != nil {
-			dbsUpdates = append(dbsUpdates, entries.nodeUpdates)
+			dbsUpdates[worldstate.ConfigDBName].Writes = append(dbsUpdates[worldstate.ConfigDBName].Writes, entries.nodeUpdates.Writes...)
+			dbsUpdates[worldstate.ConfigDBName].Deletes = append(dbsUpdates[worldstate.ConfigDBName].Deletes, entries.nodeUpdates.Deletes...)
 		}
 
 		pData, err := constructProvenanceEntriesForConfigTx(tx, version, entries, c.db)
@@ -267,7 +252,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 	return dbsUpdates, provenanceData, nil
 }
 
-func (c *committer) applyBlockOnStateTrie(worldStateUpdates []*worldstate.DBUpdates) error {
+func (c *committer) applyBlockOnStateTrie(worldStateUpdates map[string]*worldstate.DBUpdates) error {
 	return ApplyBlockOnStateTrie(c.stateTrie, worldStateUpdates)
 }
 
@@ -275,10 +260,10 @@ func (c *committer) commitTrie(height uint64) error {
 	return c.stateTrie.Commit(height)
 }
 
-func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates []*worldstate.DBUpdates) error {
-	for _, dbUpdate := range worldStateUpdates {
+func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates map[string]*worldstate.DBUpdates) error {
+	for dbName, dbUpdate := range worldStateUpdates {
 		for _, dbWrite := range dbUpdate.Writes {
-			key, err := mptrie.ConstructCompositeKey(dbUpdate.DBName, dbWrite.Key)
+			key, err := mptrie.ConstructCompositeKey(dbName, dbWrite.Key)
 			if err != nil {
 				return err
 			}
@@ -290,7 +275,7 @@ func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates []*worldstate.
 			}
 		}
 		for _, dbDelete := range dbUpdate.Deletes {
-			key, err := mptrie.ConstructCompositeKey(dbUpdate.DBName, dbDelete)
+			key, err := mptrie.ConstructCompositeKey(dbName, dbDelete)
 			if err != nil {
 				return err
 			}
@@ -303,12 +288,18 @@ func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates []*worldstate.
 	return nil
 }
 
-func ConstructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*worldstate.DBUpdates {
-	dbsUpdates := make([]*worldstate.DBUpdates, len(tx.DbOperations))
-
-	for i, ops := range tx.DbOperations {
-		var kvWrites []*worldstate.KVWithMetadata
-		var kvDeletes []string
+func AddDBEntriesForDataTxAndUpdateDirtyWrites(
+	tx *types.DataTx,
+	version *types.Version,
+	dbsUpdates map[string]*worldstate.DBUpdates,
+	dirtyWrites map[string]*types.Version,
+) {
+	for _, ops := range tx.DbOperations {
+		updates, ok := dbsUpdates[ops.DbName]
+		if !ok {
+			updates = &worldstate.DBUpdates{}
+			dbsUpdates[ops.DbName] = updates
+		}
 
 		for _, write := range ops.DataWrites {
 			kv := &worldstate.KVWithMetadata{
@@ -319,24 +310,20 @@ func ConstructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*wo
 					AccessControl: write.Acl,
 				},
 			}
-			kvWrites = append(kvWrites, kv)
+			updates.Writes = append(updates.Writes, kv)
+
+			if dirtyWrites != nil {
+				dirtyWrites[constructCompositeKey(ops.DbName, kv.Key)] = kv.Metadata.Version
+			}
 		}
 
 		for _, d := range ops.DataDeletes {
-			kvDeletes = append(kvDeletes, d.Key)
-		}
-
-		dbsUpdates[i] = &worldstate.DBUpdates{
-			DBName:  ops.DbName,
-			Writes:  kvWrites,
-			Deletes: kvDeletes,
+			updates.Deletes = append(updates.Deletes, d.Key)
 		}
 	}
-
-	return dbsUpdates
 }
 
-func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types.Version) ([]*worldstate.DBUpdates, error) {
+func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types.Version) (*worldstate.DBUpdates, error) {
 	var toCreateDBs []*worldstate.KVWithMetadata
 	var indexForExistingDBs []*worldstate.KVWithMetadata
 
@@ -383,16 +370,9 @@ func constructDBEntriesForDBAdminTx(tx *types.DBAdministrationTx, version *types
 		indexForExistingDBs = append(indexForExistingDBs, db)
 	}
 
-	return []*worldstate.DBUpdates{
-		{
-			DBName:  worldstate.DatabasesDBName,
-			Writes:  toCreateDBs,
-			Deletes: tx.DeleteDbs,
-		},
-		{
-			DBName: worldstate.DatabasesDBName,
-			Writes: indexForExistingDBs,
-		},
+	return &worldstate.DBUpdates{
+		Writes:  append(toCreateDBs, indexForExistingDBs...),
+		Deletes: tx.DeleteDbs,
 	}, nil
 }
 
@@ -419,7 +399,6 @@ func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterC
 	}
 
 	configUpdates := &worldstate.DBUpdates{
-		DBName: worldstate.ConfigDBName,
 		Writes: []*worldstate.KVWithMetadata{
 			{
 				Key:   worldstate.ConfigKey,
