@@ -14,7 +14,7 @@ nodes:
   - nodeId: bcdb-node1
     host: 127.0.0.1
     port: 6001
-    certificatePath: /etc/bcdb-server/pki/node/node.cert
+    certificatePath: /etc/bcdb-server/crypto/node/node.pem
 
 # consensus carries the definitions of the clustered consensus algorithm, members, and parameters.
 consensus:
@@ -70,7 +70,7 @@ consensus:
 caConfig:
   # The paths to root certificates. At least one is required. for example:
   #   rootCACertsPath: ./pki/rootcaA.cert, ./pki/rootcaB.cert
-  rootCACertsPath: /etc/bcdb-server/pki/ca/rootCA.cert
+  rootCACertsPath: /etc/bcdb-server/crypto/CA/CA.pem
 
   # The paths to intermediate certificates. Optional. For example:
   #   intermediateCACertsPath: ./pki/midcaA.cert, ./pki/midcaB.cert
@@ -81,4 +81,4 @@ admin:
   id: admin
   # identity.certificatePath denotes the path
   # to the x509 certificate of the cluster admin
-  certificatePath: /etc/bcdb-server/pki/admin/admin.cert
+  certificatePath: /etc/bcdb-server/crypto/admin/admin.pem

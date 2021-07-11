@@ -1,29 +1,55 @@
 #! /bin/bash
 
+create_pki() {
+        echo "Creating PKIs folders"
+        mkdir -p "$BASE_DIR/crypto/$1"
+
+        echo "Generating private key for $1"
+        docker run -it --rm -v $BASE_DIR/crypto:/export frapsoft/openssl ecparam -name prime256v1 -genkey -noout -out "/export/$1/$1.key"
+
+        echo "Generate node CSR"
+        docker run -it --rm -v $BASE_DIR/crypto:/export frapsoft/openssl req -new -key "/export/$1/$1.key" -out "/export/$1/$1.csr" -subj "/C=IL/ST=Haifa/O=BCDB"
+
+        echo "Generate node certificate"
+        docker run -it --rm -v $BASE_DIR/crypto:/export frapsoft/openssl x509 -req -in "/export/$1/$1.csr" -CA "/export/CA/CA.pem" -CAkey "/export/CA/CA.key" -CAcreateserial -out "/export/$1/$1.pem" -days 365 -sha256
+}
+
+if [ -z "$1" ]
+  then
+    echo "cryptoGenDocker.sh folder [extra users]"
+    exit 1
+fi
 BASE_DIR=$1
 
-rm -rf "$BASE_DIR/pki"
+rm -rf "$BASE_DIR/crypto"
+
+if [[ "$BASE_DIR" = /* ]]
+then
+   : # Absolute path
+else
+   BASE_DIR=$(pwd)/$BASE_DIR
+fi
 
 echo "Creating PKIs folders"
-mkdir -p "$BASE_DIR/pki/ca"
+mkdir -p "$BASE_DIR/crypto/CA"
 
 echo "Generate root CA private key"
-openssl ecparam -name prime256v1 -genkey -noout -out "$BASE_DIR/pki/ca/rootCA.key"
+docker run -it --rm -v $BASE_DIR/crypto:/export frapsoft/openssl ecparam -name prime256v1 -genkey -noout -out "/export/CA/CA.key"
 
 echo "Generating self-signed root CA certificate"
-openssl req -new -x509 -nodes -key "$BASE_DIR/pki/ca/rootCA.key" -sha256 -days 365 -out "$BASE_DIR/pki/ca/rootCA.cert" -subj "/C=IL/ST=Haifa/O=BCDB" -extensions v3_ca
+docker run -it --rm -v $BASE_DIR/crypto:/export frapsoft/openssl req -new -x509 -nodes -key "/export/CA/CA.key" -sha256 -days 365 -out "/export/CA/CA.pem" -subj "/C=IL/ST=Haifa/O=BCDB" -extensions v3_ca
 
 for f in "node" "admin" "user"
 do
-    echo "Creating PKIs folders"
-    mkdir -p "$BASE_DIR/pki/$f"
-
-    echo "Generating private key for $f"
-    openssl ecparam -name prime256v1 -genkey -noout -out "$BASE_DIR/pki/$f/$f.key"
-
-    echo "Generate node CSR"
-    openssl req -new -key "$BASE_DIR/pki/$f/$f.key" -out "$BASE_DIR/pki/$f/$f.csr" -subj "/C=IL/ST=Haifa/O=BCDB"
-
-    echo "Generate node certificate"
-    openssl x509 -req -in "$BASE_DIR/pki/$f/$f.csr" -CA "$BASE_DIR/pki/ca/rootCA.cert" -CAkey "$BASE_DIR/pki/ca/rootCA.key" -CAcreateserial -out "$BASE_DIR/pki/$f/$f.cert" -days 365 -sha256
+  create_pki "$f"
 done
+
+shift 1
+
+if [ $# -ne 0 ]
+  then
+    for f in "$@"
+    do
+      create_pki "$f"
+    done
+fi

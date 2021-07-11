@@ -25,7 +25,6 @@ FROM bcdb-base
 VOLUME /etc/bcdb-server
 VOLUME /var/bcdb-server
 COPY --from=bcdb /go/src/github.com/IBM-Blockchain/bcdb-server/bin/bdb /usr/local/bin
-COPY --from=bcdb /go/src/github.com/IBM-Blockchain/bcdb-server/sampleconfig/config.yml /etc/bcdb-server
-COPY --from=bcdb /go/src/github.com/IBM-Blockchain/bcdb-server/sampleconfig/1node-shared-config-bootstrap.yml /etc/bcdb-server
+COPY --from=bcdb /go/src/github.com/IBM-Blockchain/bcdb-server/sampleconfig/ /etc/bcdb-server
 EXPOSE 6001
-CMD ["bdb", "start", "--configpath", "/etc/bcdb-server/."]
+CMD ["bdb", "start", "--configpath", "/etc/bcdb-server/config/."]

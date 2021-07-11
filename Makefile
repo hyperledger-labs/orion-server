@@ -1,7 +1,7 @@
 TIMEOUT  = 20m
 GO      = go
 DOCKER  = docker
-DOCKER_IMAGE = bcdb-container
+DOCKER_IMAGE = bcdb-server
 DOCKERFILE = images/Dockerfile
 PKGS     = $(or $(PKG),$(shell env GO111MODULE=on $(GO) list ./...))
 TESTPKGS = $(shell env GO111MODULE=on $(GO) list -f \
