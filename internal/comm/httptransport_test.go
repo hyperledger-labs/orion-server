@@ -5,6 +5,9 @@ package comm_test
 
 import (
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
 	"github.com/IBM-Blockchain/bcdb-server/internal/comm/mocks"
@@ -12,8 +15,6 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft/raftpb"
-	"testing"
-	"time"
 )
 
 func TestNewHTTPTransport(t *testing.T) {

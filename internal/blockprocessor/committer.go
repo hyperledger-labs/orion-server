@@ -152,7 +152,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 			toProcessUpdatesFromIndex := len(dbsUpdates)
 			dbsUpdates = append(
 				dbsUpdates,
-				constructDBEntriesForDataTx(tx, version)...,
+				ConstructDBEntriesForDataTx(tx, version)...,
 			)
 
 			// after constructing entries for each transaction, we update the
@@ -268,6 +268,14 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) ([]*worl
 }
 
 func (c *committer) applyBlockOnStateTrie(worldStateUpdates []*worldstate.DBUpdates) error {
+	return ApplyBlockOnStateTrie(c.stateTrie, worldStateUpdates)
+}
+
+func (c *committer) commitTrie(height uint64) error {
+	return c.stateTrie.Commit(height)
+}
+
+func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates []*worldstate.DBUpdates) error {
 	for _, dbUpdate := range worldStateUpdates {
 		for _, dbWrite := range dbUpdate.Writes {
 			key, err := mptrie.ConstructCompositeKey(dbUpdate.DBName, dbWrite.Key)
@@ -276,7 +284,7 @@ func (c *committer) applyBlockOnStateTrie(worldStateUpdates []*worldstate.DBUpda
 			}
 			// TODO: should we add Metadata to value
 			value := dbWrite.Value
-			err = c.stateTrie.Update(key, value)
+			err = trie.Update(key, value)
 			if err != nil {
 				return err
 			}
@@ -286,7 +294,7 @@ func (c *committer) applyBlockOnStateTrie(worldStateUpdates []*worldstate.DBUpda
 			if err != nil {
 				return err
 			}
-			_, err = c.stateTrie.Delete(key)
+			_, err = trie.Delete(key)
 			if err != nil {
 				return err
 			}
@@ -295,11 +303,7 @@ func (c *committer) applyBlockOnStateTrie(worldStateUpdates []*worldstate.DBUpda
 	return nil
 }
 
-func (c *committer) commitTrie(height uint64) error {
-	return c.stateTrie.Commit(height)
-}
-
-func constructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*worldstate.DBUpdates {
+func ConstructDBEntriesForDataTx(tx *types.DataTx, version *types.Version) []*worldstate.DBUpdates {
 	dbsUpdates := make([]*worldstate.DBUpdates, len(tx.DbOperations))
 
 	for i, ops := range tx.DbOperations {

@@ -5,7 +5,6 @@ package bcdb
 import (
 	"bytes"
 	"crypto/x509"
-	"encoding/json"
 	"io/ioutil"
 	"math"
 	"os"
@@ -29,7 +28,6 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -658,19 +656,6 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 			},
 		},
 	}
-}
-
-func calculateTxHash(msg proto.Message, valInfo proto.Message) ([]byte, error) {
-	payloadBytes, err := json.Marshal(msg)
-	if err != nil {
-		return nil, errors.Wrapf(err, "can't serialize msg to json %v", msg)
-	}
-	valBytes, err := json.Marshal(valInfo)
-	if err != nil {
-		return nil, errors.Wrapf(err, "can't validationInfo msg to json %v", msg)
-	}
-	finalBytes := append(payloadBytes, valBytes...)
-	return crypto.ComputeSHA256Hash(finalBytes)
 }
 
 func applyTxsOnTrie(t *testing.T, env *txProcessorTestEnv, payload interface{}, stateTrie *mptrie.MPTrie) []byte {

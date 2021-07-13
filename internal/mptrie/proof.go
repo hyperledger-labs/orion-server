@@ -96,3 +96,7 @@ func (p *Proof) Validate(leafHash, rootHash []byte, isDeleted bool) (bool, error
 func (p *Proof) GetPath() []NodeBytes {
 	return p.path
 }
+
+func NewProof(path []NodeBytes) *Proof {
+	return &Proof{path: path}
+}

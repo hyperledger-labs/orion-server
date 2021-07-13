@@ -6,9 +6,13 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
@@ -82,6 +86,14 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 			Logger:   logger,
 		},
 	)
+
+	trieStorePath := constructStateTrieStorePath(path)
+	trieStore, err := store.Open(
+		&store.Config{
+			StoreDir: trieStorePath,
+			Logger:   logger,
+		},
+	)
 	if err != nil {
 		if rmErr := os.RemoveAll(path); rmErr != nil {
 			t.Errorf("error while removing directory %s, %v", path, rmErr)
@@ -97,7 +109,10 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 			t.Errorf("error while closing blockstore, %v", err)
 		}
 		if err := provenanceStore.Close(); err != nil {
-			t.Errorf("error while closing blockstore, %v", err)
+			t.Errorf("error while closing provenancestore, %v", err)
+		}
+		if err := trieStore.Close(); err != nil {
+			t.Errorf("error while closing triestore, %v", err)
 		}
 		if err := os.RemoveAll(path); err != nil {
 			t.Fatalf("failed to remove %s due to %v", path, err)
@@ -108,6 +123,7 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		db:              db,
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,
+		trieStore:       trieStore,
 		identityQuerier: identity.NewQuerier(db),
 		logger:          logger,
 	}
@@ -198,24 +214,32 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 
 	require.NoError(t, env.db.Commit(createUser, 1))
 
-	dirtyWriteKeyVersion := make(map[string]*types.Version)
+	trie, err := mptrie.NewTrie(nil, env.p.trieStore)
+	require.NoError(t, err)
 
 	for i := uint64(2); i < uint64(blocksNum); i++ {
 		key := make([]string, 0)
 		value := make([][]byte, 0)
 		for j := uint64(0); j < i; j++ {
 			key = append(key, fmt.Sprintf("key%d", j))
-			value = append(value, []byte(fmt.Sprintf("value_%d", j)))
+			value = append(value, []byte(fmt.Sprintf("value_%d_%d", j, i)))
 		}
 		block := createSampleBlock(i, key, value)
 		require.NoError(t, env.p.blockStore.AddSkipListLinks(block))
 		root, err := mtree.BuildTreeForBlockTx(block)
 		require.NoError(t, err)
 		block.Header.TxMerkelTreeRootHash = root.Hash()
+		dataUpdates := createDataUpdatesFromBlock(block)
+		blockprocessor.ApplyBlockOnStateTrie(trie, dataUpdates)
+		block.Header.StateMerkelTreeRootHash, err = trie.Hash()
+		require.NoError(t, err)
 		require.NoError(t, env.p.blockStore.Commit(block))
 
-		pData := createProvenanceDataFromBlock(block, dirtyWriteKeyVersion)
+		pData := createProvenanceDataFromBlock(block)
 		err = env.p.provenanceStore.Commit(block.GetHeader().GetBaseHeader().GetNumber(), pData)
+		require.NoError(t, err)
+
+		err = trie.Commit(block.GetHeader().GetBaseHeader().GetNumber())
 		require.NoError(t, err)
 
 		env.blocks = append(env.blocks, block.GetHeader())
@@ -267,8 +291,9 @@ func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.
 	}
 }
 
-func createProvenanceDataFromBlock(block *types.Block, dirtyWriteKeyVersion map[string]*types.Version) []*provenance.TxDataForProvenance {
+func createProvenanceDataFromBlock(block *types.Block) []*provenance.TxDataForProvenance {
 	var provenanceData []*provenance.TxDataForProvenance
+	dirtyWriteKeyVersion := make(map[string]*types.Version)
 	txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
 
 	for txNum, tx := range txsEnvelopes {
@@ -328,6 +353,23 @@ func constructProvenanceEntriesForDataTx(tx *types.DataTx, version *types.Versio
 	}
 
 	return txpData
+}
+
+func createDataUpdatesFromBlock(block *types.Block) []*worldstate.DBUpdates {
+	var dataUpdate []*worldstate.DBUpdates
+	txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
+
+	for txNum, tx := range txsEnvelopes {
+		version := &types.Version{
+			BlockNum: block.GetHeader().GetBaseHeader().GetNumber(),
+			TxNum:    uint64(txNum),
+		}
+
+		txData := blockprocessor.ConstructDBEntriesForDataTx(tx.GetPayload(), version)
+		dataUpdate = append(dataUpdate, txData...)
+	}
+
+	return dataUpdate
 }
 
 func TestGetBlock(t *testing.T) {
@@ -504,7 +546,7 @@ func TestGetPath(t *testing.T) {
 	}
 }
 
-func TestGetProof(t *testing.T) {
+func TestGetTxProof(t *testing.T) {
 	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
@@ -580,7 +622,7 @@ func TestGetProof(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			payload, err := env.p.getProof(testCase.user, testCase.blockNumber, testCase.txIndex)
+			payload, err := env.p.getTxProof(testCase.user, testCase.blockNumber, testCase.txIndex)
 			if testCase.expectedErr == nil {
 				require.NoError(t, err)
 				txBytes, err := json.Marshal(testCase.expectedTx)
@@ -601,6 +643,114 @@ func TestGetProof(t *testing.T) {
 					}
 				}
 				require.Equal(t, testCase.expectedRoot, currRoot)
+			} else {
+				require.Error(t, err)
+				require.EqualError(t, err, testCase.expectedErr.Error())
+				require.IsType(t, testCase.expectedErr, err)
+			}
+		})
+	}
+}
+
+func TestGetDataProof(t *testing.T) {
+	t.Parallel()
+	env := newLedgerProcessorTestEnv(t)
+	defer env.cleanup(t)
+	setup(t, env, 100)
+
+	testCases := []struct {
+		name        string
+		blockNumber uint64
+		key         string
+		value       []byte
+		isDeleted   bool
+		isValid     bool
+		user        string
+		expectedErr error
+	}{
+		{
+			name:        "get regular data",
+			blockNumber: 5,
+			key:         "key3",
+			value:       []byte(fmt.Sprintf("value_%d_%d", 3, 5)),
+			isDeleted:   false,
+			isValid:     true,
+			user:        "testUser",
+			expectedErr: nil,
+		},
+		{
+			name:        "get regular data",
+			blockNumber: 95,
+			key:         "key13",
+			value:       []byte(fmt.Sprintf("value_%d_%d", 13, 95)),
+			isDeleted:   false,
+			isValid:     true,
+			user:        "testUser",
+			expectedErr: nil,
+		},
+		{
+			name:        "get regular data but with isDeleted true",
+			blockNumber: 95,
+			key:         "key13",
+			value:       []byte(fmt.Sprintf("value_%d_%d", 13, 95)),
+			isDeleted:   true,
+			isValid:     false,
+			user:        "testUser",
+			expectedErr: &interrors.NotFoundErr{Message: "no proof for block 95, db bdb, key key13, isDeleted true found"},
+		},
+		{
+			name:        "get already updated old value",
+			blockNumber: 95,
+			key:         "key13",
+			value:       []byte(fmt.Sprintf("value_%d_%d", 13, 5)),
+			isDeleted:   false,
+			isValid:     false,
+			user:        "testUser",
+			expectedErr: nil,
+		},
+		{
+			name:        "get for non exist key",
+			blockNumber: 95,
+			key:         "keyyyy13",
+			value:       []byte(fmt.Sprintf("value_%d_%d", 13, 5)),
+			isDeleted:   false,
+			isValid:     false,
+			user:        "testUser",
+			expectedErr: &interrors.NotFoundErr{Message: "no proof for block 95, db bdb, key keyyyy13, isDeleted false found"},
+		},
+		{
+			name:        "get proof from block 515 - not exist",
+			blockNumber: 515,
+			user:        "testUser",
+			expectedErr: &interrors.NotFoundErr{Message: "block not found: 515"},
+		},
+		{
+			name:        "get proof from block 40 - wrong user",
+			blockNumber: 40,
+			user:        "userNotExist",
+			expectedErr: &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			proof, err := env.p.getDataProof(testCase.user, testCase.blockNumber, worldstate.DefaultDBName, testCase.key, testCase.isDeleted)
+			if testCase.expectedErr == nil {
+				require.NoError(t, err)
+				require.NotNil(t, proof)
+				proofPath := make([]mptrie.NodeBytes, 0)
+				for _, segment := range proof.Path {
+					proofPath = append(proofPath, segment.Hashes)
+				}
+				mpTrieProof := mptrie.NewProof(proofPath)
+				trieKey, err := mptrie.ConstructCompositeKey(worldstate.DefaultDBName, testCase.key)
+				require.NoError(t, err)
+				kvHash, err := mptrie.CalculateKeyValueHash(trieKey, testCase.value)
+				rootHash := env.blocks[testCase.blockNumber-1].StateMerkelTreeRootHash
+				require.NoError(t, err)
+				isValid, err := mpTrieProof.Validate(kvHash, rootHash, testCase.isDeleted)
+				require.NoError(t, err)
+				require.Equal(t, testCase.isValid, isValid)
 			} else {
 				require.Error(t, err)
 				require.EqualError(t, err, testCase.expectedErr.Error())

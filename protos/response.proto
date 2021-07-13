@@ -106,11 +106,27 @@ message GetTxProofResponse {
   repeated bytes hashes = 2;
 }
 
+// GetDataProof
+message GetDataProofResponseEnvelope {
+  GetDataProofResponse response = 1;
+  bytes signature = 2;
+}
+
+message GetDataProofResponse {
+  ResponseHeader header = 1;
+  repeated MPTrieProofElement path = 2;
+}
+
+message MPTrieProofElement {
+  repeated bytes hashes = 1;
+}
+
 // GetHistoricalData
 message GetHistoricalDataResponseEnvelope {
   GetHistoricalDataResponse response = 1;
   bytes signature = 2;
 }
+
 
 message GetHistoricalDataResponse {
   ResponseHeader header = 1;
