@@ -64,6 +64,51 @@ The output of the above command would be something similar to the following
 
 Congratulations! We have started a node successfully.
 
+## Build and start Blockchain DB node inside Docker
+### Prerequisites
+
+To build an docker image, the following are the prerequisites which should be installed.
+
+  - **Docker**: To generate cryptographic materials and build BCDB image.
+  - **Git**: To clone the code repository.
+  - **cURL**: To execute queries and transactions provided in the tutorial.
+
+### Build
+
+Build process includes two steps - crypto materials generation and docker image build
+
+#### Generate cryptographic materials 
+Minimal set of crypto materials includes 3 sets of certificates, totally 4 certificates
+
+1. `admin` and `user` - for db users
+2. `node` - for server node
+3. `CA` - for Certificate Authority 
+To create minimal set of cryptographic materials, you can run:
+```
+./scripts/cryptoGen.sh sampleconfig
+```
+Please note that `sampleconfig` folder already contains multiple configuration files used to build BCDB docker images.
+
+If you plan to use more users, you can create extra certificates in addition to minimal set. To create crypto configuration for more users, you can run:
+```
+./scripts/cryptoGen.sh sampleconfig <extra users>
+```
+For example, in case you want to generate crypto materials for extra users used in car demo, you can run:
+```
+./scripts/cryptoGen.sh sampleconfig alice bob dmv dealer
+```
+You don't have to create certificates for all users using `cryptoGen.sh` script, but can create them manually after that. See [Generating Crypto Materials]()
+
+#### Generate docker image
+To generate docker image, after you generated crypto materials, run:
+```
+make docker
+```
+#### Start docker container
+To invoke bcdb docker container, you can run:
+```
+docker run -it --rm -v $(pwd)/sampleconfig/:/etc/bcdb-server -p 6001:6001 -p 7050:7050 bcdb-server
+``` 
 
 ## Build and Use Signer Utility
 
