@@ -168,7 +168,7 @@ func (s *Store) CommitChanges(blockNum uint64) error {
 		}
 		batch.Put(append(trieNodesNs, []byte(k)...), nodeBytes)
 	}
-	if err := s.trieDataDB.Write(batch, &opt.WriteOptions{}); err != nil {
+	if err := s.trieDataDB.Write(batch, &opt.WriteOptions{Sync: true}); err != nil {
 		return err
 	}
 	s.nodesToPersist = make(map[string]*NodeBytesWithType)
