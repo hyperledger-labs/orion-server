@@ -183,7 +183,7 @@ func (v *dataTxValidator) validateOps(
 		return r, nil
 	}
 
-	return v.mvccValidation(dbName, txOps.DataReads, pendingOps)
+	return v.mvccValidation(dbName, txOps, pendingOps)
 }
 
 func (v *dataTxValidator) validateFieldsInDataWrites(DataWrites []*types.DataWrite) (*types.ValidationInfo, error) {
@@ -459,8 +459,8 @@ func (v *dataTxValidator) validateACLForWriteOrDelete(userIDs []string, dbName, 
 	}, nil
 }
 
-func (v *dataTxValidator) mvccValidation(dbName string, reads []*types.DataRead, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
-	for _, r := range reads {
+func (v *dataTxValidator) mvccValidation(dbName string, txOps *types.DBOperation, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
+	for _, r := range txOps.DataReads {
 		if pendingOps.exist(dbName, r.Key) {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
@@ -480,6 +480,27 @@ func (v *dataTxValidator) mvccValidation(dbName string, reads []*types.DataRead,
 			Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
 			ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the key [" + r.Key + "] in database [" + dbName + "] changed",
 		}, nil
+	}
+
+	// as state trie generation work at the boundary of block, we cannot allow more than one write per key. This is because, the state trie
+	// generation considers only the final updates and not intermediate updates within a block boundary. As a result, we would have intermediate
+	// entries in the provenance store but cannot generate proof of existence for the same using the state trie. As blind writes/deletes are quite
+	// rare, we allow only one write per key within a block. In general, user reads the key before writing to it.
+	for _, w := range txOps.DataWrites {
+		if pendingOps.exist(dbName, w.Key) {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [" + w.Key + "] in database [" + dbName + "]. Within a block, a key can be modified only once",
+			}, nil
+		}
+	}
+	for _, d := range txOps.DataDeletes {
+		if pendingOps.exist(dbName, d.Key) {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [" + d.Key + "] in database [" + dbName + "]. Within a block, a key can be modified only once",
+			}, nil
+		}
 	}
 
 	return &types.ValidationInfo{

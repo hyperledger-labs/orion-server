@@ -117,7 +117,6 @@ func (c *committer) commitToStateDB(blockNum uint64, dbsUpdates map[string]*worl
 func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[string]*worldstate.DBUpdates, []*provenance.TxDataForProvenance, error) {
 	dbsUpdates := make(map[string]*worldstate.DBUpdates)
 	var provenanceData []*provenance.TxDataForProvenance
-	dirtyWriteKeyVersion := make(map[string]*types.Version)
 	blockValidationInfo := block.Header.ValidationInfo
 
 	c.logger.Debugf("committing to the state changes from the block number %d", block.GetHeader().GetBaseHeader().GetNumber())
@@ -144,15 +143,13 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 
 			tx := txsEnvelopes[txNum].Payload
 
-			// we pass the dirty write-set to the provenance entries constructor so that the
-			// old version can be recorded to add previous value link in the provenance store
-			pData, err := constructProvenanceEntriesForDataTx(c.db, tx, version, dirtyWriteKeyVersion)
+			pData, err := constructProvenanceEntriesForDataTx(c.db, tx, version)
 			if err != nil {
 				return nil, nil, err
 			}
 			provenanceData = append(provenanceData, pData...)
 
-			AddDBEntriesForDataTxAndUpdateDirtyWrites(tx, version, dbsUpdates, dirtyWriteKeyVersion)
+			AddDBEntriesForDataTx(tx, version, dbsUpdates)
 		}
 		c.logger.Debugf("constructed %d, updates for data transactions, block number %d",
 			len(blockValidationInfo),
@@ -291,12 +288,7 @@ func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates map[string]*wo
 	return nil
 }
 
-func AddDBEntriesForDataTxAndUpdateDirtyWrites(
-	tx *types.DataTx,
-	version *types.Version,
-	dbsUpdates map[string]*worldstate.DBUpdates,
-	dirtyWrites map[string]*types.Version,
-) {
+func AddDBEntriesForDataTx(tx *types.DataTx, version *types.Version, dbsUpdates map[string]*worldstate.DBUpdates) {
 	for _, ops := range tx.DbOperations {
 		updates, ok := dbsUpdates[ops.DbName]
 		if !ok {
@@ -314,10 +306,6 @@ func AddDBEntriesForDataTxAndUpdateDirtyWrites(
 				},
 			}
 			updates.Writes = append(updates.Writes, kv)
-
-			if dirtyWrites != nil {
-				dirtyWrites[constructCompositeKey(ops.DbName, kv.Key)] = kv.Metadata.Version
-			}
 		}
 
 		for _, d := range ops.DataDeletes {
@@ -476,12 +464,7 @@ func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterC
 	}, nil
 }
 
-func constructProvenanceEntriesForDataTx(
-	db worldstate.DB,
-	tx *types.DataTx,
-	version *types.Version,
-	dirtyWriteKeyVersion map[string]*types.Version,
-) ([]*provenance.TxDataForProvenance, error) {
+func constructProvenanceEntriesForDataTx(db worldstate.DB, tx *types.DataTx, version *types.Version) ([]*provenance.TxDataForProvenance, error) {
 	txpData := make([]*provenance.TxDataForProvenance, len(tx.DbOperations))
 
 	for i, ops := range tx.DbOperations {
@@ -513,12 +496,13 @@ func constructProvenanceEntriesForDataTx(
 			}
 			pData.Writes = append(pData.Writes, kv)
 
-			// Given that two or more transaction within a
-			// block can do blind write to a key, we need
-			// to ensure that the old version is the one
-			// written by the last transaction and not the
-			// one present in the worldstate
-			v, err := getVersion(ops.DbName, write.Key, dirtyWriteKeyVersion, db)
+			// we assume a block to write a key only once. If more than
+			// one transaction in a block writes to the same key (blind write),
+			// only the first valid transaction gets committed while others get
+			// invalidated. Hence, the old version of the key can only exist in
+			// the committed state and not in the pending writes of previous
+			// transactions within the block
+			v, err := db.GetVersion(ops.DbName, write.Key)
 			if err != nil {
 				return nil, err
 			}
@@ -534,11 +518,7 @@ func constructProvenanceEntriesForDataTx(
 		// first valid transaction gets committed while others get
 		// invalidated.
 		for _, d := range ops.DataDeletes {
-			// as there can be a blind delete with previous transaction
-			// in the same block writing the value, we need to first
-			// consider the dirty set before fetching the version from
-			// the worldstate
-			v, err := getVersion(ops.DbName, d.Key, dirtyWriteKeyVersion, db)
+			v, err := db.GetVersion(ops.DbName, d.Key)
 			if err != nil {
 				return nil, err
 			}
