@@ -577,6 +577,33 @@ func TestValidateDataBlock(t *testing.T) {
 									},
 								},
 							}),
+							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
+								MustSignUserIds: []string{"operatingUser"},
+								DbOperations: []*types.DBOperation{
+									{
+										DbName: worldstate.DefaultDBName,
+										DataWrites: []*types.DataWrite{
+											{
+												Key:   "key1",
+												Value: []byte("new-val"),
+											},
+										},
+									},
+								},
+							}),
+							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
+								MustSignUserIds: []string{"operatingUser"},
+								DbOperations: []*types.DBOperation{
+									{
+										DbName: "db1",
+										DataDeletes: []*types.DataDelete{
+											{
+												Key: "key1",
+											},
+										},
+									},
+								},
+							}),
 						},
 					},
 				},
@@ -596,6 +623,14 @@ func TestValidateDataBlock(t *testing.T) {
 				{
 					Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 					ReasonIfInvalid: "the database [db2] does not exist in the cluster",
+				},
+				{
+					Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+					ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [" + worldstate.DefaultDBName + "]. Within a block, a key can be modified only once",
+				},
+				{
+					Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+					ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [db1]. Within a block, a key can be modified only once",
 				},
 			},
 		},

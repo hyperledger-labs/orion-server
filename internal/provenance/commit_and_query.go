@@ -82,7 +82,6 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 	defer s.mutex.Unlock()
 
 	cayleyTx := graph.NewTransaction()
-	commitSet := make(map[string]string)
 
 	for index, tx := range txsData {
 		loc, err := json.Marshal(&TxIDLocation{blockNum, index})
@@ -105,7 +104,7 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 			return err
 		}
 
-		if err := s.addWrites(tx, cayleyTx, commitSet); err != nil {
+		if err := s.addWrites(tx, cayleyTx); err != nil {
 			return err
 		}
 
@@ -131,7 +130,7 @@ func (s *Store) addReads(tx *TxDataForProvenance, cayleyTx *graph.Transaction) e
 	return nil
 }
 
-func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, commitSet map[string]string) error {
+func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction) error {
 	for _, write := range tx.Writes {
 		actualKey := write.Key
 		write.Key = constructCompositeKey(tx.DBName, write.Key)
@@ -152,14 +151,14 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, 
 
 		oldVersion, ok := tx.OldVersionOfWrites[actualKey]
 		if !ok {
-			// old version would not have been passed if it was deleted
+			// old version would not have been passed if it was deleted in the worldstate database already
+			// but we can find the old version from the provenance store even if it was deleted already
 			s.logger.Debug("fetching last deleted version of key [" + actualKey + "] from db [" + tx.DBName + "]")
 			lastVer, err := s.getLastDeletedVersion(tx.DBName, write.Key)
 			if err != nil {
 				return err
 			}
 			if lastVer == nil {
-				commitSet[write.Key] = string(newValue)
 				s.logger.Debug("previous version of key [" + actualKey + "] does not exist in db [" + tx.DBName + "]")
 				continue
 			}
@@ -173,13 +172,8 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, 
 		}
 
 		if oldValue == nil {
-			oldValueStr, ok := commitSet[write.Key]
-			if !ok {
-				s.logger.Debugf("key [%s] version [%d,%d] for which oldValue is not found", actualKey, oldVersion.BlockNum, oldVersion.TxNum)
-				return errors.Errorf("error while finding the previous version of the key[%s]", write.Key)
-			}
-
-			oldValue = quad.String(oldValueStr)
+			s.logger.Debugf("key [%s] version [%d,%d] for which oldValue is not found", actualKey, oldVersion.BlockNum, oldVersion.TxNum)
+			return errors.Errorf("error while finding the previous version of the key[%s]", write.Key)
 		}
 
 		s.logger.Debugf("oldValue[%s]<---(previous)---newValue[%s]", quad.NativeOf(oldValue), string(newValue))
@@ -187,8 +181,6 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction, 
 
 		s.logger.Debugf("oldValue[%s]---(next)--->newValue[%s]", quad.NativeOf(oldValue), string(newValue))
 		cayleyTx.AddQuad(quad.Make(oldValue, NEXT, string(newValue), ""))
-
-		commitSet[write.Key] = string(newValue)
 	}
 
 	return nil

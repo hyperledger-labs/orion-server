@@ -1413,93 +1413,6 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 		expectedData []*types.ValueWithMetadata
 	}{
 		{
-			name: "previous value link within the block",
-			txs: []*types.DataTxEnvelope{
-				{
-					Payload: &types.DataTx{
-						MustSignUserIds: []string{"user1"},
-						TxId:            "tx1",
-						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key1",
-										Value: []byte("value1"),
-									},
-								},
-							},
-							{
-								DbName: "db1",
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key1",
-										Value: []byte("value1"),
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.DataTx{
-						MustSignUserIds: []string{"user1"},
-						TxId:            "tx2",
-						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key1",
-										Value: []byte("value2"),
-									},
-								},
-							},
-							{
-								DbName: "db1",
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key1",
-										Value: []byte("value2"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			valInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
-				},
-				{
-					Flag: types.Flag_VALID,
-				},
-			},
-			query: func(s *provenance.Store, dbName string) ([]*types.ValueWithMetadata, error) {
-				return s.GetPreviousValues(
-					dbName,
-					"key1",
-					&types.Version{
-						BlockNum: 2,
-						TxNum:    1,
-					},
-					-1,
-				)
-			},
-			expectedData: []*types.ValueWithMetadata{
-				{
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
-						},
-					},
-				},
-			},
-		},
-		{
 			name: "previous value link with the already committed value",
 			txs: []*types.DataTxEnvelope{
 				{
@@ -1669,133 +1582,6 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 						Version: &types.Version{
 							BlockNum: 1,
 							TxNum:    0,
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "blind write and blind delete key0",
-			txs: []*types.DataTxEnvelope{
-				{
-					Payload: &types.DataTx{
-						MustSignUserIds: []string{"user1"},
-						TxId:            "tx1",
-						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key0",
-										Value: []byte("value1"),
-									},
-								},
-							},
-							{
-								DbName: "db1",
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key0",
-										Value: []byte("value1"),
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.DataTx{
-						MustSignUserIds: []string{"user1"},
-						TxId:            "tx2",
-						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataDeletes: []*types.DataDelete{
-									{
-										Key: "key0",
-									},
-								},
-							},
-							{
-								DbName: "db1",
-								DataDeletes: []*types.DataDelete{
-									{
-										Key: "key0",
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.DataTx{
-						MustSignUserIds: []string{"user1"},
-						TxId:            "tx3",
-						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key0",
-										Value: []byte("value2"),
-									},
-								},
-							},
-							{
-								DbName: "db1",
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key0",
-										Value: []byte("value2"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			valInfo: []*types.ValidationInfo{
-				{
-					Flag: types.Flag_VALID,
-				},
-				{
-					Flag: types.Flag_VALID,
-				},
-				{
-					Flag: types.Flag_VALID,
-				},
-			},
-			query: func(s *provenance.Store, dbName string) ([]*types.ValueWithMetadata, error) {
-				return s.GetValues(
-					worldstate.DefaultDBName,
-					"key0",
-				)
-			},
-			expectedData: []*types.ValueWithMetadata{
-				{
-					Value: []byte("value0"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    0,
-						},
-					},
-				},
-				{
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
-						},
-					},
-				},
-				{
-					Value: []byte("value2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    2,
 						},
 					},
 				},
@@ -2589,7 +2375,6 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 		tx                     *types.DataTx
 		version                *types.Version
 		setup                  func(db worldstate.DB)
-		dirtyWriteKeyVersion   map[string]*types.Version
 		expectedProvenanceData []*provenance.TxDataForProvenance
 	}{
 		{
@@ -2771,12 +2556,6 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 				}
 				require.NoError(t, db.Commit(update, 1))
 			},
-			dirtyWriteKeyVersion: map[string]*types.Version{
-				constructCompositeKey(worldstate.DefaultDBName, "key1"): {
-					BlockNum: 4,
-					TxNum:    4,
-				},
-			},
 			expectedProvenanceData: []*provenance.TxDataForProvenance{
 				{
 					IsValid: true,
@@ -2818,8 +2597,8 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 					Deletes: make(map[string]*types.Version),
 					OldVersionOfWrites: map[string]*types.Version{
 						"key1": {
-							BlockNum: 4,
-							TxNum:    4,
+							BlockNum: 3,
+							TxNum:    3,
 						},
 						"key2": {
 							BlockNum: 5,
@@ -2887,7 +2666,7 @@ func TestConstructProvenanceEntriesForDataTx(t *testing.T) {
 			defer env.cleanup()
 			tt.setup(env.db)
 
-			provenanceData, err := constructProvenanceEntriesForDataTx(env.db, tt.tx, tt.version, tt.dirtyWriteKeyVersion)
+			provenanceData, err := constructProvenanceEntriesForDataTx(env.db, tt.tx, tt.version)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedProvenanceData, provenanceData)
 		})

@@ -144,39 +144,6 @@ func setup(t *testing.T, s *Store) {
 				},
 			},
 		},
-		{
-			IsValid: true,
-			DBName:  "db1",
-			UserID:  "user2",
-			TxID:    "tx4",
-			Reads: []*KeyWithVersion{
-				{
-					Key: "key2",
-					Version: &types.Version{
-						BlockNum: 1,
-						TxNum:    1,
-					},
-				},
-			},
-			Writes: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
-			},
-			OldVersionOfWrites: map[string]*types.Version{
-				"key1": {
-					BlockNum: 2,
-					TxNum:    0,
-				},
-			},
-		},
 	}
 
 	block3TxsData := []*TxDataForProvenance{
@@ -190,7 +157,7 @@ func setup(t *testing.T, s *Store) {
 					Key: "key1",
 					Version: &types.Version{
 						BlockNum: 2,
-						TxNum:    1,
+						TxNum:    0,
 					},
 				},
 				{
@@ -232,7 +199,7 @@ func setup(t *testing.T, s *Store) {
 			OldVersionOfWrites: map[string]*types.Version{
 				"key1": {
 					BlockNum: 2,
-					TxNum:    1,
+					TxNum:    0,
 				},
 				"key2": {
 					BlockNum: 1,
@@ -426,15 +393,6 @@ func TestGetValues(t *testing.T) {
 					},
 				},
 				{
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
-				{
 					Value: []byte("value4"),
 					Metadata: &types.Metadata{
 						Version: &types.Version{
@@ -529,7 +487,7 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 		{
 			name:          "fetch ids of tx submitted by user2",
 			userID:        "user2",
-			expectedTxIDs: []string{"tx4", "tx5", "tx50", "tx6"},
+			expectedTxIDs: []string{"tx5", "tx50", "tx6"},
 		},
 		{
 			name:          "fetch non-existing transaction",
@@ -541,7 +499,6 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-
 			txIDs, err := env.s.GetTxIDsSubmittedByUser(tt.userID)
 			require.NoError(t, err)
 			require.ElementsMatch(t, tt.expectedTxIDs, txIDs)
@@ -576,7 +533,7 @@ func TestGetReaders(t *testing.T) {
 			dbName: "db1",
 			key:    "key2",
 			expectedReaders: map[string]uint32{
-				"user2": 2,
+				"user2": 1,
 			},
 		},
 		{
@@ -616,7 +573,7 @@ func TestGetWriters(t *testing.T) {
 			key:    "key1",
 			expectedWriters: map[string]uint32{
 				"user1": 2,
-				"user2": 3,
+				"user2": 2,
 			},
 		},
 		{
@@ -696,27 +653,11 @@ func TestGetValuesReadByUser(t *testing.T) {
 				},
 				{
 					Key:   "key1",
-					Value: []byte("value3"),
+					Value: []byte("value2"),
 					Metadata: &types.Metadata{
 						Version: &types.Version{
 							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
-				{
-					Key:   "key2",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						AccessControl: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
-								"user2": true,
-							},
-						},
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
+							TxNum:    0,
 						},
 					},
 				},
@@ -797,16 +738,6 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 			name:   "fetch all values written by user2",
 			userID: "user2",
 			expectedWrites: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
 				{
 					Key:   "key1",
 					Value: []byte("value4"),
@@ -897,15 +828,6 @@ func TestGetNextValues(t *testing.T) {
 					},
 				},
 				{
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
-				{
 					Value: []byte("value4"),
 					Metadata: &types.Metadata{
 						Version: &types.Version{
@@ -935,15 +857,6 @@ func TestGetNextValues(t *testing.T) {
 			},
 			limit: -1,
 			expectedValues: []*types.ValueWithMetadata{
-				{
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
 				{
 					Value: []byte("value4"),
 					Metadata: &types.Metadata{
@@ -1016,11 +929,11 @@ func TestGetNextValues(t *testing.T) {
 					},
 				},
 				{
-					Value: []byte("value3"),
+					Value: []byte("value4"),
 					Metadata: &types.Metadata{
 						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
+							BlockNum: 3,
+							TxNum:    0,
 						},
 					},
 				},
@@ -1092,24 +1005,15 @@ func TestGetPreviousValues(t *testing.T) {
 						},
 					},
 				},
-				{
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
 			},
 		},
 		{
-			name:   "all previous values of key1, value3",
+			name:   "all previous values of key1, value2",
 			dbName: "db1",
 			key:    "key1",
 			version: &types.Version{
 				BlockNum: 2,
-				TxNum:    1,
+				TxNum:    0,
 			},
 			limit: -1,
 			expectedValues: []*types.ValueWithMetadata{
@@ -1118,15 +1022,6 @@ func TestGetPreviousValues(t *testing.T) {
 					Metadata: &types.Metadata{
 						Version: &types.Version{
 							BlockNum: 1,
-							TxNum:    0,
-						},
-					},
-				},
-				{
-					Value: []byte("value2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
 							TxNum:    0,
 						},
 					},
@@ -1164,11 +1059,11 @@ func TestGetPreviousValues(t *testing.T) {
 					},
 				},
 				{
-					Value: []byte("value3"),
+					Value: []byte("value1"),
 					Metadata: &types.Metadata{
 						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
+							BlockNum: 1,
+							TxNum:    0,
 						},
 					},
 				},
@@ -1185,11 +1080,11 @@ func TestGetPreviousValues(t *testing.T) {
 			limit: 2,
 			expectedValues: []*types.ValueWithMetadata{
 				{
-					Value: []byte("value3"),
+					Value: []byte("value2"),
 					Metadata: &types.Metadata{
 						Version: &types.Version{
 							BlockNum: 2,
-							TxNum:    1,
+							TxNum:    0,
 						},
 					},
 				},
@@ -1427,15 +1322,15 @@ func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 			dbName: "db1",
 			key:    "key1",
 			version: &types.Version{
-				BlockNum: 2,
-				TxNum:    1,
+				BlockNum: 3,
+				TxNum:    0,
 			},
 			expectedValue: &types.ValueWithMetadata{
-				Value: []byte("value3"),
+				Value: []byte("value4"),
 				Metadata: &types.Metadata{
 					Version: &types.Version{
-						BlockNum: 2,
-						TxNum:    1,
+						BlockNum: 3,
+						TxNum:    0,
 					},
 				},
 			},
@@ -1485,11 +1380,11 @@ func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 				TxNum:    10,
 			},
 			expectedValue: &types.ValueWithMetadata{
-				Value: []byte("value3"),
+				Value: []byte("value2"),
 				Metadata: &types.Metadata{
 					Version: &types.Version{
 						BlockNum: 2,
-						TxNum:    1,
+						TxNum:    0,
 					},
 				},
 			},

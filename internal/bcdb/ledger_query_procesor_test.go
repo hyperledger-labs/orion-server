@@ -365,7 +365,7 @@ func createDataUpdatesFromBlock(block *types.Block) map[string]*worldstate.DBUpd
 			TxNum:    uint64(txNum),
 		}
 
-		blockprocessor.AddDBEntriesForDataTxAndUpdateDirtyWrites(tx.GetPayload(), version, dataUpdate, nil)
+		blockprocessor.AddDBEntriesForDataTx(tx.GetPayload(), version, dataUpdate)
 	}
 
 	return dataUpdate
