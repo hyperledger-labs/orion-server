@@ -2008,17 +2008,22 @@ func TestMVCCOnDataTx(t *testing.T) {
 	tests := []struct {
 		name           string
 		setup          func(db worldstate.DB)
+		txOps          *types.DBOperation
 		dataReads      []*types.DataRead
+		dataWrites     []*types.DataWrite
+		dataDeletes    []*types.DataDelete
 		pendingOps     *pendingOperations
 		expectedResult *types.ValidationInfo
 	}{
 		{
 			name:  "invalid: conflict writes within the block",
 			setup: func(db worldstate.DB) {},
-			dataReads: []*types.DataRead{
-				{
-					Key:     "key1",
-					Version: version1,
+			txOps: &types.DBOperation{
+				DataReads: []*types.DataRead{
+					{
+						Key:     "key1",
+						Version: version1,
+					},
 				},
 			},
 			pendingOps: &pendingOperations{
@@ -2035,10 +2040,12 @@ func TestMVCCOnDataTx(t *testing.T) {
 		{
 			name:  "invalid: conflict deletes within the block",
 			setup: func(db worldstate.DB) {},
-			dataReads: []*types.DataRead{
-				{
-					Key:     "key1",
-					Version: version1,
+			txOps: &types.DBOperation{
+				DataReads: []*types.DataRead{
+					{
+						Key:     "key1",
+						Version: version1,
+					},
 				},
 			},
 			pendingOps: &pendingOperations{
@@ -2053,12 +2060,100 @@ func TestMVCCOnDataTx(t *testing.T) {
 			},
 		},
 		{
+			name:  "invalid: more than one modification per key - conflict between write and delete",
+			setup: func(db worldstate.DB) {},
+			txOps: &types.DBOperation{
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+					},
+				},
+			},
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{},
+				pendingDeletes: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [" + worldstate.DefaultDBName + "]. Within a block, a key can be modified only once",
+			},
+		},
+		{
+			name:  "invalid: more than one modification per key - conflict between write and write",
+			setup: func(db worldstate.DB) {},
+			txOps: &types.DBOperation{
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+					},
+				},
+			},
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+				},
+				pendingDeletes: map[string]bool{},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [" + worldstate.DefaultDBName + "]. Within a block, a key can be modified only once",
+			},
+		},
+		{
+			name:  "invalid: more than one modification per key - conflict between delete and write",
+			setup: func(db worldstate.DB) {},
+			txOps: &types.DBOperation{
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key1",
+					},
+				},
+			},
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+				},
+				pendingDeletes: map[string]bool{},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [" + worldstate.DefaultDBName + "]. Within a block, a key can be modified only once",
+			},
+		},
+		{
+			name:  "invalid: more than one modification per key - conflict between delete and delete",
+			setup: func(db worldstate.DB) {},
+			txOps: &types.DBOperation{
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key1",
+					},
+				},
+			},
+			pendingOps: &pendingOperations{
+				pendingWrites: map[string]bool{},
+				pendingDeletes: map[string]bool{
+					constructCompositeKey(worldstate.DefaultDBName, "key1"): true,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+				ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [" + worldstate.DefaultDBName + "]. Within a block, a key can be modified only once",
+			},
+		},
+		{
 			name:  "invalid: committed version does not exist",
 			setup: func(db worldstate.DB) {},
-			dataReads: []*types.DataRead{
-				{
-					Key:     "key1",
-					Version: version1,
+			txOps: &types.DBOperation{
+				DataReads: []*types.DataRead{
+					{
+						Key:     "key1",
+						Version: version1,
+					},
 				},
 			},
 			pendingOps: newPendingOperations(),
@@ -2091,14 +2186,16 @@ func TestMVCCOnDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			dataReads: []*types.DataRead{
-				{
-					Key:     "key1",
-					Version: version2,
-				},
-				{
-					Key:     "key2",
-					Version: version1,
+			txOps: &types.DBOperation{
+				DataReads: []*types.DataRead{
+					{
+						Key:     "key1",
+						Version: version2,
+					},
+					{
+						Key:     "key2",
+						Version: version1,
+					},
 				},
 			},
 			pendingOps: newPendingOperations(),
@@ -2131,18 +2228,20 @@ func TestMVCCOnDataTx(t *testing.T) {
 
 				require.NoError(t, db.Commit(data, 1))
 			},
-			dataReads: []*types.DataRead{
-				{
-					Key:     "key1",
-					Version: version2,
-				},
-				{
-					Key:     "key2",
-					Version: version3,
-				},
-				{
-					Key:     "key3",
-					Version: nil,
+			txOps: &types.DBOperation{
+				DataReads: []*types.DataRead{
+					{
+						Key:     "key1",
+						Version: version2,
+					},
+					{
+						Key:     "key2",
+						Version: version3,
+					},
+					{
+						Key:     "key3",
+						Version: nil,
+					},
 				},
 			},
 			pendingOps: newPendingOperations(),
@@ -2162,7 +2261,7 @@ func TestMVCCOnDataTx(t *testing.T) {
 
 			tt.setup(env.db)
 
-			result, err := env.validator.dataTxValidator.mvccValidation(worldstate.DefaultDBName, tt.dataReads, tt.pendingOps)
+			result, err := env.validator.dataTxValidator.mvccValidation(worldstate.DefaultDBName, tt.txOps, tt.pendingOps)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})

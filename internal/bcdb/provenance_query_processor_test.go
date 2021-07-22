@@ -143,39 +143,6 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 				},
 			},
 		},
-		{
-			IsValid: true,
-			DBName:  "db1",
-			UserID:  "user2",
-			TxID:    "tx4",
-			Reads: []*provenance.KeyWithVersion{
-				{
-					Key: "key2",
-					Version: &types.Version{
-						BlockNum: 1,
-						TxNum:    1,
-					},
-				},
-			},
-			Writes: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value3"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    1,
-						},
-					},
-				},
-			},
-			OldVersionOfWrites: map[string]*types.Version{
-				"key1": {
-					BlockNum: 2,
-					TxNum:    0,
-				},
-			},
-		},
 	}
 
 	block3TxsData := []*provenance.TxDataForProvenance{
@@ -189,7 +156,7 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 					Key: "key1",
 					Version: &types.Version{
 						BlockNum: 2,
-						TxNum:    1,
+						TxNum:    0,
 					},
 				},
 				{
@@ -231,7 +198,7 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 			OldVersionOfWrites: map[string]*types.Version{
 				"key1": {
 					BlockNum: 2,
-					TxNum:    1,
+					TxNum:    0,
 				},
 				"key2": {
 					BlockNum: 1,
@@ -344,15 +311,6 @@ func TestGetValues(t *testing.T) {
 							Version: &types.Version{
 								BlockNum: 2,
 								TxNum:    0,
-							},
-						},
-					},
-					{
-						Value: []byte("value3"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 2,
-								TxNum:    1,
 							},
 						},
 					},
@@ -470,12 +428,12 @@ func TestGetPreviousValues(t *testing.T) {
 		expectedPayload *types.GetHistoricalDataResponse
 	}{
 		{
-			name:   "fetch the previous value of key1 at version{Blk 2, txNum 1}",
+			name:   "fetch the previous value of key1 at version{Blk 3, txNum 0}",
 			dbName: "db1",
 			key:    "key1",
 			version: &types.Version{
-				BlockNum: 2,
-				TxNum:    1,
+				BlockNum: 3,
+				TxNum:    0,
 			},
 			expectedPayload: &types.GetHistoricalDataResponse{
 				Values: []*types.ValueWithMetadata{
@@ -536,12 +494,12 @@ func TestGetNextValues(t *testing.T) {
 		expectedPayload *types.GetHistoricalDataResponse
 	}{
 		{
-			name:   "fetch next value of key1 at version {Blk 2, txNum 1}",
+			name:   "fetch next value of key1 at version {Blk 2, txNum 0}",
 			dbName: "db1",
 			key:    "key1",
 			version: &types.Version{
 				BlockNum: 2,
-				TxNum:    1,
+				TxNum:    0,
 			},
 			expectedPayload: &types.GetHistoricalDataResponse{
 				Values: []*types.ValueWithMetadata{
@@ -608,17 +566,17 @@ func TestGetValueAt(t *testing.T) {
 			dbName: "db1",
 			key:    "key1",
 			version: &types.Version{
-				BlockNum: 2,
-				TxNum:    1,
+				BlockNum: 3,
+				TxNum:    0,
 			},
 			expectedPayload: &types.GetHistoricalDataResponse{
 				Values: []*types.ValueWithMetadata{
 					{
-						Value: []byte("value3"),
+						Value: []byte("value4"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
-								BlockNum: 2,
-								TxNum:    1,
+								BlockNum: 3,
+								TxNum:    0,
 							},
 						},
 					},
@@ -673,11 +631,11 @@ func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 			expectedPayload: &types.GetHistoricalDataResponse{
 				Values: []*types.ValueWithMetadata{
 					{
-						Value: []byte("value3"),
+						Value: []byte("value2"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
 								BlockNum: 2,
-								TxNum:    1,
+								TxNum:    0,
 							},
 						},
 					},
@@ -770,7 +728,7 @@ func TestGetWriters(t *testing.T) {
 			expectedPayload: &types.GetDataWritersResponse{
 				WrittenBy: map[string]uint32{
 					"user1": 2,
-					"user2": 3,
+					"user2": 2,
 				},
 			},
 		},
@@ -988,7 +946,7 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 			name: "fetch tx submitted by user",
 			user: "user2",
 			expectedPayload: &types.GetTxIDsSubmittedByResponse{
-				TxIDs: []string{"tx4", "tx5", "tx50", "tx6"},
+				TxIDs: []string{"tx5", "tx50", "tx6"},
 			},
 		},
 		{
