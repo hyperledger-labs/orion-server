@@ -81,15 +81,14 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	cayleyTx := graph.NewTransaction()
-
-	for index, tx := range txsData {
-		loc, err := json.Marshal(&TxIDLocation{blockNum, index})
+	batch := graph.NewWriter(s.cayleyGraph.QuadWriter)
+	for txNum, tx := range txsData {
+		loc, err := json.Marshal(&TxIDLocation{blockNum, txNum})
 		if err != nil {
 			return errors.WithMessage(err, "error while marshaling txID location")
 		}
 		s.logger.Debugf("loc[%s]]---(includes)--->txID[%s]", loc, tx.TxID)
-		cayleyTx.AddQuad(quad.Make(string(loc), INCLUDES, tx.TxID, ""))
+		batch.WriteQuad(quad.Make(string(loc), INCLUDES, tx.TxID, ""))
 
 		if !tx.IsValid {
 			s.logger.Debugf("as txID [%s] is invalid, we created vertex and edge to represent only the relation [location--(includes)-->txID]", tx.TxID)
@@ -98,25 +97,25 @@ func (s *Store) Commit(blockNum uint64, txsData []*TxDataForProvenance) error {
 		}
 
 		s.logger.Debugf("userID[%s]---(submitted)--->txID[%s]", tx.UserID, tx.TxID)
-		cayleyTx.AddQuad(quad.Make(tx.UserID, SUBMITTED, tx.TxID, ""))
+		batch.WriteQuad(quad.Make(tx.UserID, SUBMITTED, tx.TxID, ""))
 
-		if err := s.addReads(tx, cayleyTx); err != nil {
+		if err := s.addReads(tx, batch); err != nil {
 			return err
 		}
 
-		if err := s.addWrites(tx, cayleyTx); err != nil {
+		if err := s.addWrites(tx, batch); err != nil {
 			return err
 		}
 
-		if err := s.addDeletes(tx, cayleyTx); err != nil {
+		if err := s.addDeletes(tx, batch); err != nil {
 			return err
 		}
 	}
 
-	return s.cayleyGraph.ApplyTransaction(cayleyTx)
+	return batch.Close()
 }
 
-func (s *Store) addReads(tx *TxDataForProvenance, cayleyTx *graph.Transaction) error {
+func (s *Store) addReads(tx *TxDataForProvenance, batch graph.BatchWriter) error {
 	for _, read := range tx.Reads {
 		value, err := s.getValueVertex(tx.DBName, read.Key, read.Version)
 		if err != nil {
@@ -124,13 +123,13 @@ func (s *Store) addReads(tx *TxDataForProvenance, cayleyTx *graph.Transaction) e
 		}
 
 		s.logger.Debugf("txID[%s]---(reads)--->value[%s]", tx.TxID, quad.NativeOf(value))
-		cayleyTx.AddQuad(quad.Make(tx.TxID, READS, value, ""))
+		batch.WriteQuad(quad.Make(tx.TxID, READS, value, ""))
 	}
 
 	return nil
 }
 
-func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction) error {
+func (s *Store) addWrites(tx *TxDataForProvenance, batch graph.BatchWriter) error {
 	for _, write := range tx.Writes {
 		actualKey := write.Key
 		write.Key = constructCompositeKey(tx.DBName, write.Key)
@@ -144,10 +143,10 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction) 
 			return err
 		}
 		s.logger.Debugf("key[%s]---(version[%s])--->value[%s]", write.Key, string(newVersion), string(newValue))
-		cayleyTx.AddQuad(quad.Make(write.Key, string(newVersion), string(newValue), ""))
+		batch.WriteQuad(quad.Make(write.Key, string(newVersion), string(newValue), ""))
 
 		s.logger.Debugf("txID[%s]---(writes)--->value[%s]", tx.TxID, string(newValue))
-		cayleyTx.AddQuad(quad.Make(tx.TxID, WRITES, string(newValue), ""))
+		batch.WriteQuad(quad.Make(tx.TxID, WRITES, string(newValue), ""))
 
 		oldVersion, ok := tx.OldVersionOfWrites[actualKey]
 		if !ok {
@@ -177,16 +176,16 @@ func (s *Store) addWrites(tx *TxDataForProvenance, cayleyTx *graph.Transaction) 
 		}
 
 		s.logger.Debugf("oldValue[%s]<---(previous)---newValue[%s]", quad.NativeOf(oldValue), string(newValue))
-		cayleyTx.AddQuad(quad.Make(string(newValue), PREVIOUS, oldValue, ""))
+		batch.WriteQuad(quad.Make(string(newValue), PREVIOUS, oldValue, ""))
 
 		s.logger.Debugf("oldValue[%s]---(next)--->newValue[%s]", quad.NativeOf(oldValue), string(newValue))
-		cayleyTx.AddQuad(quad.Make(oldValue, NEXT, string(newValue), ""))
+		batch.WriteQuad(quad.Make(oldValue, NEXT, string(newValue), ""))
 	}
 
 	return nil
 }
 
-func (s *Store) addDeletes(tx *TxDataForProvenance, cayleyTx *graph.Transaction) error {
+func (s *Store) addDeletes(tx *TxDataForProvenance, batch graph.BatchWriter) error {
 	for k, v := range tx.Deletes {
 		s.logger.Debugf("fetch value of key [%s] at version (%d, %d)", k, v.BlockNum, v.TxNum)
 		value, err := s.getValueVertex(tx.DBName, k, v)
@@ -199,7 +198,7 @@ func (s *Store) addDeletes(tx *TxDataForProvenance, cayleyTx *graph.Transaction)
 			continue
 		}
 		s.logger.Debugf("txID[%s]---(deletes)--->value[%s]", tx.TxID, quad.NativeOf(value))
-		cayleyTx.AddQuad(quad.Make(tx.TxID, DELETES, value, ""))
+		batch.WriteQuad(quad.Make(tx.TxID, DELETES, value, ""))
 	}
 	return nil
 }
