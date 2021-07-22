@@ -45,23 +45,22 @@ type txProcessorTestEnv struct {
 }
 
 func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configurations) *txProcessorTestEnv {
-	dir, err := ioutil.TempDir("/tmp", "transactionProcessor")
-	require.NoError(t, err)
+	dir := conf.LocalConfig.Server.Database.LedgerDirectory
 
 	c := &logger.Config{
-		Level:         "debug",
+		Level:         "info",
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
 	}
-	logger, err := logger.New(c)
+	lg, err := logger.New(c)
 	require.NoError(t, err)
 
 	dbPath := constructWorldStatePath(dir)
 	db, err := leveldb.Open(
 		&leveldb.Config{
 			DBRootDir: dbPath,
-			Logger:    logger,
+			Logger:    lg,
 		},
 	)
 	if err != nil {
@@ -75,7 +74,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 	blockStore, err := blockstore.Open(
 		&blockstore.Config{
 			StoreDir: blockStorePath,
-			Logger:   logger,
+			Logger:   lg,
 		},
 	)
 	if err != nil {
@@ -89,7 +88,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 	provenanceStore, err := provenance.Open(
 		&provenance.Config{
 			StoreDir: provenanceStorePath,
-			Logger:   logger,
+			Logger:   lg,
 		},
 	)
 
@@ -103,7 +102,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 	stateTrieStore, err := mptrieStore.Open(
 		&mptrieStore.Config{
 			StoreDir: constructStateTrieStorePath(dir),
-			Logger:   logger,
+			Logger:   lg,
 		},
 	)
 
@@ -122,7 +121,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 		blockStore:      blockStore,
 		provenanceStore: provenanceStore,
 		stateTrieStore:  stateTrieStore,
-		logger:          logger,
+		logger:          lg,
 	}
 	txProcessor, err := newTransactionProcessor(txProcConf)
 	require.NoError(t, err)
@@ -152,6 +151,8 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 			t.Fatalf("error while removing directory %s, %v", dir, err)
 		}
 	}
+
+	require.Eventually(t, func() bool { return txProcessor.IsLeader() == nil }, 30*time.Second, 100*time.Millisecond)
 
 	return &txProcessorTestEnv{
 		dbPath:         dbPath,
@@ -210,12 +211,11 @@ func setupTxProcessor(t *testing.T, env *txProcessorTestEnv, dbName string) {
 func TestTransactionProcessor(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir, conf := testConfiguration(t)
-	require.NotEqual(t, "", cryptoDir)
-	defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
-
 	t.Run("commit a data transaction asynchronously", func(t *testing.T) {
 		t.Parallel()
+		cryptoDir, conf := testConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -313,7 +313,10 @@ func TestTransactionProcessor(t *testing.T) {
 
 		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
-		require.True(t, proto.Equal(expectedBlock, block))
+		require.True(t, block.GetConsensusMetadata().GetRaftTerm() > 0)
+		require.True(t, block.GetConsensusMetadata().GetRaftIndex() > 0)
+		block.ConsensusMetadata = nil
+		require.True(t, proto.Equal(expectedBlock, block), "expected: %+v, actual: %+v", expectedBlock, block)
 
 		noPendingTxs := func() bool {
 			return env.txProcessor.pendingTxs.isEmpty()
@@ -323,6 +326,9 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("commit a data transaction synchronously", func(t *testing.T) {
 		t.Parallel()
+		cryptoDir, conf := testConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -399,6 +405,9 @@ func TestTransactionProcessor(t *testing.T) {
 		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
 		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
+		require.True(t, block.GetConsensusMetadata().GetRaftTerm() > 0)
+		require.True(t, block.GetConsensusMetadata().GetRaftIndex() > 0)
+		block.ConsensusMetadata = nil
 		require.True(t, proto.Equal(expectedBlock, block))
 
 		expectedRespPayload := &types.TxReceiptResponse{
@@ -425,6 +434,9 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with the already committed transaction", func(t *testing.T) {
 		t.Parallel()
+		cryptoDir, conf := testConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -459,6 +471,9 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
 		t.Parallel()
+		cryptoDir, conf := testConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -497,6 +512,9 @@ func TestTransactionProcessor(t *testing.T) {
 
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
 		t.Parallel()
+		cryptoDir, conf := testConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -618,6 +636,10 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 				MaxTransactionCountPerBlock: 1,
 				BlockTimeout:                50 * time.Millisecond,
 			},
+			Replication: config.ReplicationConf{
+				WALDir:  path.Join(ledgerDir, "raft", "wal"),
+				SnapDir: path.Join(ledgerDir, "raft", "snap"),
+			},
 		},
 		SharedConfig: &config.SharedConfiguration{
 			Nodes: []config.NodeConf{
@@ -642,7 +664,7 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 					TickInterval:         "100ms",
 					ElectionTicks:        100,
 					HeartbeatTicks:       10,
-					MaxInflightBlocks:    50,
+					MaxInflightBlocks:    10,
 					SnapshotIntervalSize: math.MaxUint64,
 				},
 			},

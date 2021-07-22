@@ -84,7 +84,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	blockQueue := queue.New(10) // Output: accumulates the blocks that are submitted to the Replicator.
 	mockReplicator := &mocks.Replicator{}
 	mockReplicator.SubmitCalls(
-		func(block interface{}) error {
+		func(block *types.Block) error {
 			blockQueue.Enqueue(block)
 			return nil
 		},

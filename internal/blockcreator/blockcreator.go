@@ -15,7 +15,7 @@ import (
 
 // Replicator is the input to the block replication layer.
 type Replicator interface {
-	Submit(block interface{}) error
+	Submit(block *types.Block) error
 }
 
 // BlockCreator uses transactions batch queue to construct the

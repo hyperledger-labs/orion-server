@@ -51,13 +51,13 @@ func (c *ClosedError) Error() string {
 // NotLeaderError is an error that denotes that the current node is not the cluster leader.
 // The error carries the identity of the leader if it is known (>0), or 0 if it is not.
 type NotLeaderError struct {
-	LeaderID int
+	LeaderID uint64
 }
 
 func (n *NotLeaderError) Error() string {
 	return fmt.Sprintf("not a leader, leader is: %d", n.LeaderID)
 }
 
-func (n *NotLeaderError) GetLeaderID() int {
+func (n *NotLeaderError) GetLeaderID() uint64 {
 	return n.LeaderID
 }

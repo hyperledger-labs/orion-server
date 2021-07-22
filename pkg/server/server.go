@@ -4,6 +4,7 @@ package server
 
 import (
 	"fmt"
+	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"net"
 	"net/http"
 
@@ -124,4 +125,8 @@ func (s *BCDBHTTPServer) Stop() error {
 func (s *BCDBHTTPServer) Port() (port string, err error) {
 	_, port, err = net.SplitHostPort(s.listen.Addr().String())
 	return
+}
+
+func (s *BCDBHTTPServer) IsLeader() *ierrors.NotLeaderError {
+	return s.db.IsLeader()
 }

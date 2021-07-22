@@ -77,7 +77,7 @@ func (p *HTTPTransport) SetConsensusListener(l ConsensusListener) error {
 	return nil
 }
 
-//TODO dynamic re-config
+//TODO implement dynamic re-config, currently it can only be updated once.
 func (p *HTTPTransport) UpdateClusterConfig(clusterConfig *types.ClusterConfig) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -86,20 +86,12 @@ func (p *HTTPTransport) UpdateClusterConfig(clusterConfig *types.ClusterConfig) 
 		return errors.New("dynamic re-config of http transport is not supported yet")
 	}
 
-	//TODO export to a config util
-	var foundRaftID bool
-	for _, member := range clusterConfig.ConsensusConfig.Members {
-		if member.NodeId == p.localConf.Server.Identity.ID {
-			p.raftID = member.RaftId
-			foundRaftID = true
-			break
-		}
-	}
-	if !foundRaftID {
-		return errors.Errorf("local NodeID '%s' is not in Consensus members: %v",
-			p.localConf.Server.Identity.ID, clusterConfig.ConsensusConfig.Members)
+	raftID, err := MemberRaftID(p.localConf.Server.Identity.ID, clusterConfig)
+	if err != nil {
+		return err
 	}
 
+	p.raftID = raftID
 	p.clusterConfig = clusterConfig
 
 	return nil
@@ -188,4 +180,14 @@ func (p *HTTPTransport) SendConsensus(msgs []raftpb.Message) error {
 	p.transport.Send(msgs)
 
 	return nil
+}
+
+func MemberRaftID(memberID string, clusterConfig *types.ClusterConfig) (uint64, error) {
+	for _, member := range clusterConfig.ConsensusConfig.Members {
+		if member.NodeId == memberID {
+			return member.RaftId, nil
+		}
+	}
+
+	return 0, errors.Errorf("node ID '%s' is not in Consensus members: %v", memberID, clusterConfig.ConsensusConfig.Members)
 }

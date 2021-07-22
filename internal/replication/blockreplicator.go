@@ -5,8 +5,10 @@ package replication
 
 import (
 	"context"
-	"errors"
+	"github.com/golang/protobuf/proto"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
@@ -14,111 +16,371 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/wal"
 )
 
+type BlockLedgerReader interface {
+	Height() (uint64, error)
+	Get(blockNumber uint64) (*types.Block, error)
+}
+
 type BlockReplicator struct {
-	localConf       *config.LocalConfiguration
-	raftCh          chan interface{}       // TODO a placeholder for the Raft pipeline
+	localConf *config.LocalConfiguration
+
+	proposeCh       chan *types.Block
+	raftID          uint64
+	raftStorage     *RaftStorage
+	raftNode        raft.Node
 	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver  with the block-processor commit
 	transport       *comm.HTTPTransport
+	ledgerReader    BlockLedgerReader
 
-	stopCh   chan struct{}
-	stopOnce sync.Once
-	doneCh   chan struct{}
+	stopCh        chan struct{}
+	stopOnce      sync.Once
+	doneProposeCh chan struct{}
+	doneEventCh   chan struct{}
 
-	mutex         sync.Mutex
-	clusterConfig *types.ClusterConfig
+	mutex           sync.Mutex
+	clusterConfig   *types.ClusterConfig
+	lastKnownLeader uint64
+	appliedIndex    uint64
 
-	logger *logger.SugarLogger
+	lg *logger.SugarLogger
 }
 
 // Config holds the configuration information required to initialize the block replicator.
 type Config struct {
-	//TODO just a skeleton
 	LocalConf            *config.LocalConfiguration
 	ClusterConfig        *types.ClusterConfig
+	LedgerReader         BlockLedgerReader
 	Transport            *comm.HTTPTransport
 	BlockOneQueueBarrier *queue.OneQueueBarrier
 	Logger               *logger.SugarLogger
 }
 
 // NewBlockReplicator creates a new BlockReplicator.
-func NewBlockReplicator(conf *Config) *BlockReplicator {
-	//TODO just a skeleton
+func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
+	raftID, err := comm.MemberRaftID(conf.LocalConf.Server.Identity.ID, conf.ClusterConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	lg := conf.Logger.With("nodeID", conf.LocalConf.Server.Identity.ID, "raftID", raftID)
+
+	haveWAL := wal.Exist(conf.LocalConf.Replication.WALDir)
+	storage, err := CreateStorage(lg, conf.LocalConf.Replication.WALDir, conf.LocalConf.Replication.SnapDir)
+	if err != nil {
+		return nil, errors.Errorf("failed to restore persisted raft data: %s", err)
+	}
 
 	br := &BlockReplicator{
 		localConf:       conf.LocalConf,
-		raftCh:          make(chan interface{}, 10), // TODO a placeholder for the Raft pipeline
+		proposeCh:       make(chan *types.Block, 1),
+		raftID:          raftID,
+		raftStorage:     storage,
 		oneQueueBarrier: conf.BlockOneQueueBarrier,
 		stopCh:          make(chan struct{}),
-		doneCh:          make(chan struct{}),
+		doneProposeCh:   make(chan struct{}),
+		doneEventCh:     make(chan struct{}),
 		clusterConfig:   conf.ClusterConfig,
 		transport:       conf.Transport,
-		logger:          conf.Logger,
+		ledgerReader:    conf.LedgerReader,
+		lg:              lg,
 	}
 
-	return br
+	height, err := br.ledgerReader.Height()
+	if err != nil {
+		br.lg.Panic("Failed to read block height")
+	}
+
+	if height > 1 {
+		lastBlock, err := br.ledgerReader.Get(height)
+		if err != nil {
+			br.lg.Panic("Failed to read last block")
+		}
+		br.appliedIndex = lastBlock.GetConsensusMetadata().GetRaftIndex()
+		br.lg.Debugf("last block [%d], consensus metadata: %+v",
+			lastBlock.GetHeader().GetBaseHeader().GetNumber(), lastBlock.GetConsensusMetadata())
+	}
+
+	//TODO DO NOT use Applied option in config, we need to guard against replay of written blocks with `appliedIndex` instead.
+	config := &raft.Config{
+		ID:              raftID,
+		ElectionTick:    int(br.clusterConfig.ConsensusConfig.RaftConfig.ElectionTicks),
+		HeartbeatTick:   int(br.clusterConfig.ConsensusConfig.RaftConfig.HeartbeatTicks),
+		MaxSizePerMsg:   br.localConf.BlockCreation.MaxBlockSize,
+		MaxInflightMsgs: int(br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks),
+		Logger:          lg,
+		Storage:         br.raftStorage.MemoryStorage,
+		// PreVote prevents reconnected node from disturbing network.
+		// See etcd/raft doc for more details.
+		PreVote:                   true,
+		CheckQuorum:               true,
+		DisableProposalForwarding: true, // This prevents blocks from being accidentally proposed by followers
+	}
+
+	lg.Infof("haveWAL: %v, Storage: %v, Raft config: %+v", haveWAL, storage, config) //TODO remove
+
+	joinExistingCluster := false // TODO support node join to an existing cluster
+
+	if haveWAL {
+		br.raftNode = raft.RestartNode(config)
+	} else {
+		if joinExistingCluster {
+			// TODO support node join to an existing cluster
+			br.lg.Panicf("not supported yet: joinExistingCluster")
+		} else {
+			startPeers := raftPeers(br.clusterConfig)
+			br.raftNode = raft.StartNode(config, startPeers)
+		}
+	}
+
+	return br, nil
+}
+
+func (br *BlockReplicator) RaftID() uint64 {
+	return br.raftID
 }
 
 // Submit a block for replication.
 //
-// Submit may block if the replication input queue is full.
+// This call may block if the replication input queue is full.
 // Returns an error if the current node is not a leader.
 // Returns an error if the component is already closed.
-func (br *BlockReplicator) Submit(block interface{}) error {
-	//TODO just a skeleton
+func (br *BlockReplicator) Submit(block *types.Block) error {
+	blockNum := block.GetHeader().GetBaseHeader().GetNumber()
+	if err := br.IsLeader(); err != nil {
+		br.lg.Debugf("Submit of block [%d] refused, not a leader: %s", blockNum, err)
+		return err
+	}
 
 	select {
 	case <-br.stopCh:
 		return &ierrors.ClosedError{ErrMsg: "block replicator closed"}
-	case br.raftCh <- block: // TODO a placeholder for the Raft pipeline
+	case br.proposeCh <- block:
+		br.lg.Debugf("Submitted block [%d]", blockNum)
 		return nil
 	}
 }
 
 // Start an internal go-routine to serve the main replication loop.
 func (br *BlockReplicator) Start() {
-	readyCh := make(chan struct{})
-	go br.run(readyCh)
-	<-readyCh
+	readyRaftCh := make(chan struct{})
+	go br.runRaftEventLoop(readyRaftCh)
+	<-readyRaftCh
+
+	readyProposeCh := make(chan struct{})
+	go br.runProposeLoop(readyProposeCh)
+	<-readyProposeCh
 }
 
-func (br *BlockReplicator) run(readyCh chan<- struct{}) {
-	defer close(br.doneCh)
+func (br *BlockReplicator) runRaftEventLoop(readyCh chan<- struct{}) {
+	defer close(br.doneEventCh)
 
-	br.logger.Info("Starting the block replicator")
+	br.lg.Info("Starting the block replicator event loop")
 	close(readyCh)
 
-Replicator_Loop:
+	// TODO use 'clock.Clock' so that tests can inject a fake clock
+	tickInterval, err := time.ParseDuration(br.clusterConfig.ConsensusConfig.RaftConfig.TickInterval)
+	if err != nil {
+		br.lg.Panicf("Error parsing raft tick interval duration: %s", err)
+	}
+	raftTicker := time.NewTicker(tickInterval)
+	electionTimeout := tickInterval.Seconds() * float64(br.clusterConfig.ConsensusConfig.RaftConfig.ElectionTicks)
+	halfElectionTimeout := electionTimeout / 2
+
+	if s := br.raftStorage.Snapshot(); !raft.IsEmptySnap(s) {
+		//TODO support snapshots
+		br.lg.Panicf("Snapshots not supported yet (start): %+v", s)
+	}
+
+	// TODO proactive campaign to speed up leader election on a new cluster
+
+	var raftStatusStr string
+Event_Loop:
 	for {
 		select {
-		case <-br.stopCh:
-			br.logger.Info("Stopping block replicator")
-			return
+		case <-raftTicker.C:
+			if status := br.raftNode.Status().String(); status != raftStatusStr {
+				br.lg.Debugf("Raft node status: %+v", status)
+				raftStatusStr = status
+			}
+			br.raftNode.Tick()
 
-		case blockToCommit := <-br.raftCh:
-			// Enqueue the block for the block-processor to commit, wait for a reply.
-			// Once a reply is received, the block is safely committed.
-			reConfig, err := br.oneQueueBarrier.EnqueueWait(blockToCommit)
-			if err != nil {
-				br.logger.Errorf("queue barrier error: %s, stopping block replicator", err.Error())
-				break Replicator_Loop
+		case rd := <-br.raftNode.Ready():
+			startStoring := time.Now()
+			if err := br.raftStorage.Store(rd.Entries, rd.HardState, rd.Snapshot); err != nil {
+				br.lg.Panicf("Failed to persist etcd/raft data: %s", err)
+			}
+			duration := time.Since(startStoring).Seconds()
+			if duration > halfElectionTimeout {
+				br.lg.Warningf("WAL sync took %v seconds and the network is configured to start elections after %v seconds. Your disk is too slow and may cause loss of quorum and trigger leadership election.", duration, electionTimeout)
 			}
 
-			// A non-nil reply is an indication that the last block was a valid config that applies
-			// to the replication component.
-			if reConfig != nil {
-				clusterConfig := reConfig.(*types.ClusterConfig)
-				if err = br.updateClusterConfig(clusterConfig); err != nil {
-					br.logger.Panicf("Failed to update ClusterConfig: %s", err)
+			if !raft.IsEmptySnap(rd.Snapshot) {
+				//TODO support snapshots
+				br.lg.Panicf("Snapshots not supported yet (loop): %+v", rd.Snapshot)
+			}
+
+			br.transport.SendConsensus(rd.Messages)
+
+			if ok := br.deliverEntries(rd.CommittedEntries); !ok {
+				br.lg.Warningf("Failed to deliver committed entries, breaking out of event loop")
+				break Event_Loop
+			}
+
+			if rd.SoftState != nil {
+				leader := atomic.LoadUint64(&rd.SoftState.Lead) // etcdraft requires atomic access to this var
+				if leader != raft.None {
+					br.lg.Debugf("Leader %d is present", leader)
+				} else {
+					br.lg.Debug("No leader")
 				}
+
+				br.mutex.Lock()
+				if leader != br.lastKnownLeader {
+					br.lg.Infof("Leader changed: %d to %d", br.lastKnownLeader, leader)
+					br.lastKnownLeader = leader
+				}
+				br.mutex.Unlock()
 			}
+
+			br.raftNode.Advance()
+
+		case <-br.stopCh:
+			br.lg.Info("Stopping block replicator")
+			break Event_Loop
 		}
 	}
 
-	br.logger.Info("Exiting the block replicator")
+	raftTicker.Stop()
+	br.raftNode.Stop()
+	if err := br.raftStorage.Close(); err != nil {
+		br.lg.Errorf("Error while stopping RaftStorage: %s", err) // TODO move to raft main loop
+	}
+
+	br.lg.Info("Exiting block replicator event loop")
+}
+
+func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool {
+	br.lg.Debugf("Num. entries: %d", len(committedEntries))
+	if len(committedEntries) == 0 {
+		return true
+	}
+
+	if committedEntries[0].Index > br.appliedIndex+1 {
+		br.lg.Panicf("First index of committed entry [%d] should <= appliedIndex [%d]+1", committedEntries[0].Index, br.appliedIndex)
+	}
+
+	for i := range committedEntries {
+		br.lg.Debugf("processing commited entry [%d]: %s", i, raftEntryString(committedEntries[i]))
+
+		switch committedEntries[i].Type {
+		case raftpb.EntryNormal:
+			if len(committedEntries[i].Data) == 0 {
+				br.lg.Debugf("commited entry [%d] has empty data, ignoring", i)
+				break
+			}
+
+			// We need to strictly avoid re-applying normal entries,
+			// otherwise we are writing the same block twice.
+			if committedEntries[i].Index <= br.appliedIndex {
+				br.lg.Debugf("Received block with raft index (%d) <= applied index (%d), skip", committedEntries[i].Index, br.appliedIndex)
+				break
+			}
+
+			var block = &types.Block{}
+			if err := proto.Unmarshal(committedEntries[i].Data, block); err != nil {
+				br.lg.Panicf("Error unmarshaling entry [#%d], entry: %+v, error: %s", i, committedEntries[i], err)
+			}
+			block.ConsensusMetadata = &types.ConsensusMetadata{
+				RaftTerm:  committedEntries[i].Term,
+				RaftIndex: committedEntries[i].Index,
+			}
+
+			br.lg.Debugf("enqueue for commit block [%d] ", block.GetHeader().GetBaseHeader().GetNumber())
+			reConfig, err := br.oneQueueBarrier.EnqueueWait(block)
+			if err != nil {
+				br.lg.Errorf("queue barrier error: %s, stopping block replicator", err.Error())
+				return false
+			}
+
+			if reConfig != nil {
+				// TODO support reconfig
+				br.lg.Panic("Unexpected update to ClusterConfig during normal entry")
+			}
+
+		case raftpb.EntryConfChange:
+			// TODO support reconfig
+			var cc raftpb.ConfChange
+			if err := cc.Unmarshal(committedEntries[i].Data); err != nil {
+				br.lg.Warnf("Failed to unmarshal ConfChange data: %s", err)
+				continue
+			}
+
+			confState := *br.raftNode.ApplyConfChange(cc)
+
+			switch cc.Type {
+			case raftpb.ConfChangeAddNode:
+				br.lg.Infof("Applied config change to add node %d, current nodes in cluster: %+v", cc.NodeID, confState.Voters)
+			case raftpb.ConfChangeRemoveNode:
+				br.lg.Infof("Applied config change to remove node %d, current nodes in cluster: %+v", cc.NodeID, confState.Voters)
+			default:
+				br.lg.Panic("Programming error, encountered unsupported raft config change")
+			}
+
+			// TODO configure transport
+
+			// TODO detect removal of leader
+
+			// TODO detect removal of self
+		}
+
+		// after commit, update appliedIndex
+		if br.appliedIndex < committedEntries[i].Index {
+			br.appliedIndex = committedEntries[i].Index
+		}
+	}
+
+	// TODO trigger snapshot if storage size exceeds the limit
+
+	return true
+}
+
+func (br *BlockReplicator) runProposeLoop(readyCh chan<- struct{}) {
+	defer close(br.doneProposeCh)
+
+	br.lg.Info("Starting the block replicator propose loop")
+	close(readyCh)
+
+Propose_Loop:
+	for {
+		select {
+		case blockToPropose := <-br.proposeCh:
+
+			//TODO check if leader, if not, refuse to propose
+
+			blockBytes, err := proto.Marshal(blockToPropose)
+			if err != nil {
+				br.lg.Panicf("Error marshaling a block: %s", err)
+			}
+
+			err = br.raftNode.Propose(context.Background(), blockBytes)
+			if err != nil {
+				br.lg.Warnf("Failed to propose block: Num: %d; error: %s", blockToPropose.GetHeader().GetBaseHeader().GetNumber(), err)
+				//TODO reject all TXs in that block,
+			}
+
+		case <-br.stopCh:
+			br.lg.Debug("Stopping block replicator")
+			break Propose_Loop
+		}
+	}
+
+	br.lg.Info("Exiting the block replicator propose loop")
 }
 
 // Close signals the internal go-routine to stop and waits for it to exit.
@@ -126,20 +388,38 @@ Replicator_Loop:
 func (br *BlockReplicator) Close() (err error) {
 	err = &ierrors.ClosedError{ErrMsg: "block replicator already closed"}
 	br.stopOnce.Do(func() {
-		br.logger.Info("closing block replicator")
+		br.lg.Info("closing block replicator")
 		close(br.stopCh)
 		if errQB := br.oneQueueBarrier.Close(); errQB != nil {
-			br.logger.Debugf("OneQueueBarrier error: %s", errQB)
+			br.lg.Debugf("OneQueueBarrier error: %s", errQB)
 		}
-		<-br.doneCh
+		<-br.doneProposeCh
+		<-br.doneEventCh
+
+		//after the node stops, it no longer knows who the leader is
+		br.mutex.Lock()
+		defer br.mutex.Unlock()
+		br.lastKnownLeader = 0
+
 		err = nil
 	})
 
 	return err
 }
 
+func (br *BlockReplicator) IsLeader() *ierrors.NotLeaderError {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if br.lastKnownLeader == br.raftID {
+		return nil
+	}
+
+	return &ierrors.NotLeaderError{LeaderID: br.lastKnownLeader}
+}
+
 func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfig) error {
-	br.logger.Infof("New cluster config committed, going to apply to block replicator: %+v", clusterConfig)
+	br.lg.Infof("New cluster config committed, going to apply to block replicator: %+v", clusterConfig)
 
 	//TODO dynamic re-config, update transport config, etc
 
@@ -147,21 +427,29 @@ func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfi
 }
 
 func (br *BlockReplicator) Process(ctx context.Context, m raftpb.Message) error {
-	// see: rafthttp.RAFT
-	//TODO
-	return nil
+	br.lg.Debugf("Incoming raft message: %+v", m)
+	err := br.raftNode.Step(ctx, m)
+	if err != nil {
+		br.lg.Errorf("Error during raft node Step: %s", err)
+	}
+	return err
 }
 
 func (br *BlockReplicator) IsIDRemoved(id uint64) bool {
+	br.lg.Debugf("> IsIDRemoved: %d", id)
 	// see: rafthttp.RAFT
-	//TODO
+
+	//TODO look into the cluster config and check whether this RaftID was removed.
+	// removed RaftIDs may never return.
+	// see issue: https://github.com/ibm-blockchain/bcdb-server/issues/40
 	return false
 }
 func (br *BlockReplicator) ReportUnreachable(id uint64) {
-	// see: rafthttp.RAFT
-	//TODO
+	br.lg.Debugf("ReportUnreachable: %d", id)
+	br.raftNode.ReportUnreachable(id)
 }
 func (br *BlockReplicator) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
+	br.lg.Debugf("> ReportSnapshot: %d, %+v", id, status)
 	// see: rafthttp.RAFT
-	//TODO
+	//TODO see issue: https://github.com/ibm-blockchain/bcdb-server/issues/41
 }
