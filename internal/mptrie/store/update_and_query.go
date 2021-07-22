@@ -118,7 +118,6 @@ func (s *Store) PersistNode(nodePtr []byte) (bool, error) {
 	nodeBytesWithType, ok := s.inMemoryNodes[key]
 	if ok {
 		s.nodesToPersist[key] = nodeBytesWithType
-		delete(s.inMemoryNodes, key)
 		return true, nil
 	}
 	return false, nil
@@ -131,7 +130,6 @@ func (s *Store) PersistValue(valuePtr []byte) (bool, error) {
 	valueBytes, ok := s.inMemoryValues[key]
 	if ok {
 		s.valuesToPersist[key] = valueBytes
-		delete(s.inMemoryValues, key)
 		return true, nil
 	}
 	return false, nil
