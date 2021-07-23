@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
@@ -114,15 +115,42 @@ func (s *Store) appendBlock(number uint64, content []byte) (*BlockLocation, erro
 }
 
 func (s *Store) storeMetadataInDB(block *types.Block, location *BlockLocation) error {
-	if err := s.storeIndexForBlock(block.Header.BaseHeader.Number, location); err != nil {
-		return err
-	}
+	// we can commit to metadata DBs in any order. If the node fails, partial update to
+	// metadata DBs is recovered by the recovery logic implemented in recover() when the
+	// the node is restarted.
+	var wg sync.WaitGroup
+	errC := make(chan error, 3)
+	wg.Add(3)
 
-	if err := s.storeBlockValidationInfo(block); err != nil {
-		return err
-	}
+	go func() {
+		defer wg.Done()
+		if err := s.storeIndexForBlock(block.Header.BaseHeader.Number, location); err != nil {
+			errC <- err
+		}
+	}()
 
-	return s.storeBlockHeaders(block.Header)
+	go func() {
+		defer wg.Done()
+		if err := s.storeBlockValidationInfo(block); err != nil {
+			errC <- err
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if err := s.storeBlockHeaders(block.Header); err != nil {
+			errC <- err
+		}
+	}()
+
+	wg.Wait()
+
+	select {
+	case err := <-errC:
+		return err
+	default:
+		return nil
+	}
 }
 
 func (s *Store) storeIndexForBlock(number uint64, location *BlockLocation) error {
@@ -240,46 +268,13 @@ func (s *Store) storeBlockHeaders(header *types.BlockHeader) error {
 		return errors.Wrapf(err, "can't calculate block hash {%d, %v}", number, header)
 	}
 
-	if err = s.blockHeaderDB.Put(
-		constructHeaderBaseHashKey(number),
-		blockHeaderBaseHash,
-		&opt.WriteOptions{
-			Sync: true,
-		},
-	); err != nil {
-		return errors.Wrapf(err, "can't create block base header hash index {%d, %v}", number, header)
-	}
+	batch := &leveldb.Batch{}
+	batch.Put(constructHeaderBaseHashKey(number), blockHeaderBaseHash)
+	batch.Put(constructHeaderHashKey(number), blockHash)
+	batch.Put(constructHeaderBytesKey(number), blockHeaderBytes)
+	batch.Put(constructHeaderHashIndexKey(blockHash), encodeOrderPreservingVarUint64(number))
 
-	if err = s.blockHeaderDB.Put(
-		constructHeaderHashKey(number),
-		blockHash,
-		&opt.WriteOptions{
-			Sync: true,
-		},
-	); err != nil {
-		return errors.Wrapf(err, "can't create block hash index {%d, %v}", number, header)
-	}
-
-	if err = s.blockHeaderDB.Put(
-		constructHeaderBytesKey(number),
-		blockHeaderBytes,
-		&opt.WriteOptions{
-			Sync: true,
-		},
-	); err != nil {
-		return errors.Wrapf(err, "can't create block hash index {%d, %v}", number, header)
-	}
-
-	if err = s.blockHeaderDB.Put(
-		constructHeaderHashIndexKey(blockHash),
-		encodeOrderPreservingVarUint64(number),
-		&opt.WriteOptions{
-			Sync: true,
-		},
-	); err != nil {
-		return errors.Wrapf(err, "can't create block header by hash index {%d, %v}", number, header)
-	}
-	return nil
+	return s.blockHeaderDB.Write(batch, &opt.WriteOptions{Sync: true})
 }
 
 // Height returns the height of the block store, i.e., the last committed block number
