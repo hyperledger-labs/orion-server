@@ -46,6 +46,8 @@ func New(c *Config) (*SugarLogger, error) {
 
 			CallerKey:    "caller",
 			EncodeCaller: zapcore.ShortCallerEncoder,
+
+			EncodeDuration: zapcore.StringDurationEncoder,
 		},
 	}
 
