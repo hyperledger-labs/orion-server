@@ -370,7 +370,6 @@ func createDataUpdatesFromBlock(block *types.Block) map[string]*worldstate.DBUpd
 }
 
 func TestGetBlock(t *testing.T) {
-	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
 	setup(t, env, 20)
@@ -449,7 +448,6 @@ func TestGetBlock(t *testing.T) {
 }
 
 func TestGetPath(t *testing.T) {
-	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
 	setup(t, env, 100)
@@ -544,7 +542,6 @@ func TestGetPath(t *testing.T) {
 }
 
 func TestGetTxProof(t *testing.T) {
-	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
 	setup(t, env, 100)
@@ -650,7 +647,6 @@ func TestGetTxProof(t *testing.T) {
 }
 
 func TestGetDataProof(t *testing.T) {
-	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
 	setup(t, env, 100)
@@ -758,7 +754,6 @@ func TestGetDataProof(t *testing.T) {
 }
 
 func TestGetTxReceipt(t *testing.T) {
-	t.Parallel()
 	env := newLedgerProcessorTestEnv(t)
 	defer env.cleanup(t)
 	setup(t, env, 20)

@@ -24,7 +24,7 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 	require.NoError(t, err)
 
 	c := &logger.Config{
-		Level:         "debug",
+		Level:         "info",
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
@@ -311,7 +311,6 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 }
 
 func TestGetValues(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -397,7 +396,6 @@ func TestGetValues(t *testing.T) {
 }
 
 func TestGetDeletedValues(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -456,7 +454,6 @@ func TestGetDeletedValues(t *testing.T) {
 }
 
 func TestGetPreviousValues(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -522,7 +519,6 @@ func TestGetPreviousValues(t *testing.T) {
 }
 
 func TestGetNextValues(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -590,7 +586,6 @@ func TestGetNextValues(t *testing.T) {
 }
 
 func TestGetValueAt(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -649,7 +644,6 @@ func TestGetValueAt(t *testing.T) {
 }
 
 func TestGetMostRecentValueAtOrBelow(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -708,7 +702,6 @@ func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 }
 
 func TestGetReaders(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -751,7 +744,6 @@ func TestGetReaders(t *testing.T) {
 }
 
 func TestGetWriters(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -793,7 +785,6 @@ func TestGetWriters(t *testing.T) {
 }
 
 func TestGetValuesReadByUser(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -841,7 +832,6 @@ func TestGetValuesReadByUser(t *testing.T) {
 }
 
 func TestGetValuesWrittenByUser(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -915,7 +905,6 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 }
 
 func TestGetValuesDeletedByUser(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
@@ -973,7 +962,6 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 }
 
 func TestGetTxSubmittedByUser(t *testing.T) {
-	t.Parallel()
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
