@@ -3,57 +3,60 @@ package store
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"errors"
 
-	"github.com/syndtr/goleveldb/leveldb"
-
 	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	"github.com/golang/protobuf/proto"
+	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 const (
-	Branch    = "B"
-	Extension = "E"
-	Value     = "V"
+	Branch    = 0x1
+	Extension = 0x2
+	Value     = 0x3
 )
 
 func (s *Store) GetNode(nodePtr []byte) (mptrie.TrieNode, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	key := base64.StdEncoding.EncodeToString(nodePtr)
-	nodeBytes, ok := s.inMemoryNodes[key]
+	storedNodeBytes, ok := s.inMemoryNodes[key]
 	if !ok {
-		nodeBytes, ok = s.nodesToPersist[key]
+		storedNodeBytes, ok = s.nodesToPersist[key]
 		if !ok {
-			storedNodeBytes, err := s.trieDataDB.Get(append(trieNodesNs, []byte(key)...), &opt.ReadOptions{})
+			var err error
+			storedNodeBytes, err = s.trieDataDB.Get(append(trieNodesNs, []byte(key)...), &opt.ReadOptions{})
 			if err != nil {
-				return nil, err
-			}
-			nodeBytes = &NodeBytesWithType{}
-			if err = json.Unmarshal(storedNodeBytes, nodeBytes); err != nil {
 				return nil, err
 			}
 		}
 	}
-	switch nodeBytes.NodeType {
+	nodeTypePrefix := storedNodeBytes[0]
+	switch nodeTypePrefix {
 	case Branch:
 		branchNode := &mptrie.BranchNode{
 			Children: make([][]byte, 16),
 		}
-		if err := json.Unmarshal(nodeBytes.NodeBytes, branchNode); err != nil {
+		if err := proto.Unmarshal(storedNodeBytes[1:], branchNode); err != nil {
 			return nil, err
+		}
+		// In array of byte slices (Children), proto.Unmarshal may convert nil to empty byte slice.
+		for i, c := range branchNode.Children {
+			if c != nil && len(c) == 0 {
+				branchNode.Children[i] = nil
+			}
 		}
 		return branchNode, nil
 	case Extension:
 		extensionNode := &mptrie.ExtensionNode{}
-		if err := json.Unmarshal(nodeBytes.NodeBytes, extensionNode); err != nil {
+		if err := proto.Unmarshal(storedNodeBytes[1:], extensionNode); err != nil {
 			return nil, err
 		}
 		return extensionNode, nil
 	case Value:
 		valueNode := &mptrie.ValueNode{}
-		if err := json.Unmarshal(nodeBytes.NodeBytes, valueNode); err != nil {
+		if err := proto.Unmarshal(storedNodeBytes[1:], valueNode); err != nil {
 			return nil, err
 		}
 		return valueNode, nil
@@ -84,20 +87,26 @@ func (s *Store) PutNode(nodePtr []byte, node mptrie.TrieNode) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := base64.StdEncoding.EncodeToString(nodePtr)
-	nodeBytes, err := json.Marshal(node)
-	if err != nil {
-		return err
-	}
-	nodeBytesWithType := &NodeBytesWithType{
-		NodeBytes: nodeBytes,
-	}
+	nodeBytesWithType := make([]byte, 0)
 	switch node.(type) {
 	case *mptrie.BranchNode:
-		nodeBytesWithType.NodeType = Branch
+		nodeBytes, err := proto.Marshal(node.(*mptrie.BranchNode))
+		if err != nil {
+			return err
+		}
+		nodeBytesWithType = append([]byte{Branch}, nodeBytes...)
 	case *mptrie.ExtensionNode:
-		nodeBytesWithType.NodeType = Extension
+		nodeBytes, err := proto.Marshal(node.(*mptrie.ExtensionNode))
+		if err != nil {
+			return err
+		}
+		nodeBytesWithType = append([]byte{Extension}, nodeBytes...)
 	case *mptrie.ValueNode:
-		nodeBytesWithType.NodeType = Value
+		nodeBytes, err := proto.Marshal(node.(*mptrie.ValueNode))
+		if err != nil {
+			return err
+		}
+		nodeBytesWithType = append([]byte{Value}, nodeBytes...)
 	}
 	s.inMemoryNodes[key] = nodeBytesWithType
 	return nil
@@ -160,18 +169,14 @@ func (s *Store) CommitChanges(blockNum uint64) error {
 	}
 
 	for k, n := range s.nodesToPersist {
-		nodeBytes, err := json.Marshal(n)
-		if err != nil {
-			return err
-		}
-		batch.Put(append(trieNodesNs, []byte(k)...), nodeBytes)
+		batch.Put(append(trieNodesNs, []byte(k)...), n)
 	}
 	if err := s.trieDataDB.Write(batch, &opt.WriteOptions{Sync: true}); err != nil {
 		return err
 	}
-	s.nodesToPersist = make(map[string]*NodeBytesWithType)
+	s.nodesToPersist = make(map[string][]byte)
 	s.valuesToPersist = make(map[string][]byte)
-	s.inMemoryNodes = make(map[string]*NodeBytesWithType)
+	s.inMemoryNodes = make(map[string][]byte)
 	s.inMemoryValues = make(map[string][]byte)
 	return nil
 }
@@ -180,9 +185,9 @@ func (s *Store) RollbackChanges() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.nodesToPersist = make(map[string]*NodeBytesWithType)
+	s.nodesToPersist = make(map[string][]byte)
 	s.valuesToPersist = make(map[string][]byte)
-	s.inMemoryNodes = make(map[string]*NodeBytesWithType)
+	s.inMemoryNodes = make(map[string][]byte)
 	s.inMemoryValues = make(map[string][]byte)
 	return nil
 }

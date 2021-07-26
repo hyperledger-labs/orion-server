@@ -5,15 +5,21 @@ package mptrie
 import (
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
 var keyNibbles = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"}
+
+const (
+	Branch    = 0x1
+	Extension = 0x2
+	Value     = 0x3
+)
 
 func TestNewTrie(t *testing.T) {
 	trie, err := NewTrie(nil, newMockStore())
@@ -838,9 +844,9 @@ func validateTrieStatistic(t *testing.T, trie *MPTrie, branchNodesNum, extension
 }
 
 type trieStoreMock struct {
-	inMemoryNodes  map[string]*nodeBytesWithType
+	inMemoryNodes  map[string][]byte
 	inMemoryValues map[string][]byte
-	persistNodes   map[string]*nodeBytesWithType
+	persistNodes   map[string][]byte
 	persistValues  map[string][]byte
 	lastBlock      uint64
 }
@@ -852,9 +858,9 @@ type nodeBytesWithType struct {
 
 func newMockStore() Store {
 	return &trieStoreMock{
-		inMemoryNodes:  make(map[string]*nodeBytesWithType),
+		inMemoryNodes:  make(map[string][]byte),
 		inMemoryValues: make(map[string][]byte),
-		persistNodes:   make(map[string]*nodeBytesWithType),
+		persistNodes:   make(map[string][]byte),
 		persistValues:  make(map[string][]byte),
 	}
 }
@@ -863,29 +869,39 @@ func (s *trieStoreMock) GetNode(nodePtr []byte) (TrieNode, error) {
 	key := base64.StdEncoding.EncodeToString(nodePtr)
 	nodeBytes, ok := s.persistNodes[key]
 	if !ok {
-		nodeBytes = s.inMemoryNodes[key]
+		nodeBytes, ok = s.inMemoryNodes[key]
+		if !ok {
+			return nil, errors.Errorf("Node with key %s not found", key)
+		}
 	}
 	var err error
-	switch nodeBytes.name {
-	case "branch":
+	nodeTypePrefix := nodeBytes[0]
+	switch nodeTypePrefix {
+	case Branch:
 		branchNode := &BranchNode{
 			Children: make([][]byte, 16),
 		}
-		err = json.Unmarshal(nodeBytes.nodeBytes, branchNode)
+		err = proto.Unmarshal(nodeBytes[1:], branchNode)
 		if err != nil {
 			return nil, err
 		}
-		return branchNode, nil
-	case "extension":
+		return cleanBranchNode(branchNode), nil
+	case Extension:
 		extensionNode := &ExtensionNode{}
-		err = json.Unmarshal(nodeBytes.nodeBytes, extensionNode)
+		err = proto.Unmarshal(nodeBytes[1:], extensionNode)
 		if err != nil {
 			return nil, err
+		}
+		if len(extensionNode.Child) == 0 {
+			extensionNode.Child = nil
+		}
+		if len(extensionNode.Key) == 0 {
+			extensionNode.Key = nil
 		}
 		return extensionNode, nil
-	case "value":
+	case Value:
 		valueNode := &ValueNode{}
-		err = json.Unmarshal(nodeBytes.nodeBytes, valueNode)
+		err = proto.Unmarshal(nodeBytes[1:], valueNode)
 		if err != nil {
 			return nil, err
 		}
@@ -905,22 +921,30 @@ func (s *trieStoreMock) GetValue(valuePtr []byte) ([]byte, error) {
 
 func (s *trieStoreMock) PutNode(nodePtr []byte, node TrieNode) error {
 	key := base64.StdEncoding.EncodeToString(nodePtr)
-	nb, err := json.Marshal(node)
-	if err != nil {
-		return err
-	}
-	nbtype := &nodeBytesWithType{
-		nodeBytes: nb,
-	}
+	var nb []byte
+	var err error
+
 	switch node.(type) {
 	case *BranchNode:
-		nbtype.name = "branch"
+		nb, err = proto.Marshal(node.(*BranchNode))
+		if err != nil {
+			return err
+		}
+		nb = append([]byte{Branch}, nb...)
 	case *ExtensionNode:
-		nbtype.name = "extension"
+		nb, err = proto.Marshal(node.(*ExtensionNode))
+		if err != nil {
+			return err
+		}
+		nb = append([]byte{Extension}, nb...)
 	case *ValueNode:
-		nbtype.name = "value"
+		nb, err = proto.Marshal(node.(*ValueNode))
+		if err != nil {
+			return err
+		}
+		nb = append([]byte{Value}, nb...)
 	}
-	s.inMemoryNodes[key] = nbtype
+	s.inMemoryNodes[key] = nb
 	return nil
 }
 
@@ -935,7 +959,6 @@ func (s *trieStoreMock) PersistNode(nodePtr []byte) (bool, error) {
 	nb, ok := s.inMemoryNodes[key]
 	if ok {
 		s.persistNodes[key] = nb
-		delete(s.inMemoryNodes, key)
 		return true, nil
 	}
 	return false, nil
@@ -946,7 +969,6 @@ func (s *trieStoreMock) PersistValue(valuePtr []byte) (bool, error) {
 	vb, ok := s.inMemoryValues[key]
 	if ok {
 		s.persistValues[key] = vb
-		delete(s.inMemoryValues, key)
 		return true, nil
 	}
 	return false, nil
@@ -954,7 +976,7 @@ func (s *trieStoreMock) PersistValue(valuePtr []byte) (bool, error) {
 
 func (s *trieStoreMock) CommitChanges(blockNum uint64) error {
 	s.lastBlock = blockNum
-	s.inMemoryNodes = make(map[string]*nodeBytesWithType)
+	s.inMemoryNodes = make(map[string][]byte)
 	s.inMemoryValues = make(map[string][]byte)
 	return nil
 }
@@ -1185,4 +1207,13 @@ func printTrie(t *testing.T, trie *MPTrie, maxDepth int) {
 		}
 		fmt.Println(line)
 	}
+}
+
+func cleanBranchNode(node *BranchNode) *BranchNode {
+	for i, c := range node.Children {
+		if c != nil && len(c) == 0 {
+			node.Children[i] = nil
+		}
+	}
+	return node
 }
