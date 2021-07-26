@@ -454,33 +454,39 @@ func (t *MPTrie) Commit(blockNum uint64) error {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
-	if err := t.persistSubtrie(t.root); err != nil {
+	rootHash, err := t.root.hash()
+	if err != nil {
+		return err
+	}
+
+	if err := t.persistSubtrie(rootHash); err != nil {
 		return err
 	}
 	return t.store.CommitChanges(blockNum)
 }
 
-func (t *MPTrie) persistSubtrie(n TrieNode) error {
-	wasChanged, err := t.persistNode(n)
+func (t *MPTrie) persistSubtrie(nodePtr []byte) error {
+	wasChanged, err := t.persistNode(nodePtr)
 	if err != nil {
 		return err
 	}
+
 	// If node wasn't changed, no need to persist iт child nodes and can return
 	if !wasChanged {
 		return nil
 	}
-	switch n := n.(type) {
+	node, err := t.store.GetNode(nodePtr)
+	if err != nil {
+		return err
+	}
+	switch n := node.(type) {
 	case *BranchNode:
 		for _, childPtr := range n.Children {
-			if childPtr != nil {
-				child, err := t.store.GetNode(childPtr)
-				if err != nil {
-					return err
-				}
-
-				if err = t.persistSubtrie(child); err != nil {
-					return err
-				}
+			if childPtr == nil {
+				continue
+			}
+			if err = t.persistSubtrie(childPtr); err != nil {
+				return err
 			}
 		}
 		if n.ValuePtr != nil {
@@ -489,12 +495,7 @@ func (t *MPTrie) persistSubtrie(n TrieNode) error {
 			}
 		}
 	case *ExtensionNode:
-		child, err := t.store.GetNode(n.Child)
-		if err != nil {
-			return err
-		}
-
-		if err = t.persistSubtrie(child); err != nil {
+		if err = t.persistSubtrie(n.Child); err != nil {
 			return err
 		}
 	case *ValueNode:
@@ -579,11 +580,7 @@ func (t *MPTrie) saveNode(node TrieNode) ([]byte, error) {
 	return nodePtr, nil
 }
 
-func (t *MPTrie) persistNode(node TrieNode) (bool, error) {
-	nodePtr, err := node.hash()
-	if err != nil {
-		return false, err
-	}
+func (t *MPTrie) persistNode(nodePtr []byte) (bool, error) {
 	isChanged, err := t.store.PersistNode(nodePtr)
 	if err != nil {
 		return false, err

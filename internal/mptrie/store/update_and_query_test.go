@@ -105,6 +105,7 @@ func TestPutAndPersist(t *testing.T) {
 			}
 		}
 
+		require.NoError(t, s.CommitChanges(uint64(2)))
 		for i, p := range pointers[:500] {
 			switch i % 4 {
 			case 3:
@@ -118,7 +119,6 @@ func TestPutAndPersist(t *testing.T) {
 			}
 		}
 
-		require.NoError(t, s.CommitChanges(uint64(2)))
 		checkStoreContent(t, s, pointers[:500], true, true, 0)
 		checkStoreContent(t, s, pointers[500:], false, false, 0)
 	})
