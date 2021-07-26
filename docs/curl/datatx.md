@@ -94,7 +94,7 @@ Once the above transaction gets committed, the submitter of the transaction woul
 }
 ```
 
-### Checking the existance of the state
+### Checking the existence of the state
 
 Let's query the node to see whether `key1` exists. The query can be submitted by either `alice` or `bob` as both have
 the read permission to this key. No one else can read `key1` including the admin user of the node. In this example,

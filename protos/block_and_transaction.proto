@@ -33,8 +33,8 @@ message BlockHeaderBase {
   uint64 last_committed_block_num = 4;
 }
 
-// BlockHeader holds, in addition to base header, extra block metadata and the chain information
-// that computed after transactions validation
+// BlockHeader holds, in addition to base header, additional chain integrity information that is computed after transactions validation,
+// including the state and transaction Merkle trees roots, skip-chain hashes, and transaction validation information.
 message BlockHeader {
   BlockHeaderBase base_header = 1;
   // Skip chain hashed, based of BlockHeader hashed of blocks connected in blocks skip list

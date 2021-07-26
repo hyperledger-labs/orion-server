@@ -97,7 +97,7 @@ The receipt for the above transaction would look something like the following:
 
 Once the above transaction gets validated and committed, we can check the existance of `db1` and `db2`.
 
-### Checking the existance of db1
+### Checking the existence of db1
 Compute the digital signature on the request payload `'{"user_id":"admin","db_name":"db1"}'`
 ```sh
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","db_name":"db1"}'
@@ -127,7 +127,7 @@ curl \
 }
 ```
 
-### Checking the existance of db2
+### Checking the existence of db2
 ```sh
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","db_name":"db1"}'
 MEYCIQCcd9pucHSiyrP/wTIfSxer1M1qhyuYZ954WyuNO6NNuAIhALXfLg9NdwIDY2xDoLO9GxY5k/5hPqOz6i7fxvurd/v3
@@ -199,7 +199,7 @@ The receipt for the above transaction would look something like the following:
 
 Once the above transaction gets validated and committed, we can check that the `db1` and `db2` do not exist anymore.
 
-### Checking the existance of db1
+### Checking the existence of db1
 ```sh
 curl \
       -H "Content-Type: application/json" \
@@ -219,7 +219,7 @@ curl \
 ```
 The default values are omitted and hence, the `exist = false` is not printed. 
 
-### Checking the existance of db2
+### Checking the existence of db2
 
 ```sh
 curl \

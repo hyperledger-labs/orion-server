@@ -312,8 +312,8 @@ func (m *BlockHeaderBase) GetLastCommittedBlockNum() uint64 {
 	return 0
 }
 
-// BlockHeader holds, in addition to base header, extra block metadata and the chain information
-// that computed after transactions validation
+// BlockHeader holds, in addition to base header, additional chain integrity information that is computed after transactions validation,
+// including the state and transaction Merkle trees roots, skip-chain hashes, and transaction validation information.
 type BlockHeader struct {
 	BaseHeader *BlockHeaderBase `protobuf:"bytes,1,opt,name=base_header,json=baseHeader,proto3" json:"base_header,omitempty"`
 	// Skip chain hashed, based of BlockHeader hashed of blocks connected in blocks skip list

@@ -82,12 +82,12 @@ Queries can be used to fetch data stored/managed by the database. For example, w
   1. [Querying the configuration](./docs/curl/query.md#querying-the-cluster-configuration)
   2. [Querying a user information/credentials/privileges](./docs/curl/query.md#querying-the-user-information)
   3. [Checking the existance of a database](./docs/curl/query.md#checking-the-database-existance)
-  4. [Querying data]()
-  5. [Querying provenance of data or user]()
+  4. [Querying data](./docs/curl/datatx.md#checking-the-existence-of-the-state)
+  5. [Querying provenance of data or user](./docs/curl/provenance.md)
   6. [Querying a block](./docs/curl/query.md#querying-a-block-header)
-  7. [Querying a transaction]()
-  8. [Querying proof of existance of a transaction]
-  9. [Querying proof of existance of data]
+  7. [Querying a transaction receipt for async transactions](./docs/curl/ledger.md#transaction-receipt-query)
+  8. [Querying proof of existence of a transaction](./docs/curl/ledger.md#transaction-proof-query)
+  9. [Querying proof of existence of data](./docs/curl/ledger.md#state-proof-query)
 
 Error cases are discussed in [queries resulting in errors](./docs/curl/errors.md)
 
@@ -107,7 +107,12 @@ We support four types of transactions:
 
 ### Proofs
 
-TODO
+We support three kinds of proofs:
+- Proof of ledger connectivity and block existence in ledger.
+- Proof of transaction TxID been part of block N.
+- Proof of state - at the end of a specific block N the value of given key K was equal to X.
+
+Detailed explanation about these kinds of proofs can be found [here](docs/proofs/Proofs.md)
 
 ## How to Contribute
 
