@@ -29,7 +29,7 @@ func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorT
 	require.NoError(t, err)
 
 	c := &logger.Config{
-		Level:         "debug",
+		Level:         "info",
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
@@ -77,10 +77,9 @@ func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorT
 }
 
 func TestGetDBStatus(t *testing.T) {
-	t.Parallel()
 
 	t.Run("getDBStatus-Returns-Status", func(t *testing.T) {
-		t.Parallel()
+
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -119,7 +118,6 @@ func TestGetDBStatus(t *testing.T) {
 }
 
 func TestGetData(t *testing.T) {
-	t.Parallel()
 
 	setup := func(db worldstate.DB, userID, dbName string) {
 		user := &types.User{
@@ -165,7 +163,7 @@ func TestGetData(t *testing.T) {
 	}
 
 	t.Run("getData returns data", func(t *testing.T) {
-		t.Parallel()
+
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -241,7 +239,7 @@ func TestGetData(t *testing.T) {
 	})
 
 	t.Run("getData returns permission error due to ACL", func(t *testing.T) {
-		t.Parallel()
+
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -282,7 +280,7 @@ func TestGetData(t *testing.T) {
 	})
 
 	t.Run("getData returns permission error due to directly accessing system database", func(t *testing.T) {
-		t.Parallel()
+
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -327,7 +325,6 @@ func TestGetData(t *testing.T) {
 }
 
 func TestGetUser(t *testing.T) {
-	t.Parallel()
 
 	t.Run("query existing user", func(t *testing.T) {
 		querierUser := &types.User{
@@ -511,7 +508,6 @@ func TestGetUser(t *testing.T) {
 	})
 
 	t.Run("error expected", func(t *testing.T) {
-		t.Parallel()
 
 		querierUser := &types.User{
 			Id: "querierUser",
@@ -580,7 +576,6 @@ func TestGetUser(t *testing.T) {
 		for _, tt := range tests {
 			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
-				t.Parallel()
 
 				env := newWorldstateQueryProcessorTestEnv(t)
 				defer env.cleanup(t)
@@ -596,7 +591,6 @@ func TestGetUser(t *testing.T) {
 }
 
 func TestGetConfig(t *testing.T) {
-	t.Parallel()
 
 	t.Run("getConfig returns config", func(t *testing.T) {
 		env := newWorldstateQueryProcessorTestEnv(t)

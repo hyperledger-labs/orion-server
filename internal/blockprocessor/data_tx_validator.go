@@ -21,31 +21,7 @@ type dataTxValidator struct {
 	logger          *logger.SugarLogger
 }
 
-func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
-	var valRes *types.ValidationInfo
-	var err error
-
-	var userIDsWithValidSign []string
-	for userID, signtature := range txEnv.Signatures {
-		valRes, err = v.sigValidator.validate(userID, signtature, txEnv.Payload)
-		if err != nil {
-			return nil, err
-		}
-		if valRes.Flag != types.Flag_VALID {
-			for _, mustSignUserID := range txEnv.Payload.MustSignUserIds {
-				if userID == mustSignUserID {
-					return &types.ValidationInfo{
-						Flag:            types.Flag_INVALID_UNAUTHORISED,
-						ReasonIfInvalid: "signature of the must sign user [" + userID + "] is not valid (maybe the certifcate got changed)",
-					}, nil
-				}
-			}
-			continue
-		}
-
-		userIDsWithValidSign = append(userIDsWithValidSign, userID)
-	}
-
+func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, userIDsWithValidSign []string, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
 	dbs := make(map[string]bool)
 	for _, ops := range txEnv.Payload.DbOperations {
 		if !dbs[ops.DbName] {
@@ -60,7 +36,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 	}
 
 	for _, ops := range txEnv.Payload.DbOperations {
-		valRes, err = v.validateDBName(ops.DbName)
+		valRes, err := v.validateDBName(ops.DbName)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +75,33 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, pendingOps *pend
 		}
 	}
 
-	return valRes, nil
+	return &types.ValidationInfo{Flag: types.Flag_VALID}, nil
+}
+
+func (v *dataTxValidator) validateSignatures(txEnv *types.DataTxEnvelope) ([]string, *types.ValidationInfo, error) {
+	var userIDsWithValidSign []string
+	for userID, signature := range txEnv.Signatures {
+		valRes, err := v.sigValidator.validate(userID, signature, txEnv.Payload)
+		if err != nil {
+			return nil, nil, err
+		}
+		if valRes.Flag != types.Flag_VALID {
+			for _, mustSignUserID := range txEnv.Payload.MustSignUserIds {
+				if userID == mustSignUserID {
+					return nil,
+						&types.ValidationInfo{
+							Flag:            types.Flag_INVALID_UNAUTHORISED,
+							ReasonIfInvalid: "signature of the must sign user [" + userID + "] is not valid (maybe the certificate got changed)",
+						}, nil
+				}
+			}
+			continue
+		}
+
+		userIDsWithValidSign = append(userIDsWithValidSign, userID)
+	}
+
+	return userIDsWithValidSign, &types.ValidationInfo{Flag: types.Flag_VALID}, nil
 }
 
 func (v *dataTxValidator) validateDBName(dbName string) (*types.ValidationInfo, error) {
