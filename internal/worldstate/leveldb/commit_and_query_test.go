@@ -192,8 +192,8 @@ func TestCommitAndQuery(t *testing.T) {
 		require.NoError(t, l.create("db2"))
 	}
 
-	setupWithData := func(l *LevelDB) (map[string]*ValueAndMetadata, map[string]*ValueAndMetadata) {
-		db1valAndMetadata1 := &ValueAndMetadata{
+	setupWithData := func(l *LevelDB) (map[string]*types.ValueWithMetadata, map[string]*types.ValueWithMetadata) {
+		db1valAndMetadata1 := &types.ValueWithMetadata{
 			Value: []byte("db1-value1"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -210,7 +210,7 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		db1valAndMetadata2 := &ValueAndMetadata{
+		db1valAndMetadata2 := &types.ValueWithMetadata{
 			Value: []byte("db1-value2"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -219,7 +219,7 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		db2valAndMetadata1 := &ValueAndMetadata{
+		db2valAndMetadata1 := &types.ValueWithMetadata{
 			Value: []byte("db2-value1"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -236,7 +236,7 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		db2valAndMetadata2 := &ValueAndMetadata{
+		db2valAndMetadata2 := &types.ValueWithMetadata{
 			Value: []byte("db2-value2"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -280,18 +280,18 @@ func TestCommitAndQuery(t *testing.T) {
 		require.NoError(t, l.create("db2"))
 		require.NoError(t, l.Commit(dbsUpdates, 1))
 
-		db1KVs := map[string]*ValueAndMetadata{
+		db1KVs := map[string]*types.ValueWithMetadata{
 			"db1-key1": db1valAndMetadata1,
 			"db1-key2": db1valAndMetadata2,
 		}
-		db2KVs := map[string]*ValueAndMetadata{
+		db2KVs := map[string]*types.ValueWithMetadata{
 			"db2-key1": db2valAndMetadata1,
 			"db2-key2": db2valAndMetadata2,
 		}
 		return db1KVs, db2KVs
 	}
 
-	t.Run("Get(), GetVersion(), and Has() on empty databases", func(t *testing.T) {
+	t.Run("Get(), GetVersion(), Has(), and GetIterator() on empty databases", func(t *testing.T) {
 		t.Parallel()
 		env := newTestEnv(t)
 		defer env.cleanup()
@@ -313,6 +313,12 @@ func TestCommitAndQuery(t *testing.T) {
 				require.NoError(t, err)
 				require.False(t, exist)
 			}
+
+			iter, err := l.GetIterator(db, "key0", "key3")
+			defer iter.Release()
+			require.NoError(t, err)
+			require.False(t, iter.Next())
+			require.NoError(t, iter.Error())
 		}
 	})
 
@@ -331,7 +337,7 @@ func TestCommitAndQuery(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, proto.Equal(
 				expectedValAndMetadata,
-				&ValueAndMetadata{Value: val, Metadata: metadata},
+				&types.ValueWithMetadata{Value: val, Metadata: metadata},
 			))
 
 			ver, err := l.GetVersion("db1", key)
@@ -352,7 +358,7 @@ func TestCommitAndQuery(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, proto.Equal(
 				expectedValAndMetadata,
-				&ValueAndMetadata{Value: val, Metadata: metadata},
+				&types.ValueWithMetadata{Value: val, Metadata: metadata},
 			))
 
 			ver, err := l.GetVersion("db2", key)
@@ -369,6 +375,114 @@ func TestCommitAndQuery(t *testing.T) {
 		}
 	})
 
+	t.Run("GetIterator() on non-empty databases", func(t *testing.T) {
+		t.Parallel()
+		env := newTestEnv(t)
+		defer env.cleanup()
+		l := env.l
+		db1KVs, db2KVs := setupWithData(l)
+
+		tests := []struct {
+			name                 string
+			dbName               string
+			startKey             string
+			endKey               string
+			expectedValueAndMeta map[string]*types.ValueWithMetadata
+		}{
+			{
+				name:     "end key is exclusive and both keys exist",
+				dbName:   "db1",
+				startKey: "db1-key1",
+				endKey:   "db1-key2",
+				expectedValueAndMeta: map[string]*types.ValueWithMetadata{
+					"db1-key1": db1KVs["db1-key1"],
+				},
+			},
+			{
+				name:                 "end key does not exist",
+				dbName:               "db1",
+				startKey:             "db1-key1",
+				endKey:               "db1-key3",
+				expectedValueAndMeta: db1KVs,
+			},
+			{
+				name:                 "start key does not exist",
+				dbName:               "db1",
+				startKey:             "db1-key0",
+				endKey:               "db1-key3",
+				expectedValueAndMeta: db1KVs,
+			},
+			{
+				name:                 "start key is beyond the range",
+				dbName:               "db1",
+				startKey:             "db1-key3",
+				endKey:               "",
+				expectedValueAndMeta: nil,
+			},
+			{
+				name:                 "end key is before the beginning",
+				dbName:               "db1",
+				startKey:             "",
+				endKey:               "db1-key0",
+				expectedValueAndMeta: nil,
+			},
+			{
+				name:                 "[begin:]",
+				dbName:               "db2",
+				startKey:             "db2-key1",
+				endKey:               "",
+				expectedValueAndMeta: db2KVs,
+			},
+			{
+				name:     "[:end]",
+				dbName:   "db2",
+				startKey: "",
+				endKey:   "db2-key2",
+				expectedValueAndMeta: map[string]*types.ValueWithMetadata{
+					"db2-key1": db2KVs["db2-key1"],
+				},
+			},
+			{
+				name:                 "[:]",
+				dbName:               "db2",
+				startKey:             "",
+				endKey:               "",
+				expectedValueAndMeta: db2KVs,
+			},
+		}
+
+		for _, tt := range tests {
+			iter1, err := l.GetIterator(tt.dbName, tt.startKey, tt.endKey)
+			defer iter1.Release()
+			require.NoError(t, err)
+			kvs := make(map[string]*types.ValueWithMetadata)
+
+			for iter1.Next() {
+				require.NoError(t, err)
+				k := string(iter1.Key())
+				v := &types.ValueWithMetadata{}
+				require.NoError(t, proto.Unmarshal(iter1.Value(), v))
+				kvs[k] = v
+			}
+
+			require.Equal(t, len(tt.expectedValueAndMeta), len(kvs))
+			for expectedKey, expectedValueAndMeta := range tt.expectedValueAndMeta {
+				valueAndMeta := kvs[expectedKey]
+				require.Equal(t, expectedValueAndMeta.Value, valueAndMeta.Value)
+				require.True(t, proto.Equal(expectedValueAndMeta.Metadata, valueAndMeta.Metadata))
+			}
+		}
+
+		iter2, err := l.GetIterator("db3", "", "")
+		require.Nil(t, iter2)
+		require.EqualError(t, err, "database db3 does not exist")
+
+		iter3, err := l.GetIterator("db2", "", "")
+		iter3.Release()
+		iter3.Next()
+		require.EqualError(t, iter3.Error(), "leveldb: iterator released")
+	})
+
 	// Scenario-2: For both databases (db1, db2), update
 	// the first key and delete the second key.
 	// (db1-key1 is updated, db1-key2 is deleted for db1) and
@@ -381,7 +495,7 @@ func TestCommitAndQuery(t *testing.T) {
 		l := env.l
 		db1KVs, db2KVs := setupWithData(l)
 
-		db1valAndMetadata1New := &ValueAndMetadata{
+		db1valAndMetadata1New := &types.ValueWithMetadata{
 			Value: []byte("db1-value1-new"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{
@@ -398,7 +512,7 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		db2valAndMetadata1New := &ValueAndMetadata{
+		db2valAndMetadata1New := &types.ValueWithMetadata{
 			Value: []byte("db2-value1-new"),
 			Metadata: &types.Metadata{
 				Version: &types.Version{

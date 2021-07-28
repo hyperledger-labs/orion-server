@@ -173,7 +173,7 @@ message KVWithMetadata{
 
 message ValueWithMetadata{
   bytes value = 1;
-  Metadata metadata = 3;
+  Metadata metadata = 2;
 }
 
 message Digest {

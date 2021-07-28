@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 var (
@@ -106,7 +107,7 @@ func (l *LevelDB) Get(dbName string, key string) ([]byte, *types.Metadata, error
 		return nil, nil, errors.WithMessagef(err, "failed to retrieve leveldb key [%s] from database %s", key, dbName)
 	}
 
-	persisted := &ValueAndMetadata{}
+	persisted := &types.ValueWithMetadata{}
 	if err := proto.Unmarshal(dbval, persisted); err != nil {
 		return nil, nil, err
 	}
@@ -163,6 +164,36 @@ func (l *LevelDB) GetIndexDefinition(dbName string) ([]byte, *types.Metadata, er
 	return l.Get(worldstate.DatabasesDBName, dbName)
 }
 
+// GetIterator returns an iterator to fetch values associated with a range of keys
+// startKey is inclusive while the endKey is exclusive. An empty startKey (i.e., "") denotes that
+// the caller wants from the first key in the database (lexicographic order). An empty
+// endKey (i.e., "") denotes that the caller wants till the last key in the database (lexicographic order).
+func (l *LevelDB) GetIterator(dbName string, startKey, endKey string) (worldstate.Iterator, error) {
+	l.dbsList.RLock()
+	db := l.dbs[dbName]
+	l.dbsList.RUnlock()
+
+	if db == nil {
+		l.logger.Errorf("database %s does not exist", dbName)
+		return nil, errors.Errorf("database %s does not exist", dbName)
+	}
+
+	r := &util.Range{}
+	if startKey == "" {
+		r.Start = nil
+	} else {
+		r.Start = []byte(startKey)
+	}
+
+	if endKey == "" {
+		r.Limit = nil
+	} else {
+		r.Limit = []byte(endKey)
+	}
+
+	return db.file.NewIterator(r, &opt.ReadOptions{}), nil
+}
+
 // Commit commits the updates to the database
 func (l *LevelDB) Commit(dbsUpdates map[string]*worldstate.DBUpdates, blockNumber uint64) error {
 	for dbName, updates := range dbsUpdates {
@@ -207,7 +238,7 @@ func (l *LevelDB) commitToDB(dbName string, db *db, updates *worldstate.DBUpdate
 
 	for _, kv := range updates.Writes {
 		dbval, err := proto.Marshal(
-			&ValueAndMetadata{
+			&types.ValueWithMetadata{
 				Value:    kv.Value,
 				Metadata: kv.Metadata,
 			},
