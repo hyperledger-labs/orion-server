@@ -366,7 +366,7 @@ func createEntriesForNewDBs(newDBs []string, dbsIndex map[string]*types.DBIndex,
 			// for each DB, if index is defined, we need to create an
 			// index DB to store index entries for that DB
 			indexDB := &worldstate.KVWithMetadata{
-				Key: stateindex.IndexDBPrefix + dbName,
+				Key: stateindex.IndexDB(dbName),
 				Metadata: &types.Metadata{
 					Version: version,
 				},
@@ -392,7 +392,7 @@ func createEntriesForIndexUpdates(
 	var err error
 
 	for dbName, dbIndex := range dbsIndex {
-		indexExist := db.Exist(stateindex.IndexDBPrefix + dbName)
+		indexExist := db.Exist(stateindex.IndexDB(dbName))
 		deleteExistingIndex := dbIndex == nil || dbIndex.GetAttributeAndType() == nil
 
 		updateDBIndex := &worldstate.KVWithMetadata{
@@ -406,7 +406,7 @@ func createEntriesForIndexUpdates(
 		if !indexExist && deleteExistingIndex {
 			continue
 		} else if indexExist && deleteExistingIndex {
-			toDeleteDBs = append(toDeleteDBs, stateindex.IndexDBPrefix+dbName)
+			toDeleteDBs = append(toDeleteDBs, stateindex.IndexDB(dbName))
 		} else if indexExist && !deleteExistingIndex {
 			updateDBIndex.Value, err = json.Marshal(dbIndex.GetAttributeAndType())
 			if err != nil {
@@ -420,7 +420,7 @@ func createEntriesForIndexUpdates(
 
 			// as there is no existing index, we need to create the index database
 			indexDB := &worldstate.KVWithMetadata{
-				Key: stateindex.IndexDBPrefix + dbName,
+				Key: stateindex.IndexDB(dbName),
 				Metadata: &types.Metadata{
 					Version: version,
 				},
