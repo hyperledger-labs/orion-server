@@ -4,6 +4,7 @@
 package replication_test
 
 import (
+	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
@@ -19,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Scenario: start and close w/o waiting for a leader
 func TestBlockReplicator_StartClose_Fast(t *testing.T) {
 	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
@@ -40,6 +42,7 @@ func TestBlockReplicator_StartClose_Fast(t *testing.T) {
 	require.EqualError(t, err, "block replicator already closed")
 }
 
+// Scenario: start, wait for the node to become a leader, and close
 func TestBlockReplicator_StartClose_Slow(t *testing.T) {
 	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
@@ -67,6 +70,8 @@ func TestBlockReplicator_StartClose_Slow(t *testing.T) {
 	require.EqualError(t, err, "block replicator already closed")
 }
 
+// Scenario: start, close, and restart. No blocks submitted.
+// The node is expected to restart from the "empty" snapshot and the genesis block.
 func TestBlockReplicator_Restart(t *testing.T) {
 	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
@@ -108,6 +113,11 @@ func TestBlockReplicator_Restart(t *testing.T) {
 	env.conf.Transport.Close()
 }
 
+// Scenario: start, submit a block, check it is enqueued for commit, and:
+// - close after commit replies
+// - close while the block-replicator is blocked waiting for a reply,
+// - close while the submit go-routine is busy submitting,
+// - restart: the nod is expected to recover from an "empty" snapshot and a single entry, as no snapshots are taken.
 func TestBlockReplicator_Submit(t *testing.T) {
 	t.Run("normal flow", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
@@ -368,6 +378,10 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	})
 }
 
+// Scenario: check that a config block is allowed to commit, if
+// - it carries admin updates, or
+// - it carries CA updates.
+// TODO changing consensus/node config is not yet supported.
 func TestBlockReplicator_ReConfig(t *testing.T) {
 	t.Run("update admins", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
@@ -464,5 +478,198 @@ func TestBlockReplicator_ReConfig(t *testing.T) {
 		err = env.blockReplicator.Close()
 		require.NoError(t, err)
 		env.conf.Transport.Close()
+	})
+}
+
+// Scenario: check that snapshots are taken as expected, and can be recovered from.
+func TestBlockReplicator_Snapshots(t *testing.T) {
+	// Scenario:
+	// - configure the cluster to take snapshots every 2 blocks,
+	// - submit blocks and verify the last 4 snapshots exist.
+	t.Run("take a snapshot every two blocks", func(t *testing.T) {
+		lg := testLogger(t, "info")
+		testDir, err := ioutil.TempDir("", "replication-test")
+		require.NoError(t, err)
+		defer os.RemoveAll(testDir)
+
+		block := &types.Block{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number:                1,
+					LastCommittedBlockNum: 1,
+				},
+			},
+			Payload: &types.Block_DataTxEnvelopes{},
+		}
+		blockData, err := proto.Marshal(block)
+		require.NoError(t, err)
+		blockLen := uint64(len(blockData))
+
+		clusterConfig := proto.Clone(clusterConfig1node).(*types.ClusterConfig)
+		clusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize = blockLen + 1 // take a snapshot every 2 blocks
+		env, err := newNodeEnv(1, testDir, lg, clusterConfig)
+		require.NoError(t, err)
+		require.NotNil(t, env)
+
+		err = env.Start()
+		require.NoError(t, err)
+
+		// wait for the node to become leader
+		isLeaderCond := func() bool {
+			return env.blockReplicator.IsLeader() == nil
+		}
+		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+		numBlocks := uint64(20)
+		for i := uint64(0); i < numBlocks; i++ {
+			b := proto.Clone(block).(*types.Block)
+			b.Header.BaseHeader.Number = 2 + i
+			err := env.blockReplicator.Submit(b)
+			require.NoError(t, err)
+
+		}
+
+		assert.Eventually(t, func() bool {
+			h, err := env.ledger.Height()
+			if err == nil && h == numBlocks+1 {
+				return true
+			}
+			return false
+		}, 30*time.Second, 100*time.Millisecond)
+
+		err = env.blockReplicator.Close()
+		require.NoError(t, err)
+		env.conf.Transport.Close()
+
+		snapList := replication.ListSnapshots(env.conf.Logger, env.conf.LocalConf.Replication.SnapDir)
+		require.Equal(t, 4, len(snapList)) //implementation keeps last 4 snapshots
+		t.Logf("Snap list: %v", snapList)
+	})
+
+	// Scenario:
+	// - configure the cluster to take snapshots every 4 blocks;
+	// - submit 20 blocks, which should create 4 snapshots exactly, with no trailing log entries;
+	// - close the node and restart it, the node is expected to start from last snapshot;
+	// - submit 6 blocks, which should create one more snapshot and two following entries;
+	// - close the node and restart it, the node is expected to start from last snapshot, and recover two trailing entries;
+	// - submit 6 blocks, and make sure the ledger is correct, then close.
+	// Correct behavior after restart is checked by submitting more blocks and checking that they commit.
+	t.Run("restart from a snapshot", func(t *testing.T) {
+		lg := testLogger(t, "debug")
+		testDir, err := ioutil.TempDir("", "replication-test")
+		require.NoError(t, err)
+		defer os.RemoveAll(testDir)
+
+		block := &types.Block{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number:                1,
+					LastCommittedBlockNum: 1,
+				},
+			},
+			Payload: &types.Block_DataTxEnvelopes{},
+		}
+		blockData, err := proto.Marshal(block)
+		require.NoError(t, err)
+		blockLen := uint64(len(blockData))
+
+		clusterConfig := proto.Clone(clusterConfig1node).(*types.ClusterConfig)
+		clusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize = 3*blockLen + 1 // take a snapshot every 4 data blocks
+		env, err := newNodeEnv(1, testDir, lg, clusterConfig)
+		require.NoError(t, err)
+		require.NotNil(t, env)
+
+		err = env.Start()
+		require.NoError(t, err)
+
+		// wait for the node to become leader
+		isLeaderCond := func() bool {
+			return env.blockReplicator.IsLeader() == nil
+		}
+		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+		numBlocks := uint64(20)
+		for i := uint64(0); i < numBlocks; i++ {
+			b := proto.Clone(block).(*types.Block)
+			b.Header.BaseHeader.Number = 2 + i
+			err := env.blockReplicator.Submit(b)
+			require.NoError(t, err)
+
+		}
+		assert.Eventually(t, func() bool {
+			h, err := env.ledger.Height()
+			if err == nil && h == numBlocks+1 {
+				return true
+			}
+			return false
+		}, 30*time.Second, 100*time.Millisecond)
+
+		err = env.Close()
+		require.NoError(t, err)
+
+		snapList := replication.ListSnapshots(env.conf.Logger, env.conf.LocalConf.Replication.SnapDir)
+		require.Equal(t, 4, len(snapList))
+		t.Logf("Snap list after close: %v", snapList)
+
+		//recreate - snapshot and no following entries
+		err = env.Restart()
+		require.NoError(t, err)
+
+		isLeaderCond = func() bool {
+			return env.blockReplicator.IsLeader() == nil
+		}
+		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+		// add 6 blocks, to create another snapshot and 2 more entries
+		numBlocksExtra := uint64(6)
+		for i := numBlocks; i < numBlocks+numBlocksExtra; i++ {
+			b := proto.Clone(block).(*types.Block)
+			b.Header.BaseHeader.Number = 2 + i
+			err := env.blockReplicator.Submit(b)
+			require.NoError(t, err)
+		}
+		assert.Eventually(t, func() bool {
+			h, err := env.ledger.Height()
+			if err == nil && h == numBlocks+numBlocksExtra+1 {
+				return true
+			}
+			return false
+		}, 30*time.Second, 100*time.Millisecond)
+
+		err = env.Close()
+		require.NoError(t, err)
+
+		snapList2 := replication.ListSnapshots(env.conf.Logger, env.conf.LocalConf.Replication.SnapDir)
+		require.Equal(t, 4, len(snapList2))
+		t.Logf("Snap list after 2nd close: %v", snapList2)
+		require.Equal(t, snapList[3], snapList2[2])
+
+		//recreate - from a snapshot and two following entries
+		err = env.Restart()
+		require.NoError(t, err)
+
+		isLeaderCond = func() bool {
+			return env.blockReplicator.IsLeader() == nil
+		}
+		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+		// add another 6 blocks and make sure the ledger is correct
+		numBlocks += numBlocksExtra
+		for i := numBlocks; i < numBlocks+numBlocksExtra; i++ {
+			b := proto.Clone(block).(*types.Block)
+			b.Header.BaseHeader.Number = 2 + i
+			err := env.blockReplicator.Submit(b)
+			require.NoError(t, err)
+		}
+		assert.Eventually(t, func() bool {
+			h, err := env.ledger.Height()
+			if err == nil && h == numBlocks+numBlocksExtra+1 {
+				return true
+			}
+			return false
+		}, 30*time.Second, 100*time.Millisecond)
+
+		err = env.Close()
+		require.NoError(t, err)
 	})
 }

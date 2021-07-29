@@ -22,6 +22,13 @@ import (
 	"go.etcd.io/etcd/wal"
 )
 
+const (
+	// DefaultSnapshotCatchUpEntries is the default number of entries
+	// to preserve in memory when a snapshot is taken. This is for
+	// slow followers to catch up.
+	DefaultSnapshotCatchUpEntries = uint64(4)
+)
+
 type BlockLedgerReader interface {
 	Height() (uint64, error)
 	Get(blockNumber uint64) (*types.Block, error)
@@ -47,6 +54,12 @@ type BlockReplicator struct {
 	clusterConfig   *types.ClusterConfig
 	lastKnownLeader uint64
 	appliedIndex    uint64
+
+	// needed by snapshotting
+	sizeLimit        uint64 // SnapshotIntervalSize in bytes
+	accDataSize      uint64 // accumulative data size since last snapshot
+	lastSnapBlockNum uint64
+	confState        raftpb.ConfState // Etcdraft requires ConfState to be persisted within snapshot
 
 	lg *logger.SugarLogger
 }
@@ -75,20 +88,37 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 	if err != nil {
 		return nil, errors.Errorf("failed to restore persisted raft data: %s", err)
 	}
+	storage.SnapshotCatchUpEntries = DefaultSnapshotCatchUpEntries
+
+	var snapBlkNum uint64
+	var confState raftpb.ConfState
+	if s := storage.Snapshot(); !raft.IsEmptySnap(s) {
+		snapBlock := &types.Block{}
+		if err := proto.Unmarshal(s.Data, snapBlock); err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal snapshot block")
+		}
+
+		snapBlkNum = snapBlock.GetHeader().GetBaseHeader().GetNumber()
+		confState = s.Metadata.ConfState
+		lg.Debugf("Starting from last snapshot: block number [%d], Raft ConfState: %+v", snapBlkNum, confState)
+	}
 
 	br := &BlockReplicator{
-		localConf:       conf.LocalConf,
-		proposeCh:       make(chan *types.Block, 1),
-		raftID:          raftID,
-		raftStorage:     storage,
-		oneQueueBarrier: conf.BlockOneQueueBarrier,
-		stopCh:          make(chan struct{}),
-		doneProposeCh:   make(chan struct{}),
-		doneEventCh:     make(chan struct{}),
-		clusterConfig:   conf.ClusterConfig,
-		transport:       conf.Transport,
-		ledgerReader:    conf.LedgerReader,
-		lg:              lg,
+		localConf:        conf.LocalConf,
+		proposeCh:        make(chan *types.Block, 1),
+		raftID:           raftID,
+		raftStorage:      storage,
+		oneQueueBarrier:  conf.BlockOneQueueBarrier,
+		stopCh:           make(chan struct{}),
+		doneProposeCh:    make(chan struct{}),
+		doneEventCh:      make(chan struct{}),
+		clusterConfig:    conf.ClusterConfig,
+		transport:        conf.Transport,
+		ledgerReader:     conf.LedgerReader,
+		sizeLimit:        conf.ClusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize,
+		confState:        confState,
+		lastSnapBlockNum: snapBlkNum,
+		lg:               lg,
 	}
 
 	height, err := br.ledgerReader.Height()
@@ -122,7 +152,7 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 		DisableProposalForwarding: true, // This prevents blocks from being accidentally proposed by followers
 	}
 
-	lg.Infof("haveWAL: %v, Storage: %v, Raft config: %+v", haveWAL, storage, config) //TODO remove
+	lg.Debugf("haveWAL: %v, Storage: %v, Raft config: %+v", haveWAL, storage, config)
 
 	joinExistingCluster := false // TODO support node join to an existing cluster
 
@@ -191,11 +221,6 @@ func (br *BlockReplicator) runRaftEventLoop(readyCh chan<- struct{}) {
 	raftTicker := time.NewTicker(tickInterval)
 	electionTimeout := tickInterval.Seconds() * float64(br.clusterConfig.ConsensusConfig.RaftConfig.ElectionTicks)
 	halfElectionTimeout := electionTimeout / 2
-
-	if s := br.raftStorage.Snapshot(); !raft.IsEmptySnap(s) {
-		//TODO support snapshots
-		br.lg.Panicf("Snapshots not supported yet (start): %+v", s)
-	}
 
 	// TODO proactive campaign to speed up leader election on a new cluster
 
@@ -275,6 +300,7 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 		br.lg.Panicf("First index of committed entry [%d] should <= appliedIndex [%d]+1", committedEntries[0].Index, br.appliedIndex)
 	}
 
+	var position int
 	for i := range committedEntries {
 		br.lg.Debugf("processing commited entry [%d]: %s", i, raftEntryString(committedEntries[i]))
 
@@ -284,6 +310,9 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				br.lg.Debugf("commited entry [%d] has empty data, ignoring", i)
 				break
 			}
+
+			position = i
+			br.accDataSize += uint64(len(committedEntries[i].Data))
 
 			// We need to strictly avoid re-applying normal entries,
 			// otherwise we are writing the same block twice.
@@ -324,13 +353,13 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				continue
 			}
 
-			confState := *br.raftNode.ApplyConfChange(cc)
+			br.confState = *br.raftNode.ApplyConfChange(cc)
 
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
-				br.lg.Infof("Applied config change to add node %d, current nodes in cluster: %+v", cc.NodeID, confState.Voters)
+				br.lg.Infof("Applied config change to add node %d, current nodes in cluster: %+v", cc.NodeID, br.confState.Voters)
 			case raftpb.ConfChangeRemoveNode:
-				br.lg.Infof("Applied config change to remove node %d, current nodes in cluster: %+v", cc.NodeID, confState.Voters)
+				br.lg.Infof("Applied config change to remove node %d, current nodes in cluster: %+v", cc.NodeID, br.confState.Voters)
 			default:
 				br.lg.Panic("Programming error, encountered unsupported raft config change")
 			}
@@ -348,7 +377,24 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 		}
 	}
 
-	// TODO trigger snapshot if storage size exceeds the limit
+	// Take a snapshot if in-memory storage size exceeds the limit
+	if br.accDataSize >= br.sizeLimit {
+		var snapBlock = &types.Block{}
+		if err := proto.Unmarshal(committedEntries[position].Data, snapBlock); err != nil {
+			br.lg.Panicf("Error unmarshaling entry [#%d], entry: %+v, error: %s", position, committedEntries[position], err)
+		}
+
+		if err := br.raftStorage.TakeSnapshot(br.appliedIndex, br.confState, committedEntries[position].Data); err != nil {
+			br.lg.Fatalf("Failed to create snapshot at index %d: %s", br.appliedIndex, err)
+		}
+
+		br.lg.Infof("Accumulated %d bytes since last snapshot, exceeding size limit (%d bytes), "+
+			"taking snapshot at block [%d] (index: %d), last snapshotted block number is %d, current voters: %+v",
+			br.accDataSize, br.sizeLimit, snapBlock.GetHeader().GetBaseHeader().GetNumber(), br.appliedIndex, br.lastSnapBlockNum, br.confState.Voters)
+
+		br.accDataSize = 0
+		br.lastSnapBlockNum = snapBlock.GetHeader().GetBaseHeader().GetNumber()
+	}
 
 	return true
 }
