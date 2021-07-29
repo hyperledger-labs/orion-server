@@ -155,7 +155,7 @@ func (n *nodeEnv) ServeCommit() {
 			block2commit := b.(*types.Block)
 			err = n.ledger.Append(block2commit)
 			if err != nil {
-				lg.Errorf("Stopping to serve commit loop, error: %s", err)
+				lg.Panicf("Stopping to serve commit loop, error: %s", err)
 				return
 			}
 			switch block2commit.Payload.(type) {

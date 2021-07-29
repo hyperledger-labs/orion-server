@@ -1,13 +1,13 @@
 package replication_test
 
 import (
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
