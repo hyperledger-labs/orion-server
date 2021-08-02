@@ -105,6 +105,16 @@ func (c *committer) commitToProvenanceStore(blockNum uint64, provenanceData []*p
 }
 
 func (c *committer) commitToStateDB(blockNum uint64, dbsUpdates map[string]*worldstate.DBUpdates) error {
+	indexUpdates, err := stateindex.ConstructIndexEntries(dbsUpdates, c.db)
+	if err != nil {
+		return errors.WithMessage(err, "failed to create index updates")
+	}
+
+	for indexDB, updates := range indexUpdates {
+		// note that dbsUpdates will not contain any existing indexDB entries
+		dbsUpdates[indexDB] = updates
+	}
+
 	if err := c.db.Commit(dbsUpdates, blockNum); err != nil {
 		return errors.WithMessagef(err, "failed to commit block %d to state database", blockNum)
 	}

@@ -81,7 +81,7 @@ func TestConstructIndexEntries(t *testing.T) {
 	indexDB2Json, err := json.Marshal(indexDB2)
 	require.NoError(t, err)
 
-	encoded10 := base64.URLEncoding.EncodeToString(encodeOrderPreservingVarUint64(uint64(10)))
+	encoded10 := base64.URLEncoding.EncodeToString(EncodeOrderPreservingVarUint64(uint64(10)))
 	createDBsWithIndex := map[string]*worldstate.DBUpdates{
 		worldstate.DatabasesDBName: {
 			Writes: []*worldstate.KVWithMetadata{
@@ -192,7 +192,7 @@ func TestConstructIndexEntries(t *testing.T) {
 				IndexDB("db1"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a1","t":0,"m":"` + positiveNumber + `","vp":1,"v":"` + encoded10 + `","kp":1,"k":"person1"}`,
+							Key: `{"a":"a1","t":0,"m":"` + PositiveNumber + `","vp":1,"v":"` + encoded10 + `","kp":1,"k":"person1"}`,
 						},
 						{
 							Key: `{"a":"a2","t":1,"m":"","vp":1,"v":"ten","kp":1,"k":"person1"}`,
@@ -315,7 +315,7 @@ func TestConstructIndexEntries(t *testing.T) {
 			expectedIndexEntries: map[string]*worldstate.DBUpdates{
 				IndexDB("db1"): {
 					Deletes: []string{
-						`{"a":"a1","t":0,"m":"` + positiveNumber + `","vp":1,"v":"` + encoded10 + `","kp":1,"k":"person1"}`,
+						`{"a":"a1","t":0,"m":"` + PositiveNumber + `","vp":1,"v":"` + encoded10 + `","kp":1,"k":"person1"}`,
 						`{"a":"a2","t":1,"m":"","vp":1,"v":"ten","kp":1,"k":"person1"}`,
 						`{"a":"a3","t":2,"m":"","vp":1,"v":true,"kp":1,"k":"person1"}`,
 					},
@@ -333,7 +333,7 @@ func TestConstructIndexEntries(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			env := newIndexTestEnv(t)
 			tt.setup(env.db)
-			indexEntries, err := constructIndexEntries(tt.updates, env.db)
+			indexEntries, err := ConstructIndexEntries(tt.updates, env.db)
 			require.NoError(t, err)
 			require.Equal(t, len(tt.expectedIndexEntries), len(indexEntries))
 			for dbName, expectedEntries := range tt.expectedIndexEntries {
@@ -349,8 +349,8 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 		"age": types.Type_NUMBER,
 	}
 
-	encoded25 := encodeOrderPreservingVarUint64(uint64(25))
-	encoded26 := encodeOrderPreservingVarUint64(uint64(26))
+	encoded25 := EncodeOrderPreservingVarUint64(uint64(25))
+	encoded26 := EncodeOrderPreservingVarUint64(uint64(26))
 
 	testCases := []struct {
 		name                 string
@@ -401,7 +401,7 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.Type_NUMBER,
-					Metadata:      positiveNumber,
+					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded25,
 					KeyPosition:   Existing,
@@ -410,7 +410,7 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.Type_NUMBER,
-					Metadata:      positiveNumber,
+					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded26,
 					KeyPosition:   Existing,
@@ -434,10 +434,10 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 		"age": types.Type_NUMBER,
 	}
 
-	encoded25 := encodeOrderPreservingVarUint64(uint64(25))
-	encodedNegative26 := encodeReverseOrderVarUint64(uint64(26))
-	encoded0 := encodeOrderPreservingVarUint64(uint64(0))
-	encodedMax := encodeOrderPreservingVarUint64(math.MaxInt64)
+	encoded25 := EncodeOrderPreservingVarUint64(uint64(25))
+	encodedNegative26 := EncodeReverseOrderVarUint64(uint64(26))
+	encoded0 := EncodeOrderPreservingVarUint64(uint64(0))
+	encodedMax := EncodeOrderPreservingVarUint64(math.MaxInt64)
 
 	testCases := []struct {
 		name                 string
@@ -525,7 +525,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.Type_NUMBER,
-					Metadata:      positiveNumber,
+					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded25,
 					KeyPosition:   Existing,
@@ -534,7 +534,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.Type_NUMBER,
-					Metadata:      negativeNumber,
+					Metadata:      NegativeNumber,
 					ValuePosition: Existing,
 					Value:         encodedNegative26,
 					KeyPosition:   Existing,
@@ -543,7 +543,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.Type_NUMBER,
-					Metadata:      positiveNumber,
+					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded0,
 					KeyPosition:   Existing,
@@ -552,7 +552,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.Type_NUMBER,
-					Metadata:      positiveNumber,
+					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encodedMax,
 					KeyPosition:   Existing,
@@ -574,13 +574,13 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 }
 
 func TestPartialIndexEntriesForValue(t *testing.T) {
-	encoded10 := encodeOrderPreservingVarUint64(uint64(10))
+	encoded10 := EncodeOrderPreservingVarUint64(uint64(10))
 	expectedIndexEntries :=
 		[]*IndexEntry{
 			{
 				Attribute:     "a1",
 				Type:          types.Type_NUMBER,
-				Metadata:      positiveNumber,
+				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         encoded10,
 				KeyPosition:   Existing,
