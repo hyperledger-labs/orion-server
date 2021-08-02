@@ -1,7 +1,6 @@
 package queryexecutor
 
 import (
-	"encoding/json"
 	"sync"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
@@ -97,6 +96,7 @@ func (e *WorldStateQueryExecutor) executeAllConditions(dbName string, attrsConds
 
 			keys, err := e.execute(dbName, attr, conds)
 			if err != nil {
+				e.logger.Errorf("error while executing conditions [%v] on attribute [%s] in the database [%s]", conds, attr, dbName)
 				errC <- err
 				return
 			}
@@ -123,16 +123,16 @@ func (e *WorldStateQueryExecutor) execute(dbName string, attribute string, conds
 		return nil, err
 	}
 
-	startKey, err := json.Marshal(plan.startKey)
+	startKey, err := plan.startKey.String()
 	if err != nil {
 		return nil, err
 	}
-	endKey, err := json.Marshal(plan.endKey)
+	endKey, err := plan.endKey.String()
 	if err != nil {
 		return nil, err
 	}
 
-	iter, err := e.db.GetIterator(stateindex.IndexDB(dbName), string(startKey), string(endKey))
+	iter, err := e.db.GetIterator(stateindex.IndexDB(dbName), startKey, endKey)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (e *WorldStateQueryExecutor) execute(dbName string, attribute string, conds
 		}
 
 		indexEntry := &stateindex.IndexEntry{}
-		if err := json.Unmarshal([]byte(iter.Key()), indexEntry); err != nil {
+		if err := indexEntry.Load(iter.Key()); err != nil {
 			return nil, err
 		}
 

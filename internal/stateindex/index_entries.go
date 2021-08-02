@@ -17,10 +17,10 @@ const (
 	// indexDBPrefix is the prefix added to each user database to create an index
 	// database for that user database
 	indexDBPrefix = "_index_"
-	// positiveNumber and negativeNumber are metadata that denote whether the value being
+	// PositiveNumber and NegativeNumber are metadata that denote whether the value being
 	// index is positive or negative
-	positiveNumber = "p"
-	negativeNumber = "n"
+	PositiveNumber = "p"
+	NegativeNumber = "n"
 )
 
 const (
@@ -29,7 +29,8 @@ const (
 	Ending
 )
 
-func constructIndexEntries(updates map[string]*worldstate.DBUpdates, db worldstate.DB) (map[string]*worldstate.DBUpdates, error) {
+// ConstructIndexEntries constructs index entries for the supplied the world state updates
+func ConstructIndexEntries(updates map[string]*worldstate.DBUpdates, db worldstate.DB) (map[string]*worldstate.DBUpdates, error) {
 	indexEntries := make(map[string]*worldstate.DBUpdates)
 
 	for dbName, update := range updates {
@@ -126,6 +127,21 @@ type IndexEntry struct {
 	Value         interface{} `json:"v"`
 	KeyPosition   int8        `json:"kp"` // KeyPosition is used such that range query for lesser than, greater than can be executed easily
 	Key           string      `json:"k"`
+}
+
+// String returns a string representation of the indexEntry
+func (e *IndexEntry) String() (string, error) {
+	b, err := json.Marshal(e)
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
+}
+
+// Load loads the string representation of IndexEntry into the IndexEntry object
+func (e *IndexEntry) Load(entry []byte) error {
+	return json.Unmarshal(entry, e)
 }
 
 func indexEntriesForNewValues(kvs []*worldstate.KVWithMetadata, index map[string]types.Type) ([]*IndexEntry, error) {
@@ -231,9 +247,9 @@ func GetMetadataAndValue(value interface{}, t types.Type) (string, interface{}) 
 
 	num := value.(int64)
 	if num >= 0 {
-		return positiveNumber, encodeOrderPreservingVarUint64(uint64(num))
+		return PositiveNumber, EncodeOrderPreservingVarUint64(uint64(num))
 	}
-	return negativeNumber, encodeReverseOrderVarUint64(uint64(-num))
+	return NegativeNumber, EncodeReverseOrderVarUint64(uint64(-num))
 }
 
 func getType(v reflect.Value) reflect.Kind {
@@ -323,11 +339,11 @@ func removeDuplicateIndexEntries(indexOfNewValues, indexOfExistingValues []strin
 func toStrings(indexEntries []*IndexEntry) ([]string, error) {
 	var entries []string
 	for _, indexEntry := range indexEntries {
-		b, err := json.Marshal(indexEntry)
+		e, err := indexEntry.String()
 		if err != nil {
 			return nil, err
 		}
-		entries = append(entries, string(b))
+		entries = append(entries, e)
 	}
 
 	return entries, nil

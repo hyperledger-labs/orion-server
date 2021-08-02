@@ -4,10 +4,10 @@ import (
 	"math"
 )
 
-// encodeOrderPreservingVarUint64 returns a byte-representation for a uint64 number such that
+// EncodeOrderPreservingVarUint64 returns a byte-representation for a uint64 number such that
 // all zero-bits starting bytes are trimmed in order to reduce the length of the array
 // For preserving the order in a default bytes-comparison, first byte contains the number of remaining bytes.
-func encodeOrderPreservingVarUint64(n uint64) []byte {
+func EncodeOrderPreservingVarUint64(n uint64) []byte {
 	var bytePosition int
 	for bytePosition = 0; bytePosition <= 7; bytePosition++ {
 		if byte(n>>(56-(bytePosition*8))) != 0x00 {
@@ -37,12 +37,12 @@ func decodeOrderPreservingVarUint64(b []byte) uint64 {
 	return v
 }
 
-// encodeReverseOrderVarUint64 returns a byte-representation for a uint64 number such that
+// EncodeReverseOrderVarUint64 returns a byte-representation for a uint64 number such that
 // the number is first subtracted from MaxUint64 and then all the leading 0xff bytes
 // are trimmed and replaced by the number of such trimmed bytes. This helps in reducing the size.
 // In the byte order comparison this encoding ensures that encodeReverseOrderVarUint64(A) > encodeReverseOrderVarUint64(B),
 // If B > A
-func encodeReverseOrderVarUint64(n uint64) []byte {
+func EncodeReverseOrderVarUint64(n uint64) []byte {
 	n = math.MaxUint64 - n
 
 	var bytePosition int

@@ -3,6 +3,7 @@
 package blockprocessor
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -339,83 +340,119 @@ func TestBlockStoreCommitter(t *testing.T) {
 	})
 }
 
-func TestStateDBCommitterForDataBlock(t *testing.T) {
+func TestStateDBCommitterForDataBlockWithIndex(t *testing.T) {
 	t.Parallel()
 
-	setup := func(db worldstate.DB) {
-		createDB := map[string]*worldstate.DBUpdates{
+	expectedDataBefore := []*worldstate.KVWithMetadata{
+		{
+			Key:   "key1",
+			Value: []byte(`{"title":"book1","year":2015,"bestseller":true}`),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 2,
+					TxNum:    0,
+				},
+			},
+		},
+		{
+			Key:   "key2",
+			Value: []byte(`{"title":"book2","year":2016,"bestseller":false}`),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 2,
+					TxNum:    0,
+				},
+			},
+		},
+	}
+
+	encoded2015 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2015))
+	encoded2016 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2016))
+	encoded2018 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2018))
+	encoded2021 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2021))
+
+	expectedIndexBefore := []*worldstate.KVWithMetadata{
+		{
+			Key: `{"a":"title","t":1,"m":"","vp":1,"v":"book1","kp":1,"k":"key1"}`,
+		},
+		{
+			Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":1,"v":"` + encoded2015 + `","kp":1,"k":"key1"}`,
+		},
+		{
+			Key: `{"a":"bestseller","t":2,"m":"","vp":1,"v":true,"kp":1,"k":"key1"}`,
+		},
+		{
+			Key: `{"a":"title","t":1,"m":"","vp":1,"v":"book2","kp":1,"k":"key2"}`,
+		},
+		{
+			Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":1,"v":"` + encoded2016 + `","kp":1,"k":"key2"}`,
+		},
+		{
+			Key: `{"a":"bestseller","t":2,"m":"","vp":1,"v":false,"kp":1,"k":"key2"}`,
+		},
+	}
+
+	setup := func(c *committer) {
+		indexDef := map[string]types.Type{
+			"title":      types.Type_STRING,
+			"year":       types.Type_NUMBER,
+			"bestseller": types.Type_BOOLEAN,
+		}
+		marshaledIndexDef, err := json.Marshal(indexDef)
+		require.NoError(t, err)
+
+		createDbs := map[string]*worldstate.DBUpdates{
 			worldstate.DatabasesDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
-						Key: "db1",
+						Key:   "db1",
+						Value: marshaledIndexDef,
+					},
+					{
+						Key: stateindex.IndexDB("db1"),
 					},
 				},
 			},
 		}
-		require.NoError(t, db.Commit(createDB, 1))
+		require.NoError(t, c.db.Commit(createDbs, 1))
 
-		data := map[string]*worldstate.DBUpdates{
-			worldstate.DefaultDBName: {
-				Writes: []*worldstate.KVWithMetadata{
-					constructDataEntryForTest("key1", []byte("value1"), &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
-						},
-						AccessControl: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
-							},
-						},
-					}),
-					constructDataEntryForTest("key2", []byte("value2"), nil),
-					constructDataEntryForTest("key3", []byte("value3"), nil),
-				},
-			},
+		dbsUpdates := map[string]*worldstate.DBUpdates{
 			"db1": {
 				Writes: []*worldstate.KVWithMetadata{
-					constructDataEntryForTest("key1", []byte("value1"), &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
-						},
-						AccessControl: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
+					{
+						Key:   "key1",
+						Value: []byte(`{"title":"book1","year":2015,"bestseller":true}`),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    0,
 							},
 						},
-					}),
-					constructDataEntryForTest("key2", []byte("value2"), nil),
-					constructDataEntryForTest("key3", []byte("value3"), nil),
+					},
+					{
+						Key:   "key2",
+						Value: []byte(`{"title":"book2","year":2016,"bestseller":false}`),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    0,
+							},
+						},
+					},
 				},
 			},
 		}
-
-		require.NoError(t, db.Commit(data, 1))
-	}
-
-	expectedDataBefore := []*worldstate.KVWithMetadata{
-		constructDataEntryForTest("key1", []byte("value1"), &types.Metadata{
-			Version: &types.Version{
-				BlockNum: 1,
-				TxNum:    1,
-			},
-			AccessControl: &types.AccessControl{
-				ReadWriteUsers: map[string]bool{
-					"user1": true,
-				},
-			},
-		}),
-		constructDataEntryForTest("key2", []byte("value2"), nil),
-		constructDataEntryForTest("key3", []byte("value3"), nil),
+		require.NoError(t, c.commitToStateDB(2, dbsUpdates))
 	}
 
 	tests := []struct {
-		name                     string
-		txs                      []*types.DataTxEnvelope
-		valInfo                  []*types.ValidationInfo
-		expectedDbsInUpdateBatch []string
-		expectedDataAfter        []*worldstate.KVWithMetadata
+		name                string
+		txs                 []*types.DataTxEnvelope
+		valInfo             []*types.ValidationInfo
+		expectedDataBefore  []*worldstate.KVWithMetadata
+		expectedIndexBefore []*worldstate.KVWithMetadata
+		expectedDataAfter   []*worldstate.KVWithMetadata
+		expectedIndexAfter  []*worldstate.KVWithMetadata
 	}{
 		{
 			name: "update existing, add new, and delete existing",
@@ -425,36 +462,11 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 						MustSignUserIds: []string{"testUser"},
 						DbOperations: []*types.DBOperation{
 							{
-								DbName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key2",
-										Value: []byte("new-value2"),
-										Acl: &types.AccessControl{
-											ReadUsers: map[string]bool{
-												"user1": true,
-											},
-											ReadWriteUsers: map[string]bool{
-												"user2": true,
-											},
-										},
-									},
-								},
-							},
-							{
 								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key2",
-										Value: []byte("new-value2"),
-										Acl: &types.AccessControl{
-											ReadUsers: map[string]bool{
-												"user1": true,
-											},
-											ReadWriteUsers: map[string]bool{
-												"user2": true,
-											},
-										},
+										Value: []byte(`{"title":"book2","year":2018,"bestseller":true,"newfield":"abc"}`),
 									},
 								},
 							},
@@ -465,21 +477,12 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 					Payload: &types.DataTx{
 						MustSignUserIds: []string{"testUser"},
 						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key3",
-										Value: []byte("new-value3"),
-									},
-								},
-							},
 							{
 								DbName: "db1",
 								DataWrites: []*types.DataWrite{
 									{
 										Key:   "key3",
-										Value: []byte("new-value3"),
+										Value: []byte(`{"title":"book3","year":2021,"bestseller":false}`),
 									},
 								},
 							},
@@ -490,59 +493,11 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 					Payload: &types.DataTx{
 						MustSignUserIds: []string{"testUser"},
 						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key4",
-										Value: []byte("value4"),
-									},
-								},
-							},
-							{
-								DbName: "db1",
-								DataWrites: []*types.DataWrite{
-									{
-										Key:   "key4",
-										Value: []byte("value4"),
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.DataTx{
-						MustSignUserIds: []string{"testUser"},
-						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataDeletes: []*types.DataDelete{
-									{
-										Key: "key1",
-									},
-								},
-							},
 							{
 								DbName: "db1",
 								DataDeletes: []*types.DataDelete{
 									{
 										Key: "key1",
-									},
-								},
-							},
-						},
-					},
-				},
-				{
-					Payload: &types.DataTx{
-						MustSignUserIds: []string{"testUser"},
-						DbOperations: []*types.DBOperation{
-							{
-								DbName: worldstate.DefaultDBName,
-								DataDeletes: []*types.DataDelete{
-									{
-										Key: "key2",
 									},
 								},
 							},
@@ -560,43 +515,72 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 				{
 					Flag: types.Flag_VALID,
 				},
+			},
+			expectedDataBefore:  expectedDataBefore,
+			expectedIndexBefore: expectedIndexBefore,
+			expectedDataAfter: []*worldstate.KVWithMetadata{
 				{
-					Flag: types.Flag_VALID,
+					Key:   "key2",
+					Value: []byte(`{"title":"book2","year":2018,"bestseller":true,"newfield":"abc"}`),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 3,
+							TxNum:    0,
+						},
+					},
 				},
 				{
-					Flag: types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
+					Key:   "key3",
+					Value: []byte(`{"title":"book3","year":2021,"bestseller":false}`),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 3,
+							TxNum:    1,
+						},
+					},
 				},
 			},
-			expectedDbsInUpdateBatch: []string{worldstate.DefaultDBName, "db1"},
-			expectedDataAfter: []*worldstate.KVWithMetadata{
-				constructDataEntryForTest("key2", []byte("new-value2"), &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 2,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadUsers: map[string]bool{
-							"user1": true,
-						},
-						ReadWriteUsers: map[string]bool{
-							"user2": true,
-						},
-					},
-				}),
-				constructDataEntryForTest("key3", []byte("new-value3"), &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 2,
-						TxNum:    1,
-					},
-				}),
-				constructDataEntryForTest("key4", []byte("value4"), &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 2,
-						TxNum:    2,
-					},
-				}),
+			expectedIndexAfter: []*worldstate.KVWithMetadata{
+				{
+					Key: `{"a":"title","t":1,"m":"","vp":1,"v":"book2","kp":1,"k":"key2"}`,
+				},
+				{
+					Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":1,"v":"` + encoded2018 + `","kp":1,"k":"key2"}`,
+				},
+				{
+					Key: `{"a":"bestseller","t":2,"m":"","vp":1,"v":true,"kp":1,"k":"key2"}`,
+				},
+				{
+					Key: `{"a":"title","t":1,"m":"","vp":1,"v":"book3","kp":1,"k":"key3"}`,
+				},
+				{
+					Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":1,"v":"` + encoded2021 + `","kp":1,"k":"key3"}`,
+				},
+				{
+					Key: `{"a":"bestseller","t":2,"m":"","vp":1,"v":false,"kp":1,"k":"key3"}`,
+				},
 			},
 		},
+	}
+
+	fetchAllKVsFromDB := func(db worldstate.DB, dbName string) map[string]*worldstate.KVWithMetadata {
+		committedData := make(map[string]*worldstate.KVWithMetadata)
+		itr, err := db.GetIterator(dbName, "", "")
+		defer itr.Release()
+		require.NoError(t, err)
+		for itr.Next() {
+			k := string(itr.Key())
+			v := &types.ValueWithMetadata{}
+			require.NoError(t, proto.Unmarshal(itr.Value(), v))
+			require.NoError(t, err)
+			committedData[k] = &worldstate.KVWithMetadata{
+				Key:      k,
+				Value:    v.Value,
+				Metadata: v.Metadata,
+			}
+		}
+
+		return committedData
 	}
 
 	for _, tt := range tests {
@@ -607,21 +591,24 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 			env := newCommitterTestEnv(t)
 			defer env.cleanup()
 
-			setup(env.db)
+			setup(env.committer)
 
-			for _, db := range []string{worldstate.DefaultDBName, "db1"} {
-				for _, kv := range expectedDataBefore {
-					val, meta, err := env.db.Get(db, kv.Key)
-					require.NoError(t, err)
-					require.Equal(t, kv.Value, val)
-					require.Equal(t, kv.Metadata, meta)
-				}
+			committedData := fetchAllKVsFromDB(env.db, "db1")
+			require.Equal(t, len(tt.expectedDataBefore), len(committedData))
+			for _, expectedKV := range tt.expectedDataBefore {
+				require.Equal(t, expectedKV, committedData[expectedKV.Key])
+			}
+
+			committedIndex := fetchAllKVsFromDB(env.db, stateindex.IndexDB("db1"))
+			require.Equal(t, len(tt.expectedIndexBefore), len(committedIndex))
+			for _, expectedIndexKV := range tt.expectedIndexBefore {
+				require.Equal(t, expectedIndexKV, committedIndex[expectedIndexKV.Key])
 			}
 
 			block := &types.Block{
 				Header: &types.BlockHeader{
 					BaseHeader: &types.BlockHeaderBase{
-						Number: 2,
+						Number: 3,
 					},
 					ValidationInfo: tt.valInfo,
 				},
@@ -634,20 +621,18 @@ func TestStateDBCommitterForDataBlock(t *testing.T) {
 
 			dbsUpdates, _, err := env.committer.constructDBAndProvenanceEntries(block)
 			require.NoError(t, err)
-			require.Equal(t, len(tt.expectedDbsInUpdateBatch), len(dbsUpdates))
-			for _, dbName := range tt.expectedDbsInUpdateBatch {
-				_, ok := dbsUpdates[dbName]
-				require.Equal(t, true, ok)
-			}
 			require.NoError(t, env.committer.commitToStateDB(2, dbsUpdates))
 
-			for _, db := range []string{worldstate.DefaultDBName, "db1"} {
-				for _, kv := range tt.expectedDataAfter {
-					val, meta, err := env.db.Get(db, kv.Key)
-					require.NoError(t, err)
-					require.Equal(t, kv.Value, val)
-					require.Equal(t, kv.Metadata, meta)
-				}
+			committedData = fetchAllKVsFromDB(env.db, "db1")
+			require.Equal(t, len(tt.expectedDataAfter), len(committedData))
+			for _, expectedKV := range tt.expectedDataAfter {
+				require.Equal(t, expectedKV, committedData[expectedKV.Key])
+			}
+
+			committedIndex = fetchAllKVsFromDB(env.db, stateindex.IndexDB("db1"))
+			require.Equal(t, len(tt.expectedIndexAfter), len(committedIndex))
+			for _, expectedIndexKV := range tt.expectedIndexAfter {
+				require.Equal(t, expectedIndexKV, committedIndex[expectedIndexKV.Key])
 			}
 		})
 	}

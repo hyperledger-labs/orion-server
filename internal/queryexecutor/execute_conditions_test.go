@@ -535,6 +535,18 @@ func TestExecute(t *testing.T) {
 			},
 			expectedKeys: []string{"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15", "key31", "key16", "key17", "key18", "key19", "key20", "key21", "key22", "key23"},
 		},
+		{
+			name:      "all values",
+			attribute: "attr1",
+			condition: &attributeTypeAndConditions{
+				valueType: types.Type_STRING,
+				conditions: map[string]interface{}{
+					"$gt": "zzz",
+					"$lt": "",
+				},
+			},
+			expectedKeys: []string{},
+		},
 	}
 
 	for _, tt := range tests {
