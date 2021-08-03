@@ -225,7 +225,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 		wg.Add(1)
 
 		submitManyTillClosed := func() {
-			for i := 0; i < 1000; i++ { // larger then the raft pipeline
+			for i := 0; i < 1000; i++ { // larger than the raft pipeline
 				block := &types.Block{
 					Header: &types.BlockHeader{
 						BaseHeader: &types.BlockHeaderBase{
@@ -241,8 +241,14 @@ func TestBlockReplicator_Submit(t *testing.T) {
 				}
 				if err != nil {
 					wg.Done()
-					require.EqualError(t, err, "block replicator closed")
-					require.IsType(t, &ierrors.ClosedError{}, err)
+					switch err.(type) {
+					case *ierrors.NotLeaderError:
+						require.EqualError(t, err, "not a leader, leader is: 0")
+					case *ierrors.ClosedError:
+						require.EqualError(t, err, "block replicator closed")
+					default:
+						t.Fail()
+					}
 					break
 				}
 			}
