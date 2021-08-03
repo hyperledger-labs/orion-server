@@ -17,7 +17,7 @@ import (
 )
 
 type testEnv struct {
-	e       *WorldStateQueryExecutor
+	e       *WorldStateJSONQueryExecutor
 	cleanup func()
 }
 
@@ -52,7 +52,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	return &testEnv{
-		e: NewWorldStateQueryExecutor(db, l),
+		e: NewWorldStateJSONQueryExecutor(db, l),
 		cleanup: func() {
 			if err := db.Close(); err != nil {
 				t.Log("error while closing the database: [" + err.Error() + "]")
@@ -62,6 +62,233 @@ func newTestEnv(t *testing.T) *testEnv {
 				t.Fail()
 			}
 		},
+	}
+}
+
+func TestExecuteJSONQuery(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	dbName := "testdb"
+	setupDBForTestingExecutes(t, env.e.db, dbName)
+
+	tests := []struct {
+		name         string
+		query        []byte
+		expectedKeys map[string]bool
+	}{
+		{
+			name: "neither and nor or is set",
+			query: []byte(
+				`{
+					"attr1": {
+						"$gte": "a",
+						"$lt": "b"
+					},
+					"attr2": {
+						"$eq": true
+					},
+					"attr3": {
+						"$lt": "a2"
+					}
+				}`,
+			),
+			expectedKeys: map[string]bool{
+				"key1": true,
+				"key2": true,
+				"key3": true,
+			},
+		},
+		{
+			name: "and is set",
+			query: []byte(
+				`{
+					"$and": {
+						"attr1": {
+							"$gte": "a",
+							"$lt": "b"
+						},
+						"attr2": {
+							"$eq": true
+						},
+						"attr3": {
+							"$lt": "a2"
+						}
+					}
+				}`,
+			),
+			expectedKeys: map[string]bool{
+				"key1": true,
+				"key2": true,
+				"key3": true,
+			},
+		},
+		{
+			name: "or is set",
+			query: []byte(
+				`{
+					"$or": {
+						"attr1": {
+							"$gte": "b",
+							"$lt": "c"
+						},
+						"attr2": {
+							"$eq": false
+						},
+						"attr3": {
+							"$gte": "a2"
+						}
+					}
+				}`,
+			),
+			expectedKeys: map[string]bool{
+				"key4":  true,
+				"key5":  true,
+				"key11": true,
+				"key21": true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			keys, err := env.e.ExecuteQuery(dbName, tt.query)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedKeys, keys)
+		})
+	}
+}
+
+func TestExecuteJSONQueryErrorCases(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+
+	dbName := "testdb"
+	setupDBForTestingExecutes(t, env.e.db, dbName)
+
+	tests := []struct {
+		name          string
+		query         []byte
+		expectedError string
+	}{
+		{
+			name: "both and - or are set",
+			query: []byte(
+				`{
+					"$and": {
+						"attr1": {
+							"$gte": "a",
+							"$lt": "b"
+						},
+						"attr2": {
+							"$eq": true
+						}
+					},
+					"$or": {
+						"attr3": {
+							"$lt": "a2"
+						},
+						"attr2": {
+							"$eq": true
+						}
+					}
+				}`,
+			),
+			expectedError: "there must be a single upper level combination operator",
+		},
+		{
+			name: "extra commas: query syntax error",
+			query: []byte(
+				`{
+					"$and": {
+						"attr1": {
+							"$gte": "a",
+							"$lt": "b",
+						},
+					}
+				}`,
+			),
+			expectedError: "error decoding the query",
+		},
+		{
+			name: "and is not with correct syntax",
+			query: []byte(
+				`{
+					"$and": [
+						{
+							"attr1": "bc"
+						},
+						{
+							"attr2": "bc"
+						}
+					]
+				}`,
+			),
+			expectedError: "query syntax error near $and",
+		},
+		{
+			name: "or is not with correct syntax",
+			query: []byte(
+				`{
+					"$or": [
+						{
+							"attr1": "bc"
+						},
+						{
+							"attr2": "bc"
+						}
+					]
+				}`,
+			),
+			expectedError: "query syntax error near $or",
+		},
+		{
+			name: "attribute used in and is not indexed",
+			query: []byte(
+				`{
+					"$and": {
+						"attr5": {
+							"$eq": true
+						}
+					}
+				}`,
+			),
+			expectedError: "attribute [attr5] given in the query condition is not indexed",
+		},
+		{
+			name: "attribute used in or is not indexed",
+			query: []byte(
+				`{
+					"$or": {
+						"attr5": {
+							"$eq": true
+						}
+					}
+				}`,
+			),
+			expectedError: "attribute [attr5] given in the query condition is not indexed",
+		},
+		{
+			name: "attribute used in default combination is not indexed",
+			query: []byte(
+				`{
+					"attr5": {
+						"$eq": true
+					}
+				}`,
+			),
+			expectedError: "attribute [attr5] given in the query condition is not indexed",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := env.e.ExecuteQuery(dbName, tt.query)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.expectedError)
+		})
 	}
 }
 

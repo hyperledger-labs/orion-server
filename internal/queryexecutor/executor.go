@@ -1,6 +1,7 @@
 package queryexecutor
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -15,16 +16,80 @@ import (
 // WorldStateQueryExecutor executes a given set of query criterias on the states stored in
 // the world state database and returns a set of keys whose values are matching the given
 // criterias
-type WorldStateQueryExecutor struct {
+type WorldStateJSONQueryExecutor struct {
 	db     worldstate.DB
 	logger *logger.SugarLogger
 }
 
-func NewWorldStateQueryExecutor(db worldstate.DB, l *logger.SugarLogger) *WorldStateQueryExecutor {
-	return &WorldStateQueryExecutor{
+func NewWorldStateJSONQueryExecutor(db worldstate.DB, l *logger.SugarLogger) *WorldStateJSONQueryExecutor {
+	return &WorldStateJSONQueryExecutor{
 		db:     db,
 		logger: l,
 	}
+}
+
+func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byte) (map[string]bool, error) {
+	query := make(map[string]interface{})
+	decoder := json.NewDecoder(bytes.NewBuffer(selector))
+	decoder.UseNumber()
+	if err := decoder.Decode(&query); err != nil {
+		return nil, errors.Wrap(err, "error decoding the query")
+	}
+
+	// only the following query semantics are allowed for now
+	// "$and: {cond1, cond2, ...} -- all conditions must pass
+	// "$or": {cond1, cond2, ...} -- any one condition needs to pass
+	// {cond1, cond2, cond3} -- if no combination operator is specified, it defaults to "$and"
+
+	// in the future, we will allow nested "$and", "$or" semantics
+
+	_, and := query[constants.QueryOpAnd]
+	_, or := query[constants.QueryOpOr]
+
+	var keys map[string]bool
+
+	switch {
+	case !and && !or:
+		// default is $and
+		disectedConditions, err := e.validateAndDisectConditions(dbName, query)
+		if err != nil {
+			return nil, err
+		}
+		if keys, err = e.executeAND(dbName, disectedConditions); err != nil {
+			return nil, err
+		}
+	case and && or:
+		// not supported yet
+		return nil, errors.New("there must be a single upper level combination operator")
+	case and:
+		c, ok := query[constants.QueryOpAnd].(map[string]interface{})
+		if !ok {
+			return nil, errors.New("query syntax error near $and")
+		}
+
+		disectedConditions, err := e.validateAndDisectConditions(dbName, c)
+		if err != nil {
+			return nil, err
+		}
+		if keys, err = e.executeAND(dbName, disectedConditions); err != nil {
+			return nil, err
+		}
+	case or:
+		c, ok := query[constants.QueryOpOr].(map[string]interface{})
+		if !ok {
+			return nil, errors.New("query syntax error near $or")
+		}
+
+		disectedConditions, err := e.validateAndDisectConditions(dbName, c)
+		if err != nil {
+			return nil, err
+		}
+		if keys, err = e.executeOR(dbName, disectedConditions); err != nil {
+			return nil, err
+		}
+	}
+
+	return keys, nil
 }
 
 type attributeToConditions map[string]*attributeTypeAndConditions
@@ -34,7 +99,7 @@ type attributeTypeAndConditions struct {
 	conditions map[string]interface{}
 }
 
-func (e *WorldStateQueryExecutor) validateAndDisectConditions(dbName string, conditions map[string]interface{}) (attributeToConditions, error) {
+func (e *WorldStateJSONQueryExecutor) validateAndDisectConditions(dbName string, conditions map[string]interface{}) (attributeToConditions, error) {
 	// when we reach here, we assume that the given dbName exist
 	marshledIndexDef, _, err := e.db.GetIndexDefinition(dbName)
 	if err != nil {
