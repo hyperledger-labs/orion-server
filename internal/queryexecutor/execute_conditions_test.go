@@ -11,6 +11,14 @@ import (
 )
 
 func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
+	indexDef := map[string]types.Type{
+		"attr1": types.Type_STRING,
+		"attr2": types.Type_BOOLEAN,
+		"attr3": types.Type_STRING,
+	}
+	marshaledIndexDef, err := json.Marshal(indexDef)
+	require.NoError(t, err)
+
 	indexDBName := stateindex.IndexDB(dbName)
 
 	require.NoError(
@@ -19,6 +27,10 @@ func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
 			map[string]*worldstate.DBUpdates{
 				worldstate.DatabasesDBName: {
 					Writes: []*worldstate.KVWithMetadata{
+						{
+							Key:   dbName,
+							Value: marshaledIndexDef,
+						},
 						{
 							Key: indexDBName,
 						},
