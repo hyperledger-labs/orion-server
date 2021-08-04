@@ -25,6 +25,20 @@ func TestURLConstruction(t *testing.T) {
 			expectedURL: "/data/db1/key1",
 		},
 		{
+			name: "ExecuteQuery",
+			execute: func() string {
+				return URLForDataQuery("db1")
+			},
+			expectedURL: "/data/db1",
+		},
+		{
+			name: "JSONQuery",
+			execute: func() string {
+				return URLForJSONQuery("db1")
+			},
+			expectedURL: "/data/jsonquery/db1",
+		},
+		{
 			name: "GetUser",
 			execute: func() string {
 				return URLForGetUser("user1")

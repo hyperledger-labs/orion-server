@@ -3,11 +3,13 @@
 package bcdb
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate/leveldb"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -77,7 +79,6 @@ func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorT
 }
 
 func TestGetDBStatus(t *testing.T) {
-
 	t.Run("getDBStatus-Returns-Status", func(t *testing.T) {
 
 		env := newWorldstateQueryProcessorTestEnv(t)
@@ -118,7 +119,6 @@ func TestGetDBStatus(t *testing.T) {
 }
 
 func TestGetData(t *testing.T) {
-
 	setup := func(db worldstate.DB, userID, dbName string) {
 		user := &types.User{
 			Id: userID,
@@ -163,7 +163,6 @@ func TestGetData(t *testing.T) {
 	}
 
 	t.Run("getData returns data", func(t *testing.T) {
-
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -239,7 +238,6 @@ func TestGetData(t *testing.T) {
 	})
 
 	t.Run("getData returns permission error due to ACL", func(t *testing.T) {
-
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -280,7 +278,6 @@ func TestGetData(t *testing.T) {
 	})
 
 	t.Run("getData returns permission error due to directly accessing system database", func(t *testing.T) {
-
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
 
@@ -324,8 +321,271 @@ func TestGetData(t *testing.T) {
 	})
 }
 
-func TestGetUser(t *testing.T) {
+func TestExecuteJSONQuery(t *testing.T) {
+	m := &types.Metadata{
+		Version: &types.Version{
+			BlockNum: 3,
+			TxNum:    0,
+		},
+		AccessControl: &types.AccessControl{
+			ReadUsers: map[string]bool{
+				"user1": true,
+			},
+		},
+	}
+	db1 := "db1"
 
+	setup := func(db worldstate.DB, userID string) {
+		user := &types.User{
+			Id: userID,
+			Privilege: &types.Privilege{
+				DbPermission: map[string]types.Privilege_Access{
+					db1: types.Privilege_ReadWrite,
+				},
+			},
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + userID,
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createUser, 2))
+
+		indexDef := map[string]types.Type{
+			"attr1": types.Type_STRING,
+			"attr2": types.Type_BOOLEAN,
+			"attr3": types.Type_STRING,
+		}
+		marshaledIndexDef, err := json.Marshal(indexDef)
+		require.NoError(t, err)
+
+		indexDBName := stateindex.IndexDB(db1)
+
+		createDB := map[string]*worldstate.DBUpdates{
+			worldstate.DatabasesDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   db1,
+						Value: marshaledIndexDef,
+					},
+					{
+						Key: "db2",
+					},
+					{
+						Key: indexDBName,
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createDB, 2))
+
+		dbsUpdates := map[string]*worldstate.DBUpdates{
+			db1: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      "key1",
+						Value:    []byte(`{"attr1":"a","attr2":false,"attr3":"z","attr4":100}`),
+						Metadata: m,
+					},
+					{
+						Key:      "key2",
+						Value:    []byte(`{"attr1":"b","attr2":false,"attr3":"y","attr4":101}`),
+						Metadata: m,
+					},
+					{
+						Key:      "key3",
+						Value:    []byte(`{"attr1":"c","attr2":false,"attr3":"x","attr4":102}`),
+						Metadata: m,
+					},
+					{
+						Key:      "key4",
+						Value:    []byte(`{"attr1":"f","attr2":true,"attr3":"m","attr4":-100}`),
+						Metadata: m,
+					},
+					{
+						Key:      "key5",
+						Value:    []byte(`{"attr1":"g","attr2":true,"attr3":"n","attr4":-101}`),
+						Metadata: m,
+					},
+					{
+						Key:      "key6",
+						Value:    []byte(`{"attr1":"h","attr2":true,"attr3":"o","attr4":-102}`),
+						Metadata: m,
+					},
+				},
+			},
+		}
+
+		indexUpdates, err := stateindex.ConstructIndexEntries(dbsUpdates, db)
+		require.NoError(t, err)
+		for indexDB, updates := range indexUpdates {
+			dbsUpdates[indexDB] = updates
+		}
+		require.NoError(t, db.Commit(dbsUpdates, 3))
+	}
+
+	tests := []struct {
+		name        string
+		dbName      string
+		userID      string
+		query       []byte
+		expectedKVs map[string]*types.KVWithMetadata
+		expectedErr string
+	}{
+		{
+			name:   "fetch records based on boolean matching",
+			dbName: "db1",
+			userID: "user1",
+			query: []byte(
+				`{
+					"attr2": {
+						"$eq": true
+					}
+				}`,
+			),
+			expectedKVs: map[string]*types.KVWithMetadata{
+				"key4": {
+					Key:      "key4",
+					Value:    []byte(`{"attr1":"f","attr2":true,"attr3":"m","attr4":-100}`),
+					Metadata: m,
+				},
+				"key5": {
+					Key:      "key5",
+					Value:    []byte(`{"attr1":"g","attr2":true,"attr3":"n","attr4":-101}`),
+					Metadata: m,
+				},
+				"key6": {
+					Key:      "key6",
+					Value:    []byte(`{"attr1":"h","attr2":true,"attr3":"o","attr4":-102}`),
+					Metadata: m,
+				},
+			},
+		},
+		{
+			name:   "fetch records based on string",
+			dbName: "db1",
+			userID: "user1",
+			query: []byte(
+				`{
+					"attr1": {
+						"$gt": "",
+						"$lte": "d"
+					}
+				}`,
+			),
+			expectedKVs: map[string]*types.KVWithMetadata{
+				"key1": {
+					Key:      "key1",
+					Value:    []byte(`{"attr1":"a","attr2":false,"attr3":"z","attr4":100}`),
+					Metadata: m,
+				},
+				"key2": {
+					Key:      "key2",
+					Value:    []byte(`{"attr1":"b","attr2":false,"attr3":"y","attr4":101}`),
+					Metadata: m,
+				},
+				"key3": {
+					Key:      "key3",
+					Value:    []byte(`{"attr1":"c","attr2":false,"attr3":"x","attr4":102}`),
+					Metadata: m,
+				},
+			},
+		},
+		{
+			name:   "empty result due to acl",
+			dbName: "db1",
+			userID: "user2",
+			query: []byte(
+				`{
+					"attr2": {
+						"$eq": true
+					}
+				}`,
+			),
+		},
+		{
+			name:   "user cannot read from system database",
+			dbName: worldstate.ConfigDBName,
+			userID: "user1",
+			query: []byte(
+				`{
+					"attr1": {
+						"$gt": "",
+						"$lte": "d"
+					}
+				}`,
+			),
+			expectedErr: "no user can directly read from a system database [" + worldstate.ConfigDBName + "]",
+		},
+		{
+			name:   "user does not have read permission",
+			dbName: "db2",
+			userID: "user1",
+			query: []byte(
+				`{
+					"attr1": {
+						"$gt": "",
+						"$lte": "d"
+					}
+				}`,
+			),
+			expectedErr: "the user [user1] has no permission to read from database [db2]",
+		},
+		{
+			name:   "query syntax error",
+			dbName: "db1",
+			userID: "user1",
+			query: []byte(
+				`{
+					"attr1": {
+						"$gt": "",
+						"$lte": "d",
+					}
+				}`,
+			),
+			expectedErr: "error decoding the query",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			env := newWorldstateQueryProcessorTestEnv(t)
+			defer env.cleanup(t)
+
+			setup(env.db, tt.userID)
+			result, err := env.q.executeJSONQuery(tt.dbName, tt.userID, tt.query)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+				require.Equal(t, len(tt.expectedKVs), len(result.KVs))
+				for _, kv := range result.KVs {
+					require.True(t, proto.Equal(kv, tt.expectedKVs[kv.Key]))
+				}
+			} else {
+				require.Nil(t, result)
+				require.NotNil(t, err)
+				require.Contains(t, err.Error(), tt.expectedErr)
+			}
+		})
+	}
+}
+
+func TestGetUser(t *testing.T) {
 	t.Run("query existing user", func(t *testing.T) {
 		querierUser := &types.User{
 			Id: "querierUser",
@@ -508,7 +768,6 @@ func TestGetUser(t *testing.T) {
 	})
 
 	t.Run("error expected", func(t *testing.T) {
-
 		querierUser := &types.User{
 			Id: "querierUser",
 		}
@@ -576,7 +835,6 @@ func TestGetUser(t *testing.T) {
 		for _, tt := range tests {
 			tt := tt
 			t.Run(tt.name, func(t *testing.T) {
-
 				env := newWorldstateQueryProcessorTestEnv(t)
 				defer env.cleanup(t)
 
@@ -591,7 +849,6 @@ func TestGetUser(t *testing.T) {
 }
 
 func TestGetConfig(t *testing.T) {
-
 	t.Run("getConfig returns config", func(t *testing.T) {
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)

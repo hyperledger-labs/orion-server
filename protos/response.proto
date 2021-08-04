@@ -186,3 +186,14 @@ message TxReceiptResponse {
   ResponseHeader header = 1;
   TxReceipt receipt = 2;
 }
+
+message DataQueryResponseEnvelope {
+  DataQueryResponse response = 1;
+  bytes signature = 2;
+}
+
+message DataQueryResponse {
+  ResponseHeader header = 1;
+  repeated KVWithMetadata KVs = 2;
+}
+

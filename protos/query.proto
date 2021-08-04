@@ -202,3 +202,9 @@ message GetMostRecentUserOrNodeQuery {
     string id = 3;
     Version  version = 4;
 }
+
+message DataJSONQuery {
+    string user_id = 1;
+    string db_name = 2;
+    string query = 3;
+}

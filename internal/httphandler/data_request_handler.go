@@ -42,6 +42,7 @@ func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler 
 
 	handler.router.HandleFunc(constants.GetData, handler.dataQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostDataTx, handler.dataTransaction).Methods(http.MethodPost)
+	handler.router.HandleFunc(constants.PostDataQuery, handler.dataJSONQuery).Methods(http.MethodPost)
 
 	return handler
 }
@@ -142,4 +143,41 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	}
 
 	d.txHandler.handleTransaction(response, txEnv, timeout)
+}
+
+func (d *dataRequestHandler) dataJSONQuery(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.PostDataQuery, d.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.DataJSONQuery)
+
+	if !d.db.IsDBExists(query.DbName) {
+		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
+			ErrMsg: "'" + query.DbName + "' does not exist",
+		})
+		return
+	}
+
+	data, err := d.db.DataQuery(query.DbName, query.UserId, []byte(query.Query))
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *errors.PermissionErr:
+			status = http.StatusForbidden
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		SendHTTPResponse(
+			response,
+			status,
+			&types.HttpResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	SendHTTPResponse(response, http.StatusOK, data)
 }
