@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/cayleygraph/cayley v0.7.7
 	github.com/cayleygraph/quad v1.1.0
+	github.com/gogo/protobuf v1.3.0
 	github.com/golang/protobuf v1.4.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/uuid v1.1.1

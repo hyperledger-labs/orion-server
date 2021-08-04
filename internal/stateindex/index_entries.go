@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
@@ -14,7 +15,11 @@ import (
 
 // IndexDBPrefix is the prefix added to each user database to create an index
 // database for that user database
-const IndexDBPrefix = "_index_"
+const (
+	IndexDBPrefix  = "_index_"
+	PositiveNumber = "p"
+	NegativeNumber = "n"
+)
 
 func constructIndexEntries(updates map[string]*worldstate.DBUpdates, db worldstate.DB) (map[string]*worldstate.DBUpdates, error) {
 	indexEntries := make(map[string]*worldstate.DBUpdates)
@@ -107,6 +112,7 @@ func indexEntriesForDeletes(deletes []string, index map[string]types.Type, db wo
 type indexEntry struct {
 	Attribute string      `json:"a"`
 	Type      types.Type  `json:"t"`
+	Metadata  string      `json:"m"`
 	Value     interface{} `json:"v"`
 	Key       string      `json:"k"`
 }
@@ -190,14 +196,23 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) [
 
 			same, value := isTypeSame(v.MapIndex(attr), valueType)
 			if same {
-				partialIndexEntries = append(
-					partialIndexEntries,
-					&indexEntry{
-						Attribute: attr.String(),
-						Type:      valueType,
-						Value:     value,
-					},
-				)
+				e := &indexEntry{
+					Attribute: attr.String(),
+					Type:      valueType,
+				}
+				if valueType == types.Type_NUMBER {
+					num := value.(int64)
+					if num >= 0 {
+						e.Metadata = PositiveNumber
+						e.Value = encodeOrderPreservingVarUint64(uint64(num))
+					} else {
+						e.Metadata = NegativeNumber
+						e.Value = encodeReverseOrderVarUint64(uint64(-num))
+					}
+				} else {
+					e.Value = value
+				}
+				partialIndexEntries = append(partialIndexEntries, e)
 			}
 			break
 		}
@@ -229,7 +244,12 @@ func isTypeSame(v reflect.Value, t types.Type) (bool, interface{}) {
 	case reflect.String:
 		if v.Type().Name() == "Number" {
 			if t == types.Type_NUMBER {
-				return true, fmt.Sprintf(`%v`, v)
+				num, err := strconv.ParseInt(fmt.Sprintf(`%v`, v), 10, 64)
+				if err != nil {
+					// float is not supported in index
+					return false, nil
+				}
+				return true, num
 			}
 			return false, nil
 		}
