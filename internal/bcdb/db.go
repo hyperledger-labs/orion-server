@@ -6,12 +6,12 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"io/ioutil"
 	"time"
 
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
+	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/fileops"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
 	mptrieStore "github.com/IBM-Blockchain/bcdb-server/internal/mptrie/store"
@@ -57,6 +57,29 @@ type DB interface {
 
 	// GetData retrieves values for given key
 	GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error)
+
+	// DataQuery executes a given JSON query and return key-value pairs which are matching
+	// the criteria provided in the query. The query is a json marshled bytes which needs
+	// to contain a top level combinational operator followed by a list of attributes and
+	// a list of conditions per attributes. For example, the following is one of the query:
+	//
+	// {
+	//   "selector": {
+	// 		"$and": {            -- top level combinational operator
+	// 			"attr1": {          -- a field in the json document
+	// 				"$gte": "a",    -- value criteria for the field
+	// 				"$lt": "b"      -- value criteria for the field
+	// 			},
+	// 			"attr2": {          -- a field in the json document
+	// 				"$eq": true     -- value criteria for the field
+	// 			},
+	// 			"attr3": {          -- a field in the json document
+	// 				"$lt": "a2"     -- a field in the json document
+	// 			}
+	// 		}
+	//   }
+	// }
+	DataQuery(dbName, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error)
 
 	// GetBlockHeader returns ledger block header
 	GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
@@ -391,6 +414,26 @@ func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseE
 
 	return &types.GetDataResponseEnvelope{
 		Response:  dataResponse,
+		Signature: sign,
+	}, nil
+}
+
+// DataQuery executes a given JSON query and return key-value pairs which are matching
+// the criteria provided in the query.
+func (d *db) DataQuery(dbName, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error) {
+	queryResponse, err := d.worldstateQueryProcessor.executeJSONQuery(dbName, querierUserID, query)
+	if err != nil {
+		return nil, err
+	}
+
+	queryResponse.Header = d.responseHeader()
+	sign, err := d.signature(queryResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.DataQueryResponseEnvelope{
+		Response:  queryResponse,
 		Signature: sign,
 	}, nil
 }

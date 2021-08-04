@@ -240,6 +240,275 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 	}
 }
 
+func TestDataRequestHandler_DataJSONQuery(t *testing.T) {
+	dbName := "test_database"
+
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	bobCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+
+	q := `{"attr1":{"$eq":true}}`
+	queryBytes, err := json.Marshal(q)
+	require.NoError(t, err)
+	require.NotNil(t, queryBytes)
+
+	queryReader := bytes.NewReader(queryBytes)
+	require.NotNil(t, queryReader)
+
+	sigFoo := testutils.SignatureFromQuery(t, aliceSigner, &types.DataJSONQuery{
+		UserId: submittingUserName,
+		DbName: dbName,
+		Query:  q,
+	})
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() (*http.Request, error)
+		dbMockFactory      func(response *types.DataQueryResponseEnvelope) bcdb.DB
+		expectedResponse   *types.DataQueryResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "valid json query",
+			expectedResponse: &types.DataQueryResponseEnvelope{
+				Response: &types.DataQueryResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte(`{"attr1":true}`),
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				db.On("DataQuery", dbName, submittingUserName, []byte(q)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "database does not exist",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(false)
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "'test_database' does not exist",
+		},
+		{
+			name: "submitting user is not eligible to query the database",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				db.On("DataQuery", dbName, submittingUserName, []byte(q)).
+					Return(nil, &interrors.PermissionErr{ErrMsg: "access forbidden"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
+			expectedErr:        "error while processing 'POST /data/test_database/jsonquery' because access forbidden",
+		},
+		{
+			name: "failed to execute the query",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				db.On("DataQuery", dbName, submittingUserName, []byte(q)).
+					Return(nil, errors.New("failed to execute the query"))
+				return db
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'POST /data/test_database/jsonquery' because failed to execute the query",
+		},
+		{
+			name: "user does not exist",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "failed to verify signature",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(bobCert, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "missing userID http header",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				return &mocks.DB{}
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
+		},
+		{
+			name: "missing signature http header",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				return &mocks.DB{}
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
+		},
+		{
+			name: "empty query",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "query is empty",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			rr := httptest.NewRecorder()
+			handler := NewDataRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &types.HttpResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.DataQueryResponseEnvelope{}
+				err = json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+				//TODO verify signature on response
+			}
+		})
+	}
+}
+
 func TestDataRequestHandler_DataTransaction(t *testing.T) {
 	alice := "alice"
 	bob := "bob"

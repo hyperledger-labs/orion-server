@@ -6,17 +6,19 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/queryexecutor"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 type worldstateQueryProcessor struct {
-	nodeID          string
-	db              worldstate.DB
-	blockStore      *blockstore.Store
-	identityQuerier *identity.Querier
-	logger          *logger.SugarLogger
+	nodeID            string
+	db                worldstate.DB
+	blockStore        *blockstore.Store
+	identityQuerier   *identity.Querier
+	jsonQueryExecutor *queryexecutor.WorldStateJSONQueryExecutor
+	logger            *logger.SugarLogger
 }
 
 type worldstateQueryProcessorConfig struct {
@@ -29,11 +31,12 @@ type worldstateQueryProcessorConfig struct {
 
 func newWorldstateQueryProcessor(conf *worldstateQueryProcessorConfig) *worldstateQueryProcessor {
 	return &worldstateQueryProcessor{
-		nodeID:          conf.nodeID,
-		db:              conf.db,
-		blockStore:      conf.blockStore,
-		identityQuerier: conf.identityQuerier,
-		logger:          conf.logger,
+		nodeID:            conf.nodeID,
+		db:                conf.db,
+		blockStore:        conf.blockStore,
+		identityQuerier:   conf.identityQuerier,
+		jsonQueryExecutor: queryexecutor.NewWorldStateJSONQueryExecutor(conf.db, conf.logger),
+		logger:            conf.logger,
 	}
 }
 
@@ -139,4 +142,59 @@ func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeC
 	}
 
 	return c, nil
+}
+
+func (q *worldstateQueryProcessor) executeJSONQuery(dbName, querierUserID string, query []byte) (*types.DataQueryResponse, error) {
+	if worldstate.IsSystemDB(dbName) {
+		return nil, &errors.PermissionErr{
+			ErrMsg: "no user can directly read from a system database [" + dbName + "]. " +
+				"To read from a system database, use /config, /user, /db rest endpoints instead of /data",
+		}
+	}
+
+	hasPerm, err := q.identityQuerier.HasReadAccessOnDataDB(querierUserID, dbName)
+	if err != nil {
+		return nil, err
+	}
+	if !hasPerm {
+		return nil, &errors.PermissionErr{
+			ErrMsg: "the user [" + querierUserID + "] has no permission to read from database [" + dbName + "]",
+		}
+	}
+
+	keys, err := q.jsonQueryExecutor.ExecuteQuery(dbName, query)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*types.KVWithMetadata
+
+	for k := range keys {
+		value, metadata, err := q.db.Get(dbName, k)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: we can store the ACL as value in the indexEntry. With that, we can avoid reading the whole value
+		// to perform the access control - issue #152
+		acl := metadata.GetAccessControl()
+		if acl != nil {
+			if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
+				continue
+			}
+		}
+
+		results = append(
+			results,
+			&types.KVWithMetadata{
+				Key:      k,
+				Value:    value,
+				Metadata: metadata,
+			},
+		)
+	}
+
+	return &types.DataQueryResponse{
+		KVs: results,
+	}, nil
 }
