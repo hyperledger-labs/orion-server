@@ -37,9 +37,9 @@ var (
 // Store maintains MPTrie nodes and values in backend store
 type Store struct {
 	trieDataDB      *leveldb.DB
-	inMemoryNodes   map[string]*NodeBytesWithType
+	inMemoryNodes   map[string][]byte
 	inMemoryValues  map[string][]byte
-	nodesToPersist  map[string]*NodeBytesWithType
+	nodesToPersist  map[string][]byte
 	valuesToPersist map[string][]byte
 	logger          *logger.SugarLogger
 	mu              sync.RWMutex
@@ -115,9 +115,9 @@ func openNewStore(c *Config) (*Store, error) {
 
 	return &Store{
 		trieDataDB:      trieDataDB,
-		inMemoryNodes:   make(map[string]*NodeBytesWithType),
+		inMemoryNodes:   make(map[string][]byte),
 		inMemoryValues:  make(map[string][]byte),
-		nodesToPersist:  make(map[string]*NodeBytesWithType),
+		nodesToPersist:  make(map[string][]byte),
 		valuesToPersist: make(map[string][]byte),
 		logger:          c.Logger,
 		mu:              sync.RWMutex{},
@@ -134,9 +134,9 @@ func openExistingStore(c *Config) (*Store, error) {
 
 	s := &Store{
 		trieDataDB:      trieDataDB,
-		inMemoryNodes:   make(map[string]*NodeBytesWithType),
+		inMemoryNodes:   make(map[string][]byte),
 		inMemoryValues:  make(map[string][]byte),
-		nodesToPersist:  make(map[string]*NodeBytesWithType),
+		nodesToPersist:  make(map[string][]byte),
 		valuesToPersist: make(map[string][]byte),
 		logger:          c.Logger,
 		mu:              sync.RWMutex{},
