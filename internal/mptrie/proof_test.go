@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -79,10 +81,10 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, false)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := CalculateKeyValueHash(key, values[i])
+		valPtr, err := state.CalculateKeyValueHash(key, values[i])
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
-		isValid, err := proof.Validate(valPtr, rootHashBeforeDelete, false)
+		isValid, err := proof.Verify(valPtr, rootHashBeforeDelete, false)
 		require.NoError(t, err)
 		require.True(t, isValid, fmt.Sprintf("Key is: %s", convertKeyToHex(t, key)))
 
@@ -95,10 +97,10 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, false)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := CalculateKeyValueHash(key, []byte("TO_DELETE"))
+		valPtr, err := state.CalculateKeyValueHash(key, []byte("TO_DELETE"))
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
-		isValid, err := proof.Validate(valPtr, rootHashBeforeDelete, false)
+		isValid, err := proof.Verify(valPtr, rootHashBeforeDelete, false)
 		require.NoError(t, err)
 		require.True(t, isValid)
 
@@ -123,10 +125,10 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, false)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := CalculateKeyValueHash(key, values[i])
+		valPtr, err := state.CalculateKeyValueHash(key, values[i])
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
-		isValid, err := proof.Validate(valPtr, rootHashAfterDelete, false)
+		isValid, err := proof.Verify(valPtr, rootHashAfterDelete, false)
 		require.NoError(t, err)
 		require.True(t, isValid)
 
@@ -139,13 +141,13 @@ func TestMPTrieGetProof(t *testing.T) {
 		proof, err := trie.GetProof(key, true)
 		require.NoError(t, err)
 		require.NotNil(t, proof)
-		valPtr, err := CalculateKeyValueHash(key, []byte("TO_DELETE"))
+		valPtr, err := state.CalculateKeyValueHash(key, []byte("TO_DELETE"))
 		require.NoError(t, err)
 		require.NotNil(t, valPtr)
-		isValid, err := proof.Validate(valPtr, rootHashAfterDelete, true)
+		isValid, err := proof.Verify(valPtr, rootHashAfterDelete, true)
 		require.NoError(t, err)
 		require.True(t, isValid)
-		isValid, err = proof.Validate(valPtr, rootHashBeforeDelete, false)
+		isValid, err = proof.Verify(valPtr, rootHashBeforeDelete, false)
 		require.NoError(t, err)
 		require.False(t, isValid)
 

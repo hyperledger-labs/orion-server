@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor/mocks"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
@@ -425,7 +427,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 			}
 
 			assertCommittedValue := func() bool {
-				stateTrieKey, err := mptrie.ConstructCompositeKey(worldstate.DefaultDBName, "key1")
+				stateTrieKey, err := state.ConstructCompositeKey(worldstate.DefaultDBName, "key1")
 				if err != nil {
 					return false
 				}
@@ -433,11 +435,11 @@ func TestValidatorAndCommitter(t *testing.T) {
 				if err != nil || proof == nil {
 					return false
 				}
-				kvHash, err := mptrie.CalculateKeyValueHash(stateTrieKey, tt.expectedValue)
+				kvHash, err := state.CalculateKeyValueHash(stateTrieKey, tt.expectedValue)
 				if err != nil {
 					return false
 				}
-				valid, err := proof.Validate(kvHash, tt.expectedBlocks[tt.expectedBlockHeight-2].Header.StateMerkelTreeRootHash, false)
+				valid, err := proof.Verify(kvHash, tt.expectedBlocks[tt.expectedBlockHeight-2].Header.StateMerkelTreeRootHash, false)
 				if err != nil || !valid {
 					return false
 				}

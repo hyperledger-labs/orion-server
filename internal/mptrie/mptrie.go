@@ -6,7 +6,8 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+
 	"github.com/pkg/errors"
 )
 
@@ -103,7 +104,7 @@ func (t *MPTrie) Update(key, value []byte) error {
 	if len(key) == 0 {
 		return errors.New("can't update element with empty key")
 	}
-	valuePtr, err := CalculateKeyValueHash(key, value)
+	valuePtr, err := state.CalculateKeyValueHash(key, value)
 	if err != nil {
 		return err
 	}
@@ -611,43 +612,9 @@ func findCommonPrefix(hexKey1, hexKey2 []byte) []byte {
 	return res
 }
 
-func CalculateKeyValueHash(key, value []byte) ([]byte, error) {
-	bytesToHash := make([]byte, 0)
-	if len(key) > 0 {
-		bytesToHash = append(bytesToHash, key...)
-	}
-	if len(value) > 0 {
-		valHash, err := crypto.ComputeSHA256Hash(value)
-		if err != nil {
-			return nil, err
-		}
-		bytesToHash = append(bytesToHash, valHash...)
-	}
-	return crypto.ComputeSHA256Hash(bytesToHash)
-}
-
 func min(a, b int) int {
 	if a > b {
 		return b
 	}
 	return a
-}
-
-func ConstructCompositeKey(dbName, key string) ([]byte, error) {
-	bytesToHash := make([]byte, 0)
-	if len(dbName) > 0 {
-		dbNameHash, err := crypto.ComputeSHA256Hash([]byte(dbName))
-		if err != nil {
-			return nil, err
-		}
-		bytesToHash = append(bytesToHash, dbNameHash...)
-	}
-	if len(key) > 0 {
-		keyHash, err := crypto.ComputeSHA256Hash([]byte(key))
-		if err != nil {
-			return nil, err
-		}
-		bytesToHash = append(bytesToHash, keyHash...)
-	}
-	return crypto.ComputeSHA256Hash(bytesToHash)
 }

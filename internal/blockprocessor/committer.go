@@ -5,6 +5,8 @@ package blockprocessor
 import (
 	"encoding/json"
 
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
 	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
@@ -264,7 +266,7 @@ func (c *committer) commitTrie(height uint64) error {
 func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates map[string]*worldstate.DBUpdates) error {
 	for dbName, dbUpdate := range worldStateUpdates {
 		for _, dbWrite := range dbUpdate.Writes {
-			key, err := mptrie.ConstructCompositeKey(dbName, dbWrite.Key)
+			key, err := state.ConstructCompositeKey(dbName, dbWrite.Key)
 			if err != nil {
 				return err
 			}
@@ -276,7 +278,7 @@ func ApplyBlockOnStateTrie(trie *mptrie.MPTrie, worldStateUpdates map[string]*wo
 			}
 		}
 		for _, dbDelete := range dbUpdate.Deletes {
-			key, err := mptrie.ConstructCompositeKey(dbName, dbDelete)
+			key, err := state.ConstructCompositeKey(dbName, dbDelete)
 			if err != nil {
 				return err
 			}
