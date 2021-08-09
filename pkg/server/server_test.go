@@ -59,7 +59,7 @@ func (env *serverTestEnv) restart(t *testing.T) {
 	err = env.bcdbHTTPServer.Start()
 	require.NoError(t, err)
 
-	isLeaderCond := func () bool {
+	isLeaderCond := func() bool {
 		return env.bcdbHTTPServer.IsLeader() == nil
 	}
 	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
@@ -245,7 +245,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	err = server.Start()
 	require.NoError(t, err)
 
-	isLeaderCond := func () bool {
+	isLeaderCond := func() bool {
 		return server.IsLeader() == nil
 	}
 	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
