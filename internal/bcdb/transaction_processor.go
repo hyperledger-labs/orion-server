@@ -120,8 +120,9 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	}
 
 	p.peerTransport = comm.NewHTTPTransport(&comm.Config{
-		LocalConf: localConfig,
-		Logger:    conf.logger,
+		LocalConf:    localConfig,
+		Logger:       conf.logger,
+		LedgerReader: conf.blockStore,
 	})
 
 	clusterConfig, _, err := conf.db.GetConfig()

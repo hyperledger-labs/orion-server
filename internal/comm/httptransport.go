@@ -36,8 +36,9 @@ type HTTPTransport struct {
 
 	raftID uint64
 
-	transport  *rafthttp.Transport
-	httpServer *http.Server
+	transport      *rafthttp.Transport
+	catchupHandler *catchupHandler
+	httpServer     *http.Server
 
 	stopCh chan struct{} // signals HTTPTransport to shutdown
 	doneCh chan struct{} // signals HTTPTransport shutdown complete
@@ -46,8 +47,9 @@ type HTTPTransport struct {
 }
 
 type Config struct {
-	LocalConf *config.LocalConfiguration
-	Logger    *logger.SugarLogger
+	LocalConf    *config.LocalConfiguration
+	Logger       *logger.SugarLogger
+	LedgerReader LedgerReader
 }
 
 func NewHTTPTransport(config *Config) *HTTPTransport {
@@ -56,12 +58,13 @@ func NewHTTPTransport(config *Config) *HTTPTransport {
 	}
 
 	tr := &HTTPTransport{
-		logger:    config.Logger,
-		localConf: config.LocalConf,
-		stopCh:    make(chan struct{}),
-		doneCh:    make(chan struct{}),
+		logger:         config.Logger,
+		localConf:      config.LocalConf,
+		catchupHandler: NewCatchupHandler(config.Logger, config.LedgerReader),
+		stopCh:         make(chan struct{}),
+		doneCh:         make(chan struct{}),
 	}
-	//TODO
+
 	return tr
 }
 
@@ -138,7 +141,11 @@ func (p *HTTPTransport) Start() error {
 		}
 	}
 
-	p.httpServer = &http.Server{Handler: p.transport.Handler()}
+	raftHandler := p.transport.Handler()
+	mux := http.NewServeMux()
+	mux.Handle(rafthttp.RaftPrefix, raftHandler)
+	mux.Handle(BCDBPeerEndpoint, p.catchupHandler)
+	p.httpServer = &http.Server{Handler: mux}
 
 	go p.servePeers(netListener)
 
@@ -180,6 +187,11 @@ func (p *HTTPTransport) SendConsensus(msgs []raftpb.Message) error {
 	p.transport.Send(msgs)
 
 	return nil
+}
+
+func (p *HTTPTransport) PullBlocks(startBlock, endBlock, leaderID uint64) ([]*types.Block, error) {
+	//TODO
+	return nil, errors.New("not implemented yet")
 }
 
 func MemberRaftID(memberID string, clusterConfig *types.ClusterConfig) (uint64, error) {

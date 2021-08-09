@@ -38,8 +38,8 @@ var clusterConfig1node = &types.ClusterConfig{
 		Certificate: []byte("bogus-cert"),
 	}},
 	Admins: []*types.Admin{&types.Admin{
-		Id:                   "admin",
-		Certificate:          []byte("something"),
+		Id:          "admin",
+		Certificate: []byte("something"),
 	}},
 	ConsensusConfig: &types.ConsensusConfig{
 		Algorithm: "raft",
