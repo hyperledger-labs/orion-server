@@ -5,7 +5,6 @@ package replication
 
 import (
 	"context"
-	"github.com/golang/protobuf/proto"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -309,8 +309,11 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 			}
 
 			if reConfig != nil {
-				// TODO support reconfig
-				br.lg.Panic("Unexpected update to ClusterConfig during normal entry")
+				clusterConfig := reConfig.(*types.ClusterConfig)
+				if err := br.updateClusterConfig(clusterConfig); err != nil {
+					// TODO support dynamic re-config
+					br.lg.Panicf("Failed to update to ClusterConfig during raft normal entry: error: %s", err)
+				}
 			}
 
 		case raftpb.EntryConfChange:
@@ -428,9 +431,13 @@ func (br *BlockReplicator) GetLeaderID() uint64 {
 func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfig) error {
 	br.lg.Infof("New cluster config committed, going to apply to block replicator: %+v", clusterConfig)
 
-	//TODO dynamic re-config, update transport config, etc
+	nodes, consensus, _, _ := ClassifyClusterReConfig(br.clusterConfig, clusterConfig)
+	if nodes || consensus {
+		return errors.New("dynamic re-config of ClusterConfig Nodes & Consensus not supported yet")
+		//TODO dynamic re-config, update transport config, etc
+	}
 
-	return errors.New("dynamic re-config of ClusterConfig not supported yet")
+	return nil
 }
 
 func (br *BlockReplicator) Process(ctx context.Context, m raftpb.Message) error {

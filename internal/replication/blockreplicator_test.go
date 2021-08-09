@@ -4,18 +4,18 @@
 package replication_test
 
 import (
-	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
-	"github.com/golang/protobuf/proto"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
 	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -362,6 +362,105 @@ func TestBlockReplicator_Submit(t *testing.T) {
 		require.NoError(t, err)
 
 		// close
+		err = env.blockReplicator.Close()
+		require.NoError(t, err)
+		env.conf.Transport.Close()
+	})
+}
+
+func TestBlockReplicator_ReConfig(t *testing.T) {
+	t.Run("update admins", func(t *testing.T) {
+		env := createNodeEnv(t, "info")
+		require.NotNil(t, env)
+		defer os.RemoveAll(env.testDir)
+		err := env.Start()
+		require.NoError(t, err)
+
+		// wait for the node to become leader
+		isLeaderCond := func() bool {
+			return env.blockReplicator.IsLeader() == nil
+		}
+		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+		clusterConfig := proto.Clone(clusterConfig1node).(*types.ClusterConfig)
+		clusterConfig.Admins = append(clusterConfig.Admins, &types.Admin{
+			Id:          "another-admin",
+			Certificate: []byte("something"),
+		})
+
+		proposeBlock := &types.Block{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number:                2,
+					LastCommittedBlockNum: 0,
+				},
+			},
+			Payload: &types.Block_ConfigTxEnvelope{
+				ConfigTxEnvelope: &types.ConfigTxEnvelope{
+					Payload: &types.ConfigTx{
+						NewConfig: clusterConfig,
+					},
+				},
+			},
+		}
+
+		err = env.blockReplicator.Submit(proposeBlock)
+		require.NoError(t, err)
+
+		heightCond := func() bool {
+			h, err := env.ledger.Height()
+			require.NoError(t, err)
+			return h == uint64(2)
+		}
+		require.Eventually(t, heightCond, 30*time.Second, 100*time.Millisecond)
+
+		err = env.blockReplicator.Close()
+		require.NoError(t, err)
+		env.conf.Transport.Close()
+	})
+
+	t.Run("update CAs", func(t *testing.T) {
+		env := createNodeEnv(t, "info")
+		require.NotNil(t, env)
+		defer os.RemoveAll(env.testDir)
+		err := env.Start()
+		require.NoError(t, err)
+
+		// wait for the node to become leader
+		isLeaderCond := func() bool {
+			return env.blockReplicator.IsLeader() == nil
+		}
+		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+		clusterConfig := proto.Clone(clusterConfig1node).(*types.ClusterConfig)
+		clusterConfig.CertAuthConfig = &types.CAConfig{Roots: [][]byte{[]byte("root")}}
+
+		proposeBlock := &types.Block{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number:                2,
+					LastCommittedBlockNum: 0,
+				},
+			},
+			Payload: &types.Block_ConfigTxEnvelope{
+				ConfigTxEnvelope: &types.ConfigTxEnvelope{
+					Payload: &types.ConfigTx{
+						NewConfig: clusterConfig,
+					},
+				},
+			},
+		}
+
+		err = env.blockReplicator.Submit(proposeBlock)
+		require.NoError(t, err)
+
+		heightCond := func() bool {
+			h, err := env.ledger.Height()
+			require.NoError(t, err)
+			return h == uint64(2)
+		}
+		require.Eventually(t, heightCond, 30*time.Second, 100*time.Millisecond)
+
 		err = env.blockReplicator.Close()
 		require.NoError(t, err)
 		env.conf.Transport.Close()
