@@ -2,6 +2,13 @@ package replication_test
 
 import (
 	"fmt"
+	"io/ioutil"
+	"math"
+	"os"
+	"path"
+	"sync"
+	"testing"
+
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
 	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
@@ -10,12 +17,6 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
-	"math"
-	"os"
-	"path"
-	"sync"
-	"testing"
 )
 
 var nodePortBase = uint32(22000)
@@ -35,6 +36,10 @@ var clusterConfig1node = &types.ClusterConfig{
 		Address:     "127.0.0.1",
 		Port:        nodePortBase + 1,
 		Certificate: []byte("bogus-cert"),
+	}},
+	Admins: []*types.Admin{&types.Admin{
+		Id:                   "admin",
+		Certificate:          []byte("something"),
 	}},
 	ConsensusConfig: &types.ConsensusConfig{
 		Algorithm: "raft",
@@ -142,20 +147,31 @@ func (n *nodeEnv) ServeCommit() {
 			lg.Info("Stopping to serve commit loop")
 			return
 		default:
-			block2commit, err := n.conf.BlockOneQueueBarrier.Dequeue()
+			b, err := n.conf.BlockOneQueueBarrier.Dequeue()
 			if err != nil {
 				lg.Errorf("Stopping to serve commit loop, error: %s", err)
 				return
 			}
-			err = n.ledger.Append(block2commit.(*types.Block))
+			block2commit := b.(*types.Block)
+			err = n.ledger.Append(block2commit)
 			if err != nil {
 				lg.Errorf("Stopping to serve commit loop, error: %s", err)
 				return
 			}
-			err = n.conf.BlockOneQueueBarrier.Reply(nil)
-			if err != nil {
-				lg.Errorf("Stopping to serve commit loop, error: %s", err)
-				return
+			switch block2commit.Payload.(type) {
+			case *types.Block_ConfigTxEnvelope:
+				clusterConfig := block2commit.GetConfigTxEnvelope().GetPayload().GetNewConfig()
+				err = n.conf.BlockOneQueueBarrier.Reply(clusterConfig)
+				if err != nil {
+					lg.Errorf("Stopping to serve commit loop, error: %s", err)
+					return
+				}
+			default:
+				err = n.conf.BlockOneQueueBarrier.Reply(nil)
+				if err != nil {
+					lg.Errorf("Stopping to serve commit loop, error: %s", err)
+					return
+				}
 			}
 		}
 	}
