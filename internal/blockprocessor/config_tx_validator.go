@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
+	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/certificateauthority"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -49,9 +50,9 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		}, nil
 	}
 
-	r, caCertCollection := validateCAConfig(tx.NewConfig.CertAuthConfig)
-	if r.Flag != types.Flag_VALID {
-		return r, nil
+	vi, caCertCollection := validateCAConfig(tx.NewConfig.CertAuthConfig)
+	if vi.Flag != types.Flag_VALID {
+		return vi, nil
 	}
 
 	if r := validateNodeConfig(tx.NewConfig.Nodes, caCertCollection); r.Flag != types.Flag_VALID {
@@ -70,7 +71,20 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		return r, nil
 	}
 
-	return v.mvccValidation(tx.ReadOldConfigVersion)
+	vi, err = v.mvccValidation(tx.ReadOldConfigVersion)
+	if err != nil {
+		return nil, err
+	}
+	if vi.Flag != types.Flag_VALID {
+		return vi, nil
+	}
+
+	clusterConfig, _, err := v.db.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	return validateConfigUpdateRules(clusterConfig, tx.NewConfig)
 }
 
 func validateCAConfig(caConfig *types.CAConfig) (*types.ValidationInfo, *certificateauthority.CACertCollection) {
@@ -485,4 +499,19 @@ func validateHostPort(host string, port uint32) error {
 	}
 
 	return nil
+}
+
+func validateConfigUpdateRules(currentConfig, updatedConfig *types.ClusterConfig) (*types.ValidationInfo, error) {
+	//TODO add rules for safe cluster re-config
+	nodes, consensus, _, _ := replication.ClassifyClusterReConfig(currentConfig, updatedConfig)
+	if nodes || consensus {
+		return &types.ValidationInfo{
+			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+			ReasonIfInvalid: "dynamic cluster re-config of Nodes & ConsensusConfig is not yet supported",
+		}, nil
+	}
+
+	return &types.ValidationInfo{
+		Flag: types.Flag_VALID,
+	}, nil
 }

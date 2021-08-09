@@ -901,7 +901,37 @@ func TestValidateConfigBlock(t *testing.T) {
 		adminUserSerialized, err := proto.Marshal(adminUser)
 		require.NoError(t, err)
 
-		newUsers := map[string]*worldstate.DBUpdates{
+		config := &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					Id:          "node1",
+					Address:     "127.0.0.1",
+					Port:        6090,
+					Certificate: nodeCert.Raw,
+				},
+			},
+			ConsensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "127.0.0.1",
+						PeerPort: 7090,
+					},
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:   "100ms",
+					ElectionTicks:  100,
+					HeartbeatTicks: 10,
+				},
+			},
+		}
+		configSerialized, err := proto.Marshal(config)
+		require.NoError(t, err)
+
+		dbUpdates := map[string]*worldstate.DBUpdates{
 			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
@@ -910,9 +940,20 @@ func TestValidateConfigBlock(t *testing.T) {
 					},
 				},
 			},
+			worldstate.ConfigDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   worldstate.ConfigKey,
+						Value: configSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{BlockNum: 1, TxNum: 1},
+						},
+					},
+				},
+			},
 		}
 
-		require.NoError(t, db.Commit(newUsers, 1))
+		require.NoError(t, db.Commit(dbUpdates, 1))
 	}
 
 	tests := []struct {
@@ -992,8 +1033,11 @@ func TestValidateConfigBlock(t *testing.T) {
 				Payload: &types.Block_ConfigTxEnvelope{
 					ConfigTxEnvelope: testutils.SignedConfigTxEnvelope(t, userSigner,
 						&types.ConfigTx{
-							UserId:               "adminUser",
-							ReadOldConfigVersion: nil,
+							UserId: "adminUser",
+							ReadOldConfigVersion: &types.Version{
+								BlockNum: 1,
+								TxNum:    1,
+							},
 							NewConfig: &types.ClusterConfig{
 								Nodes: []*types.NodeConfig{
 									{
@@ -1008,6 +1052,10 @@ func TestValidateConfigBlock(t *testing.T) {
 										Id:          "admin1",
 										Certificate: adminCert.Raw,
 									},
+									{
+										Id:          "admin2", //<<< changed
+										Certificate: adminCert.Raw,
+									},
 								},
 								CertAuthConfig: &types.CAConfig{
 									Roots: [][]byte{caCert.Raw},
@@ -1018,10 +1066,11 @@ func TestValidateConfigBlock(t *testing.T) {
 										{
 											NodeId:   "node1",
 											RaftId:   1,
-											PeerHost: "10.10.10.10",
+											PeerHost: "127.0.0.1",
 											PeerPort: 7090,
 										},
 									},
+									Observers: nil,
 									RaftConfig: &types.RaftConfig{
 										TickInterval:   "100ms",
 										ElectionTicks:  100,
@@ -1052,7 +1101,7 @@ func TestValidateConfigBlock(t *testing.T) {
 
 			results, err := env.validator.validateBlock(tt.block)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedResults, results)
+			require.Equal(t, tt.expectedResults, results, "%+v", results)
 		})
 	}
 }

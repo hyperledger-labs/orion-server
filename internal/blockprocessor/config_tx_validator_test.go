@@ -44,7 +44,37 @@ func TestValidateConfigTx(t *testing.T) {
 		adminUserSerialized, err := proto.Marshal(adminUser)
 		require.NoError(t, err)
 
-		newUsers := map[string]*worldstate.DBUpdates{
+		config := &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					Id:          "node1",
+					Address:     "127.0.0.1",
+					Port:        6090,
+					Certificate: nodeCert.Raw,
+				},
+			},
+			ConsensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					{
+						NodeId:   "node1",
+						RaftId:   1,
+						PeerHost: "127.0.0.1",
+						PeerPort: 7090,
+					},
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:   "100ms",
+					ElectionTicks:  100,
+					HeartbeatTicks: 10,
+				},
+			},
+		}
+		configSerialized, err := proto.Marshal(config)
+		require.NoError(t, err)
+
+		dbUpdates := map[string]*worldstate.DBUpdates{
 			worldstate.UsersDBName: {
 				Writes: []*worldstate.KVWithMetadata{
 					{
@@ -57,9 +87,20 @@ func TestValidateConfigTx(t *testing.T) {
 					},
 				},
 			},
+			worldstate.ConfigDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   worldstate.ConfigKey,
+						Value: configSerialized,
+						Metadata: &types.Metadata{
+							Version: &types.Version{BlockNum: 1, TxNum: 1},
+						},
+					},
+				},
+			},
 		}
 
-		require.NoError(t, db.Commit(newUsers, 1))
+		require.NoError(t, db.Commit(dbUpdates, 1))
 	}
 
 	tests := []struct {
@@ -198,10 +239,113 @@ func TestValidateConfigTx(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: unsupported nodes update ",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserId: "adminUser",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+				NewConfig: &types.ClusterConfig{
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "node1",
+							Address:     "127.0.0.1",
+							Port:        666, //<<< changed
+							Certificate: nodeCert.Raw,
+						},
+					},
+					Admins: []*types.Admin{
+						{
+							Id:          "admin1",
+							Certificate: adminCert.Raw,
+						},
+					},
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7090,
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  100,
+							HeartbeatTicks: 10,
+						},
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "dynamic cluster re-config of Nodes & ConsensusConfig is not yet supported",
+			},
+		},
+		{
+			name: "invalid: unsupported consensus update ",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserId: "adminUser",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+				NewConfig: &types.ClusterConfig{
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "node1",
+							Address:     "127.0.0.1",
+							Port:        6090,
+							Certificate: nodeCert.Raw,
+						},
+					},
+					Admins: []*types.Admin{
+						{
+							Id:          "admin1",
+							Certificate: adminCert.Raw,
+						},
+					},
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 666, //<<< changed
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  100,
+							HeartbeatTicks: 10,
+						},
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "dynamic cluster re-config of Nodes & ConsensusConfig is not yet supported",
+			},
+		},
+		{
 			name: "valid",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
-				UserId:               "adminUser",
-				ReadOldConfigVersion: nil,
+				UserId: "adminUser",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
 				NewConfig: &types.ClusterConfig{
 					Nodes: []*types.NodeConfig{
 						{
