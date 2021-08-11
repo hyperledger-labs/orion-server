@@ -51,6 +51,11 @@ type DB interface {
 	GetConfig() (*types.ClusterConfig, *types.Metadata, error)
 	// GetIndexDefinition returns the index definition of a given database
 	GetIndexDefinition(dbName string) ([]byte, *types.Metadata, error)
+	// GetIterator returns an iterator to fetch values associated with a range of keys
+	// startKey is inclusive while the endKey is exclusive. An empty startKey (i.e., "") denotes that
+	// the caller wants from the first key in the database (lexicographic order). An empty
+	// endKey (i.e., "") denotes that the caller wants till the last key in the database (lexicographic order).
+	GetIterator(dbName string, startKey, endKey string) (Iterator, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates map[string]*DBUpdates, blockNumber uint64) error
 	// Height returns the state database block height. In other
@@ -74,6 +79,30 @@ type KVWithMetadata struct {
 type DBUpdates struct {
 	Writes  []*KVWithMetadata
 	Deletes []string
+}
+
+// Iterator provides methods to fetch a range of key-value pairs
+type Iterator interface {
+	// Key returns the key of the current key/value pair, or nil if done.
+	// The caller should not modify the contents of the returned slice, and
+	// its contents may change on the next call to 'Next()'.
+	Key() []byte
+	// Value returns the value and metadata of the current key/value
+	// pair in bytes, nil if done.
+	// The caller should not modify the contents of the returned slice, and
+	// its contents may change on the next call to 'Next()'. To get the
+	// exact `Value` and `Metadata` from the returned bytes, caller should
+	// unmarshal the bytes to types.ValueWithMetadata
+	Value() []byte
+	// Next moves the iterator to the next key/value pair.
+	// It returns false if the iterator is exhausted.
+	Next() bool
+	// Error returns any accumulated error during 'Next()'. An error could occur
+	// when the 'Next()' is called on the closed iterator or closed database.
+	Error() error
+	// Release releases associated resources. Release should always succeed
+	// and can be called multiple times without causing error.
+	Release()
 }
 
 // IsSystemDB returns true if the given db is a system database
