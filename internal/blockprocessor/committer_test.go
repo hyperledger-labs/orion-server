@@ -365,10 +365,10 @@ func TestStateDBCommitterForDataBlockWithIndex(t *testing.T) {
 		},
 	}
 
-	encoded2015 := stateindex.EncodeOrderPreservingVarUint64(2015)
-	encoded2016 := stateindex.EncodeOrderPreservingVarUint64(2016)
-	encoded2018 := stateindex.EncodeOrderPreservingVarUint64(2018)
-	encoded2021 := stateindex.EncodeOrderPreservingVarUint64(2021)
+	encoded2015 := stateindex.EncodeInt64(2015)
+	encoded2016 := stateindex.EncodeInt64(2016)
+	encoded2018 := stateindex.EncodeInt64(2018)
+	encoded2021 := stateindex.EncodeInt64(2021)
 
 	expectedIndexBefore := []*worldstate.KVWithMetadata{
 		{

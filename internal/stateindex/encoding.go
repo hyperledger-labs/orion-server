@@ -11,11 +11,20 @@ const (
 	normalOrder  = '1'
 )
 
-// EncodeOrderPreservingVarUint64 returns a string-representation for a uint64 number such that
+// EncodeInt64 encodes a given int64 value to a hexadecimal representation to
+// preserve the order of actual value, i.e., -100 < -10 < 0 < 100 < 1000
+func EncodeInt64(n int64) string {
+	if n < 0 {
+		return encodeReverseOrderVarUint64(-uint64(n))
+	}
+	return encodeOrderPreservingVarUint64(uint64(n))
+}
+
+// encodeOrderPreservingVarUint64 returns a string-representation for a uint64 number such that
 // all zero-bits starting bytes are trimmed in order to reduce the length of the array
 // For preserving the order in a default bytes-comparison, first byte contains the type of
 // encoding and the second byte contains the number of remaining bytes.
-func EncodeOrderPreservingVarUint64(n uint64) string {
+func encodeOrderPreservingVarUint64(n uint64) string {
 	var bytePosition int
 	for bytePosition = 0; bytePosition <= 7; bytePosition++ {
 		if byte(n>>(56-(bytePosition*8))) != 0x00 {
@@ -41,12 +50,12 @@ func EncodeOrderPreservingVarUint64(n uint64) string {
 	return string(encodedBytes)
 }
 
-// EncodeReverseOrderVarUint64 returns a string-representation for a uint64 number such that
+// encodeReverseOrderVarUint64 returns a string-representation for a uint64 number such that
 // the number is first subtracted from MaxUint64 and then all the leading 0xff bytes
 // are trimmed and replaced by the number of such trimmed bytes. This helps in reducing the size.
 // In the byte order comparison this encoding ensures that EncodeReverseOrderVarUint64(A) > EncodeReverseOrderVarUint64(B),
 // If B > A
-func EncodeReverseOrderVarUint64(n uint64) string {
+func encodeReverseOrderVarUint64(n uint64) string {
 	n = math.MaxUint64 - n
 
 	var bytePosition int
@@ -72,6 +81,20 @@ func EncodeReverseOrderVarUint64(n uint64) string {
 		j += 2
 	}
 	return string(encodedBytes)
+}
+
+func decodeInt64(s string) (int64, error) {
+	n, o, err := decodeVarUint64(s)
+	if err != nil {
+		return 0, err
+	}
+
+	switch o {
+	case normalOrder:
+		return int64(n), nil
+	default:
+		return -int64(n), nil
+	}
 }
 
 func decodeVarUint64(s string) (uint64, int32, error) {

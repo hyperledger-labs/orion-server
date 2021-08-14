@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -154,6 +155,7 @@ func (e *WorldStateJSONQueryExecutor) validateAndDisectConditions(dbName string,
 				if err != nil {
 					return nil, err
 				}
+				v = stateindex.EncodeInt64(v.(int64))
 			}
 
 			conds.conditions[opr] = v

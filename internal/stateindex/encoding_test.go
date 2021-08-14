@@ -7,6 +7,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestEncodingInt64(t *testing.T) {
+	tests := []struct {
+		name string
+		n    int64
+	}{
+		{
+			name: "maximum negative value",
+			n:    -math.MaxInt64,
+		},
+		{
+			name: "minimum negative value",
+			n:    -1,
+		},
+		{
+			name: "maximum positive value",
+			n:    math.MaxInt64,
+		},
+		{
+			name: "minimum positive value",
+			n:    0,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			en := EncodeInt64(tt.n)
+			n, err := decodeInt64(en)
+			require.NoError(t, err)
+			require.Equal(t, tt.n, n)
+		})
+	}
+}
+
 func TestOrderPreservingEncodingDecoding(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		testEncodeAndDecode(t, uint64(i))
@@ -15,8 +49,8 @@ func TestOrderPreservingEncodingDecoding(t *testing.T) {
 }
 
 func testEncodeAndDecode(t *testing.T, n uint64) {
-	value := EncodeOrderPreservingVarUint64(n)
-	nextValue := EncodeOrderPreservingVarUint64(n + 1)
+	value := encodeOrderPreservingVarUint64(n)
+	nextValue := encodeOrderPreservingVarUint64(n + 1)
 	if !(value < nextValue) {
 		t.Fatalf("A smaller integer should result into smaller bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
 			n, value, n+1, nextValue)
@@ -37,8 +71,8 @@ func TestReverseOrderPreservingEncodingDecoding(t *testing.T) {
 }
 
 func testReverseOrderEncodingAndDecoding(t *testing.T, n uint64) {
-	value := EncodeReverseOrderVarUint64(n)
-	nextValue := EncodeReverseOrderVarUint64(n + 1)
+	value := encodeReverseOrderVarUint64(n)
+	nextValue := encodeReverseOrderVarUint64(n + 1)
 	if !(value > nextValue) {
 		t.Fatalf("A smaller integer should result into greater bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
 			n, value, n+1, nextValue)
