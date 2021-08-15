@@ -1,0 +1,163 @@
+./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-45d0-9723-1f31712add71","create_dbs":["books"],"dbs_index":{"books":{"attribute_and_type":{"bestseller":2,"publisher":1,"title":1}}}}'
+
+MEQCIFlreuBXWiBL9m6Z312JRotep2fLmIjW/eRJx/OpFNiGAiBjNGBKhmFCZg3JkrqLLnnIzkAeIujI8VLlGkK1kRhgVg==
+
+curl \
+               -H "Content-Type: application/json" \
+               -H "TxTimeout: 2s" \
+               -X POST http://127.0.0.1:6001/db/tx \
+               --data '{
+        "payload": {
+           "user_id": "admin",
+           "tx_id": "1b6d6414-9b58-45d0-9723-1f31712add71",
+           "create_dbs": [
+             "books"
+           ],
+           "dbs_index":{
+             "books":{
+               "attribute_and_type":{
+                 "bestseller":2,
+                 "publisher":1,
+                 "title":1
+               }
+             }
+           }
+        },
+          "signature": "MEQCIFlreuBXWiBL9m6Z312JRotep2fLmIjW/eRJx/OpFNiGAiBjNGBKhmFCZg3JkrqLLnnIzkAeIujI8VLlGkK1kRhgVg=="
+        }' | jq .
+
+
+./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","tx_id":"7b6d6414-9b58-45d0-9723-1f31712add01","user_writes":[{"user":{"id":"alice","certificate":"MIIBsjCCAVigAwIBAgIRAJp7i/UhOnaawHTSdkzxR1QwCgYIKoZIzj0EAwIwHjEcMBoGA1UEAxMTQ2FyIHJlZ2lzdHJ5IFJvb3RDQTAeFw0yMTA2MTYxMTEzMjdaFw0yMjA2MTYxMTE4MjdaMCQxIjAgBgNVBAMTGUNhciByZWdpc3RyeSBDbGllbnQgYWxpY2UwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASdCmAgHdqck7uhAK5siEF/O1EIUEIYtiR3XVEjbVhNe/6GXFShtsSThXYL9/XK6p4qF4oSy9j/PURMGnWbzSnso3EwbzAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAU7nVzp7gto++BPlj5KAF1IA62TNEwDwYDVR0RBAgwBocEfwAAATAKBggqhkjOPQQDAgNIADBFAiEAsRZlR4sDyxS//BJnYpC684EWu1hO/JU8rkNW6Nn0FFQCIH/p6m6ELkLNQpx+1QJsWWtH/LdW94WinVylhuA4jggQ","privilege":{"db_permission":{"books":1}}}}]}'
+
+MEQCIHNzLVAk7ljkUsQCyh6T/4C7FUD33aZjyKiE80mH4C09AiB6uOdDe+LwQKH7OEDSN2Cg9O8GJBh++2o3XiCMmg1JzQ==
+
+ curl \
+               -H "Content-Type: application/json" \
+               -H "TxTimeout: 10s" \
+               -X POST http://127.0.0.1:6001/user/tx \
+               --data '{
+    "payload": {
+              "user_id": "admin",
+              "tx_id": "7b6d6414-9b58-45d0-9723-1f31712add01",
+              "user_writes": [
+                    {
+                          "user": {
+                                "id": "alice",
+                                "certificate": "MIIBsjCCAVigAwIBAgIRAJp7i/UhOnaawHTSdkzxR1QwCgYIKoZIzj0EAwIwHjEcMBoGA1UEAxMTQ2FyIHJlZ2lzdHJ5IFJvb3RDQTAeFw0yMTA2MTYxMTEzMjdaFw0yMjA2MTYxMTE4MjdaMCQxIjAgBgNVBAMTGUNhciByZWdpc3RyeSBDbGllbnQgYWxpY2UwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASdCmAgHdqck7uhAK5siEF/O1EIUEIYtiR3XVEjbVhNe/6GXFShtsSThXYL9/XK6p4qF4oSy9j/PURMGnWbzSnso3EwbzAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAU7nVzp7gto++BPlj5KAF1IA62TNEwDwYDVR0RBAgwBocEfwAAATAKBggqhkjOPQQDAgNIADBFAiEAsRZlR4sDyxS//BJnYpC684EWu1hO/JU8rkNW6Nn0FFQCIH/p6m6ELkLNQpx+1QJsWWtH/LdW94WinVylhuA4jggQ",
+                                "privilege": {
+                                      "db_permission": {
+                                        "books": 1
+                                      }
+                                }
+                          }
+                    }
+              ]
+        },
+        "signature": "MEQCIHNzLVAk7ljkUsQCyh6T/4C7FUD33aZjyKiE80mH4C09AiB6uOdDe+LwQKH7OEDSN2Cg9O8GJBh++2o3XiCMmg1JzQ=="
+    }' | jq .
+
+./bin/signer -privatekey=deployment/sample/crypto/alice/alice.key -data='{"must_sign_user_ids":["alice"],"tx_id":"1b6d6414-9b58-45d0-9723-1f31712add81","db_operations":[{"db_name":"books","data_writes":[{"key":"b1","value":"eyJ0aXRsZSI6ImJvb2sxIiwicHVibGlzaGVyIjoicGVhcnNvbiIsImJlc3RzZWxsZXIiOnRydWV9"},{"key":"b2","value":"eyJ0aXRsZSI6ImJvb2syIiwicHVibGlzaGVyIjoicGVhcnNvbiIsImJlc3RzZWxsZXIiOmZhbHNlfQ=="},{"key":"b3","value":"eyJ0aXRsZSI6ImJvb2szIiwicHVibGlzaGVyIjoicGVhcnNvbiIsImJlc3RzZWxsZXIiOnRydWV9"},{"key":"b4","value":"eyJ0aXRsZSI6ImJvb2s0IiwicHVibGlzaGVyIjoidGhvbXNvbiIsImJlc3RzZWxsZXIiOmZhbHNlfQ=="},{"key":"b5","value":""},{"key":"b6","value":""}]}]}'
+
+{"title":"book1","publisher":"pearson","bestseller":true}
+{"title":"book2","publisher":"pearson","bestseller":false}
+{"title":"book3","publisher":"pearson","bestseller":true}
+{"title":"book4","publisher":"thomson","bestseller":false}
+{"title":"book5","publisher":"thomson","bestseller":true}
+{"title":"book6","publisher":"oxford","bestseller":true}
+
+
+ curl \
+   -H "Content-Type: application/json" \
+   -H "TxTimeout: 2s" \
+   -X POST http://127.0.0.1:6001/data/tx \
+   --data '{
+	"payload": {
+		"must_sign_user_ids": [
+            "alice"
+        ],
+		"tx_id": "1b6d6414-9b58-45d0-9723-1f31712add81",
+        "db_operations": [
+            {
+                "db_name": "books",
+		        "data_writes": [
+			        {
+                        "key": "b1",
+                        "value": "eyJ0aXRsZSI6ImJvb2sxIiwicHVibGlzaGVyIjoicGVhcnNvbiIsImJlc3RzZWxsZXIiOnRydWV9"
+			        },
+			        {
+                        "key": "b2",
+                        "value": "eyJ0aXRsZSI6ImJvb2syIiwicHVibGlzaGVyIjoicGVhcnNvbiIsImJlc3RzZWxsZXIiOmZhbHNlfQ=="
+			        },
+			        {
+                        "key": "b3",
+                        "value": "eyJ0aXRsZSI6ImJvb2szIiwicHVibGlzaGVyIjoicGVhcnNvbiIsImJlc3RzZWxsZXIiOnRydWV9"
+			        },
+			        {
+                        "key": "b4",
+                        "value": "eyJ0aXRsZSI6ImJvb2s0IiwicHVibGlzaGVyIjoidGhvbXNvbiIsImJlc3RzZWxsZXIiOmZhbHNlfQ=="
+			        },
+                    {
+                        "key": "b5",
+                        "value": "eyJ0aXRsZSI6ImJvb2s1IiwicHVibGlzaGVyIjoidGhvbXNvbiIsImJlc3RzZWxsZXIiOnRydWV9"
+                    },
+                    {
+                        "key": "b6",
+                        "value": "eyJ0aXRsZSI6ImJvb2s2IiwicHVibGlzaGVyIjoib3hmb3JkIiwiYmVzdHNlbGxlciI6dHJ1ZX0="
+                    }
+                ]
+            }
+		]
+	},
+    "signatures": {
+        "alice": "MEYCIQCly4uFy+Ui4siMssRkY/j82ilMhWrucRRr+KqzToN1kgIhAPCYCMLXqGBCq6P/tXG8Bv1IvcKHXEugLkcsKgXnB1s6"
+    }
+}' | jq .
+
+./bin/signer -privatekey=deployment/sample/crypto/alice/alice.key -data='{"user_id":"alice","db_name":"books","query":"{\\"bestseller\\":{\\"$eq\\":true}}"}'
+
+MEYCIQC3TxklGRqDRkjBVK+iu9Zf6f7rm4h7z+8hAfsoSLLA9AIhAKqkaIWsclCjYvtB0PrBC3ltjfbnJkp/IQEK74gi5cwV
+
+ curl \
+           -H "Content-Type: application/json" \
+           -H "UserID: alice" \
+           -H "Signature: MEYCIQCmMHRlyOpzg4QoSeJfy+PAqeiLadcfhIQHXDp1vTIeagIhAJdeWMAQX+afekAkZ/UGGbCX8TUv7Y8FDYh0P45X8cFY" \
+           -X POST http://127.0.0.1:6001/data/query/books \
+           --data '{
+                "title":{
+                    "$eq":"book1"
+                }
+            }' | jq .
+
+ curl \
+           -H "Content-Type: application/json" \
+           -H "UserID: alice" \
+           -H "Signature: MEYCIQCmMHRlyOpzg4QoSeJfy+PAqeiLadcfhIQHXDp1vTIeagIhAJdeWMAQX+afekAkZ/UGGbCX8TUv7Y8FDYh0P45X8cFY" \
+           -X POST http://127.0.0.1:6001/data/query/books \
+           --data '{
+               "$and":{
+                   "bestseller":{
+                     "$eq":true
+                   },
+                   "publisher":{
+                     "$eq":"pearson"
+                   }
+               }
+            }' | jq .
+
+ curl \
+           -H "Content-Type: application/json" \
+           -H "UserID: alice" \
+           -H "Signature: MEYCIQCmMHRlyOpzg4QoSeJfy+PAqeiLadcfhIQHXDp1vTIeagIhAJdeWMAQX+afekAkZ/UGGbCX8TUv7Y8FDYh0P45X8cFY" \
+           -X POST http://127.0.0.1:6001/data/query/books \
+           --data '{
+               "$and":{
+                   "bestseller":{
+                     "$eq":true
+                   },
+                   "publisher":{
+                     "$eq":"thomson"
+                   }
+               }
+            }' | jq .
+
+

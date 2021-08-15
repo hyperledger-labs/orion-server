@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -260,6 +261,13 @@ func TestDataRequestHandler_DataJSONQuery(t *testing.T) {
 		DbName: dbName,
 		Query:  q,
 	})
+	b, err := json.Marshal(&types.DataJSONQuery{
+		UserId: submittingUserName,
+		DbName: dbName,
+		Query:  q,
+	})
+	require.NoError(t, err)
+	fmt.Println(string(b))
 
 	testCases := []struct {
 		name               string

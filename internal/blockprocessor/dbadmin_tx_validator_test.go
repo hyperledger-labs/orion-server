@@ -3,6 +3,8 @@
 package blockprocessor
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
@@ -228,6 +230,22 @@ func TestValidateDBAdminTx(t *testing.T) {
 			defer env.cleanup()
 
 			tt.setup(env.db)
+
+			j, err := json.Marshal(&types.DBAdministrationTx{
+				UserId:    "userWithMorePrivilege",
+				CreateDbs: []string{"db1", "db2"},
+				DeleteDbs: []string{"db3", "db4"},
+				DbsIndex: map[string]*types.DBIndex{
+					"db1": {
+						AttributeAndType: map[string]types.Type{
+							"title":      types.Type_STRING,
+							"bestseller": types.Type_BOOLEAN,
+							"publisher":  types.Type_STRING,
+						},
+					},
+				},
+			})
+			fmt.Println(string(j))
 
 			result, err := env.validator.dbAdminTxValidator.validate(tt.txEnv)
 			require.NoError(t, err)

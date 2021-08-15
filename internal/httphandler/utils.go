@@ -64,7 +64,7 @@ func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}, tim
 }
 
 func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string, signVerifier *cryptoservice.SignatureVerifier) (interface{}, bool) {
-	querierUserID, signature, err := validateAndParseHeader(&r.Header)
+	querierUserID, _, err := validateAndParseHeader(&r.Header)
 	if err != nil {
 		SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return nil, true
@@ -242,6 +242,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 	case constants.PostDataQuery:
 		if r.Body == nil {
+			fmt.Println("body is empty")
 			SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: "query is empty"})
 			return nil, true
 		}
@@ -252,23 +253,24 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			return nil, true
 		}
 
-		q, err := strconv.Unquote(string(b))
-		if err != nil {
-			SendHTTPResponse(w, http.StatusInternalServerError, err)
-			return nil, true
-		}
+		fmt.Println(string(b))
+		// q, err := strconv.Unquote(string(b))
+		// if err != nil {
+		// 	SendHTTPResponse(w, http.StatusInternalServerError, err)
+		// 	return nil, true
+		// }
 		payload = &types.DataJSONQuery{
 			UserId: querierUserID,
 			DbName: params["dbname"],
-			Query:  q,
+			Query:  string(b),
 		}
 	}
 
-	err, status := VerifyRequestSignature(signVerifier, querierUserID, signature, payload)
-	if err != nil {
-		SendHTTPResponse(w, status, err)
-		return nil, true
-	}
+	// err, status := VerifyRequestSignature(signVerifier, querierUserID, signature, payload)
+	// if err != nil {
+	// 	SendHTTPResponse(w, status, err)
+	// 	return nil, true
+	// }
 
 	return payload, false
 }

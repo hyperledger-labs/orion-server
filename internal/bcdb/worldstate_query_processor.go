@@ -3,6 +3,8 @@
 package bcdb
 
 import (
+	"fmt"
+
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	"github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
@@ -162,12 +164,13 @@ func (q *worldstateQueryProcessor) executeJSONQuery(dbName, querierUserID string
 		}
 	}
 
+	fmt.Println("execute json query")
 	keys, err := q.jsonQueryExecutor.ExecuteQuery(dbName, query)
 	if err != nil {
 		return nil, err
 	}
 
-	var results []*types.KVWithMetadata
+	var results []*types.KVWithMetadataS
 
 	for k := range keys {
 		value, metadata, err := q.db.Get(dbName, k)
@@ -186,9 +189,9 @@ func (q *worldstateQueryProcessor) executeJSONQuery(dbName, querierUserID string
 
 		results = append(
 			results,
-			&types.KVWithMetadata{
+			&types.KVWithMetadataS{
 				Key:      k,
-				Value:    value,
+				Value:    string(value),
 				Metadata: metadata,
 			},
 		)

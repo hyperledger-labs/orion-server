@@ -194,6 +194,11 @@ message DataQueryResponseEnvelope {
 
 message DataQueryResponse {
   ResponseHeader header = 1;
-  repeated KVWithMetadata KVs = 2;
+  repeated KVWithMetadataS KVs = 2;
 }
 
+message KVWithMetadataS{
+  string key = 1;
+  string value = 2;
+  Metadata metadata = 3;
+}

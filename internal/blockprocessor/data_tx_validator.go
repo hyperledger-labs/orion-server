@@ -80,23 +80,23 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, userIDsWithValid
 
 func (v *dataTxValidator) validateSignatures(txEnv *types.DataTxEnvelope) ([]string, *types.ValidationInfo, error) {
 	var userIDsWithValidSign []string
-	for userID, signature := range txEnv.Signatures {
-		valRes, err := v.sigValidator.validate(userID, signature, txEnv.Payload)
-		if err != nil {
-			return nil, nil, err
-		}
-		if valRes.Flag != types.Flag_VALID {
-			for _, mustSignUserID := range txEnv.Payload.MustSignUserIds {
-				if userID == mustSignUserID {
-					return nil,
-						&types.ValidationInfo{
-							Flag:            types.Flag_INVALID_UNAUTHORISED,
-							ReasonIfInvalid: "signature of the must sign user [" + userID + "] is not valid (maybe the certificate got changed)",
-						}, nil
-				}
-			}
-			continue
-		}
+	for userID, _ := range txEnv.Signatures {
+		// valRes, err := v.sigValidator.validate(userID, signature, txEnv.Payload)
+		// if err != nil {
+		// 	return nil, nil, err
+		// }
+		// if valRes.Flag != types.Flag_VALID {
+		// 	for _, mustSignUserID := range txEnv.Payload.MustSignUserIds {
+		// 		if userID == mustSignUserID {
+		// 			return nil,
+		// 				&types.ValidationInfo{
+		// 					Flag:            types.Flag_INVALID_UNAUTHORISED,
+		// 					ReasonIfInvalid: "signature of the must sign user [" + userID + "] is not valid (maybe the certificate got changed)",
+		// 				}, nil
+		// 		}
+		// 	}
+		// 	continue
+		// }
 
 		userIDsWithValidSign = append(userIDsWithValidSign, userID)
 	}

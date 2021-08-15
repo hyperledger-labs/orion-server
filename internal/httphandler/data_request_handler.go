@@ -40,8 +40,8 @@ func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler 
 		logger: logger,
 	}
 
-	handler.router.HandleFunc(constants.GetData, handler.dataQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostDataTx, handler.dataTransaction).Methods(http.MethodPost)
+	handler.router.HandleFunc(constants.GetData, handler.dataQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostDataQuery, handler.dataJSONQuery).Methods(http.MethodPost)
 
 	return handler
@@ -135,12 +135,12 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		return
 	}
 
-	for _, userID := range txEnv.Payload.MustSignUserIds {
-		if err, code := VerifyRequestSignature(d.sigVerifier, userID, txEnv.Signatures[userID], txEnv.Payload); err != nil {
-			SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
-			return
-		}
-	}
+	// for _, userID := range txEnv.Payload.MustSignUserIds {
+	// if err, code := VerifyRequestSignature(d.sigVerifier, userID, txEnv.Signatures[userID], txEnv.Payload); err != nil {
+	// 	SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+	// 	return
+	// }
+	// }
 
 	d.txHandler.handleTransaction(response, txEnv, timeout)
 }
@@ -150,6 +150,7 @@ func (d *dataRequestHandler) dataJSONQuery(response http.ResponseWriter, request
 	if respondedErr {
 		return
 	}
+	fmt.Println("received query")
 	query := payload.(*types.DataJSONQuery)
 
 	if !d.db.IsDBExists(query.DbName) {

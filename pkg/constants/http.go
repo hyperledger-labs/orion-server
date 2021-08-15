@@ -22,7 +22,7 @@ const (
 	DataEndpoint  = "/data/"
 	GetData       = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
 	PostDataTx    = "/data/tx"
-	PostDataQuery = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
+	PostDataQuery = "/data/query/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
 
 	DBEndpoint  = "/db/"
 	GetDBStatus = "/db/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
@@ -63,7 +63,7 @@ func URLForGetData(dbName, key string) string {
 // URLForDataQuery returns url for POST request to retrieve
 // key-value pairs matching a given query criteria
 func URLForDataQuery(dbName string) string {
-	return path.Join(DataEndpoint, dbName)
+	return path.Join(DataEndpoint, "query", dbName)
 }
 
 // URLForJSONQuery returns url for GET request to retrieve
