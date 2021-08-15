@@ -10,6 +10,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
@@ -731,17 +733,13 @@ func TestGetDataProof(t *testing.T) {
 			if testCase.expectedErr == nil {
 				require.NoError(t, err)
 				require.NotNil(t, proof)
-				proofPath := make([]mptrie.NodeBytes, 0)
-				for _, segment := range proof.Path {
-					proofPath = append(proofPath, segment.Hashes)
-				}
-				mpTrieProof := mptrie.NewProof(proofPath)
-				trieKey, err := mptrie.ConstructCompositeKey(worldstate.DefaultDBName, testCase.key)
+				mpTrieProof := state.NewProof(proof.Path)
+				trieKey, err := state.ConstructCompositeKey(worldstate.DefaultDBName, testCase.key)
 				require.NoError(t, err)
-				kvHash, err := mptrie.CalculateKeyValueHash(trieKey, testCase.value)
+				kvHash, err := state.CalculateKeyValueHash(trieKey, testCase.value)
 				rootHash := env.blocks[testCase.blockNumber-1].StateMerkelTreeRootHash
 				require.NoError(t, err)
-				isValid, err := mpTrieProof.Validate(kvHash, rootHash, testCase.isDeleted)
+				isValid, err := mpTrieProof.Verify(kvHash, rootHash, testCase.isDeleted)
 				require.NoError(t, err)
 				require.Equal(t, testCase.isValid, isValid)
 			} else {

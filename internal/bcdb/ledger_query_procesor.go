@@ -5,6 +5,8 @@ package bcdb
 import (
 	"fmt"
 
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
 	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
@@ -140,7 +142,7 @@ func (p *ledgerQueryProcessor) getDataProof(userId string, blockNum uint64, dbna
 	if err != nil {
 		return nil, err
 	}
-	trieKey, err := mptrie.ConstructCompositeKey(dbname, key)
+	trieKey, err := state.ConstructCompositeKey(dbname, key)
 	if err != nil {
 		return nil, err
 	}
@@ -155,14 +157,9 @@ func (p *ledgerQueryProcessor) getDataProof(userId string, blockNum uint64, dbna
 	}
 
 	resp := &types.GetDataProofResponse{
-		Path: make([]*types.MPTrieProofElement, 0),
+		Path: proof.GetPath(),
 	}
 
-	for _, pathStep := range proof.GetPath() {
-		resp.Path = append(resp.Path, &types.MPTrieProofElement{
-			Hashes: pathStep,
-		})
-	}
 	return resp, nil
 }
 

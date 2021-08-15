@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package mptrie
 
-import "github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+import (
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+)
 
 type TrieNode interface {
 	hash() ([]byte, error)
@@ -16,10 +18,8 @@ type TrieNodeWithValue interface {
 	isDeleted() bool
 }
 
-var deleteBytes = []byte{1}
-
 func (m *BranchNode) hash() ([]byte, error) {
-	return calcHash(m.bytes())
+	return state.CalcHash(m.bytes())
 }
 
 func (m *BranchNode) bytes() [][]byte {
@@ -30,7 +30,7 @@ func (m *BranchNode) bytes() [][]byte {
 		bytes = append(bytes, m.ValuePtr)
 	}
 	if m.isDeleted() {
-		bytes = append(bytes, deleteBytes)
+		bytes = append(bytes, state.KeyDeleteMarkerBytes)
 	}
 	return bytes
 }
@@ -48,7 +48,7 @@ func (m *BranchNode) isDeleted() bool {
 }
 
 func (m *ExtensionNode) hash() ([]byte, error) {
-	return calcHash(m.bytes())
+	return state.CalcHash(m.bytes())
 }
 
 func (m *ExtensionNode) bytes() [][]byte {
@@ -63,7 +63,7 @@ func (m *ExtensionNode) bytes() [][]byte {
 }
 
 func (m *ValueNode) hash() ([]byte, error) {
-	return calcHash(m.bytes())
+	return state.CalcHash(m.bytes())
 }
 
 func (m *ValueNode) bytes() [][]byte {
@@ -75,7 +75,7 @@ func (m *ValueNode) bytes() [][]byte {
 		bytes = append(bytes, m.ValuePtr)
 	}
 	if m.isDeleted() {
-		bytes = append(bytes, deleteBytes)
+		bytes = append(bytes, state.KeyDeleteMarkerBytes)
 	}
 	return bytes
 }
@@ -98,12 +98,4 @@ func (m *EmptyNode) hash() ([]byte, error) {
 
 func (m *EmptyNode) bytes() [][]byte {
 	panic("can't hash empty node")
-}
-
-func calcHash(bytes [][]byte) ([]byte, error) {
-	bytesToHash := make([]byte, 0)
-	for _, b := range bytes {
-		bytesToHash = append(bytesToHash, b...)
-	}
-	return crypto.ComputeSHA256Hash(bytesToHash)
 }

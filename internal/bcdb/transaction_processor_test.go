@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+
 	"github.com/IBM-Blockchain/bcdb-server/config"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockprocessor"
 	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
@@ -720,7 +722,7 @@ func applyTxsOnTrie(t *testing.T, env *txProcessorTestEnv, payload interface{}, 
 
 	for dbName, update := range dbUpdates {
 		for _, dbwrite := range update.Writes {
-			key, err := mptrie.ConstructCompositeKey(dbName, dbwrite.Key)
+			key, err := state.ConstructCompositeKey(dbName, dbwrite.Key)
 			require.NoError(t, err)
 			// TODO: should we add Metadata to value
 			value := dbwrite.Value
@@ -728,7 +730,7 @@ func applyTxsOnTrie(t *testing.T, env *txProcessorTestEnv, payload interface{}, 
 			require.NoError(t, err)
 		}
 		for _, dbdelete := range update.Deletes {
-			key, err := mptrie.ConstructCompositeKey(dbName, dbdelete)
+			key, err := state.ConstructCompositeKey(dbName, dbdelete)
 			require.NoError(t, err)
 			_, err = stateTrie.Delete(key)
 			require.NoError(t, err)
