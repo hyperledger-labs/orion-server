@@ -189,23 +189,23 @@ func TestConstructIndexEntries(t *testing.T) {
 				},
 			},
 			expectedIndexEntries: map[string]*worldstate.DBUpdates{
-				IndexDBPrefix + "db1": {
+				IndexDB("db1"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a1","t":0,"m":"` + PositiveNumber + `","v":"` + encoded10 + `","k":"person1"}`,
+							Key: `{"a":"a1","t":0,"m":"` + positiveNumber + `","vp":1,"v":"` + encoded10 + `","kp":1,"k":"person1"}`,
 						},
 						{
-							Key: `{"a":"a2","t":1,"m":"","v":"ten","k":"person1"}`,
+							Key: `{"a":"a2","t":1,"m":"","vp":1,"v":"ten","kp":1,"k":"person1"}`,
 						},
 						{
-							Key: `{"a":"a3","t":2,"m":"","v":true,"k":"person1"}`,
+							Key: `{"a":"a3","t":2,"m":"","vp":1,"v":true,"kp":1,"k":"person1"}`,
 						},
 					},
 				},
-				IndexDBPrefix + "db2": {
+				IndexDB("db2"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a2","t":1,"m":"","v":"eleven","k":"person2"}`,
+							Key: `{"a":"a2","t":1,"m":"","vp":1,"v":"eleven","kp":1,"k":"person2"}`,
 						},
 					},
 				},
@@ -254,28 +254,28 @@ func TestConstructIndexEntries(t *testing.T) {
 				},
 			},
 			expectedIndexEntries: map[string]*worldstate.DBUpdates{
-				IndexDBPrefix + "db1": {
+				IndexDB("db1"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a3","t":2,"m":"","v":true,"k":"person1"}`,
+							Key: `{"a":"a3","t":2,"m":"","vp":1,"v":true,"kp":1,"k":"person1"}`,
 						},
 						{
-							Key: `{"a":"a2","t":1,"m":"","v":"10","k":"person1"}`,
+							Key: `{"a":"a2","t":1,"m":"","vp":1,"v":"10","kp":1,"k":"person1"}`,
 						},
 					},
 					Deletes: []string{
-						`{"a":"a3","t":2,"m":"","v":false,"k":"person1"}`,
-						`{"a":"a2","t":1,"m":"","v":"ten","k":"person1"}`,
+						`{"a":"a3","t":2,"m":"","vp":1,"v":false,"kp":1,"k":"person1"}`,
+						`{"a":"a2","t":1,"m":"","vp":1,"v":"ten","kp":1,"k":"person1"}`,
 					},
 				},
-				IndexDBPrefix + "db2": {
+				IndexDB("db2"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a2","t":1,"m":"","v":"eleven","k":"person2"}`,
+							Key: `{"a":"a2","t":1,"m":"","vp":1,"v":"eleven","kp":1,"k":"person2"}`,
 						},
 					},
 					Deletes: []string{
-						`{"a":"a2","t":1,"m":"","v":"ten","k":"person2"}`,
+						`{"a":"a2","t":1,"m":"","vp":1,"v":"ten","kp":1,"k":"person2"}`,
 					},
 				},
 			},
@@ -313,16 +313,16 @@ func TestConstructIndexEntries(t *testing.T) {
 				},
 			},
 			expectedIndexEntries: map[string]*worldstate.DBUpdates{
-				IndexDBPrefix + "db1": {
+				IndexDB("db1"): {
 					Deletes: []string{
-						`{"a":"a1","t":0,"m":"` + PositiveNumber + `","v":"` + encoded10 + `","k":"person1"}`,
-						`{"a":"a2","t":1,"m":"","v":"ten","k":"person1"}`,
-						`{"a":"a3","t":2,"m":"","v":true,"k":"person1"}`,
+						`{"a":"a1","t":0,"m":"` + positiveNumber + `","vp":1,"v":"` + encoded10 + `","kp":1,"k":"person1"}`,
+						`{"a":"a2","t":1,"m":"","vp":1,"v":"ten","kp":1,"k":"person1"}`,
+						`{"a":"a3","t":2,"m":"","vp":1,"v":true,"kp":1,"k":"person1"}`,
 					},
 				},
-				IndexDBPrefix + "db2": {
+				IndexDB("db2"): {
 					Deletes: []string{
-						`{"a":"a2","t":1,"m":"","v":"eleven","k":"person2"}`,
+						`{"a":"a2","t":1,"m":"","vp":1,"v":"eleven","kp":1,"k":"person2"}`,
 					},
 				},
 			},
@@ -355,7 +355,7 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 	testCases := []struct {
 		name                 string
 		kvs                  []*worldstate.KVWithMetadata
-		expectedIndexEntries []*indexEntry
+		expectedIndexEntries []*IndexEntry
 	}{
 		{
 			name: "non-json values",
@@ -397,20 +397,24 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 					Value: []byte(`{"age": 26}`),
 				},
 			},
-			expectedIndexEntries: []*indexEntry{
+			expectedIndexEntries: []*IndexEntry{
 				{
-					Attribute: "age",
-					Type:      types.Type_NUMBER,
-					Metadata:  PositiveNumber,
-					Value:     encoded25,
-					Key:       "person1",
+					Attribute:     "age",
+					Type:          types.Type_NUMBER,
+					Metadata:      positiveNumber,
+					ValuePosition: Existing,
+					Value:         encoded25,
+					KeyPosition:   Existing,
+					Key:           "person1",
 				},
 				{
-					Attribute: "age",
-					Type:      types.Type_NUMBER,
-					Metadata:  PositiveNumber,
-					Value:     encoded26,
-					Key:       "person2",
+					Attribute:     "age",
+					Type:          types.Type_NUMBER,
+					Metadata:      positiveNumber,
+					ValuePosition: Existing,
+					Value:         encoded26,
+					KeyPosition:   Existing,
+					Key:           "person2",
 				},
 			},
 		},
@@ -440,7 +444,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 		setup                func(db worldstate.DB)
 		dbName               string
 		deletedKeys          []string
-		expectedIndexEntries []*indexEntry
+		expectedIndexEntries []*IndexEntry
 	}{
 		{
 			name: "non-json values",
@@ -517,34 +521,42 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 			},
 			dbName:      worldstate.DefaultDBName,
 			deletedKeys: []string{"person1", "person2", "person3", "person4"},
-			expectedIndexEntries: []*indexEntry{
+			expectedIndexEntries: []*IndexEntry{
 				{
-					Attribute: "age",
-					Type:      types.Type_NUMBER,
-					Metadata:  PositiveNumber,
-					Value:     encoded25,
-					Key:       "person1",
+					Attribute:     "age",
+					Type:          types.Type_NUMBER,
+					Metadata:      positiveNumber,
+					ValuePosition: Existing,
+					Value:         encoded25,
+					KeyPosition:   Existing,
+					Key:           "person1",
 				},
 				{
-					Attribute: "age",
-					Type:      types.Type_NUMBER,
-					Metadata:  NegativeNumber,
-					Value:     encodedNegative26,
-					Key:       "person2",
+					Attribute:     "age",
+					Type:          types.Type_NUMBER,
+					Metadata:      negativeNumber,
+					ValuePosition: Existing,
+					Value:         encodedNegative26,
+					KeyPosition:   Existing,
+					Key:           "person2",
 				},
 				{
-					Attribute: "age",
-					Type:      types.Type_NUMBER,
-					Metadata:  PositiveNumber,
-					Value:     encoded0,
-					Key:       "person3",
+					Attribute:     "age",
+					Type:          types.Type_NUMBER,
+					Metadata:      positiveNumber,
+					ValuePosition: Existing,
+					Value:         encoded0,
+					KeyPosition:   Existing,
+					Key:           "person3",
 				},
 				{
-					Attribute: "age",
-					Type:      types.Type_NUMBER,
-					Metadata:  PositiveNumber,
-					Value:     encodedMax,
-					Key:       "person4",
+					Attribute:     "age",
+					Type:          types.Type_NUMBER,
+					Metadata:      positiveNumber,
+					ValuePosition: Existing,
+					Value:         encodedMax,
+					KeyPosition:   Existing,
+					Key:           "person4",
 				},
 			},
 		},
@@ -564,22 +576,28 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 func TestPartialIndexEntriesForValue(t *testing.T) {
 	encoded10 := encodeOrderPreservingVarUint64(uint64(10))
 	expectedIndexEntries :=
-		[]*indexEntry{
+		[]*IndexEntry{
 			{
-				Attribute: "a1",
-				Type:      types.Type_NUMBER,
-				Metadata:  PositiveNumber,
-				Value:     encoded10,
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      positiveNumber,
+				ValuePosition: Existing,
+				Value:         encoded10,
+				KeyPosition:   Existing,
 			},
 			{
-				Attribute: "a2",
-				Type:      types.Type_STRING,
-				Value:     "female",
+				Attribute:     "a2",
+				Type:          types.Type_STRING,
+				ValuePosition: Existing,
+				Value:         "female",
+				KeyPosition:   Existing,
 			},
 			{
-				Attribute: "a3",
-				Type:      types.Type_BOOLEAN,
-				Value:     true,
+				Attribute:     "a3",
+				Type:          types.Type_BOOLEAN,
+				ValuePosition: Existing,
+				Value:         true,
+				KeyPosition:   Existing,
 			},
 		}
 
@@ -719,38 +737,38 @@ func TestRemoveDuplicateIndexEntries(t *testing.T) {
 		{
 			name: "no duplicates",
 			indexOfNewValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			indexOfExistingValues: []string{
-				`{"a":"age","type":0,"v":26,"k":"person1"}`,
-				`{"a":"age","type":0,"v":27,"k":"person2"}`,
-				`{"a":"age","type":0,"v":28,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":27,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":28,"kp":1,"k":"person3"}`,
 			},
 			expectedIndexOfNewValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			expectedIndexOfExistingValues: []string{
-				`{"a":"age","type":0,"v":26,"k":"person1"}`,
-				`{"a":"age","type":0,"v":27,"k":"person2"}`,
-				`{"a":"age","type":0,"v":28,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":27,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":28,"kp":1,"k":"person3"}`,
 			},
 		},
 		{
 			name: "no duplicates as there is no existing value",
 			indexOfNewValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			indexOfExistingValues: []string{},
 			expectedIndexOfNewValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			expectedIndexOfExistingValues: []string{},
 		},
@@ -758,47 +776,47 @@ func TestRemoveDuplicateIndexEntries(t *testing.T) {
 			name:             "no duplicates as the new value is empty",
 			indexOfNewValues: []string{},
 			indexOfExistingValues: []string{
-				`{"a":"age","type":0,"v":26,"k":"person1"}`,
-				`{"a":"age","type":0,"v":27,"k":"person2"}`,
-				`{"a":"age","type":0,"v":28,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":27,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":28,"kp":1,"k":"person3"}`,
 			},
 			expectedIndexOfNewValues: []string{},
 			expectedIndexOfExistingValues: []string{
-				`{"a":"age","type":0,"v":26,"k":"person1"}`,
-				`{"a":"age","type":0,"v":27,"k":"person2"}`,
-				`{"a":"age","type":0,"v":28,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":27,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":28,"kp":1,"k":"person3"}`,
 			},
 		},
 		{
 			name: "two duplicate entries",
 			indexOfNewValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			indexOfExistingValues: []string{
-				`{"a":"age","type":0,"v":26,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			expectedIndexOfNewValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
 			},
 			expectedIndexOfExistingValues: []string{
-				`{"a":"age","type":0,"v":26,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person1"}`,
 			},
 		},
 		{
 			name: "all are duplicate entries",
 			indexOfNewValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			indexOfExistingValues: []string{
-				`{"a":"age","type":0,"v":25,"k":"person1"}`,
-				`{"a":"age","type":0,"v":25,"k":"person2"}`,
-				`{"a":"age","type":0,"v":26,"k":"person3"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person1"}`,
+				`{"a":"age","t":0,"vp":1,"v":25,"kp":1,"k":"person2"}`,
+				`{"a":"age","t":0,"vp":1,"v":26,"kp":1,"k":"person3"}`,
 			},
 			expectedIndexOfNewValues:      []string{},
 			expectedIndexOfExistingValues: []string{},

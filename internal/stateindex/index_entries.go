@@ -13,12 +13,20 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
-// IndexDBPrefix is the prefix added to each user database to create an index
-// database for that user database
 const (
-	IndexDBPrefix  = "_index_"
-	PositiveNumber = "p"
-	NegativeNumber = "n"
+	// indexDBPrefix is the prefix added to each user database to create an index
+	// database for that user database
+	indexDBPrefix = "_index_"
+	// positiveNumber and negativeNumber are metadata that denote whether the value being
+	// index is positive or negative
+	positiveNumber = "p"
+	negativeNumber = "n"
+)
+
+const (
+	Beginning = iota
+	Existing
+	Ending
 )
 
 func constructIndexEntries(updates map[string]*worldstate.DBUpdates, db worldstate.DB) (map[string]*worldstate.DBUpdates, error) {
@@ -59,7 +67,7 @@ func constructIndexEntries(updates map[string]*worldstate.DBUpdates, db worldsta
 		dbUpdates.Deletes = append(dbUpdates.Deletes, oldIndexToBeDeleted...)
 
 		if len(dbUpdates.Writes) > 0 || len(dbUpdates.Deletes) > 0 {
-			indexEntries[IndexDBPrefix+dbName] = dbUpdates
+			indexEntries[IndexDB(dbName)] = dbUpdates
 		}
 	}
 
@@ -109,16 +117,19 @@ func indexEntriesForDeletes(deletes []string, index map[string]types.Type, db wo
 	return toStrings(existingIndexOfDeletedValues)
 }
 
-type indexEntry struct {
-	Attribute string      `json:"a"`
-	Type      types.Type  `json:"t"`
-	Metadata  string      `json:"m"`
-	Value     interface{} `json:"v"`
-	Key       string      `json:"k"`
+// IndexEntry hold metadata associated with the attribute being indexed along with the attribute value and key
+type IndexEntry struct {
+	Attribute     string      `json:"a"`
+	Type          types.Type  `json:"t"`
+	Metadata      string      `json:"m"`
+	ValuePosition int8        `json:"vp"` // ValuePosition is used such that range query for lesser than, greater than can be executed easily
+	Value         interface{} `json:"v"`
+	KeyPosition   int8        `json:"kp"` // KeyPosition is used such that range query for lesser than, greater than can be executed easily
+	Key           string      `json:"k"`
 }
 
-func indexEntriesForNewValues(kvs []*worldstate.KVWithMetadata, index map[string]types.Type) ([]*indexEntry, error) {
-	var indexEntriesToBeCreated []*indexEntry
+func indexEntriesForNewValues(kvs []*worldstate.KVWithMetadata, index map[string]types.Type) ([]*IndexEntry, error) {
+	var indexEntriesToBeCreated []*IndexEntry
 
 	for _, kv := range kvs {
 		indexEntriesToBeCreated = append(
@@ -130,8 +141,8 @@ func indexEntriesForNewValues(kvs []*worldstate.KVWithMetadata, index map[string
 	return indexEntriesToBeCreated, nil
 }
 
-func indexEntriesOfExistingValue(deletes []string, index map[string]types.Type, db worldstate.DB, dbName string) ([]*indexEntry, error) {
-	var indexEntriesToBeDeleted []*indexEntry
+func indexEntriesOfExistingValue(deletes []string, index map[string]types.Type, db worldstate.DB, dbName string) ([]*IndexEntry, error) {
+	var indexEntriesToBeDeleted []*IndexEntry
 
 	for _, k := range deletes {
 		v, _, err := db.Get(dbName, k)
@@ -148,7 +159,7 @@ func indexEntriesOfExistingValue(deletes []string, index map[string]types.Type, 
 	return indexEntriesToBeDeleted, nil
 }
 
-func decodeJSONAndConstructIndexEntries(key string, value []byte, index map[string]types.Type) []*indexEntry {
+func decodeJSONAndConstructIndexEntries(key string, value []byte, index map[string]types.Type) []*IndexEntry {
 	val := make(map[string]interface{})
 	decoder := json.NewDecoder(bytes.NewBuffer(value))
 	decoder.UseNumber()
@@ -159,7 +170,7 @@ func decodeJSONAndConstructIndexEntries(key string, value []byte, index map[stri
 	}
 	partialIndexes := partialIndexEntriesForValue(reflect.ValueOf(val), index)
 
-	var indexEntries []*indexEntry
+	var indexEntries []*IndexEntry
 	for _, partialIndex := range partialIndexes {
 		partialIndex.Key = key
 		indexEntries = append(indexEntries, partialIndex)
@@ -168,7 +179,7 @@ func decodeJSONAndConstructIndexEntries(key string, value []byte, index map[stri
 	return indexEntries
 }
 
-func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) []*indexEntry {
+func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) []*IndexEntry {
 	if v.IsNil() {
 		return nil
 	}
@@ -176,7 +187,7 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) [
 		v = v.Elem()
 	}
 
-	var partialIndexEntries []*indexEntry
+	var partialIndexEntries []*IndexEntry
 
 	if v.Kind() != reflect.Map {
 		return nil
@@ -196,22 +207,13 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) [
 
 			same, value := isTypeSame(v.MapIndex(attr), valueType)
 			if same {
-				e := &indexEntry{
-					Attribute: attr.String(),
-					Type:      valueType,
+				e := &IndexEntry{
+					Attribute:     attr.String(),
+					Type:          valueType,
+					ValuePosition: Existing,
+					KeyPosition:   Existing,
 				}
-				if valueType == types.Type_NUMBER {
-					num := value.(int64)
-					if num >= 0 {
-						e.Metadata = PositiveNumber
-						e.Value = encodeOrderPreservingVarUint64(uint64(num))
-					} else {
-						e.Metadata = NegativeNumber
-						e.Value = encodeReverseOrderVarUint64(uint64(-num))
-					}
-				} else {
-					e.Value = value
-				}
+				e.Metadata, e.Value = GetMetadataAndValue(value, valueType)
 				partialIndexEntries = append(partialIndexEntries, e)
 			}
 			break
@@ -219,6 +221,19 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) [
 	}
 
 	return partialIndexEntries
+}
+
+// GetMetadataAndValue returns the value used by the index creator and the associated metadata
+func GetMetadataAndValue(value interface{}, t types.Type) (string, interface{}) {
+	if t != types.Type_NUMBER {
+		return "", value
+	}
+
+	num := value.(int64)
+	if num >= 0 {
+		return positiveNumber, encodeOrderPreservingVarUint64(uint64(num))
+	}
+	return negativeNumber, encodeReverseOrderVarUint64(uint64(-num))
 }
 
 func getType(v reflect.Value) reflect.Kind {
@@ -305,7 +320,7 @@ func removeDuplicateIndexEntries(indexOfNewValues, indexOfExistingValues []strin
 	return newIndex, existingIndex
 }
 
-func toStrings(indexEntries []*indexEntry) ([]string, error) {
+func toStrings(indexEntries []*IndexEntry) ([]string, error) {
 	var entries []string
 	for _, indexEntry := range indexEntries {
 		b, err := json.Marshal(indexEntry)
@@ -316,4 +331,8 @@ func toStrings(indexEntries []*indexEntry) ([]string, error) {
 	}
 
 	return entries, nil
+}
+
+func IndexDB(dbName string) string {
+	return indexDBPrefix + dbName
 }
