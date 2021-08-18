@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"io/ioutil"
 	"math/rand"
 	"mime"
@@ -19,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"

@@ -197,6 +197,12 @@ func (p *HTTPTransport) SendConsensus(msgs []raftpb.Message) error {
 	return nil
 }
 
+// PullBlocks tries to pull as many blocks as possible from startBlock to endBlock (inclusive).
+//
+// The calling go-routine will block until some blocks are retrieved, depending on the availability of remote peers.
+// The underlying implementation will poll the cluster members, starting from the leader hint (if exists), until it can
+// retrieve some blocks. The call may return fewer blocks than requested. The `leaderID` is a hint to the leader's
+// Raft ID, and can be 0. The call maybe canceled using the context `ctx`.
 func (p *HTTPTransport) PullBlocks(ctx context.Context, startBlock, endBlock, leaderID uint64) ([]*types.Block, error) {
 	return p.catchUpClient.PullBlocks(ctx, startBlock, endBlock, leaderID)
 }
