@@ -3,9 +3,11 @@
 package httputils
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
@@ -50,4 +52,23 @@ func TestSendHTTPResponse(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), actualErr))
 		require.Equal(t, err, actualErr)
 	})
+}
+
+func TestSendHTTPRedirectServer(t *testing.T) {
+	w := httptest.NewRecorder()
+
+	reqUrl := &url.URL{
+		Scheme: "http",
+		Host:   "11.11.11.11:6091",
+		Path:   "some/path",
+	}
+	r, err := http.NewRequest(http.MethodPost, reqUrl.String(), bytes.NewReader([]byte("body")))
+	require.NoError(t, err)
+
+	hostPort := "10.10.10.10:6090"
+	SendHTTPRedirectServer(w, r, hostPort)
+
+	require.Equal(t, http.StatusTemporaryRedirect, w.Code)
+	locationUrl := w.Header().Get("Location")
+	require.Equal(t, "http://10.10.10.10:6090/some/path", locationUrl)
 }

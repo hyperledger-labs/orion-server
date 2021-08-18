@@ -74,12 +74,12 @@ func TestPromise_Error(t *testing.T) {
 
 		go func() {
 			time.Sleep(5 * time.Millisecond)
-			promise.error(&ierrors.NotLeaderError{LeaderID: 3})
+			promise.error(&ierrors.NotLeaderError{LeaderID: 3, LeaderHostPort: "10.10.10.10:12345"})
 		}()
 
 		receipt, err := promise.Wait()
 		require.Nil(t, receipt)
-		require.EqualError(t, err, "not a leader, leader is: 3")
+		require.EqualError(t, err, "not a leader, leader is RaftID: 3, with HostPort: 10.10.10.10:12345")
 		require.IsType(t, &ierrors.NotLeaderError{}, err)
 
 		checkPromiseAfterCompletion(t, promise)

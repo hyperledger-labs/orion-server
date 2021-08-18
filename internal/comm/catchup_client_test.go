@@ -248,8 +248,8 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 
 	mn := comm.RetryIntervalMin
 	mx := comm.RetryIntervalMax
-	comm.RetryIntervalMin = 100 * time.Microsecond
-	comm.RetryIntervalMax = time.Millisecond
+	comm.RetryIntervalMin = 10 * time.Microsecond
+	comm.RetryIntervalMax = 100 * time.Microsecond
 	defer func() {
 		comm.RetryIntervalMin = mn
 		comm.RetryIntervalMax = mx

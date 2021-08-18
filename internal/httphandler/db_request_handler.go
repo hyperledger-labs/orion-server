@@ -109,5 +109,5 @@ func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *
 		return
 	}
 
-	d.txHandler.handleTransaction(response, txEnv, timeout)
+	d.txHandler.handleTransaction(response, request, txEnv, timeout)
 }

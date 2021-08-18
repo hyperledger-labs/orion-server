@@ -195,6 +195,10 @@ func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Du
 		return nil, errors.Errorf("unexpected transaction type")
 	}
 
+	if err := t.IsLeader(); err != nil {
+		return nil, err
+	}
+
 	t.Lock()
 	duplicate, err := t.isTxIDDuplicate(txID)
 	if err != nil {

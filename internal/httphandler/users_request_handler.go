@@ -124,5 +124,5 @@ func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, requ
 		return
 	}
 
-	u.txHandler.handleTransaction(response, txEnv, timeout)
+	u.txHandler.handleTransaction(response, request, txEnv, timeout)
 }

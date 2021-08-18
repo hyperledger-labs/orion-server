@@ -1,10 +1,12 @@
 package replication_test
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
+	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"
@@ -29,9 +31,21 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 
 	// wait for an agreed leader
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader() }, 30*time.Second, 100*time.Millisecond)
+	leaderIndex1 := env.FindLeaderIndex()
+	followerIndex1 := (leaderIndex1 + 1) % 3
+	followerIndex2 := (leaderIndex1 + 1) % 3
+
+	//check the followers redirect to the leader
+	expectedLeaderErr := &interrors.NotLeaderError{
+		LeaderID:       uint64(leaderIndex1 + 1),
+		LeaderHostPort: fmt.Sprintf("127.0.0.1:%d", int(nodePortBase)+leaderIndex1+1),
+	}
+	for _, f := range []int{followerIndex1, followerIndex2} {
+		err := env.nodes[f].blockReplicator.IsLeader()
+		require.EqualError(t, err, expectedLeaderErr.Error())
+	}
 
 	//close the leader, wait for some node to become a new leader
-	leaderIndex1 := env.FindLeaderIndex()
 	require.True(t, leaderIndex1 >= 0)
 	t.Logf("Leader #1 index: %d", leaderIndex1)
 	err := env.nodes[leaderIndex1].Close()
