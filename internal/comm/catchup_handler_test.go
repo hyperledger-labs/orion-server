@@ -15,6 +15,7 @@ import (
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
 	"github.com/IBM-Blockchain/bcdb-server/internal/comm/mocks"
+	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"
@@ -124,7 +125,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "0")
 		q.Add("end", "4")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", "multipart/form-data")
+		req.Header.Set("Accept", httputils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -143,7 +144,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "10")
 		q.Add("end", "14")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", "multipart/form-data")
+		req.Header.Set("Accept", httputils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -162,7 +163,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "4")
 		q.Add("end", "2")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", "multipart/form-data")
+		req.Header.Set("Accept", httputils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -181,7 +182,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "2")
 		q.Add("end", "4")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", "multipart/form-data")
+		req.Header.Set("Accept", httputils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -217,7 +218,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "2")
 		q.Add("end", "10")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", "multipart/form-data")
+		req.Header.Set("Accept", httputils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
