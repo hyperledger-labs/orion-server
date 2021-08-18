@@ -12,6 +12,8 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
+const MultiPartFormData = "multipart/form-data"
+
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
 func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
 	response, _ := json.Marshal(payload)
@@ -101,3 +103,4 @@ func GetVersion(params map[string]string) (*types.Version, error) {
 		TxNum:    txNum,
 	}, nil
 }
+

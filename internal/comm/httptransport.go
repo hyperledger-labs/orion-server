@@ -4,6 +4,7 @@
 package comm
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -37,6 +38,7 @@ type HTTPTransport struct {
 	raftID uint64
 
 	transport      *rafthttp.Transport
+	catchUpClient  *catchUpClient
 	catchupHandler *catchupHandler
 	httpServer     *http.Server
 
@@ -60,6 +62,7 @@ func NewHTTPTransport(config *Config) *HTTPTransport {
 	tr := &HTTPTransport{
 		logger:         config.Logger,
 		localConf:      config.LocalConf,
+		catchUpClient:  NewCatchUpClient(config.Logger),
 		catchupHandler: NewCatchupHandler(config.Logger, config.LedgerReader),
 		stopCh:         make(chan struct{}),
 		doneCh:         make(chan struct{}),
@@ -133,12 +136,17 @@ func (p *HTTPTransport) Start() error {
 		return errors.Wrapf(err, "failed to start rafthttp transport")
 	}
 
+	var membersList []*types.PeerConfig
 	for _, peer := range p.clusterConfig.ConsensusConfig.Members {
 		if peer.RaftId != p.raftID {
+			membersList = append(membersList, peer)
 			p.transport.AddPeer(
 				etcd_types.ID(peer.RaftId),
 				[]string{fmt.Sprintf("http://%s:%d", peer.PeerHost, peer.PeerPort)}) //TODO unsecure for now, add TLS/https later
 		}
+	}
+	if err = p.catchUpClient.UpdateMembers(membersList); err != nil {
+		return err
 	}
 
 	raftHandler := p.transport.Handler()
@@ -189,9 +197,8 @@ func (p *HTTPTransport) SendConsensus(msgs []raftpb.Message) error {
 	return nil
 }
 
-func (p *HTTPTransport) PullBlocks(startBlock, endBlock, leaderID uint64) ([]*types.Block, error) {
-	//TODO
-	return nil, errors.New("not implemented yet")
+func (p *HTTPTransport) PullBlocks(ctx context.Context, startBlock, endBlock, leaderID uint64) ([]*types.Block, error) {
+	return p.catchUpClient.PullBlocks(ctx, startBlock, endBlock, leaderID)
 }
 
 func MemberRaftID(memberID string, clusterConfig *types.ClusterConfig) (uint64, error) {
