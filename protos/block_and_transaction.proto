@@ -17,9 +17,8 @@ message Block {
     DBAdministrationTxEnvelope db_administration_tx_envelope = 4;
     UserAdministrationTxEnvelope user_administration_tx_envelope = 5;
   }
-  repeated ValidationInfo tx_validation_info = 6;
   // Consensus protocol metadata
-  ConsensusMetadata consensus_metadata = 7;
+  ConsensusMetadata consensus_metadata = 6;
 }
 
 // BlockHeaderBase holds the block metadata and the chain information
