@@ -9,6 +9,7 @@ import (
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
 	"github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -68,7 +69,7 @@ func (u *usersRequestHandler) getUser(response http.ResponseWriter, request *htt
 			status = http.StatusInternalServerError
 		}
 
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{"error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
@@ -77,13 +78,13 @@ func (u *usersRequestHandler) getUser(response http.ResponseWriter, request *htt
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, user)
+	httputils.SendHTTPResponse(response, http.StatusOK, user)
 }
 
 func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, request *http.Request) {
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
@@ -93,33 +94,33 @@ func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, requ
 	txEnv := &types.UserAdministrationTxEnvelope{}
 	if err := d.Decode(txEnv); err != nil {
 		u.logger.Errorf(err.Error())
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
 		u.logger.Errorf(fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload))
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserId == "" {
 		u.logger.Errorf(fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload))
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
 		u.logger.Errorf(fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload))
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(u.sigVerifier, txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 

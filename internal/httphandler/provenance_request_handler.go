@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
+	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
@@ -96,7 +97,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 	case query.Direction == "next":
 		response, err = p.db.GetNextValues(query.DbName, query.Key, query.Version)
 	default:
-		SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
+		httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "direction must be either [previous] or [next]",
 		})
 	}
@@ -106,7 +107,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +123,7 @@ func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +139,7 @@ func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +155,7 @@ func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *h
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +171,7 @@ func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataDeletedByUser(w http.ResponseWriter, r *http.Request) {
@@ -186,7 +187,7 @@ func (p *provenanceRequestHandler) getDataDeletedByUser(w http.ResponseWriter, r
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r *http.Request) {
@@ -202,11 +203,11 @@ func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r 
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func processInternalError(w http.ResponseWriter, r *http.Request, err error) {
-	SendHTTPResponse(
+	httputils.SendHTTPResponse(
 		w,
 		http.StatusInternalServerError,
 		&types.HttpResponseErr{
@@ -235,5 +236,5 @@ func (p *provenanceRequestHandler) getMostRecentUserOrNode(w http.ResponseWriter
 		return
 	}
 
-	SendHTTPResponse(w, http.StatusOK, response)
+	httputils.SendHTTPResponse(w, http.StatusOK, response)
 }

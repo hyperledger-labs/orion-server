@@ -611,7 +611,7 @@ func TestDataProofQuery(t *testing.T) {
 					BlockNumber: 2,
 					DbName:      "bdb",
 					Key:         "key1",
-					IsDeleted:     false,
+					IsDeleted:   false,
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
@@ -656,7 +656,7 @@ func TestDataProofQuery(t *testing.T) {
 					BlockNumber: 2,
 					DbName:      "bdb",
 					Key:         "key1",
-					IsDeleted:     true,
+					IsDeleted:   true,
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
@@ -683,7 +683,7 @@ func TestDataProofQuery(t *testing.T) {
 					BlockNumber: 2,
 					DbName:      "bdb",
 					Key:         "key1",
-					IsDeleted:     false,
+					IsDeleted:   false,
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
@@ -711,7 +711,7 @@ func TestDataProofQuery(t *testing.T) {
 					BlockNumber: 2,
 					DbName:      "bdb",
 					Key:         "key1",
-					IsDeleted:     false,
+					IsDeleted:   false,
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
@@ -739,7 +739,7 @@ func TestDataProofQuery(t *testing.T) {
 					BlockNumber: 2,
 					DbName:      "bdb",
 					Key:         "key1",
-					IsDeleted:     true,
+					IsDeleted:   true,
 				})
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil

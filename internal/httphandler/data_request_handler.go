@@ -11,6 +11,7 @@ import (
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
 	"github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -58,7 +59,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 	query := payload.(*types.GetDataQuery)
 
 	if !d.db.IsDBExists(query.DbName) {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
+		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "error db '" + query.DbName + "' doesn't exist",
 		})
 		return
@@ -75,7 +76,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 			status = http.StatusInternalServerError
 		}
 
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -84,13 +85,13 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, data)
+	httputils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, request *http.Request) {
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
@@ -99,18 +100,18 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 
 	txEnv := &types.DataTxEnvelope{}
 	if err := requestData.Decode(txEnv); err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Payload.MustSignUserIds) == 0 {
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
@@ -118,7 +119,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	var notSigned []string
 	for _, user := range txEnv.Payload.MustSignUserIds {
 		if user == "" {
-			SendHTTPResponse(response, http.StatusBadRequest,
+			httputils.SendHTTPResponse(response, http.StatusBadRequest,
 				&types.HttpResponseErr{ErrMsg: "an empty UserID in MustSignUserIDs list present in the transaction envelope"})
 			return
 		}
@@ -129,14 +130,14 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	}
 	if len(notSigned) > 0 {
 		sort.Strings(notSigned)
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: "users [" + strings.Join(notSigned, ",") + "] in the must sign list have not signed the transaction"})
 		return
 	}
 
 	for _, userID := range txEnv.Payload.MustSignUserIds {
 		if err, code := VerifyRequestSignature(d.sigVerifier, userID, txEnv.Signatures[userID], txEnv.Payload); err != nil {
-			SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+			httputils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return
 		}
 	}

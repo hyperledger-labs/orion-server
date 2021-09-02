@@ -7,6 +7,7 @@ import (
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
 	"github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -85,7 +86,7 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 			status = http.StatusInternalServerError
 		}
 
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -94,7 +95,7 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, data)
+	httputils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *http.Request) {
@@ -117,7 +118,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 			status = http.StatusInternalServerError
 		}
 
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -126,7 +127,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, data)
+	httputils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *http.Request) {
@@ -149,7 +150,7 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 			status = http.StatusInternalServerError
 		}
 
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -158,7 +159,7 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, data)
+	httputils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *http.Request) {
@@ -180,7 +181,7 @@ func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *
 			status = http.StatusInternalServerError
 		}
 
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -189,7 +190,7 @@ func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, data)
+	httputils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *http.Request) {
@@ -212,7 +213,7 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 			status = http.StatusInternalServerError
 		}
 
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -221,26 +222,26 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, data)
+	httputils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) invalidPathQuery(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "query error - bad or missing start/end block number",
 	}
-	SendHTTPResponse(response, http.StatusBadRequest, err)
+	httputils.SendHTTPResponse(response, http.StatusBadRequest, err)
 }
 
 func (p *ledgerRequestHandler) invalidTxProof(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "tx proof query error - bad or missing query parameter",
 	}
-	SendHTTPResponse(response, http.StatusBadRequest, err)
+	httputils.SendHTTPResponse(response, http.StatusBadRequest, err)
 }
 
 func (p *ledgerRequestHandler) invalidDataProof(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "data proof query error - bad or missing query parameter",
 	}
-	SendHTTPResponse(response, http.StatusBadRequest, err)
+	httputils.SendHTTPResponse(response, http.StatusBadRequest, err)
 }

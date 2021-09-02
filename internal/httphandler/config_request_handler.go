@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
+	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
@@ -56,14 +57,14 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 
 	config, err := c.db.GetConfig()
 	if err != nil {
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
 			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
 		)
 		return
 	}
-	SendHTTPResponse(response, http.StatusOK, config)
+	httputils.SendHTTPResponse(response, http.StatusOK, config)
 }
 
 func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *http.Request) {
@@ -76,7 +77,7 @@ func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *
 	config, err := c.db.GetNodeConfig(query.NodeId)
 
 	if err != nil {
-		SendHTTPResponse(
+		httputils.SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
 			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
@@ -84,13 +85,13 @@ func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *
 		return
 	}
 
-	SendHTTPResponse(response, http.StatusOK, config)
+	httputils.SendHTTPResponse(response, http.StatusOK, config)
 }
 
 func (c *configRequestHandler) configTransaction(response http.ResponseWriter, request *http.Request) {
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
@@ -99,30 +100,30 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 
 	txEnv := &types.ConfigTxEnvelope{}
 	if err := d.Decode(txEnv); err != nil {
-		SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserId == "" {
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
-		SendHTTPResponse(response, http.StatusBadRequest,
+		httputils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(c.sigVerifier, txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload); err != nil {
-		SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+		httputils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 

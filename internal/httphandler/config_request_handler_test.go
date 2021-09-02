@@ -13,10 +13,9 @@ import (
 	"testing"
 	"time"
 
-	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
 	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb/mocks"
+	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
