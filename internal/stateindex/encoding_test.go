@@ -1,9 +1,10 @@
 package stateindex
 
 import (
-	"bytes"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestOrderPreservingEncodingDecoding(t *testing.T) {
@@ -16,11 +17,12 @@ func TestOrderPreservingEncodingDecoding(t *testing.T) {
 func testEncodeAndDecode(t *testing.T, n uint64) {
 	value := EncodeOrderPreservingVarUint64(n)
 	nextValue := EncodeOrderPreservingVarUint64(n + 1)
-	if !(bytes.Compare(value, nextValue) < 0) {
+	if !(value < nextValue) {
 		t.Fatalf("A smaller integer should result into smaller bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
-			n, n+1, value, nextValue)
+			n, value, n+1, nextValue)
 	}
-	decodedValue := decodeOrderPreservingVarUint64(value)
+	decodedValue, err := decodeOrderPreservingVarUint64(value)
+	require.NoError(t, err)
 	if decodedValue != n {
 		t.Fatalf("Value not same after decoding. Original value = [%d], decode value = [%d]", n, decodedValue)
 	}
@@ -36,11 +38,12 @@ func TestReverseOrderPreservingEncodingDecoding(t *testing.T) {
 func testReverseOrderEncodingAndDecoding(t *testing.T, n uint64) {
 	value := EncodeReverseOrderVarUint64(n)
 	nextValue := EncodeReverseOrderVarUint64(n + 1)
-	if !(bytes.Compare(value, nextValue) > 0) {
+	if !(value > nextValue) {
 		t.Fatalf("A smaller integer should result into greater bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
-			n, n+1, value, nextValue)
+			n, value, n+1, nextValue)
 	}
-	decodedValue := decodeReverseOrderVarUint64(value)
+	decodedValue, err := decodeReverseOrderVarUint64(value)
+	require.NoError(t, err)
 	if decodedValue != n {
 		t.Fatalf("Value not same after decoding. Original value = [%d], decode value = [%d]", n, decodedValue)
 	}

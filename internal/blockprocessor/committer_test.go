@@ -3,7 +3,6 @@
 package blockprocessor
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -366,10 +365,10 @@ func TestStateDBCommitterForDataBlockWithIndex(t *testing.T) {
 		},
 	}
 
-	encoded2015 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2015))
-	encoded2016 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2016))
-	encoded2018 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2018))
-	encoded2021 := base64.StdEncoding.EncodeToString(stateindex.EncodeOrderPreservingVarUint64(2021))
+	encoded2015 := stateindex.EncodeOrderPreservingVarUint64(2015)
+	encoded2016 := stateindex.EncodeOrderPreservingVarUint64(2016)
+	encoded2018 := stateindex.EncodeOrderPreservingVarUint64(2018)
+	encoded2021 := stateindex.EncodeOrderPreservingVarUint64(2021)
 
 	expectedIndexBefore := []*worldstate.KVWithMetadata{
 		{
