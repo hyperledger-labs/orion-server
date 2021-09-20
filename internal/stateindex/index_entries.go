@@ -24,7 +24,7 @@ const (
 )
 
 const (
-	Beginning = iota
+	Beginning = iota + 1
 	Existing
 	Ending
 )
