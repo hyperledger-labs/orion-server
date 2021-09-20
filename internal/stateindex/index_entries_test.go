@@ -66,16 +66,16 @@ func newIndexTestEnv(t *testing.T) *indexTestEnv {
 }
 
 func TestConstructIndexEntries(t *testing.T) {
-	indexDB1 := map[string]types.Type{
-		"a1": types.Type_NUMBER,
-		"a2": types.Type_STRING,
-		"a3": types.Type_BOOLEAN,
+	indexDB1 := map[string]types.IndexAttributeType{
+		"a1": types.IndexAttributeType_NUMBER,
+		"a2": types.IndexAttributeType_STRING,
+		"a3": types.IndexAttributeType_BOOLEAN,
 	}
 	indexDB1Json, err := json.Marshal(indexDB1)
 	require.NoError(t, err)
 
-	indexDB2 := map[string]types.Type{
-		"a2": types.Type_STRING,
+	indexDB2 := map[string]types.IndexAttributeType{
+		"a2": types.IndexAttributeType_STRING,
 	}
 	indexDB2Json, err := json.Marshal(indexDB2)
 	require.NoError(t, err)
@@ -344,8 +344,8 @@ func TestConstructIndexEntries(t *testing.T) {
 }
 
 func TestIndexEntriesForNewValues(t *testing.T) {
-	indexDef := map[string]types.Type{
-		"age": types.Type_NUMBER,
+	indexDef := map[string]types.IndexAttributeType{
+		"age": types.IndexAttributeType_NUMBER,
 	}
 
 	encoded25 := EncodeOrderPreservingVarUint64(uint64(25))
@@ -399,7 +399,7 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 			expectedIndexEntries: []*IndexEntry{
 				{
 					Attribute:     "age",
-					Type:          types.Type_NUMBER,
+					Type:          types.IndexAttributeType_NUMBER,
 					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded25,
@@ -408,7 +408,7 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 				},
 				{
 					Attribute:     "age",
-					Type:          types.Type_NUMBER,
+					Type:          types.IndexAttributeType_NUMBER,
 					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded26,
@@ -429,8 +429,8 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 }
 
 func TestIndexEntriesOfExistingValues(t *testing.T) {
-	indexDef := map[string]types.Type{
-		"age": types.Type_NUMBER,
+	indexDef := map[string]types.IndexAttributeType{
+		"age": types.IndexAttributeType_NUMBER,
 	}
 
 	encoded25 := EncodeOrderPreservingVarUint64(uint64(25))
@@ -523,7 +523,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 			expectedIndexEntries: []*IndexEntry{
 				{
 					Attribute:     "age",
-					Type:          types.Type_NUMBER,
+					Type:          types.IndexAttributeType_NUMBER,
 					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded25,
@@ -532,7 +532,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				},
 				{
 					Attribute:     "age",
-					Type:          types.Type_NUMBER,
+					Type:          types.IndexAttributeType_NUMBER,
 					Metadata:      NegativeNumber,
 					ValuePosition: Existing,
 					Value:         encodedNegative26,
@@ -541,7 +541,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				},
 				{
 					Attribute:     "age",
-					Type:          types.Type_NUMBER,
+					Type:          types.IndexAttributeType_NUMBER,
 					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded0,
@@ -550,7 +550,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				},
 				{
 					Attribute:     "age",
-					Type:          types.Type_NUMBER,
+					Type:          types.IndexAttributeType_NUMBER,
 					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encodedMax,
@@ -578,7 +578,7 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 		[]*IndexEntry{
 			{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         encoded10,
@@ -586,14 +586,14 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 			},
 			{
 				Attribute:     "a2",
-				Type:          types.Type_STRING,
+				Type:          types.IndexAttributeType_STRING,
 				ValuePosition: Existing,
 				Value:         "female",
 				KeyPosition:   Existing,
 			},
 			{
 				Attribute:     "a3",
-				Type:          types.Type_BOOLEAN,
+				Type:          types.IndexAttributeType_BOOLEAN,
 				ValuePosition: Existing,
 				Value:         true,
 				KeyPosition:   Existing,
@@ -603,7 +603,7 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 	testCases := []struct {
 		name  string
 		json  []byte
-		index map[string]types.Type
+		index map[string]types.IndexAttributeType
 	}{
 		{
 			name: "number, string, boolean in a simple JSON",
@@ -614,10 +614,10 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 					"a3":true,
 					"a4":"engineer"
 				}`),
-			index: map[string]types.Type{
-				"a1": types.Type_NUMBER,
-				"a2": types.Type_STRING,
-				"a3": types.Type_BOOLEAN,
+			index: map[string]types.IndexAttributeType{
+				"a1": types.IndexAttributeType_NUMBER,
+				"a2": types.IndexAttributeType_STRING,
+				"a3": types.IndexAttributeType_BOOLEAN,
 			},
 		},
 		{
@@ -641,10 +641,10 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 					 "a4":"engineer"
 				}`,
 			),
-			index: map[string]types.Type{
-				"a1": types.Type_NUMBER,
-				"a2": types.Type_STRING,
-				"a3": types.Type_BOOLEAN,
+			index: map[string]types.IndexAttributeType{
+				"a1": types.IndexAttributeType_NUMBER,
+				"a2": types.IndexAttributeType_STRING,
+				"a3": types.IndexAttributeType_BOOLEAN,
 			},
 		},
 		{
@@ -672,10 +672,10 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 					 "a4":"engineer"
 				}`,
 			),
-			index: map[string]types.Type{
-				"a1": types.Type_NUMBER,
-				"a2": types.Type_STRING,
-				"a3": types.Type_BOOLEAN,
+			index: map[string]types.IndexAttributeType{
+				"a1": types.IndexAttributeType_NUMBER,
+				"a2": types.IndexAttributeType_STRING,
+				"a3": types.IndexAttributeType_BOOLEAN,
 			},
 		},
 		{
@@ -705,10 +705,10 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 					 "a4":"engineer"
 				}`,
 			),
-			index: map[string]types.Type{
-				"a1": types.Type_NUMBER,
-				"a2": types.Type_STRING,
-				"a3": types.Type_BOOLEAN,
+			index: map[string]types.IndexAttributeType{
+				"a1": types.IndexAttributeType_NUMBER,
+				"a2": types.IndexAttributeType_STRING,
+				"a3": types.IndexAttributeType_BOOLEAN,
 			},
 		},
 	}
@@ -931,8 +931,8 @@ func TestIndexEntryToString(t *testing.T) {
 }
 
 func TestOrderPreservingIndexingOfNumber(t *testing.T) {
-	index := map[string]types.Type{
-		"a1": types.Type_NUMBER,
+	index := map[string]types.IndexAttributeType{
+		"a1": types.IndexAttributeType_NUMBER,
 	}
 	indexJson, err := json.Marshal(index)
 	require.NoError(t, err)
@@ -1006,13 +1006,13 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all positive numbers",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Ending,
 			},
@@ -1027,13 +1027,13 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all positive keys till",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
@@ -1049,7 +1049,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all positive keys from",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
@@ -1057,7 +1057,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Ending,
 			},
@@ -1071,7 +1071,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all positive keys from and till",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
@@ -1079,7 +1079,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
@@ -1094,13 +1094,13 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all negative numbers",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Ending,
 			},
@@ -1115,13 +1115,13 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all negative keys till",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(10)),
@@ -1137,7 +1137,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all negative keys from",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(100)),
@@ -1145,7 +1145,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Ending,
 			},
@@ -1159,7 +1159,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			name: "fetch all negative keys from and till",
 			start: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(100)),
@@ -1167,7 +1167,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
-				Type:          types.Type_NUMBER,
+				Type:          types.IndexAttributeType_NUMBER,
 				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(10)),

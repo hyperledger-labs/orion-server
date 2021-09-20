@@ -95,7 +95,7 @@ func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byt
 type attributeToConditions map[string]*attributeTypeAndConditions
 
 type attributeTypeAndConditions struct {
-	valueType  types.Type
+	valueType  types.IndexAttributeType
 	conditions map[string]interface{}
 }
 
@@ -110,7 +110,7 @@ func (e *WorldStateJSONQueryExecutor) validateAndDisectConditions(dbName string,
 		return nil, errors.New("no index has been defined on the database " + dbName)
 	}
 
-	indexDef := map[string]types.Type{}
+	indexDef := map[string]types.IndexAttributeType{}
 	if err := json.Unmarshal(marshledIndexDef, &indexDef); err != nil {
 		return nil, err
 	}
@@ -141,7 +141,7 @@ func (e *WorldStateJSONQueryExecutor) validateAndDisectConditions(dbName string,
 				return nil, errors.WithMessage(err, "attribute ["+attr+"] is indexed but the value type provided in the query does not match the actual indexed type")
 			}
 
-			if attrType == types.Type_NUMBER {
+			if attrType == types.IndexAttributeType_NUMBER {
 				v, err = v.(json.Number).Int64()
 				if err != nil {
 					return nil, err
@@ -174,15 +174,15 @@ func isValidLogicalOperator(opt string) bool {
 	}
 }
 
-func validateType(v interface{}, t types.Type) error {
+func validateType(v interface{}, t types.IndexAttributeType) error {
 	kind := reflect.TypeOf(v).Kind()
 	switch kind {
 	case reflect.String:
 		isNumber := reflect.TypeOf(v).Name() == "Number"
 
-		if t == types.Type_STRING && !isNumber {
+		if t == types.IndexAttributeType_STRING && !isNumber {
 			return nil
-		} else if t == types.Type_NUMBER && isNumber {
+		} else if t == types.IndexAttributeType_NUMBER && isNumber {
 			return nil
 		} else {
 			providedType := kind.String()
@@ -194,7 +194,7 @@ func validateType(v interface{}, t types.Type) error {
 		}
 
 	case reflect.Bool:
-		if t == types.Type_BOOLEAN {
+		if t == types.IndexAttributeType_BOOLEAN {
 			return nil
 		}
 		return errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +

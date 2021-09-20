@@ -392,10 +392,10 @@ func TestStateDBCommitterForDataBlockWithIndex(t *testing.T) {
 	}
 
 	setup := func(c *committer) {
-		indexDef := map[string]types.Type{
-			"title":      types.Type_STRING,
-			"year":       types.Type_NUMBER,
-			"bestseller": types.Type_BOOLEAN,
+		indexDef := map[string]types.IndexAttributeType{
+			"title":      types.IndexAttributeType_STRING,
+			"year":       types.IndexAttributeType_NUMBER,
+			"bestseller": types.IndexAttributeType_BOOLEAN,
 		}
 		marshaledIndexDef, err := json.Marshal(indexDef)
 		require.NoError(t, err)
@@ -870,9 +870,9 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				DeleteDbs: []string{"db1", "db2"},
 				DbsIndex: map[string]*types.DBIndex{
 					"db3": {
-						AttributeAndType: map[string]types.Type{
-							"attr1": types.Type_BOOLEAN,
-							"attr2": types.Type_NUMBER,
+						AttributeAndType: map[string]types.IndexAttributeType{
+							"attr1": types.IndexAttributeType_BOOLEAN,
+							"attr2": types.IndexAttributeType_NUMBER,
 						},
 					},
 				},
@@ -880,9 +880,9 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			expectedDBsAfter: []string{"db3", "db4"},
 			expectedIndexAfter: map[string]*types.DBIndex{
 				"db3": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_BOOLEAN,
-						"attr2": types.Type_NUMBER,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_BOOLEAN,
+						"attr2": types.IndexAttributeType_NUMBER,
 					},
 				},
 				"db4": nil,
@@ -899,19 +899,19 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			name: "change index of an existing DB and create index for new DB",
 			setup: func(db worldstate.DB) {
 				indexDB1, err := json.Marshal(
-					map[string]types.Type{
-						"attr1-db1": types.Type_NUMBER,
-						"attr2-db1": types.Type_BOOLEAN,
-						"attr3-db1": types.Type_STRING,
+					map[string]types.IndexAttributeType{
+						"attr1-db1": types.IndexAttributeType_NUMBER,
+						"attr2-db1": types.IndexAttributeType_BOOLEAN,
+						"attr3-db1": types.IndexAttributeType_STRING,
 					},
 				)
 				require.NoError(t, err)
 
 				indexDB2, err := json.Marshal(
-					map[string]types.Type{
-						"attr1-db2": types.Type_NUMBER,
-						"attr2-db2": types.Type_BOOLEAN,
-						"attr3-db2": types.Type_STRING,
+					map[string]types.IndexAttributeType{
+						"attr1-db2": types.IndexAttributeType_NUMBER,
+						"attr2-db2": types.IndexAttributeType_BOOLEAN,
+						"attr3-db2": types.IndexAttributeType_STRING,
 					},
 				)
 				require.NoError(t, err)
@@ -949,17 +949,17 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			expectedIndexDBsBefore: []string{"db1", "db2"},
 			expectedIndexBefore: map[string]*types.DBIndex{
 				"db1": {
-					AttributeAndType: map[string]types.Type{
-						"attr1-db1": types.Type_NUMBER,
-						"attr2-db1": types.Type_BOOLEAN,
-						"attr3-db1": types.Type_STRING,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1-db1": types.IndexAttributeType_NUMBER,
+						"attr2-db1": types.IndexAttributeType_BOOLEAN,
+						"attr3-db1": types.IndexAttributeType_STRING,
 					},
 				},
 				"db2": {
-					AttributeAndType: map[string]types.Type{
-						"attr1-db2": types.Type_NUMBER,
-						"attr2-db2": types.Type_BOOLEAN,
-						"attr3-db2": types.Type_STRING,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1-db2": types.IndexAttributeType_NUMBER,
+						"attr2-db2": types.IndexAttributeType_BOOLEAN,
+						"attr3-db2": types.IndexAttributeType_STRING,
 					},
 				},
 				"db3": nil,
@@ -969,20 +969,20 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 				CreateDbs: []string{"db4", "db5"},
 				DbsIndex: map[string]*types.DBIndex{
 					"db1": {
-						AttributeAndType: map[string]types.Type{
-							"attr1": types.Type_BOOLEAN,
-							"attr2": types.Type_NUMBER,
+						AttributeAndType: map[string]types.IndexAttributeType{
+							"attr1": types.IndexAttributeType_BOOLEAN,
+							"attr2": types.IndexAttributeType_NUMBER,
 						},
 					},
 					"db2": nil,
 					"db3": {
-						AttributeAndType: map[string]types.Type{
-							"attr1": types.Type_STRING,
+						AttributeAndType: map[string]types.IndexAttributeType{
+							"attr1": types.IndexAttributeType_STRING,
 						},
 					},
 					"db4": {
-						AttributeAndType: map[string]types.Type{
-							"attr1": types.Type_NUMBER,
+						AttributeAndType: map[string]types.IndexAttributeType{
+							"attr1": types.IndexAttributeType_NUMBER,
 						},
 					},
 					"db6": nil,
@@ -991,20 +991,20 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 			expectedDBsAfter: []string{"db1", "db2", "db3", "db4", "db5", "db6"},
 			expectedIndexAfter: map[string]*types.DBIndex{
 				"db1": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_BOOLEAN,
-						"attr2": types.Type_NUMBER,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_BOOLEAN,
+						"attr2": types.IndexAttributeType_NUMBER,
 					},
 				},
 				"db2": nil,
 				"db3": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_STRING,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_STRING,
 					},
 				},
 				"db4": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_NUMBER,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_NUMBER,
 					},
 				},
 				"db5": nil,

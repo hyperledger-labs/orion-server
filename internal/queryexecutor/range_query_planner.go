@@ -19,7 +19,7 @@ func createQueryPlan(attribute string, conds *attributeTypeAndConditions) (*rang
 	//   - lt and lte do not appear together
 	//   - gt and gte do not appear together
 
-	if conds.valueType == types.Type_NUMBER {
+	if conds.valueType == types.IndexAttributeType_NUMBER {
 		// TODO: support number values
 		return nil, errors.New("numbers are not supported currently")
 	}

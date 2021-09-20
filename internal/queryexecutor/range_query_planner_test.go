@@ -20,7 +20,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "equal to",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpEqual: "value-a",
 				},
@@ -28,7 +28,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -36,7 +36,7 @@ func TestCreateQueryPlan(t *testing.T) {
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -48,7 +48,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "greater than",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpGreaterThan: "value-a",
 				},
@@ -56,7 +56,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -64,7 +64,7 @@ func TestCreateQueryPlan(t *testing.T) {
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Ending,
 				},
@@ -74,7 +74,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "greater than or equal to",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpGreaterThanOrEqual: "value-a",
 				},
@@ -82,7 +82,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -90,7 +90,7 @@ func TestCreateQueryPlan(t *testing.T) {
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Ending,
 				},
@@ -100,7 +100,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "lesser than",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpLesserThan: "value-a",
 				},
@@ -108,13 +108,13 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Beginning,
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -126,7 +126,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "lesser than or equal to",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpLesserThanOrEqual: "value-a",
 				},
@@ -134,13 +134,13 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Beginning,
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -152,7 +152,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "greater than and lesser than",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpGreaterThan: "value-a",
 					constants.QueryOpLesserThan:  "value-z",
@@ -161,7 +161,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -169,7 +169,7 @@ func TestCreateQueryPlan(t *testing.T) {
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",
@@ -181,7 +181,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "greater than and lesser than or equal",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpGreaterThan:       "value-a",
 					constants.QueryOpLesserThanOrEqual: "value-z",
@@ -190,7 +190,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -198,7 +198,7 @@ func TestCreateQueryPlan(t *testing.T) {
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",
@@ -210,7 +210,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "greater than or equal and lesser than",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpGreaterThanOrEqual: "value-a",
 					constants.QueryOpLesserThan:         "value-z",
@@ -219,7 +219,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -227,7 +227,7 @@ func TestCreateQueryPlan(t *testing.T) {
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",
@@ -239,7 +239,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			name:      "greater than or equal and lesser than or equal",
 			attribute: "attr1",
 			conds: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					constants.QueryOpGreaterThanOrEqual: "value-a",
 					constants.QueryOpLesserThanOrEqual:  "value-z",
@@ -248,7 +248,7 @@ func TestCreateQueryPlan(t *testing.T) {
 			expectedPlan: &rangeQueryPlan{
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
@@ -256,7 +256,7 @@ func TestCreateQueryPlan(t *testing.T) {
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
-					Type:          types.Type_STRING,
+					Type:          types.IndexAttributeType_STRING,
 					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",

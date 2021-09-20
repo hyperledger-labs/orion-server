@@ -171,8 +171,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 				UserId: "userWithMorePrivilege",
 				DbsIndex: map[string]*types.DBIndex{
 					"db1": {
-						AttributeAndType: map[string]types.Type{
-							"attr1": types.Type_STRING,
+						AttributeAndType: map[string]types.IndexAttributeType{
+							"attr1": types.IndexAttributeType_STRING,
 						},
 					},
 				},
@@ -207,8 +207,8 @@ func TestValidateDBAdminTx(t *testing.T) {
 				DeleteDbs: []string{"db3", "db4"},
 				DbsIndex: map[string]*types.DBIndex{
 					"db1": {
-						AttributeAndType: map[string]types.Type{
-							"attr1": types.Type_STRING,
+						AttributeAndType: map[string]types.IndexAttributeType{
+							"attr1": types.IndexAttributeType_STRING,
 						},
 					},
 				},
@@ -440,8 +440,8 @@ func TestValidateIndexDBEntries(t *testing.T) {
 			name: "invalid: db does not exist already and also does not appear in the createDB list",
 			dbsIndex: map[string]*types.DBIndex{
 				"db1": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_STRING,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_STRING,
 					},
 				},
 			},
@@ -455,10 +455,10 @@ func TestValidateIndexDBEntries(t *testing.T) {
 			toCreateDBs: []string{"db1"},
 			dbsIndex: map[string]*types.DBIndex{
 				"db1": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_STRING,
-						"attr2": types.Type_NUMBER,
-						"attr3": types.Type_BOOLEAN,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_STRING,
+						"attr2": types.IndexAttributeType_NUMBER,
+						"attr3": types.IndexAttributeType_BOOLEAN,
 					},
 				},
 			},
@@ -486,8 +486,8 @@ func TestValidateIndexDBEntries(t *testing.T) {
 			toDeleteDBs: []string{"db1", "db2"},
 			dbsIndex: map[string]*types.DBIndex{
 				"db1": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_STRING,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_STRING,
 					},
 				},
 			},
@@ -501,9 +501,9 @@ func TestValidateIndexDBEntries(t *testing.T) {
 			toCreateDBs: []string{"db1"},
 			dbsIndex: map[string]*types.DBIndex{
 				"db1": {
-					AttributeAndType: map[string]types.Type{
-						"attr1": types.Type_STRING,
-						"attr2": types.Type_NUMBER,
+					AttributeAndType: map[string]types.IndexAttributeType{
+						"attr1": types.IndexAttributeType_STRING,
+						"attr2": types.IndexAttributeType_NUMBER,
 						"attr3": 10,
 					},
 				},

@@ -43,7 +43,7 @@ func ConstructIndexEntries(updates map[string]*worldstate.DBUpdates, db worldsta
 			continue
 		}
 
-		index := map[string]types.Type{}
+		index := map[string]types.IndexAttributeType{}
 		if err := json.Unmarshal(indexDef, &index); err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func ConstructIndexEntries(updates map[string]*worldstate.DBUpdates, db worldsta
 
 func indexEntriesForWrites(
 	writes []*worldstate.KVWithMetadata,
-	index map[string]types.Type,
+	index map[string]types.IndexAttributeType,
 	db worldstate.DB,
 	dbName string,
 ) ([]string, []string, error) {
@@ -109,7 +109,7 @@ func indexEntriesForWrites(
 	return newIndexToBeCreated, oldIndexToBeDeleted, nil
 }
 
-func indexEntriesForDeletes(deletes []string, index map[string]types.Type, db worldstate.DB, dbName string) ([]string, error) {
+func indexEntriesForDeletes(deletes []string, index map[string]types.IndexAttributeType, db worldstate.DB, dbName string) ([]string, error) {
 	existingIndexOfDeletedValues, err := indexEntriesOfExistingValue(deletes, index, db, dbName)
 	if err != nil {
 		return nil, err
@@ -120,13 +120,13 @@ func indexEntriesForDeletes(deletes []string, index map[string]types.Type, db wo
 
 // IndexEntry hold metadata associated with the attribute being indexed along with the attribute value and key
 type IndexEntry struct {
-	Attribute     string      `json:"a"`
-	Type          types.Type  `json:"t"`
-	Metadata      string      `json:"m"`
-	ValuePosition int8        `json:"vp"` // ValuePosition is used such that range query for lesser than, greater than can be executed easily
-	Value         interface{} `json:"v"`
-	KeyPosition   int8        `json:"kp"` // KeyPosition is used such that range query for lesser than, greater than can be executed easily
-	Key           string      `json:"k"`
+	Attribute     string                   `json:"a"`
+	Type          types.IndexAttributeType `json:"t"`
+	Metadata      string                   `json:"m"`
+	ValuePosition int8                     `json:"vp"` // ValuePosition is used such that range query for lesser than, greater than can be executed easily
+	Value         interface{}              `json:"v"`
+	KeyPosition   int8                     `json:"kp"` // KeyPosition is used such that range query for lesser than, greater than can be executed easily
+	Key           string                   `json:"k"`
 }
 
 // String returns a string representation of the indexEntry
@@ -144,7 +144,7 @@ func (e *IndexEntry) Load(entry []byte) error {
 	return json.Unmarshal(entry, e)
 }
 
-func indexEntriesForNewValues(kvs []*worldstate.KVWithMetadata, index map[string]types.Type) ([]*IndexEntry, error) {
+func indexEntriesForNewValues(kvs []*worldstate.KVWithMetadata, index map[string]types.IndexAttributeType) ([]*IndexEntry, error) {
 	var indexEntriesToBeCreated []*IndexEntry
 
 	for _, kv := range kvs {
@@ -157,7 +157,7 @@ func indexEntriesForNewValues(kvs []*worldstate.KVWithMetadata, index map[string
 	return indexEntriesToBeCreated, nil
 }
 
-func indexEntriesOfExistingValue(deletes []string, index map[string]types.Type, db worldstate.DB, dbName string) ([]*IndexEntry, error) {
+func indexEntriesOfExistingValue(deletes []string, index map[string]types.IndexAttributeType, db worldstate.DB, dbName string) ([]*IndexEntry, error) {
 	var indexEntriesToBeDeleted []*IndexEntry
 
 	for _, k := range deletes {
@@ -175,7 +175,7 @@ func indexEntriesOfExistingValue(deletes []string, index map[string]types.Type, 
 	return indexEntriesToBeDeleted, nil
 }
 
-func decodeJSONAndConstructIndexEntries(key string, value []byte, index map[string]types.Type) []*IndexEntry {
+func decodeJSONAndConstructIndexEntries(key string, value []byte, index map[string]types.IndexAttributeType) []*IndexEntry {
 	val := make(map[string]interface{})
 	decoder := json.NewDecoder(bytes.NewBuffer(value))
 	decoder.UseNumber()
@@ -195,7 +195,7 @@ func decodeJSONAndConstructIndexEntries(key string, value []byte, index map[stri
 	return indexEntries
 }
 
-func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) []*IndexEntry {
+func partialIndexEntriesForValue(v reflect.Value, index map[string]types.IndexAttributeType) []*IndexEntry {
 	if v.IsNil() {
 		return nil
 	}
@@ -240,8 +240,8 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.Type) [
 }
 
 // GetMetadataAndValue returns the value used by the index creator and the associated metadata
-func GetMetadataAndValue(value interface{}, t types.Type) (string, interface{}) {
-	if t != types.Type_NUMBER {
+func GetMetadataAndValue(value interface{}, t types.IndexAttributeType) (string, interface{}) {
+	if t != types.IndexAttributeType_NUMBER {
 		return "", value
 	}
 
@@ -263,7 +263,7 @@ func getType(v reflect.Value) reflect.Kind {
 	return v.Kind()
 }
 
-func isTypeSame(v reflect.Value, t types.Type) (bool, interface{}) {
+func isTypeSame(v reflect.Value, t types.IndexAttributeType) (bool, interface{}) {
 	if v.IsNil() {
 		return false, nil
 	}
@@ -274,7 +274,7 @@ func isTypeSame(v reflect.Value, t types.Type) (bool, interface{}) {
 	switch v.Kind() {
 	case reflect.String:
 		if v.Type().Name() == "Number" {
-			if t == types.Type_NUMBER {
+			if t == types.IndexAttributeType_NUMBER {
 				num, err := strconv.ParseInt(fmt.Sprintf(`%v`, v), 10, 64)
 				if err != nil {
 					// float is not supported in index
@@ -285,12 +285,12 @@ func isTypeSame(v reflect.Value, t types.Type) (bool, interface{}) {
 			return false, nil
 		}
 
-		if t == types.Type_STRING {
+		if t == types.IndexAttributeType_STRING {
 			return true, fmt.Sprintf(`%v`, v)
 		}
 
 	case reflect.Bool:
-		if t == types.Type_BOOLEAN {
+		if t == types.IndexAttributeType_BOOLEAN {
 			return true, v.Bool()
 		}
 		return false, nil
