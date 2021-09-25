@@ -7,18 +7,18 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/queryexecutor"
+	"github.com/hyperledger-labs/orion-server/internal/stateindex"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 type worldstateQueryProcessor struct {
-	nodeID            string
-	db                worldstate.DB
-	blockStore        *blockstore.Store
-	identityQuerier   *identity.Querier
-	jsonQueryExecutor *queryexecutor.WorldStateJSONQueryExecutor
-	logger            *logger.SugarLogger
+	nodeID          string
+	db              worldstate.DB
+	blockStore      *blockstore.Store
+	identityQuerier *identity.Querier
+	logger          *logger.SugarLogger
 }
 
 type worldstateQueryProcessorConfig struct {
@@ -31,12 +31,11 @@ type worldstateQueryProcessorConfig struct {
 
 func newWorldstateQueryProcessor(conf *worldstateQueryProcessorConfig) *worldstateQueryProcessor {
 	return &worldstateQueryProcessor{
-		nodeID:            conf.nodeID,
-		db:                conf.db,
-		blockStore:        conf.blockStore,
-		identityQuerier:   conf.identityQuerier,
-		jsonQueryExecutor: queryexecutor.NewWorldStateJSONQueryExecutor(conf.db, conf.logger),
-		logger:            conf.logger,
+		nodeID:          conf.nodeID,
+		db:              conf.db,
+		blockStore:      conf.blockStore,
+		identityQuerier: conf.identityQuerier,
+		logger:          conf.logger,
 	}
 }
 
@@ -162,7 +161,22 @@ func (q *worldstateQueryProcessor) executeJSONQuery(dbName, querierUserID string
 		}
 	}
 
-	keys, err := q.jsonQueryExecutor.ExecuteQuery(dbName, query)
+	snapshots, err := q.db.GetDBsSnapshot(
+		[]string{
+			worldstate.DatabasesDBName,
+			dbName,
+			stateindex.IndexDB(dbName),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		snapshots.Release()
+	}()
+
+	jsonQueryExecutor := queryexecutor.NewWorldStateJSONQueryExecutor(snapshots, q.logger)
+	keys, err := jsonQueryExecutor.ExecuteQuery(dbName, query)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +184,7 @@ func (q *worldstateQueryProcessor) executeJSONQuery(dbName, querierUserID string
 	var results []*types.KVWithMetadata
 
 	for k := range keys {
-		value, metadata, err := q.db.Get(dbName, k)
+		value, metadata, err := snapshots.Get(dbName, k)
 		if err != nil {
 			return nil, err
 		}

@@ -18,11 +18,11 @@ import (
 // the world state database and returns a set of keys whose values are matching the given
 // criterias
 type WorldStateJSONQueryExecutor struct {
-	db     worldstate.DB
+	db     worldstate.DBsSnapshot
 	logger *logger.SugarLogger
 }
 
-func NewWorldStateJSONQueryExecutor(db worldstate.DB, l *logger.SugarLogger) *WorldStateJSONQueryExecutor {
+func NewWorldStateJSONQueryExecutor(db worldstate.DBsSnapshot, l *logger.SugarLogger) *WorldStateJSONQueryExecutor {
 	return &WorldStateJSONQueryExecutor{
 		db:     db,
 		logger: l,
