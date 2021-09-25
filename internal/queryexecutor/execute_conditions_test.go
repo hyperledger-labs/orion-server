@@ -129,7 +129,7 @@ func TestExecuteAND(t *testing.T) {
 	defer env.cleanup()
 
 	dbName := "testdb"
-	setupDBForTestingExecutes(t, env.e.db, dbName)
+	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
 		name         string
@@ -255,11 +255,16 @@ func TestExecuteAND(t *testing.T) {
 		},
 	}
 
+	snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(dbName)})
+	require.NoError(t, err)
+	defer snapshots.Release()
+
+	qExecutor := NewWorldStateJSONQueryExecutor(snapshots, env.l)
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := env.e.executeAND(dbName, tt.attrsConds)
+			keys, err := qExecutor.executeAND(dbName, tt.attrsConds)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedKeys, keys)
 		})
@@ -271,7 +276,7 @@ func TestExecuteOR(t *testing.T) {
 	defer env.cleanup()
 
 	dbName := "testdb"
-	setupDBForTestingExecutes(t, env.e.db, dbName)
+	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
 		name         string
@@ -383,11 +388,16 @@ func TestExecuteOR(t *testing.T) {
 		},
 	}
 
+	snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(dbName)})
+	require.NoError(t, err)
+	defer snapshots.Release()
+
+	qExecutor := NewWorldStateJSONQueryExecutor(snapshots, env.l)
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := env.e.executeOR(dbName, tt.attrsConds)
+			keys, err := qExecutor.executeOR(dbName, tt.attrsConds)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedKeys, keys)
 		})
@@ -399,7 +409,7 @@ func TestExecuteOnly(t *testing.T) {
 	defer env.cleanup()
 
 	dbName := "testdb"
-	setupDBForTestingExecutes(t, env.e.db, dbName)
+	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
 		name         string
@@ -890,11 +900,16 @@ func TestExecuteOnly(t *testing.T) {
 		},
 	}
 
+	snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(dbName)})
+	require.NoError(t, err)
+	defer snapshots.Release()
+
+	qExecutor := NewWorldStateJSONQueryExecutor(snapshots, env.l)
 	for _, tt := range tests {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := env.e.execute(dbName, tt.attribute, tt.condition)
+			keys, err := qExecutor.execute(dbName, tt.attribute, tt.condition)
 			require.NoError(t, err)
 			expectedKeys := make(map[string]bool)
 			for _, k := range tt.expectedKeys {

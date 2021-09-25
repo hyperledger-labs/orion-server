@@ -17,7 +17,8 @@ import (
 )
 
 type testEnv struct {
-	e       *WorldStateJSONQueryExecutor
+	db      worldstate.DB
+	l       *logger.SugarLogger
 	cleanup func()
 }
 
@@ -52,7 +53,8 @@ func newTestEnv(t *testing.T) *testEnv {
 	require.NoError(t, err)
 
 	return &testEnv{
-		e: NewWorldStateJSONQueryExecutor(db, l),
+		db: db,
+		l:  l,
 		cleanup: func() {
 			if err := db.Close(); err != nil {
 				t.Log("error while closing the database: [" + err.Error() + "]")
@@ -70,7 +72,7 @@ func TestExecuteJSONQuery(t *testing.T) {
 	defer env.cleanup()
 
 	dbName := "testdb"
-	setupDBForTestingExecutes(t, env.e.db, dbName)
+	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
 		name         string
@@ -170,10 +172,15 @@ func TestExecuteJSONQuery(t *testing.T) {
 		},
 	}
 
+	snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(dbName)})
+	require.NoError(t, err)
+	defer snapshots.Release()
+
+	qExecutor := NewWorldStateJSONQueryExecutor(snapshots, env.l)
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := env.e.ExecuteQuery(dbName, tt.query)
+			keys, err := qExecutor.ExecuteQuery(dbName, tt.query)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedKeys, keys)
 		})
@@ -185,7 +192,7 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 	defer env.cleanup()
 
 	dbName := "testdb"
-	setupDBForTestingExecutes(t, env.e.db, dbName)
+	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
 		name          string
@@ -327,10 +334,15 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 		},
 	}
 
+	snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(dbName)})
+	require.NoError(t, err)
+	defer snapshots.Release()
+
+	qExecutor := NewWorldStateJSONQueryExecutor(snapshots, env.l)
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := env.e.ExecuteQuery(dbName, tt.query)
+			_, err := qExecutor.ExecuteQuery(dbName, tt.query)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.expectedError)
 		})
@@ -491,13 +503,18 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			env := newTestEnv(t)
 			defer env.cleanup()
 
-			tt.setup(t, env.e.db)
+			tt.setup(t, env.db)
+
+			snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(tt.dbName)})
+			require.NoError(t, err)
+			defer snapshots.Release()
+			qExecutor := NewWorldStateJSONQueryExecutor(snapshots, env.l)
 
 			conditions := make(map[string]interface{})
 			decoder := json.NewDecoder(strings.NewReader(tt.conditions))
 			decoder.UseNumber()
 			require.NoError(t, decoder.Decode(&conditions))
-			disectedQueryConditions, err := env.e.validateAndDisectConditions(tt.dbName, conditions)
+			disectedQueryConditions, err := qExecutor.validateAndDisectConditions(tt.dbName, conditions)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedDisectedConditions, disectedQueryConditions)
 		})
@@ -536,13 +553,6 @@ func TestValidateAndDisectConditionsErrorCases(t *testing.T) {
 		conditions    string
 		expectedError string
 	}{
-		{
-			name:          "no index error",
-			dbName:        "db1",
-			setup:         func(t *testing.T, db worldstate.DB) {},
-			conditions:    `{}`,
-			expectedError: "no index has been defined on the database db1",
-		},
 		{
 			name:   "attribute not indexed",
 			dbName: "db1",
@@ -667,13 +677,19 @@ func TestValidateAndDisectConditionsErrorCases(t *testing.T) {
 			env := newTestEnv(t)
 			defer env.cleanup()
 
-			tt.setup(t, env.e.db)
+			tt.setup(t, env.db)
+
+			snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(tt.dbName)})
+			require.NoError(t, err)
+			defer snapshots.Release()
+
+			qExecutor := NewWorldStateJSONQueryExecutor(snapshots, env.l)
 
 			conditions := make(map[string]interface{})
 			decoder := json.NewDecoder(strings.NewReader(tt.conditions))
 			decoder.UseNumber()
 			require.NoError(t, decoder.Decode(&conditions))
-			disectedQueryConditions, err := env.e.validateAndDisectConditions(tt.dbName, conditions)
+			disectedQueryConditions, err := qExecutor.validateAndDisectConditions(tt.dbName, conditions)
 			require.EqualError(t, err, tt.expectedError)
 			require.Nil(t, disectedQueryConditions)
 		})

@@ -56,6 +56,11 @@ type DB interface {
 	// the caller wants from the first key in the database (lexicographic order). An empty
 	// endKey (i.e., "") denotes that the caller wants till the last key in the database (lexicographic order).
 	GetIterator(dbName string, startKey, endKey string) (Iterator, error)
+	// GetDBsSnapshot returns a latest snapshot of the given DB along with all system databases.
+	// A snapshot is a frozen snapshot of a DB state at a particular point in time.
+	// The content of snapshot are guaranteed to be consistent.
+	// The snapshot must be released after use, by calling Release method on the DBSnapshot.
+	GetDBsSnapshot(dbNames []string) (DBsSnapshot, error)
 	// Commit commits the updates to each database
 	Commit(dbsUpdates map[string]*DBUpdates, blockNumber uint64) error
 	// Height returns the state database block height. In other
@@ -65,6 +70,25 @@ type DB interface {
 	ValidDBName(dbName string) bool
 	// Close closes the DB instance
 	Close() error
+}
+
+// DBsSnapshot provides methods to read from a database snapshot
+type DBsSnapshot interface {
+	// Get returns the value of the key present in the
+	// database
+	Get(dbName, key string) ([]byte, *types.Metadata, error)
+	// GetIndexDefinition returns the index definition of a given database
+	GetIndexDefinition(dbName string) ([]byte, *types.Metadata, error)
+	// GetIterator returns an iterator to fetch values associated with a range of keys
+	// startKey is inclusive while the endKey is exclusive. An empty startKey (i.e., "") denotes that
+	// the caller wants from the first key in the database (lexicographic order). An empty
+	// endKey (i.e., "") denotes that the caller wants till the last key in the database (lexicographic order).
+	GetIterator(dbName string, startKey, endKey string) (Iterator, error)
+	// Release releases the snapshot. This will not release any returned
+	// iterators, the iterators would still be valid until released or the
+	// underlying DB is closed.
+	// Other methods should not be called after the snapshot has been released.
+	Release()
 }
 
 // KVWithMetadata holds a key and value pair
