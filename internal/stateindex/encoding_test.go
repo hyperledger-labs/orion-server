@@ -14,8 +14,8 @@ func TestOrderPreservingEncodingDecoding(t *testing.T) {
 }
 
 func testEncodeAndDecode(t *testing.T, n uint64) {
-	value := encodeOrderPreservingVarUint64(n)
-	nextValue := encodeOrderPreservingVarUint64(n + 1)
+	value := EncodeOrderPreservingVarUint64(n)
+	nextValue := EncodeOrderPreservingVarUint64(n + 1)
 	if !(bytes.Compare(value, nextValue) < 0) {
 		t.Fatalf("A smaller integer should result into smaller bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
 			n, n+1, value, nextValue)
@@ -34,8 +34,8 @@ func TestReverseOrderPreservingEncodingDecoding(t *testing.T) {
 }
 
 func testReverseOrderEncodingAndDecoding(t *testing.T, n uint64) {
-	value := encodeReverseOrderVarUint64(n)
-	nextValue := encodeReverseOrderVarUint64(n + 1)
+	value := EncodeReverseOrderVarUint64(n)
+	nextValue := EncodeReverseOrderVarUint64(n + 1)
 	if !(bytes.Compare(value, nextValue) > 0) {
 		t.Fatalf("A smaller integer should result into greater bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
 			n, n+1, value, nextValue)
