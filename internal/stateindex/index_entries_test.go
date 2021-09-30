@@ -4,7 +4,6 @@ package stateindex
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"math"
@@ -81,7 +80,7 @@ func TestConstructIndexEntries(t *testing.T) {
 	indexDB2Json, err := json.Marshal(indexDB2)
 	require.NoError(t, err)
 
-	encoded10 := base64.URLEncoding.EncodeToString(EncodeOrderPreservingVarUint64(uint64(10)))
+	encoded10 := EncodeOrderPreservingVarUint64(uint64(10))
 	createDBsWithIndex := map[string]*worldstate.DBUpdates{
 		worldstate.DatabasesDBName: {
 			Writes: []*worldstate.KVWithMetadata{
@@ -927,6 +926,290 @@ func TestIndexEntryToString(t *testing.T) {
 			entry, err := tt.indexEntry.String()
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedIndexEntry, entry)
+		})
+	}
+}
+
+func TestOrderPreservingIndexingOfNumber(t *testing.T) {
+	index := map[string]types.Type{
+		"a1": types.Type_NUMBER,
+	}
+	indexJson, err := json.Marshal(index)
+	require.NoError(t, err)
+
+	createDBsWithIndex := map[string]*worldstate.DBUpdates{
+		worldstate.DatabasesDBName: {
+			Writes: []*worldstate.KVWithMetadata{
+				{
+					Key:   "db1",
+					Value: indexJson,
+				},
+				{
+					Key: IndexDB("db1"),
+				},
+			},
+		},
+	}
+	env := newIndexTestEnv(t)
+	require.NoError(t, env.db.Commit(createDBsWithIndex, 1))
+
+	updates := map[string]*worldstate.DBUpdates{
+		"db1": {
+			Writes: []*worldstate.KVWithMetadata{
+				{
+					Key:   "p3",
+					Value: []byte(`{"a1":-5}`),
+				},
+				{
+					Key:   "p1",
+					Value: []byte(`{"a1":-100}`),
+				},
+				{
+					Key:   "p0",
+					Value: []byte(`{"a1":-200}`),
+				},
+				{
+					Key:   "p6",
+					Value: []byte(`{"a1":15}`),
+				},
+				{
+					Key:   "p2",
+					Value: []byte(`{"a1":-10}`),
+				},
+				{
+					Key:   "p5",
+					Value: []byte(`{"a1":10}`),
+				},
+				{
+					Key:   "p4",
+					Value: []byte(`{"a1":0}`),
+				},
+				{
+					Key:   "p7",
+					Value: []byte(`{"a1":25}`),
+				},
+			},
+		},
+	}
+
+	indexEntries, err := ConstructIndexEntries(updates, env.db)
+	require.NoError(t, err)
+	require.NoError(t, env.db.Commit(indexEntries, 2))
+
+	tests := []struct {
+		name        string
+		start       *IndexEntry
+		end         *IndexEntry
+		expectedKVs map[string]int64
+	}{
+		{
+			name: "fetch all positive numbers",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p4": 0,
+				"p5": 10,
+				"p6": 15,
+				"p7": 25,
+			},
+		},
+		{
+			name: "fetch all positive keys till",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
+				KeyPosition:   Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p4": 0,
+				"p5": 10,
+				"p6": 15,
+			},
+		},
+		{
+			name: "fetch all positive keys from",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
+				KeyPosition:   Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p5": 10,
+				"p6": 15,
+				"p7": 25,
+			},
+		},
+		{
+			name: "fetch all positive keys from and till",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
+				KeyPosition:   Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      PositiveNumber,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
+				KeyPosition:   Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p5": 10,
+				"p6": 15,
+			},
+		},
+		{
+			name: "fetch all negative numbers",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p0": -200,
+				"p1": -100,
+				"p2": -10,
+				"p3": -5,
+			},
+		},
+		{
+			name: "fetch all negative keys till",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(uint64(10)),
+				KeyPosition:   Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p0": -200,
+				"p1": -100,
+				"p2": -10,
+			},
+		},
+		{
+			name: "fetch all negative keys from",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(uint64(100)),
+				KeyPosition:   Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p1": -100,
+				"p2": -10,
+				"p3": -5,
+			},
+		},
+		{
+			name: "fetch all negative keys from and till",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(uint64(100)),
+				KeyPosition:   Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.Type_NUMBER,
+				Metadata:      NegativeNumber,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(uint64(10)),
+				KeyPosition:   Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p1": -100,
+				"p2": -10,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			startKey, err := json.Marshal(tt.start)
+			require.NoError(t, err)
+
+			endKey, err := json.Marshal(tt.end)
+			require.NoError(t, err)
+
+			itr, err := env.db.GetIterator(IndexDB("db1"), string(startKey), string(endKey))
+			require.NoError(t, err)
+
+			kvs := make(map[string]int64)
+			for itr.Next() {
+				ie := &IndexEntry{}
+				require.NoError(t, json.Unmarshal(itr.Key(), ie))
+
+				var v int64
+
+				if tt.start.Metadata == PositiveNumber {
+					vTemp, err := decodeOrderPreservingVarUint64(ie.Value.(string))
+					require.NoError(t, err)
+					v = int64(vTemp)
+				} else {
+					vTemp, err := decodeReverseOrderVarUint64(ie.Value.(string))
+					require.NoError(t, err)
+					v = -int64(vTemp)
+				}
+				kvs[ie.Key] = v
+			}
+			require.Equal(t, tt.expectedKVs, kvs)
 		})
 	}
 }
