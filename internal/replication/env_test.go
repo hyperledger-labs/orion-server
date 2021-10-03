@@ -2,6 +2,7 @@ package replication_test
 
 import (
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"math"
 	"os"
@@ -22,12 +23,12 @@ import (
 var nodePortBase = uint32(22000)
 var peerPortBase = uint32(23000)
 
-var raftConfig = &types.RaftConfig{
+var raftConfigNoSnapshots = &types.RaftConfig{
 	TickInterval:         "20ms",
 	ElectionTicks:        100,
 	HeartbeatTicks:       10,
 	MaxInflightBlocks:    50,
-	SnapshotIntervalSize: math.MaxUint64,
+	SnapshotIntervalSize: math.MaxUint64, // never take snapshots
 }
 
 var clusterConfig1node = &types.ClusterConfig{
@@ -49,7 +50,7 @@ var clusterConfig1node = &types.ClusterConfig{
 			PeerHost: "127.0.0.1",
 			PeerPort: peerPortBase + 1,
 		}},
-		RaftConfig: raftConfig,
+		RaftConfig: raftConfigNoSnapshots,
 	},
 }
 
@@ -111,7 +112,13 @@ func (n *nodeEnv) Restart() error {
 	}
 
 	//recreate
-	n.conf.Transport = comm.NewHTTPTransport(&comm.Config{LocalConf: n.conf.LocalConf, Logger: n.conf.Logger})
+	n.conf.Transport = comm.NewHTTPTransport(
+		&comm.Config{
+			LedgerReader: n.conf.LedgerReader,
+			LocalConf:    n.conf.LocalConf,
+			Logger:       n.conf.Logger,
+		},
+	)
 	n.conf.BlockOneQueueBarrier = queue.NewOneQueueBarrier(n.conf.Logger)
 	n.stopServeCh = make(chan struct{})
 	n.blockReplicator, err = replication.NewBlockReplicator(n.conf)
@@ -184,7 +191,7 @@ type clusterEnv struct {
 }
 
 // create a clusterEnv
-func createClusterEnv(t *testing.T, logLevel string, nNodes int) *clusterEnv {
+func createClusterEnv(t *testing.T, logLevel string, nNodes int, raftConf *types.RaftConfig) *clusterEnv {
 	lg := testLogger(t, logLevel)
 
 	testDir, err := ioutil.TempDir("", "replication-test")
@@ -193,8 +200,12 @@ func createClusterEnv(t *testing.T, logLevel string, nNodes int) *clusterEnv {
 	clusterConfig := &types.ClusterConfig{
 		ConsensusConfig: &types.ConsensusConfig{
 			Algorithm:  "raft",
-			RaftConfig: raftConfig,
+			RaftConfig: raftConf,
 		},
+	}
+
+	if raftConf == nil {
+		clusterConfig.ConsensusConfig.RaftConfig = raftConfigNoSnapshots
 	}
 
 	for n := uint32(1); n <= uint32(nNodes); n++ {
@@ -253,11 +264,6 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 		},
 	}
 
-	peerTransport := comm.NewHTTPTransport(&comm.Config{
-		LocalConf: localConf,
-		Logger:    lg,
-	})
-
 	qBarrier := queue.NewOneQueueBarrier(lg)
 
 	ledger := &memLedger{}
@@ -271,6 +277,12 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 	if err := ledger.Append(proposedBlock); err != nil { //genesis block
 		return nil, err
 	}
+
+	peerTransport := comm.NewHTTPTransport(&comm.Config{
+		LedgerReader: ledger,
+		LocalConf:    localConf,
+		Logger:       lg,
+	})
 
 	conf := &replication.Config{
 		LocalConf:            localConf,
@@ -363,6 +375,41 @@ func (c *clusterEnv) AssertEqualHeight(height uint64, indices ...int) bool {
 		}
 	}
 	return true
+}
+
+// assert all the ledgers specified in 'indices' are equal.
+func (c *clusterEnv) AssertEqualLedger(indices ...int) error {
+	if len(indices) == 0 {
+		for i := 0; i < len(c.nodes); i++ {
+			indices = append(indices, i)
+		}
+	}
+
+	var prevNode *nodeEnv
+	for i, idx := range indices {
+		currNode := c.nodes[idx]
+		if i > 0 {
+			id1 := currNode.blockReplicator.RaftID()
+			id2 := prevNode.blockReplicator.RaftID()
+			h1, _ := currNode.ledger.Height()
+			h2, _ := prevNode.ledger.Height()
+			if h1 != h2 {
+				return errors.Errorf("different heights, nodes RaftID: %d %d", id1, id2)
+			}
+
+			for h := uint64(1); h <= h1; h++ {
+				b1, _ := currNode.ledger.Get(h)
+				b2, _ := prevNode.ledger.Get(h)
+				if !proto.Equal(b1, b2) {
+					return errors.Errorf("different blocks, height %d, nodes RaftID: %d %d, blocks %+v %+v", h, id1, id2, b1, b2)
+				}
+			}
+
+		}
+		prevNode = currNode
+	}
+
+	return nil
 }
 
 // memLedger mocks the block processor, which commits blocks and keeps them in the ledger.

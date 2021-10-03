@@ -1,5 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package httputils
 
 import (
@@ -10,9 +11,19 @@ import (
 	"strconv"
 
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
 )
 
 const MultiPartFormData = "multipart/form-data"
+
+func MarshalOrPanic(m proto.Message) []byte {
+	bytes, err := proto.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes
+}
 
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
 func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {

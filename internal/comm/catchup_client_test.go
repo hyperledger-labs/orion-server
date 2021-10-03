@@ -5,7 +5,6 @@ package comm_test
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"path"
@@ -289,12 +288,13 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 
 	go pullBlocksLoop()
 
-	time.Sleep(10 * time.Millisecond)
+	//TODO do "eventually" on `Retry interval max reached` instead, as this `Sleep` may creates a flake, see: https://github.com/IBM-Blockchain/bcdb-server/issues/188
+	time.Sleep(100 * time.Millisecond)
 	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 100)
 	require.NoError(t, err)
 	defer tr2.Close()
 
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	tr3, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 150)
 	require.NoError(t, err)
 	defer tr3.Close()
@@ -346,8 +346,8 @@ func TestCatchUpClient_PullBlocksCancel(t *testing.T) {
 	go func() {
 		blocks, err := cc.PullBlocks(ctx, 51, 100, 0)
 		wg.Done()
-		assert.EqualError(t, err, "PullBlocks canceled: context canceled")
-		assert.Nil(t, blocks)
+		require.EqualError(t, err, "PullBlocks canceled: context canceled")
+		require.Nil(t, blocks)
 	}()
 
 	time.Sleep(10 * time.Millisecond)
