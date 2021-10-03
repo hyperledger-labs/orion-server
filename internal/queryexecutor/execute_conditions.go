@@ -6,7 +6,7 @@ import (
 	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
 )
 
-func (e *WorldStateQueryExecutor) executeAND(dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
+func (e *WorldStateJSONQueryExecutor) executeAND(dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
 	attrKeys, err := e.executeAllConditions(dbName, attrsConds)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func (e *WorldStateQueryExecutor) executeAND(dbName string, attrsConds attribute
 	return minKeys, nil
 }
 
-func (e *WorldStateQueryExecutor) executeOR(dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
+func (e *WorldStateJSONQueryExecutor) executeOR(dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
 	attrKeys, err := e.executeAllConditions(dbName, attrsConds)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ type attributesKeys struct {
 	m sync.Mutex
 }
 
-func (e *WorldStateQueryExecutor) executeAllConditions(dbName string, attrsConds attributeToConditions) (map[string]map[string]bool, error) {
+func (e *WorldStateJSONQueryExecutor) executeAllConditions(dbName string, attrsConds attributeToConditions) (map[string]map[string]bool, error) {
 	// Note that we simply create query plan for each condition and execute the same without
 	// performing any kind of query optimization. In the future, we can use statistics on number
 	// index entries per attribute and type to come up with complex query optimization methods.
@@ -117,7 +117,7 @@ func (e *WorldStateQueryExecutor) executeAllConditions(dbName string, attrsConds
 	}
 }
 
-func (e *WorldStateQueryExecutor) execute(dbName string, attribute string, conds *attributeTypeAndConditions) (map[string]bool, error) {
+func (e *WorldStateJSONQueryExecutor) execute(dbName string, attribute string, conds *attributeTypeAndConditions) (map[string]bool, error) {
 	plan, err := createQueryPlan(attribute, conds)
 	if err != nil {
 		return nil, err
