@@ -295,10 +295,10 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 func TestValidateAndDisectConditions(t *testing.T) {
 	t.Parallel()
 
-	indexDef := map[string]types.Type{
-		"title":      types.Type_STRING,
-		"year":       types.Type_NUMBER,
-		"bestseller": types.Type_BOOLEAN,
+	indexDef := map[string]types.IndexAttributeType{
+		"title":      types.IndexAttributeType_STRING,
+		"year":       types.IndexAttributeType_NUMBER,
+		"bestseller": types.IndexAttributeType_BOOLEAN,
 	}
 	marshaledIndexDef, err := json.Marshal(indexDef)
 	require.NoError(t, err)
@@ -339,7 +339,7 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			`,
 			expectedDisectedConditions: attributeToConditions{
 				"title": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						constants.QueryOpEqual: "book1",
 					},
@@ -364,13 +364,13 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			`,
 			expectedDisectedConditions: attributeToConditions{
 				"year": {
-					valueType: types.Type_NUMBER,
+					valueType: types.IndexAttributeType_NUMBER,
 					conditions: map[string]interface{}{
 						constants.QueryOpGreaterThan: int64(2010),
 					},
 				},
 				"bestseller": {
-					valueType: types.Type_BOOLEAN,
+					valueType: types.IndexAttributeType_BOOLEAN,
 					conditions: map[string]interface{}{
 						constants.QueryOpEqual: true,
 					},
@@ -393,7 +393,7 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			`,
 			expectedDisectedConditions: attributeToConditions{
 				"year": {
-					valueType: types.Type_NUMBER,
+					valueType: types.IndexAttributeType_NUMBER,
 					conditions: map[string]interface{}{
 						constants.QueryOpGreaterThan: int64(2010),
 						constants.QueryOpLesserThan:  int64(2020),
@@ -421,14 +421,14 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			`,
 			expectedDisectedConditions: attributeToConditions{
 				"year": {
-					valueType: types.Type_NUMBER,
+					valueType: types.IndexAttributeType_NUMBER,
 					conditions: map[string]interface{}{
 						constants.QueryOpGreaterThan: int64(2010),
 						constants.QueryOpLesserThan:  int64(2020),
 					},
 				},
 				"title": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						constants.QueryOpGreaterThan: "book1",
 						constants.QueryOpLesserThan:  "book100",
@@ -462,10 +462,10 @@ func TestValidateAndDisectConditions(t *testing.T) {
 func TestValidateAndDisectConditionsErrorCases(t *testing.T) {
 	t.Parallel()
 
-	indexDef := map[string]types.Type{
-		"title":      types.Type_STRING,
-		"year":       types.Type_NUMBER,
-		"bestseller": types.Type_BOOLEAN,
+	indexDef := map[string]types.IndexAttributeType{
+		"title":      types.IndexAttributeType_STRING,
+		"year":       types.IndexAttributeType_NUMBER,
+		"bestseller": types.IndexAttributeType_BOOLEAN,
 	}
 	marshaledIndexDef, err := json.Marshal(indexDef)
 	require.NoError(t, err)

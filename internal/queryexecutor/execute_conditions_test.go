@@ -11,10 +11,10 @@ import (
 )
 
 func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
-	indexDef := map[string]types.Type{
-		"attr1": types.Type_STRING,
-		"attr2": types.Type_BOOLEAN,
-		"attr3": types.Type_STRING,
+	indexDef := map[string]types.IndexAttributeType{
+		"attr1": types.IndexAttributeType_STRING,
+		"attr2": types.IndexAttributeType_BOOLEAN,
+		"attr3": types.IndexAttributeType_STRING,
 	}
 	marshaledIndexDef, err := json.Marshal(indexDef)
 	require.NoError(t, err)
@@ -68,12 +68,12 @@ func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
 	dbUpdate := &worldstate.DBUpdates{}
 	for attr, e := range indexEntries {
 		for v, keys := range e {
-			var ty types.Type
+			var ty types.IndexAttributeType
 			switch v.(type) {
 			case string:
-				ty = types.Type_STRING
+				ty = types.IndexAttributeType_STRING
 			case bool:
-				ty = types.Type_BOOLEAN
+				ty = types.IndexAttributeType_BOOLEAN
 			}
 
 			for _, k := range keys {
@@ -127,20 +127,20 @@ func TestExecuteAND(t *testing.T) {
 			name: "non-empty result",
 			attrsConds: attributeToConditions{
 				"attr1": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a",
 						"$lt":  "f",
 					},
 				},
 				"attr2": {
-					valueType: types.Type_BOOLEAN,
+					valueType: types.IndexAttributeType_BOOLEAN,
 					conditions: map[string]interface{}{
 						"$eq": false,
 					},
 				},
 				"attr3": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a2",
 					},
@@ -154,20 +154,20 @@ func TestExecuteAND(t *testing.T) {
 			name: "more matches: non-empty result",
 			attrsConds: attributeToConditions{
 				"attr1": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a",
 						"$lte": "f",
 					},
 				},
 				"attr2": {
-					valueType: types.Type_BOOLEAN,
+					valueType: types.IndexAttributeType_BOOLEAN,
 					conditions: map[string]interface{}{
 						"$eq": false,
 					},
 				},
 				"attr3": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a2",
 					},
@@ -182,20 +182,20 @@ func TestExecuteAND(t *testing.T) {
 			name: "empty results",
 			attrsConds: attributeToConditions{
 				"attr1": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a",
 						"$lte": "f",
 					},
 				},
 				"attr2": {
-					valueType: types.Type_BOOLEAN,
+					valueType: types.IndexAttributeType_BOOLEAN,
 					conditions: map[string]interface{}{
 						"$eq": true,
 					},
 				},
 				"attr3": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a2",
 					},
@@ -207,20 +207,20 @@ func TestExecuteAND(t *testing.T) {
 			name: "minKeys is 0: empty results",
 			attrsConds: attributeToConditions{
 				"attr1": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a",
 						"$lte": "f",
 					},
 				},
 				"attr2": {
-					valueType: types.Type_BOOLEAN,
+					valueType: types.IndexAttributeType_BOOLEAN,
 					conditions: map[string]interface{}{
 						"$eq": true,
 					},
 				},
 				"attr3": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a5",
 					},
@@ -257,20 +257,20 @@ func TestExecuteOR(t *testing.T) {
 			name: "non-empty result",
 			attrsConds: attributeToConditions{
 				"attr1": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "b",
 						"$lt":  "c",
 					},
 				},
 				"attr2": {
-					valueType: types.Type_BOOLEAN,
+					valueType: types.IndexAttributeType_BOOLEAN,
 					conditions: map[string]interface{}{
 						"$eq": true,
 					},
 				},
 				"attr3": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a1",
 						"$lt":  "a2",
@@ -289,20 +289,20 @@ func TestExecuteOR(t *testing.T) {
 			name: "more matches: non-empty result",
 			attrsConds: attributeToConditions{
 				"attr1": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a",
 						"$lte": "c",
 					},
 				},
 				"attr2": {
-					valueType: types.Type_BOOLEAN,
+					valueType: types.IndexAttributeType_BOOLEAN,
 					conditions: map[string]interface{}{
 						"$eq": false,
 					},
 				},
 				"attr3": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a2",
 					},
@@ -326,13 +326,13 @@ func TestExecuteOR(t *testing.T) {
 			name: "empty results",
 			attrsConds: attributeToConditions{
 				"attr1": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "zaa",
 					},
 				},
 				"attr3": {
-					valueType: types.Type_STRING,
+					valueType: types.IndexAttributeType_STRING,
 					conditions: map[string]interface{}{
 						"$gte": "a3",
 					},
@@ -370,7 +370,7 @@ func TestExecute(t *testing.T) {
 			name:      "equal to b",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$eq": "b",
 				},
@@ -381,7 +381,7 @@ func TestExecute(t *testing.T) {
 			name:      "equal to z",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$eq": "z",
 				},
@@ -392,7 +392,7 @@ func TestExecute(t *testing.T) {
 			name:      "equal to abc",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$eq": "abc",
 				},
@@ -403,7 +403,7 @@ func TestExecute(t *testing.T) {
 			name:      "equal to true",
 			attribute: "attr2",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_BOOLEAN,
+				valueType: types.IndexAttributeType_BOOLEAN,
 				conditions: map[string]interface{}{
 					"$eq": true,
 				},
@@ -414,7 +414,7 @@ func TestExecute(t *testing.T) {
 			name:      "equal to false",
 			attribute: "attr2",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_BOOLEAN,
+				valueType: types.IndexAttributeType_BOOLEAN,
 				conditions: map[string]interface{}{
 					"$eq": false,
 				},
@@ -425,7 +425,7 @@ func TestExecute(t *testing.T) {
 			name:      "greater than n",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gt": "n",
 				},
@@ -436,7 +436,7 @@ func TestExecute(t *testing.T) {
 			name:      "greater than z",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gt": "z",
 				},
@@ -447,7 +447,7 @@ func TestExecute(t *testing.T) {
 			name:      "greater than or eq to z",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gte": "z",
 				},
@@ -458,7 +458,7 @@ func TestExecute(t *testing.T) {
 			name:      "lesser than d",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$lt": "d",
 				},
@@ -469,7 +469,7 @@ func TestExecute(t *testing.T) {
 			name:      "lesser than a",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$lt": "a",
 				},
@@ -480,7 +480,7 @@ func TestExecute(t *testing.T) {
 			name:      "lesser than or eq to b",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$lte": "b",
 				},
@@ -491,7 +491,7 @@ func TestExecute(t *testing.T) {
 			name:      "greater than c and lesser than m",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gt": "c",
 					"$lt": "m",
@@ -503,7 +503,7 @@ func TestExecute(t *testing.T) {
 			name:      "greater than c and lesser than or equal to m",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gt":  "c",
 					"$lte": "m",
@@ -515,7 +515,7 @@ func TestExecute(t *testing.T) {
 			name:      "greater than or equal to c and lesser than or equal to m",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gte": "c",
 					"$lte": "m",
@@ -527,7 +527,7 @@ func TestExecute(t *testing.T) {
 			name:      "greater than or equal to c and lesser than",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gte": "c",
 					"$lt":  "m",
@@ -539,7 +539,7 @@ func TestExecute(t *testing.T) {
 			name:      "all values",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gt": "",
 					"$lt": "zzz",
@@ -551,7 +551,7 @@ func TestExecute(t *testing.T) {
 			name:      "all values",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
-				valueType: types.Type_STRING,
+				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gt": "zzz",
 					"$lt": "",

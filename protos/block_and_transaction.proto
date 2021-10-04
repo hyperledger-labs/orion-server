@@ -119,7 +119,7 @@ message DBAdministrationTx {
 }
 
 message DBIndex {
-    map<string, Type> attribute_and_type = 1;
+    map<string, IndexAttributeType> attribute_and_type = 1;
 }
 
 message UserAdministrationTx {
@@ -213,7 +213,7 @@ enum Flag {
   INVALID_MISSING_SIGNATURE = 7;
 }
 
-enum Type {
+enum IndexAttributeType {
   NUMBER = 0;
   STRING = 1;
   BOOLEAN = 2;

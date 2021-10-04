@@ -181,9 +181,9 @@ func (v *dbAdminTxValidator) validateIndexEntries(dbsIndex map[string]*types.DBI
 
 		for attr, ty := range dbIndex.AttributeAndType {
 			switch ty {
-			case types.Type_NUMBER:
-			case types.Type_STRING:
-			case types.Type_BOOLEAN:
+			case types.IndexAttributeType_NUMBER:
+			case types.IndexAttributeType_STRING:
+			case types.IndexAttributeType_BOOLEAN:
 			default:
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
