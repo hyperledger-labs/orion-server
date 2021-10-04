@@ -3,6 +3,7 @@
 package bcdb
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -79,7 +80,7 @@ type DB interface {
 	// 		}
 	//   }
 	// }
-	DataQuery(dbName, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error)
+	DataQuery(ctx context.Context, dbName, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error)
 
 	// GetBlockHeader returns ledger block header
 	GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
@@ -419,23 +420,29 @@ func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseE
 }
 
 // DataQuery executes a given JSON query and return key-value pairs which are matching
-// the criteria provided in the query.
-func (d *db) DataQuery(dbName, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error) {
-	queryResponse, err := d.worldstateQueryProcessor.executeJSONQuery(dbName, querierUserID, query)
-	if err != nil {
-		return nil, err
+// the criteria provided in the query
+func (d *db) DataQuery(ctx context.Context, dbName, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error) {
+	queryResponse, err := d.worldstateQueryProcessor.executeJSONQuery(ctx, dbName, querierUserID, query)
+
+	select {
+	case <-ctx.Done():
+		return nil, nil
+	default:
+		if err != nil {
+			return nil, err
+		}
+		queryResponse.Header = d.responseHeader()
+		sign, err := d.signature(queryResponse)
+		if err != nil {
+			return nil, err
+		}
+
+		return &types.DataQueryResponseEnvelope{
+			Response:  queryResponse,
+			Signature: sign,
+		}, nil
 	}
 
-	queryResponse.Header = d.responseHeader()
-	sign, err := d.signature(queryResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.DataQueryResponseEnvelope{
-		Response:  queryResponse,
-		Signature: sign,
-	}, nil
 }
 
 func (d *db) IsDBExists(name string) bool {

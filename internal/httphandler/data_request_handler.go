@@ -3,6 +3,7 @@
 package httphandler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -160,25 +161,38 @@ func (d *dataRequestHandler) dataJSONQuery(response http.ResponseWriter, request
 		return
 	}
 
-	data, err := d.db.DataQuery(query.DbName, query.UserId, []byte(query.Query))
-	if err != nil {
-		var status int
+	parent := request.Context()
+	data, err := d.db.DataQuery(parent, query.DbName, query.UserId, []byte(query.Query))
 
-		switch err.(type) {
-		case *errors.PermissionErr:
-			status = http.StatusForbidden
-		default:
-			status = http.StatusInternalServerError
+	select {
+	case <-parent.Done():
+		if parent.Err() == context.DeadlineExceeded {
+			d.logger.Debug("request has been timeout")
+			httputils.SendHTTPResponse(response, http.StatusRequestTimeout, nil)
+			return
 		}
 
-		httputils.SendHTTPResponse(
-			response,
-			status,
-			&types.HttpResponseErr{
-				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
-			})
-		return
-	}
+		d.logger.Debug("http client context has been cancelled")
+	default:
+		if err != nil {
+			var status int
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+			switch err.(type) {
+			case *errors.PermissionErr:
+				status = http.StatusForbidden
+			default:
+				status = http.StatusInternalServerError
+			}
+
+			httputils.SendHTTPResponse(
+				response,
+				status,
+				&types.HttpResponseErr{
+					ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+				})
+			return
+		}
+
+		httputils.SendHTTPResponse(response, http.StatusOK, data)
+	}
 }

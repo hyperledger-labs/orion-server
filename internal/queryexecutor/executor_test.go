@@ -1,6 +1,7 @@
 package queryexecutor
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -75,9 +76,10 @@ func TestExecuteJSONQuery(t *testing.T) {
 	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
-		name         string
-		query        []byte
-		expectedKeys map[string]bool
+		name                string
+		query               []byte
+		useCancelledContext bool
+		expectedKeys        map[string]bool
 	}{
 		{
 			name: "neither and nor or is set",
@@ -100,6 +102,7 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
+			useCancelledContext: false,
 			expectedKeys: map[string]bool{
 				"key3": true,
 			},
@@ -128,10 +131,34 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
+			useCancelledContext: false,
 			expectedKeys: map[string]bool{
 				"key1": true,
 				"key2": true,
 			},
+		},
+		{
+			name: "and is set and the context is done",
+			query: []byte(
+				`{
+					"selector": {
+						"$and": {
+							"attr1": {
+								"$gte": "a",
+								"$lt": "b"
+							},
+							"attr2": {
+								"$eq": true
+							},
+							"attr3": {
+								"$lt": "a2"
+							}
+						}
+					}
+				}`,
+			),
+			useCancelledContext: true,
+			expectedKeys:        nil,
 		},
 		{
 			name: "or is set",
@@ -159,6 +186,7 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
+			useCancelledContext: false,
 			expectedKeys: map[string]bool{
 				"key4":  true,
 				"key5":  true,
@@ -167,6 +195,29 @@ func TestExecuteJSONQuery(t *testing.T) {
 				"key6":  true,
 				"key7":  true,
 			},
+		},
+		{
+			name: "or is set and the context is done",
+			query: []byte(
+				`{
+					"selector": {
+						"$or": {
+							"attr1": {
+								"$gte": "b",
+								"$lt": "c"
+							},
+							"attr2": {
+								"$eq": false
+							},
+							"attr3": {
+								"$gte": "a2"
+							}
+						}
+					}
+				}`,
+			),
+			useCancelledContext: true,
+			expectedKeys:        nil,
 		},
 	}
 
@@ -178,7 +229,13 @@ func TestExecuteJSONQuery(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := qExecutor.ExecuteQuery(dbName, tt.query)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+
+			keys, err := qExecutor.ExecuteQuery(ctx, dbName, tt.query)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedKeys, keys)
 		})
@@ -381,7 +438,7 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := qExecutor.ExecuteQuery(dbName, tt.query)
+			_, err := qExecutor.ExecuteQuery(context.Background(), dbName, tt.query)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.expectedError)
 		})

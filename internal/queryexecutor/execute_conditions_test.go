@@ -1,6 +1,7 @@
 package queryexecutor
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -132,9 +133,10 @@ func TestExecuteAND(t *testing.T) {
 	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
-		name         string
-		attrsConds   attributeToConditions
-		expectedKeys map[string]bool
+		name                string
+		attrsConds          attributeToConditions
+		useCancelledContext bool
+		expectedKeys        map[string]bool
 	}{
 		{
 			name: "non-empty result",
@@ -165,9 +167,36 @@ func TestExecuteAND(t *testing.T) {
 					},
 				},
 			},
+			useCancelledContext: false,
 			expectedKeys: map[string]bool{
 				"key5": true,
 			},
+		},
+		{
+			name: "empty result due to done context",
+			attrsConds: attributeToConditions{
+				"attr1": {
+					valueType: types.IndexAttributeType_STRING,
+					conditions: map[string]interface{}{
+						"$gte": "a",
+						"$lt":  "f",
+					},
+				},
+				"attr2": {
+					valueType: types.IndexAttributeType_BOOLEAN,
+					conditions: map[string]interface{}{
+						"$eq": false,
+					},
+				},
+				"attr3": {
+					valueType: types.IndexAttributeType_STRING,
+					conditions: map[string]interface{}{
+						"$gte": "a2",
+					},
+				},
+			},
+			useCancelledContext: true,
+			expectedKeys:        nil,
 		},
 		{
 			name: "more matches: non-empty result",
@@ -199,6 +228,7 @@ func TestExecuteAND(t *testing.T) {
 					},
 				},
 			},
+			useCancelledContext: false,
 			expectedKeys: map[string]bool{
 				"key11": true,
 			},
@@ -226,7 +256,8 @@ func TestExecuteAND(t *testing.T) {
 					},
 				},
 			},
-			expectedKeys: nil,
+			useCancelledContext: false,
+			expectedKeys:        nil,
 		},
 		{
 			name: "minKeys is 0: empty results",
@@ -251,7 +282,8 @@ func TestExecuteAND(t *testing.T) {
 					},
 				},
 			},
-			expectedKeys: nil,
+			useCancelledContext: false,
+			expectedKeys:        nil,
 		},
 	}
 
@@ -264,7 +296,13 @@ func TestExecuteAND(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := qExecutor.executeAND(dbName, tt.attrsConds)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+
+			keys, err := qExecutor.executeAND(ctx, dbName, tt.attrsConds)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedKeys, keys)
 		})
@@ -279,9 +317,10 @@ func TestExecuteOR(t *testing.T) {
 	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
-		name         string
-		attrsConds   attributeToConditions
-		expectedKeys map[string]bool
+		name                string
+		attrsConds          attributeToConditions
+		useCancelledContext bool
+		expectedKeys        map[string]bool
 	}{
 		{
 			name: "non-empty result",
@@ -314,6 +353,7 @@ func TestExecuteOR(t *testing.T) {
 					},
 				},
 			},
+			useCancelledContext: false,
 			expectedKeys: map[string]bool{
 				"key4": true,
 				"key5": true,
@@ -323,6 +363,33 @@ func TestExecuteOR(t *testing.T) {
 				"key6": true,
 				"key7": true,
 			},
+		},
+		{
+			name: "empty result due to done context",
+			attrsConds: attributeToConditions{
+				"attr1": {
+					valueType: types.IndexAttributeType_STRING,
+					conditions: map[string]interface{}{
+						"$gte": "b",
+						"$lt":  "c",
+					},
+				},
+				"attr2": {
+					valueType: types.IndexAttributeType_BOOLEAN,
+					conditions: map[string]interface{}{
+						"$eq": true,
+					},
+				},
+				"attr3": {
+					valueType: types.IndexAttributeType_STRING,
+					conditions: map[string]interface{}{
+						"$gte": "a1",
+						"$lt":  "a2",
+					},
+				},
+			},
+			useCancelledContext: true,
+			expectedKeys:        nil,
 		},
 		{
 			name: "more matches: non-empty result",
@@ -353,6 +420,7 @@ func TestExecuteOR(t *testing.T) {
 					},
 				},
 			},
+			useCancelledContext: false,
 			expectedKeys: map[string]bool{
 				"key1":  true,
 				"key2":  true,
@@ -384,7 +452,8 @@ func TestExecuteOR(t *testing.T) {
 					},
 				},
 			},
-			expectedKeys: nil,
+			useCancelledContext: false,
+			expectedKeys:        nil,
 		},
 	}
 
@@ -397,7 +466,13 @@ func TestExecuteOR(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := qExecutor.executeOR(dbName, tt.attrsConds)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+
+			keys, err := qExecutor.executeOR(ctx, dbName, tt.attrsConds)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedKeys, keys)
 		})
@@ -412,10 +487,11 @@ func TestExecuteOnly(t *testing.T) {
 	setupDBForTestingExecutes(t, env.db, dbName)
 
 	tests := []struct {
-		name         string
-		attribute    string
-		condition    *attributeTypeAndConditions
-		expectedKeys []string
+		name                string
+		attribute           string
+		condition           *attributeTypeAndConditions
+		useCancelledContext bool
+		expectedKeys        []string
 	}{
 		{
 			name:      "equal to b",
@@ -426,7 +502,20 @@ func TestExecuteOnly(t *testing.T) {
 					"$eq": "b",
 				},
 			},
-			expectedKeys: []string{"key4", "key5"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key4", "key5"},
+		},
+		{
+			name:      "equal to b but empty result due to done context",
+			attribute: "attr1",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_STRING,
+				conditions: map[string]interface{}{
+					"$eq": "b",
+				},
+			},
+			useCancelledContext: true,
+			expectedKeys:        nil,
 		},
 		{
 			name:      "equal to z",
@@ -448,7 +537,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$eq": "abc",
 				},
 			},
-			expectedKeys: nil,
+			useCancelledContext: false,
+			expectedKeys:        nil,
 		},
 		{
 			name:      "equal to true",
@@ -592,7 +682,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$gt": "n",
 				},
 			},
-			expectedKeys: []string{"key16", "key17", "key18", "key19", "key20", "key21", "key22", "key23"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key16", "key17", "key18", "key19", "key20", "key21", "key22", "key23"},
 		},
 		{
 			name:      "greater than n and not equal to x",
@@ -615,7 +706,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$gt": "z",
 				},
 			},
-			expectedKeys: nil,
+			useCancelledContext: false,
+			expectedKeys:        nil,
 		},
 		{
 			name:      "greater than -125",
@@ -672,7 +764,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$gte": "z",
 				},
 			},
-			expectedKeys: []string{"key20", "key21", "key22", "key23"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key20", "key21", "key22", "key23"},
 		},
 		{
 			name:      "greater than or equal to -125",
@@ -717,7 +810,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lt": "d",
 				},
 			},
-			expectedKeys: []string{"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9"},
 		},
 		{
 			name:      "lesser than a",
@@ -728,7 +822,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lt": "a",
 				},
 			},
-			expectedKeys: nil,
+			useCancelledContext: false,
+			expectedKeys:        nil,
 		},
 		{
 			name:      "lesser than -125",
@@ -761,7 +856,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lte": "b",
 				},
 			},
-			expectedKeys: []string{"key1", "key2", "key3", "key4", "key5"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key1", "key2", "key3", "key4", "key5"},
 		},
 		{
 			name:      "lesser than or equal to -125",
@@ -795,7 +891,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lt": "m",
 				},
 			},
-			expectedKeys: []string{"key0", "key10", "key11", "key13", "key14", "key15"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key0", "key10", "key11", "key13", "key14", "key15"},
 		},
 		{
 			name:      "greater than c and lesser than or equal to m",
@@ -807,7 +904,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lte": "m",
 				},
 			},
-			expectedKeys: []string{"key0", "key10", "key11", "key13", "key14", "key15", "key31"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key0", "key10", "key11", "key13", "key14", "key15", "key31"},
 		},
 		{
 			name:      "greater than or equal to c and lesser than or equal to m",
@@ -819,7 +917,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lte": "m",
 				},
 			},
-			expectedKeys: []string{"key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15", "key31"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15", "key31"},
 		},
 		{
 			name:      "greater than or equal to c and lesser than",
@@ -831,7 +930,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lt":  "m",
 				},
 			},
-			expectedKeys: []string{"key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15"},
 		},
 		{
 			name:      "greater than -125 and lesser than 1234",
@@ -987,7 +1087,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lt": "zzz",
 				},
 			},
-			expectedKeys: []string{"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15", "key31", "key16", "key17", "key18", "key19", "key20", "key21", "key22", "key23"},
+			useCancelledContext: false,
+			expectedKeys:        []string{"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15", "key31", "key16", "key17", "key18", "key19", "key20", "key21", "key22", "key23"},
 		},
 		{
 			name:      "greater than or equal to 0 and not eqaul to 0",
@@ -1227,7 +1328,8 @@ func TestExecuteOnly(t *testing.T) {
 					"$lt": "",
 				},
 			},
-			expectedKeys: []string{},
+			useCancelledContext: false,
+			expectedKeys:        []string{},
 		},
 		{
 			name:      "all values - number",
@@ -1274,13 +1376,137 @@ func TestExecuteOnly(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			keys, err := qExecutor.execute(dbName, tt.attribute, tt.condition)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+
+			keys, err := qExecutor.execute(ctx, dbName, tt.attribute, tt.condition)
 			require.NoError(t, err)
+
+			if tt.useCancelledContext {
+				require.Nil(t, keys)
+				require.Nil(t, tt.expectedKeys)
+				return
+			}
+
 			expectedKeys := make(map[string]bool)
 			for _, k := range tt.expectedKeys {
 				expectedKeys[k] = true
 			}
 			require.Equal(t, expectedKeys, keys)
+		})
+	}
+}
+
+func TestIntersectionWithContext(t *testing.T) {
+	tests := []struct {
+		name                string
+		attrToKeys          map[string]map[string]bool
+		useCancelledContext bool
+		expectedKeys        map[string]bool
+	}{
+		{
+			name: "non-empty result",
+			attrToKeys: map[string]map[string]bool{
+				"attr1": {
+					"key1": true,
+					"key2": true,
+				},
+				"attr2": {
+					"key2": true,
+				},
+			},
+			useCancelledContext: false,
+			expectedKeys: map[string]bool{
+				"key2": true,
+			},
+		},
+		{
+			name: "empty result as the context is done",
+			attrToKeys: map[string]map[string]bool{
+				"attr1": {
+					"key1": true,
+					"key2": true,
+				},
+				"attr2": {
+					"key2": true,
+				},
+			},
+			useCancelledContext: true,
+			expectedKeys:        nil,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+
+			keys := intersection(ctx, tt.attrToKeys)
+			require.Equal(t, tt.expectedKeys, keys)
+		})
+	}
+}
+
+func TestUnionWithContext(t *testing.T) {
+	tests := []struct {
+		name                string
+		attrToKeys          map[string]map[string]bool
+		useCancelledContext bool
+		expectedKeys        map[string]bool
+	}{
+		{
+			name: "non-empty result",
+			attrToKeys: map[string]map[string]bool{
+				"attr1": {
+					"key1": true,
+					"key2": true,
+				},
+				"attr2": {
+					"key2": true,
+				},
+			},
+			useCancelledContext: false,
+			expectedKeys: map[string]bool{
+				"key1": true,
+				"key2": true,
+			},
+		},
+		{
+			name: "empty result as the context is done",
+			attrToKeys: map[string]map[string]bool{
+				"attr1": {
+					"key1": true,
+					"key2": true,
+				},
+				"attr2": {
+					"key2": true,
+				},
+			},
+			useCancelledContext: true,
+			expectedKeys:        nil,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+
+			keys := union(ctx, tt.attrToKeys)
+			require.Equal(t, tt.expectedKeys, keys)
 		})
 	}
 }

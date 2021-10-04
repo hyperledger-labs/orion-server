@@ -4,6 +4,7 @@ package httphandler
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -301,7 +302,7 @@ func TestDataRequestHandler_DataJSONQuery(t *testing.T) {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
-				db.On("DataQuery", dbName, submittingUserName, []byte(q)).Return(response, nil)
+				db.On("DataQuery", mock.Anything, dbName, submittingUserName, []byte(q)).Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -345,7 +346,7 @@ func TestDataRequestHandler_DataJSONQuery(t *testing.T) {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
-				db.On("DataQuery", dbName, submittingUserName, []byte(q)).
+				db.On("DataQuery", mock.Anything, dbName, submittingUserName, []byte(q)).
 					Return(nil, &interrors.PermissionErr{ErrMsg: "access forbidden"})
 				return db
 			},
@@ -369,7 +370,7 @@ func TestDataRequestHandler_DataJSONQuery(t *testing.T) {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
-				db.On("DataQuery", dbName, submittingUserName, []byte(q)).
+				db.On("DataQuery", mock.Anything, dbName, submittingUserName, []byte(q)).
 					Return(nil, errors.New("failed to execute the query"))
 				return db
 			},
@@ -948,6 +949,148 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 				err := json.NewDecoder(rr.Body).Decode(respErr)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+		})
+	}
+}
+
+func TestDataRequestHandler_DataJSONQueryWithContext(t *testing.T) {
+	dbName := "test_database"
+
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+
+	q := `{"attr1":{"$eq":true}}`
+	queryBytes, err := json.Marshal(q)
+	require.NoError(t, err)
+	require.NotNil(t, queryBytes)
+
+	queryReader := bytes.NewReader(queryBytes)
+	require.NotNil(t, queryReader)
+
+	sigFoo := testutils.SignatureFromQuery(t, aliceSigner, &types.DataJSONQuery{
+		UserId: submittingUserName,
+		DbName: dbName,
+		Query:  q,
+	})
+
+	testCases := []struct {
+		name                string
+		requestFactory      func() (*http.Request, error)
+		dbMockFactory       func(response *types.DataQueryResponseEnvelope) bcdb.DB
+		expectedResponse    *types.DataQueryResponseEnvelope
+		useCancelledContext bool
+		expectedStatusCode  int
+		expectedErr         string
+	}{
+		{
+			name: "valid json query",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			useCancelledContext: false,
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				db.On("DataQuery", mock.Anything, dbName, submittingUserName, []byte(q)).Return(response, nil)
+				return db
+			},
+			expectedResponse: &types.DataQueryResponseEnvelope{
+				Response: &types.DataQueryResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte(`{"attr1":true}`),
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid json query but the context is closed",
+			requestFactory: func() (*http.Request, error) {
+				queryReader := bytes.NewReader(queryBytes)
+				require.NotNil(t, queryReader)
+				req, err := http.NewRequest(http.MethodPost, constants.URLForJSONQuery(dbName), queryReader)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.DataQueryResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				db.On("DataQuery", mock.Anything, dbName, submittingUserName, []byte(q)).Return(response, nil)
+				return db
+			},
+			useCancelledContext: true,
+			expectedResponse:    nil,
+			expectedStatusCode:  http.StatusRequestTimeout,
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			rr := httptest.NewRecorder()
+			handler := NewDataRequestHandler(db, logger)
+
+			var deadline time.Time
+			if tt.useCancelledContext {
+				deadline = time.Now()
+			} else {
+				deadline = time.Now().Add(10 * time.Second)
+			}
+
+			ctx, cancel := context.WithDeadline(req.Context(), deadline)
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+			req = req.WithContext(ctx)
+
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &types.HttpResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.DataQueryResponseEnvelope{}
+				err = json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+				//TODO verify signature on response
 			}
 		})
 	}
