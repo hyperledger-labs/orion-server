@@ -3,6 +3,8 @@
 package bcdb
 
 import (
+	"context"
+
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
@@ -143,7 +145,7 @@ func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeC
 	return c, nil
 }
 
-func (q *worldstateQueryProcessor) executeJSONQuery(dbName, querierUserID string, query []byte) (*types.DataQueryResponse, error) {
+func (q *worldstateQueryProcessor) executeJSONQuery(ctx context.Context, dbName, querierUserID string, query []byte) (*types.DataQueryResponse, error) {
 	if worldstate.IsSystemDB(dbName) {
 		return nil, &errors.PermissionErr{
 			ErrMsg: "no user can directly read from a system database [" + dbName + "]. " +
@@ -176,36 +178,46 @@ func (q *worldstateQueryProcessor) executeJSONQuery(dbName, querierUserID string
 	}()
 
 	jsonQueryExecutor := queryexecutor.NewWorldStateJSONQueryExecutor(snapshots, q.logger)
-	keys, err := jsonQueryExecutor.ExecuteQuery(dbName, query)
-	if err != nil {
-		return nil, err
+	keys, err := jsonQueryExecutor.ExecuteQuery(ctx, dbName, query)
+	select {
+	case <-ctx.Done():
+		return nil, nil
+	default:
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var results []*types.KVWithMetadata
 
 	for k := range keys {
-		value, metadata, err := snapshots.Get(dbName, k)
-		if err != nil {
-			return nil, err
-		}
-
-		// TODO: we can store the ACL as value in the indexEntry. With that, we can avoid reading the whole value
-		// to perform the access control - issue #152
-		acl := metadata.GetAccessControl()
-		if acl != nil {
-			if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
-				continue
+		select {
+		case <-ctx.Done():
+			return nil, nil
+		default:
+			value, metadata, err := snapshots.Get(dbName, k)
+			if err != nil {
+				return nil, err
 			}
-		}
 
-		results = append(
-			results,
-			&types.KVWithMetadata{
-				Key:      k,
-				Value:    value,
-				Metadata: metadata,
-			},
-		)
+			// TODO: we can store the ACL as value in the indexEntry. With that, we can avoid reading the whole value
+			// to perform the access control - issue #152
+			acl := metadata.GetAccessControl()
+			if acl != nil {
+				if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
+					continue
+				}
+			}
+
+			results = append(
+				results,
+				&types.KVWithMetadata{
+					Key:      k,
+					Value:    value,
+					Metadata: metadata,
+				},
+			)
+		}
 	}
 
 	return &types.DataQueryResponse{

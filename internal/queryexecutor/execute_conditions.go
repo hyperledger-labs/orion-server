@@ -1,76 +1,102 @@
 package queryexecutor
 
 import (
+	"context"
 	"sync"
 
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
 )
 
-func (e *WorldStateJSONQueryExecutor) executeAND(dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
-	attrKeys, err := e.executeAllConditions(dbName, attrsConds)
+func (e *WorldStateJSONQueryExecutor) executeAND(ctx context.Context, dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
+	attrKeys, err := e.executeAllConditions(ctx, dbName, attrsConds)
 	if err != nil {
 		return nil, err
 	}
 
+	keys := intersection(ctx, attrKeys)
+	return keys, nil
+}
+
+func intersection(ctx context.Context, attrToKeys map[string]map[string]bool) map[string]bool {
 	var minKeys map[string]bool
 	var minKeysAttr string
 
-	for attr, keys := range attrKeys {
-		if minKeys == nil {
-			minKeys = keys
-			minKeysAttr = attr
-			continue
-		}
-
-		if len(minKeys) > len(keys) {
-			minKeys = keys
-			minKeysAttr = attr
-		}
-	}
-
-	if len(minKeys) == 0 {
-		return nil, nil
-	}
-
-	for k := range minKeys {
-		for attr, keys := range attrKeys {
-			if attr == minKeysAttr {
+	for attr, keys := range attrToKeys {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			if minKeys == nil {
+				minKeys = keys
+				minKeysAttr = attr
 				continue
 			}
 
-			if !keys[k] {
-				delete(minKeys, k)
-				break
+			if len(minKeys) > len(keys) {
+				minKeys = keys
+				minKeysAttr = attr
 			}
 		}
 	}
 
 	if len(minKeys) == 0 {
-		return nil, nil
+		return nil
 	}
 
-	return minKeys, nil
+	for k := range minKeys {
+		for attr, keys := range attrToKeys {
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				if attr == minKeysAttr {
+					continue
+				}
+
+				if !keys[k] {
+					delete(minKeys, k)
+					break
+				}
+			}
+		}
+	}
+
+	if len(minKeys) == 0 {
+		return nil
+	}
+
+	return minKeys
 }
 
-func (e *WorldStateJSONQueryExecutor) executeOR(dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
-	attrKeys, err := e.executeAllConditions(dbName, attrsConds)
+func (e *WorldStateJSONQueryExecutor) executeOR(ctx context.Context, dbName string, attrsConds attributeToConditions) (map[string]bool, error) {
+	attrKeys, err := e.executeAllConditions(ctx, dbName, attrsConds)
 	if err != nil {
 		return nil, err
 	}
 
+	keys := union(ctx, attrKeys)
+	return keys, nil
+}
+
+func union(ctx context.Context, attrToKeys map[string]map[string]bool) map[string]bool {
 	unionOfKeys := make(map[string]bool)
 
-	for _, keys := range attrKeys {
+	for _, keys := range attrToKeys {
 		for k := range keys {
-			unionOfKeys[k] = true
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				unionOfKeys[k] = true
+			}
 		}
 	}
 
 	if len(unionOfKeys) == 0 {
-		return nil, nil
+		return nil
 	}
 
-	return unionOfKeys, nil
+	return unionOfKeys
 }
 
 type attributesKeys struct {
@@ -78,7 +104,7 @@ type attributesKeys struct {
 	m sync.Mutex
 }
 
-func (e *WorldStateJSONQueryExecutor) executeAllConditions(dbName string, attrsConds attributeToConditions) (map[string]map[string]bool, error) {
+func (e *WorldStateJSONQueryExecutor) executeAllConditions(ctx context.Context, dbName string, attrsConds attributeToConditions) (map[string]map[string]bool, error) {
 	// Note that we simply create query plan for each condition and execute the same without
 	// performing any kind of query optimization. In the future, we can use statistics on number
 	// index entries per attribute and type to come up with complex query optimization methods.
@@ -94,16 +120,21 @@ func (e *WorldStateJSONQueryExecutor) executeAllConditions(dbName string, attrsC
 		go func(attr string, conds *attributeTypeAndConditions) {
 			defer wg.Done()
 
-			keys, err := e.execute(dbName, attr, conds)
-			if err != nil {
-				e.logger.Errorf("error while executing conditions [%v] on attribute [%s] in the database [%s]", conds, attr, dbName)
-				errC <- err
+			keys, err := e.execute(ctx, dbName, attr, conds)
+			select {
+			case <-ctx.Done():
 				return
-			}
+			default:
+				if err != nil {
+					e.logger.Errorf("error while executing conditions [%v] on attribute [%s] in the database [%s]", conds, attr, dbName)
+					errC <- err
+					return
+				}
 
-			attrKeys.m.Lock()
-			attrKeys.k[attr] = keys
-			attrKeys.m.Unlock()
+				attrKeys.m.Lock()
+				attrKeys.k[attr] = keys
+				attrKeys.m.Unlock()
+			}
 		}(attr, conds)
 	}
 
@@ -117,7 +148,7 @@ func (e *WorldStateJSONQueryExecutor) executeAllConditions(dbName string, attrsC
 	}
 }
 
-func (e *WorldStateJSONQueryExecutor) execute(dbName string, attribute string, conds *attributeTypeAndConditions) (map[string]bool, error) {
+func (e *WorldStateJSONQueryExecutor) execute(ctx context.Context, dbName string, attribute string, conds *attributeTypeAndConditions) (map[string]bool, error) {
 	plan, err := createQueryPlan(attribute, conds)
 	if err != nil {
 		return nil, err
@@ -143,44 +174,49 @@ func (e *WorldStateJSONQueryExecutor) execute(dbName string, attribute string, c
 	keys := make(map[string]bool)
 
 	for iter.Next() {
-		if iter.Error() != nil {
-			return nil, err
-		}
-
-		indexEntry := &stateindex.IndexEntry{}
-		if err := indexEntry.Load(iter.Key()); err != nil {
-			return nil, err
-		}
-
-		if len(plan.excludeKeys) == 0 {
-			keys[indexEntry.Key] = true
-			continue
-		}
-
-		// we may need to skip entries continously
-		for {
-			if _, ok := plan.excludeKeys[indexEntry.Value]; !ok {
-				keys[indexEntry.Key] = true
-				break
-			}
-
-			seekKey := plan.excludeKeys[indexEntry.Value]
-			key, err := seekKey.String()
-			if err != nil {
+		select {
+		case <-ctx.Done():
+			return nil, nil
+		default:
+			if iter.Error() != nil {
 				return nil, err
 			}
-			e.logger.Debug("skipping to the next entry of [" + key + "]")
 
-			itemExist := iter.Seek([]byte(key))
-			if !itemExist {
-				break
-			}
-
-			delete(plan.excludeKeys, indexEntry.Value)
-
-			indexEntry = &stateindex.IndexEntry{}
+			indexEntry := &stateindex.IndexEntry{}
 			if err := indexEntry.Load(iter.Key()); err != nil {
 				return nil, err
+			}
+
+			if len(plan.excludeKeys) == 0 {
+				keys[indexEntry.Key] = true
+				continue
+			}
+
+			// we may need to skip entries continously
+			for {
+				if _, ok := plan.excludeKeys[indexEntry.Value]; !ok {
+					keys[indexEntry.Key] = true
+					break
+				}
+
+				seekKey := plan.excludeKeys[indexEntry.Value]
+				key, err := seekKey.String()
+				if err != nil {
+					return nil, err
+				}
+				e.logger.Debug("skipping to the next entry of [" + key + "]")
+
+				itemExist := iter.Seek([]byte(key))
+				if !itemExist {
+					break
+				}
+
+				delete(plan.excludeKeys, indexEntry.Value)
+
+				indexEntry = &stateindex.IndexEntry{}
+				if err := indexEntry.Load(iter.Key()); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

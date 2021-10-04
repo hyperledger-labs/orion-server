@@ -3,18 +3,19 @@
 package bcdb
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -440,12 +441,13 @@ func TestExecuteJSONQuery(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		dbName      string
-		userID      string
-		query       []byte
-		expectedKVs map[string]*types.KVWithMetadata
-		expectedErr string
+		name                string
+		dbName              string
+		userID              string
+		query               []byte
+		useCancelledContext bool
+		expectedKVs         map[string]*types.KVWithMetadata
+		expectedErr         string
 	}{
 		{
 			name:   "fetch records based on boolean matching",
@@ -460,6 +462,7 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
+			useCancelledContext: false,
 			expectedKVs: map[string]*types.KVWithMetadata{
 				"key4": {
 					Key:      "key4",
@@ -492,6 +495,7 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
+			useCancelledContext: false,
 			expectedKVs: map[string]*types.KVWithMetadata{
 				"key1": {
 					Key:      "key1",
@@ -511,6 +515,21 @@ func TestExecuteJSONQuery(t *testing.T) {
 			},
 		},
 		{
+			name:   "empty result due to cancelled context",
+			dbName: "db1",
+			userID: "user1",
+			query: []byte(
+				`{
+					"attr1": {
+						"$gt": "",
+						"$lte": "d"
+					}
+				}`,
+			),
+			useCancelledContext: true,
+			expectedKVs:         nil,
+		},
+		{
 			name:   "empty result due to acl",
 			dbName: "db1",
 			userID: "user2",
@@ -523,6 +542,7 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
+			useCancelledContext: false,
 		},
 		{
 			name:   "user cannot read from system database",
@@ -538,7 +558,8 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
-			expectedErr: "no user can directly read from a system database [" + worldstate.ConfigDBName + "]",
+			useCancelledContext: false,
+			expectedErr:         "no user can directly read from a system database [" + worldstate.ConfigDBName + "]",
 		},
 		{
 			name:   "user does not have read permission",
@@ -554,7 +575,8 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
-			expectedErr: "the user [user1] has no permission to read from database [db2]",
+			useCancelledContext: false,
+			expectedErr:         "the user [user1] has no permission to read from database [db2]",
 		},
 		{
 			name:   "query syntax error",
@@ -570,7 +592,8 @@ func TestExecuteJSONQuery(t *testing.T) {
 					}
 				}`,
 			),
-			expectedErr: "error decoding the query",
+			useCancelledContext: false,
+			expectedErr:         "error decoding the query",
 		},
 		{
 			name:   "query syntax error",
@@ -594,9 +617,20 @@ func TestExecuteJSONQuery(t *testing.T) {
 			defer env.cleanup(t)
 
 			setup(env.db, tt.userID)
-			result, err := env.q.executeJSONQuery(tt.dbName, tt.userID, tt.query)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.useCancelledContext {
+				cancel()
+			}
+			result, err := env.q.executeJSONQuery(ctx, tt.dbName, tt.userID, tt.query)
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
+				if tt.useCancelledContext {
+					require.Nil(t, result)
+					return
+				}
+
 				require.Equal(t, len(tt.expectedKVs), len(result.KVs))
 				for _, kv := range result.KVs {
 					require.True(t, proto.Equal(kv, tt.expectedKVs[kv.Key]))

@@ -2,6 +2,7 @@ package queryexecutor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"reflect"
 	"strings"
@@ -29,7 +30,7 @@ func NewWorldStateJSONQueryExecutor(db worldstate.DBsSnapshot, l *logger.SugarLo
 	}
 }
 
-func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byte) (map[string]bool, error) {
+func (e *WorldStateJSONQueryExecutor) ExecuteQuery(ctx context.Context, dbName string, selector []byte) (map[string]bool, error) {
 	query := make(map[string]interface{})
 	decoder := json.NewDecoder(bytes.NewBuffer(selector))
 	decoder.UseNumber()
@@ -68,7 +69,7 @@ func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byt
 		if err != nil {
 			return nil, err
 		}
-		if keys, err = e.executeAND(dbName, disectedConditions); err != nil {
+		if keys, err = e.executeAND(ctx, dbName, disectedConditions); err != nil {
 			return nil, err
 		}
 	case and && or:
@@ -84,7 +85,7 @@ func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byt
 		if err != nil {
 			return nil, err
 		}
-		if keys, err = e.executeAND(dbName, disectedConditions); err != nil {
+		if keys, err = e.executeAND(ctx, dbName, disectedConditions); err != nil {
 			return nil, err
 		}
 	case or:
@@ -97,7 +98,7 @@ func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byt
 		if err != nil {
 			return nil, err
 		}
-		if keys, err = e.executeOR(dbName, disectedConditions); err != nil {
+		if keys, err = e.executeOR(ctx, dbName, disectedConditions); err != nil {
 			return nil, err
 		}
 	}

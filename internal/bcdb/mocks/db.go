@@ -2,6 +2,7 @@
 
 package mocks
 
+import context "context"
 import errors "github.com/hyperledger-labs/orion-server/internal/errors"
 import mock "github.com/stretchr/testify/mock"
 import time "time"
@@ -27,13 +28,13 @@ func (_m *DB) Close() error {
 	return r0
 }
 
-// DataQuery provides a mock function with given fields: dbName, querierUserID, query
-func (_m *DB) DataQuery(dbName string, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error) {
-	ret := _m.Called(dbName, querierUserID, query)
+// DataQuery provides a mock function with given fields: ctx, dbName, querierUserID, query
+func (_m *DB) DataQuery(ctx context.Context, dbName string, querierUserID string, query []byte) (*types.DataQueryResponseEnvelope, error) {
+	ret := _m.Called(ctx, dbName, querierUserID, query)
 
 	var r0 *types.DataQueryResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string, []byte) *types.DataQueryResponseEnvelope); ok {
-		r0 = rf(dbName, querierUserID, query)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string, []byte) *types.DataQueryResponseEnvelope); ok {
+		r0 = rf(ctx, dbName, querierUserID, query)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.DataQueryResponseEnvelope)
@@ -41,8 +42,8 @@ func (_m *DB) DataQuery(dbName string, querierUserID string, query []byte) (*typ
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string, []byte) error); ok {
-		r1 = rf(dbName, querierUserID, query)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string, []byte) error); ok {
+		r1 = rf(ctx, dbName, querierUserID, query)
 	} else {
 		r1 = ret.Error(1)
 	}
