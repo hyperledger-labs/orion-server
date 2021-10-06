@@ -5,6 +5,7 @@ package replication
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,7 +42,7 @@ type BlockReplicator struct {
 	raftID          uint64
 	raftStorage     *RaftStorage
 	raftNode        raft.Node
-	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver  with the block-processor commit
+	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver with the block-processor commit
 	transport       *comm.HTTPTransport
 	ledgerReader    BlockLedgerReader
 
@@ -50,9 +51,10 @@ type BlockReplicator struct {
 	doneProposeCh chan struct{}
 	doneEventCh   chan struct{}
 
-	mutex           sync.Mutex
-	clusterConfig   *types.ClusterConfig
-	lastKnownLeader uint64
+	mutex               sync.Mutex
+	clusterConfig       *types.ClusterConfig
+	lastKnownLeader     uint64
+	lastKnownLeaderHost string // cache the leader's Node host:port for client request redirection
 
 	appliedIndex uint64
 	lastBlock    *types.Block
@@ -272,6 +274,7 @@ Event_Loop:
 				if leader != br.lastKnownLeader {
 					br.lg.Infof("Leader changed: %d to %d", br.lastKnownLeader, leader)
 					br.lastKnownLeader = leader
+					br.lastKnownLeaderHost = br.nodeHostPortFromRaftID(leader)
 				}
 				br.mutex.Unlock()
 			}
@@ -542,6 +545,7 @@ func (br *BlockReplicator) Close() (err error) {
 		br.mutex.Lock()
 		defer br.mutex.Unlock()
 		br.lastKnownLeader = 0
+		br.lastKnownLeaderHost = ""
 
 		err = nil
 	})
@@ -557,7 +561,8 @@ func (br *BlockReplicator) IsLeader() *ierrors.NotLeaderError {
 		return nil
 	}
 
-	return &ierrors.NotLeaderError{LeaderID: br.lastKnownLeader}
+	return &ierrors.NotLeaderError{
+		LeaderID: br.lastKnownLeader, LeaderHostPort: br.lastKnownLeaderHost}
 }
 
 func (br *BlockReplicator) GetLeaderID() uint64 {
@@ -602,6 +607,35 @@ func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfi
 	}
 
 	return nil
+}
+
+func (br *BlockReplicator) nodeHostPortFromRaftID(raftID uint64) string {
+	if raftID == 0 {
+		return ""
+	}
+
+	var nodeID string
+	for _, p := range br.clusterConfig.ConsensusConfig.Members {
+		if p.RaftId == raftID {
+			nodeID = p.NodeId
+			break
+		}
+	}
+
+	if nodeID == "" {
+		br.lg.Warnf("not found: no member with RaftID: %d", raftID)
+		return ""
+	}
+
+	for _, n := range br.clusterConfig.Nodes {
+		if n.Id == nodeID {
+			hostPort := fmt.Sprintf("%s:%d", n.Address, n.Port)
+			return hostPort
+		}
+	}
+
+	br.lg.Warnf("not found: no node with NodeID: %s, RaftID: %d", nodeID, raftID)
+	return ""
 }
 
 func (br *BlockReplicator) Process(ctx context.Context, m raftpb.Message) error {

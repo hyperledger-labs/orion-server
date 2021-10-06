@@ -142,5 +142,5 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		}
 	}
 
-	d.txHandler.handleTransaction(response, txEnv, timeout)
+	d.txHandler.handleTransaction(response, request, txEnv, timeout)
 }

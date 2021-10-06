@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
@@ -33,6 +34,20 @@ func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
 	if _, err := w.Write(response); err != nil {
 		log.Printf("Warning: failed to write response [%v] to the response writer\n", w)
 	}
+}
+
+// SendHTTPRedirectServer replaces the Host in the request URL with hostPort, and redirects using
+// StatusTemporaryRedirect (307).
+func SendHTTPRedirectServer(w http.ResponseWriter, r *http.Request, hostPort string) {
+	u, err := url.ParseRequestURI(r.URL.String())
+	if err != nil {
+		SendHTTPResponse(w, http.StatusInternalServerError,
+			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("cannot parse request URL: %s", err.Error())})
+		return
+	}
+
+	u.Host = hostPort
+	http.Redirect(w, r, u.String(), http.StatusTemporaryRedirect)
 }
 
 func GetStartAndEndBlockNum(params map[string]string) (uint64, uint64, error) {

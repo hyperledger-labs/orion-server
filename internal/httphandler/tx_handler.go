@@ -18,7 +18,7 @@ type txHandler struct {
 }
 
 // HandleTransaction handles transaction submission
-func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}, timeout time.Duration) {
+func (t *txHandler) handleTransaction(w http.ResponseWriter, request *http.Request, tx interface{}, timeout time.Duration) {
 	// If timeout == 0, tx is async, otherwise it is synchronous.
 	resp, err := t.db.SubmitTransaction(tx, timeout)
 	if err != nil {
@@ -27,6 +27,13 @@ func (t *txHandler) handleTransaction(w http.ResponseWriter, tx interface{}, tim
 			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		case *internalerror.TimeoutErr:
 			httputils.SendHTTPResponse(w, http.StatusAccepted, &types.HttpResponseErr{ErrMsg: "Transaction processing timeout"})
+		case *internalerror.NotLeaderError:
+			leaderErr := err.(*internalerror.NotLeaderError)
+			if leaderErr.GetLeaderID() == 0 {
+				httputils.SendHTTPResponse(w, http.StatusServiceUnavailable, &types.HttpResponseErr{ErrMsg: "Cluster leader unavailable"})
+			} else {
+				httputils.SendHTTPRedirectServer(w, request, leaderErr.GetLeaderHostPort())
+			}
 		default:
 			httputils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 		}

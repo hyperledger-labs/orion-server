@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -458,6 +459,29 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 			expectedCode: http.StatusInternalServerError,
 			expectedErr:  "oops, submission failed",
 		},
+		{
+			name: "not a leader",
+			txEnvFactory: func() *types.UserAdministrationTxEnvelope {
+				return &types.UserAdministrationTxEnvelope{
+					Payload:   userTx,
+					Signature: aliceSig,
+				}
+			},
+			txRespFactory: func() *types.TxReceiptResponseEnvelope {
+				return correctTxRespEnv
+			},
+			createMockAndInstrument: func(t *testing.T, txEnv interface{}, txRespEnv interface{}, timeout time.Duration) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", userID).Return(aliceCert, nil)
+				db.On("SubmitTransaction", mock.Anything, mock.Anything).Return(nil, &interrors.NotLeaderError{
+					LeaderID:       3,
+					LeaderHostPort: "server3.example.com:6091",
+				})
+				return db
+			},
+			timeoutStr:   "1s",
+			expectedCode: http.StatusTemporaryRedirect,
+		},
 	}
 
 	logger, err := createLogger("debug")
@@ -475,7 +499,12 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 			txReader := bytes.NewReader(txBytes)
 			require.NotNil(t, txReader)
 
-			req, err := http.NewRequest(http.MethodPost, constants.PostUserTx, txReader)
+			reqUrl := &url.URL{
+				Scheme: "http",
+				Host:   "server1.example.com:6091",
+				Path:   constants.PostUserTx,
+			}
+			req, err := http.NewRequest(http.MethodPost, reqUrl.String(), txReader)
 			require.NoError(t, err)
 			require.NotNil(t, req)
 
@@ -504,7 +533,9 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 				err := json.NewDecoder(rr.Body).Decode(resp)
 				require.NoError(t, err)
 				require.Equal(t, txResp, resp)
-
+			} else if tt.expectedCode == http.StatusTemporaryRedirect {
+				locationUrl := rr.Header().Get("Location")
+				require.Equal(t, "http://server3.example.com:6091/user/tx", locationUrl)
 			} else {
 				respErr := &types.HttpResponseErr{}
 				err := json.NewDecoder(rr.Body).Decode(respErr)

@@ -127,5 +127,5 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 		return
 	}
 
-	c.txHandler.handleTransaction(response, txEnv, timeout)
+	c.txHandler.handleTransaction(response, request, txEnv, timeout)
 }
