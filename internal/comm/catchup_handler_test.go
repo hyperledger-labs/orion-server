@@ -6,6 +6,7 @@ package comm_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"mime"
 	"mime/multipart"
@@ -33,7 +34,7 @@ func TestNewCatchupHandler(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	h := comm.NewCatchupHandler(lg, nil)
+	h := comm.NewCatchupHandler(lg, nil, 0)
 	require.NotNil(t, h)
 }
 
@@ -48,7 +49,7 @@ func TestCatchupHandler_ServeHTTP_Height(t *testing.T) {
 
 	t.Run("height ok", func(t *testing.T) {
 		ledgerReader := &mocks.LedgerReader{}
-		h := comm.NewCatchupHandler(lg, ledgerReader)
+		h := comm.NewCatchupHandler(lg, ledgerReader, 0)
 		require.NotNil(t, h)
 
 		resp := httptest.NewRecorder()
@@ -69,7 +70,7 @@ func TestCatchupHandler_ServeHTTP_Height(t *testing.T) {
 
 	t.Run("height error", func(t *testing.T) {
 		ledgerReader := &mocks.LedgerReader{}
-		h := comm.NewCatchupHandler(lg, ledgerReader)
+		h := comm.NewCatchupHandler(lg, ledgerReader, 0)
 		require.NotNil(t, h)
 
 		resp := httptest.NewRecorder()
@@ -103,7 +104,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		ledger1.Append(&types.Block{Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: n}}})
 	}
 
-	h := comm.NewCatchupHandler(lg, ledger1)
+	h := comm.NewCatchupHandler(lg, ledger1, 0)
 	require.NotNil(t, h)
 
 	t.Run("bad: no parameters", func(t *testing.T) {
@@ -245,5 +246,118 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 			bNum++
 		}
 		require.Equal(t, uint64(6), bNum)
+	})
+}
+
+func TestCatchupHandler_ServeHTTP_LargeResponse(t *testing.T) {
+	lg, err := logger.New(&logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	})
+	require.NoError(t, err)
+
+	b1Size := 0
+	b5Size := 0
+
+	ledger1 := &memLedger{}
+	for n := uint64(1); n < 11; n++ {
+		block := &types.Block{
+			Header: &types.BlockHeader{
+				BaseHeader:           &types.BlockHeaderBase{Number: n},
+				TxMerkelTreeRootHash: make([]byte, 1024), //just for size
+			},
+		}
+		ledger1.Append(block)
+
+		if n == 1 {
+			b1Size = len(httputils.MarshalOrPanic(block))
+		}
+		if n < 6 {
+			b5Size += len(httputils.MarshalOrPanic(block))
+		}
+	}
+
+	t.Run("too many blocks in request", func(t *testing.T) {
+		h := comm.NewCatchupHandler(lg, ledger1, b5Size) // 5 blocks in response
+		require.NotNil(t, h)
+
+		resp := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, comm.GetBlocksPath, nil)
+		q := req.URL.Query()
+		q.Add("start", "2")
+		q.Add("end", "9") // too many
+		req.URL.RawQuery = q.Encode()
+		req.Header.Set("Accept", httputils.MultiPartFormData)
+
+		h.ServeHTTP(resp, req)
+		require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+		_, params, err := mime.ParseMediaType(resp.Result().Header.Get("Content-Type"))
+		require.NoError(t, err)
+		boundary, ok := params["boundary"]
+		require.True(t, ok)
+		mr := multipart.NewReader(resp.Result().Body, boundary)
+		bNum := uint64(2)
+		var part *multipart.Part
+		var errP error
+		for part, errP = mr.NextPart(); errP == nil; part, errP = mr.NextPart() {
+			assert.Equal(t, fmt.Sprintf("block-%d", bNum-2), part.FormName())
+			assert.Equal(t, fmt.Sprintf("num-%d", bNum), part.FileName())
+
+			blockBytes, err := ioutil.ReadAll(part)
+			require.NoError(t, err)
+			require.NotNil(t, blockBytes)
+
+			block := &types.Block{}
+			err = proto.Unmarshal(blockBytes, block)
+			require.NoError(t, err)
+			assert.Equal(t, bNum, block.Header.BaseHeader.Number)
+			bNum++
+		}
+		require.EqualError(t, errP, io.EOF.Error())
+		require.Equal(t, uint64(7), bNum) // blocks 2-6 in response
+	})
+
+	t.Run("blocks are bigger than max-response-size", func(t *testing.T) {
+		h := comm.NewCatchupHandler(lg, ledger1, b1Size/2) // 1 block in response
+		require.NotNil(t, h)
+
+		resp := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, comm.GetBlocksPath, nil)
+		q := req.URL.Query()
+		q.Add("start", "2")
+		q.Add("end", "8") // too many
+		req.URL.RawQuery = q.Encode()
+		req.Header.Set("Accept", httputils.MultiPartFormData)
+
+		h.ServeHTTP(resp, req)
+		require.Equal(t, http.StatusOK, resp.Result().StatusCode)
+
+		_, params, err := mime.ParseMediaType(resp.Result().Header.Get("Content-Type"))
+		require.NoError(t, err)
+		boundary, ok := params["boundary"]
+		require.True(t, ok)
+		mr := multipart.NewReader(resp.Result().Body, boundary)
+		bNum := uint64(2)
+		var part *multipart.Part
+		var errP error
+		for part, errP = mr.NextPart(); errP == nil; part, errP = mr.NextPart() {
+			assert.Equal(t, fmt.Sprintf("block-%d", bNum-2), part.FormName())
+			assert.Equal(t, fmt.Sprintf("num-%d", bNum), part.FileName())
+
+			blockBytes, err := ioutil.ReadAll(part)
+			require.NoError(t, err)
+			require.NotNil(t, blockBytes)
+
+			block := &types.Block{}
+			err = proto.Unmarshal(blockBytes, block)
+			require.NoError(t, err)
+			assert.Equal(t, bNum, block.Header.BaseHeader.Number)
+			bNum++
+		}
+		require.EqualError(t, errP, io.EOF.Error())
+		require.Equal(t, uint64(3), bNum) // block 2 in response
 	})
 }

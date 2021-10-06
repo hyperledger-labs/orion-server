@@ -19,6 +19,8 @@ const (
 	BCDBPeerEndpoint = "/bcdb-peer/"
 	GetBlocksPath    = BCDBPeerEndpoint + "blocks"
 	GetHeightPath    = BCDBPeerEndpoint + "height"
+
+	maxResponseBytesDefault = 100 * 1024 * 1024 // protects the server against huge requests from a client
 )
 
 //go:generate counterfeiter -o mocks/ledger_reader.go --fake-name LedgerReader . LedgerReader
@@ -29,16 +31,22 @@ type LedgerReader interface {
 }
 
 type catchupHandler struct {
-	router       *mux.Router
-	lg           *logger.SugarLogger
-	ledgerReader LedgerReader
+	router           *mux.Router
+	lg               *logger.SugarLogger
+	ledgerReader     LedgerReader
+	maxResponseBytes int
 }
 
-func NewCatchupHandler(lg *logger.SugarLogger, ledgerReader LedgerReader) *catchupHandler {
+func NewCatchupHandler(lg *logger.SugarLogger, ledgerReader LedgerReader, maxResponseBytes int) *catchupHandler {
 	h := &catchupHandler{
-		router:       mux.NewRouter(),
-		lg:           lg,
-		ledgerReader: ledgerReader,
+		router:           mux.NewRouter(),
+		lg:               lg,
+		ledgerReader:     ledgerReader,
+		maxResponseBytes: maxResponseBytesDefault,
+	}
+
+	if maxResponseBytes > 0 {
+		h.maxResponseBytes = maxResponseBytes
 	}
 
 	h.router.HandleFunc(GetBlocksPath, h.blocksRequest).Methods(http.MethodGet).Headers("Accept", "multipart/form-data").Queries("start", "{startId:[0-9]+}", "end", "{endId:[0-9]+}")
@@ -77,6 +85,7 @@ func (h *catchupHandler) blocksRequest(response http.ResponseWriter, request *ht
 	}
 
 	var blocks [][]byte
+	var blocksSize int
 	for i := startBlockNum; i <= endBlockNum; i++ {
 		if i > height {
 			break
@@ -92,6 +101,15 @@ func (h *catchupHandler) blocksRequest(response http.ResponseWriter, request *ht
 			httputils.SendHTTPResponse(response, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return
 
+		}
+
+		blocksSize += len(blockBytes)
+		if blocksSize > h.maxResponseBytes {
+			// no more than maxResponseBytes but at least one block
+			if i == startBlockNum {
+				blocks = append(blocks, blockBytes)
+			}
+			break
 		}
 		blocks = append(blocks, blockBytes)
 	}
