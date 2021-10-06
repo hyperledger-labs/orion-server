@@ -1,0 +1,85 @@
+// Copyright IBM Corp. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+package queue
+
+import (
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
+)
+
+func TestPendingTxs_Async(t *testing.T) {
+	pendingTxs := NewPendingTxs()
+
+	var p *CompletionPromise
+	require.True(t, pendingTxs.Empty())
+	pendingTxs.Add("tx1", p)
+	require.True(t, pendingTxs.Has("tx1"))
+	require.False(t, pendingTxs.Has("tx2"))
+	pendingTxs.Add("tx2", p)
+	require.True(t, pendingTxs.Has("tx2"))
+	pendingTxs.DoneWithReceipt([]string{"tx1", "tx2"}, nil)
+	require.True(t, pendingTxs.Empty())
+}
+
+func TestPendingTxs_Sync(t *testing.T) {
+	pendingTxs := NewPendingTxs()
+
+	blockHeader := &types.BlockHeader{
+		BaseHeader: &types.BlockHeaderBase{
+			Number:                5,
+			LastCommittedBlockNum: 1,
+		},
+	}
+	expectedReceipt := &types.TxReceipt{
+		Header:  blockHeader,
+		TxIndex: 0,
+	}
+
+	t.Run("Wait before Done", func(t *testing.T) {
+		p := NewCompletionPromise(time.Hour)
+		pendingTxs.Add("tx3", p)
+
+		go func() {
+			time.Sleep(10*time.Millisecond)
+			pendingTxs.DoneWithReceipt([]string{"tx3"}, blockHeader)
+		}()
+
+		actualReceipt, err := p.Wait()
+		require.NoError(t, err)
+		require.True(t, proto.Equal(expectedReceipt, actualReceipt))
+	})
+
+	t.Run("Done before Wait", func(t *testing.T) {
+		p := NewCompletionPromise(time.Hour)
+		pendingTxs.Add("tx3", p)
+		pendingTxs.DoneWithReceipt([]string{"tx3"}, blockHeader)
+		actualReceipt, err := p.Wait()
+		require.NoError(t, err)
+		require.True(t, proto.Equal(expectedReceipt, actualReceipt))
+	})
+}
+
+func TestPendingTxs_Timeout(t *testing.T) {
+	pendingTxs := NewPendingTxs()
+
+	p := NewCompletionPromise(1 * time.Millisecond)
+	pendingTxs.Add("tx3", p)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		receipt, err := p.Wait()
+		require.EqualError(t, err, "timeout has occurred while waiting for the transaction receipt")
+		require.Nil(t, receipt)
+	}()
+
+	wg.Wait()
+	require.False(t, pendingTxs.Empty())
+}

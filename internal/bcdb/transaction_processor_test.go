@@ -9,7 +9,6 @@ import (
 	"math"
 	"os"
 	"path"
-	"sync"
 	"testing"
 	"time"
 
@@ -318,7 +317,7 @@ func TestTransactionProcessor(t *testing.T) {
 		require.True(t, proto.Equal(expectedBlock, block), "expected: %+v, actual: %+v", expectedBlock, block)
 
 		noPendingTxs := func() bool {
-			return env.txProcessor.pendingTxs.isEmpty()
+			return env.txProcessor.pendingTxs.Empty()
 		}
 		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
 	})
@@ -351,7 +350,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 		resp, err := env.txProcessor.submitTransaction(tx, 5*time.Second)
 		require.NoError(t, err)
-		require.True(t, env.txProcessor.pendingTxs.isEmpty())
+		require.True(t, env.txProcessor.pendingTxs.Empty())
 
 		height, err := env.blockStore.Height()
 		require.NoError(t, err)
@@ -453,7 +452,7 @@ func TestTransactionProcessor(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, resp.GetReceipt())
 		noPendingTxs := func() bool {
-			return env.txProcessor.pendingTxs.isEmpty()
+			return env.txProcessor.pendingTxs.Empty()
 		}
 		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
 
@@ -501,7 +500,7 @@ func TestTransactionProcessor(t *testing.T) {
 		require.Nil(t, resp.GetReceipt())
 
 		noPendingTxs := func() bool {
-			return env.txProcessor.pendingTxs.isEmpty()
+			return env.txProcessor.pendingTxs.Empty()
 		}
 		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
 	})
@@ -521,81 +520,6 @@ func TestTransactionProcessor(t *testing.T) {
 	})
 }
 
-func TestPendingTxs(t *testing.T) {
-	t.Run("async tx", func(t *testing.T) {
-		pendingTxs := &pendingTxs{
-			txs: make(map[string]*promise),
-		}
-
-		var p *promise
-		require.True(t, pendingTxs.isEmpty())
-		pendingTxs.add("tx1", p)
-		require.True(t, pendingTxs.has("tx1"))
-		require.False(t, pendingTxs.has("tx2"))
-		pendingTxs.add("tx2", p)
-		require.True(t, pendingTxs.has("tx2"))
-		pendingTxs.removeAndSendReceipt([]string{"tx1", "tx2"}, nil)
-		require.True(t, pendingTxs.isEmpty())
-	})
-
-	t.Run("sync tx", func(t *testing.T) {
-		pendingTxs := &pendingTxs{
-			txs: make(map[string]*promise),
-		}
-
-		p := &promise{
-			receipt: make(chan *types.TxReceipt),
-			timeout: 5 * time.Second,
-		}
-		pendingTxs.add("tx3", p)
-
-		blockHeader := &types.BlockHeader{
-			BaseHeader: &types.BlockHeaderBase{
-				Number:                5,
-				LastCommittedBlockNum: 1,
-			},
-		}
-		expectedReceipt := &types.TxReceipt{
-			Header:  blockHeader,
-			TxIndex: 0,
-		}
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			actualReceipt, err := p.wait()
-			require.NoError(t, err)
-			require.True(t, proto.Equal(expectedReceipt, actualReceipt))
-		}()
-
-		pendingTxs.removeAndSendReceipt([]string{"tx3"}, blockHeader)
-		wg.Wait()
-	})
-
-	t.Run("sync tx with timeout", func(t *testing.T) {
-		pendingTxs := &pendingTxs{
-			txs: make(map[string]*promise),
-		}
-
-		p := &promise{
-			receipt: make(chan *types.TxReceipt),
-			timeout: 1 * time.Millisecond,
-		}
-		pendingTxs.add("tx3", p)
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			receipt, err := p.wait()
-			require.EqualError(t, err, "timeout has occurred while waiting for the transaction receipt")
-			require.Nil(t, receipt)
-		}()
-
-		wg.Wait()
-		require.False(t, pendingTxs.isEmpty())
-	})
-}
 
 func testConfiguration(t *testing.T) (string, *config.Configurations) {
 	ledgerDir, err := ioutil.TempDir("/tmp", "server")

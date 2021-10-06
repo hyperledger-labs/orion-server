@@ -41,7 +41,7 @@ type transactionProcessor struct {
 	peerTransport        *comm.HTTPTransport
 	blockProcessor       *blockprocessor.BlockProcessor
 	blockStore           *blockstore.Store
-	pendingTxs           *pendingTxs
+	pendingTxs           *queue.PendingTxs
 	logger               *logger.SugarLogger
 	sync.Mutex
 }
@@ -170,9 +170,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	go p.blockProcessor.Start()
 	p.blockProcessor.WaitTillStart()
 
-	p.pendingTxs = &pendingTxs{
-		txs: make(map[string]*promise),
-	}
+	p.pendingTxs = queue.NewPendingTxs()
 	p.blockStore = conf.blockStore
 
 	return p, nil
@@ -223,19 +221,12 @@ func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Du
 	t.txQueue.Enqueue(tx)
 	t.logger.Debug("transaction is enqueued for re-ordering")
 
-	var p *promise
-	if timeout > 0 {
-		p = &promise{
-			receipt: make(chan *types.TxReceipt),
-			timeout: timeout,
-		}
-	}
-
+	promise := queue.NewCompletionPromise(timeout)
 	// TODO: add limit on the number of pending sync tx
-	t.pendingTxs.add(txID, p)
+	t.pendingTxs.Add(txID, promise)
 	t.Unlock()
 
-	receipt, err := p.wait()
+	receipt, err := promise.Wait()
 
 	if err != nil {
 		return nil, err
@@ -274,13 +265,13 @@ func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) err
 		return errors.Errorf("unexpected transaction envelope in the block")
 	}
 
-	t.pendingTxs.removeAndSendReceipt(txIDs, block.Header)
+	t.pendingTxs.DoneWithReceipt(txIDs, block.Header)
 
 	return nil
 }
 
 func (t *transactionProcessor) isTxIDDuplicate(txID string) (bool, error) {
-	if t.pendingTxs.has(txID) {
+	if t.pendingTxs.Has(txID) {
 		return true, nil
 	}
 
@@ -309,90 +300,6 @@ func (t *transactionProcessor) IsLeader() *internalerror.NotLeaderError {
 	defer t.Unlock()
 
 	return t.blockReplicator.IsLeader()
-}
-
-type pendingTxs struct {
-	txs map[string]*promise
-	sync.RWMutex
-}
-
-func (p *pendingTxs) add(txID string, subMethod *promise) {
-	p.Lock()
-	defer p.Unlock()
-
-	p.txs[txID] = subMethod
-}
-
-func (p *pendingTxs) removeAndSendReceipt(txIDs []string, blockHeader *types.BlockHeader) {
-	p.Lock()
-	defer p.Unlock()
-
-	for txIndex, txID := range txIDs {
-		p.txs[txID].done(
-			&types.TxReceipt{
-				Header:  blockHeader,
-				TxIndex: uint64(txIndex),
-			},
-		)
-
-		delete(p.txs, txID)
-	}
-}
-
-func (p *pendingTxs) has(txID string) bool {
-	p.RLock()
-	defer p.RUnlock()
-
-	_, ok := p.txs[txID]
-	return ok
-}
-
-func (p *pendingTxs) isEmpty() bool {
-	p.RLock()
-	defer p.RUnlock()
-
-	return len(p.txs) == 0
-}
-
-type promise struct {
-	receipt chan *types.TxReceipt
-	timeout time.Duration
-}
-
-func (s *promise) wait() (*types.TxReceipt, error) {
-	if s == nil {
-		return nil, nil
-	}
-
-	ticker := time.NewTicker(s.timeout)
-	select {
-	case <-ticker.C:
-		s.close()
-		return nil, &internalerror.TimeoutErr{
-			ErrMsg: "timeout has occurred while waiting for the transaction receipt",
-		}
-	case r := <-s.receipt:
-		ticker.Stop()
-		s.close()
-		return r, nil
-	}
-}
-
-func (s *promise) done(r *types.TxReceipt) {
-	if s == nil {
-		return
-	}
-
-	s.receipt <- r
-}
-
-func (s *promise) close() {
-	if s == nil {
-		return
-	}
-
-	close(s.receipt)
-	s = nil
 }
 
 func PrepareBootstrapConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {
