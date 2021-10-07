@@ -63,7 +63,7 @@ func NewHTTPTransport(config *Config) *HTTPTransport {
 		logger:         config.Logger,
 		localConf:      config.LocalConf,
 		catchUpClient:  NewCatchUpClient(config.Logger),
-		catchupHandler: NewCatchupHandler(config.Logger, config.LedgerReader),
+		catchupHandler: NewCatchupHandler(config.Logger, config.LedgerReader, 0), //TODO make max-response-bytes configurable
 		stopCh:         make(chan struct{}),
 		doneCh:         make(chan struct{}),
 	}
