@@ -23,13 +23,16 @@ type Replicator interface {
 type BlockCreator struct {
 	txBatchQueue                *queue.Queue
 	blockReplicator             Replicator
+	pendingTxs                  *queue.PendingTxs //TODO release blocks rejected from blockReplicator
 	nextBlockNumber             uint64
 	previousBlockHeaderBaseHash []byte
 	blockStore                  *blockstore.Store
-	started                     chan struct{}
-	stop                        chan struct{}
-	stopped                     chan struct{}
-	logger                      *logger.SugarLogger
+
+	started chan struct{}
+	stop    chan struct{}
+	stopped chan struct{}
+
+	logger *logger.SugarLogger
 }
 
 // Config holds the configuration information required to initialize the
@@ -37,6 +40,7 @@ type BlockCreator struct {
 type Config struct {
 	TxBatchQueue *queue.Queue
 	BlockStore   *blockstore.Store
+	PendingTxs   *queue.PendingTxs
 	Logger       *logger.SugarLogger
 }
 
@@ -56,6 +60,7 @@ func New(conf *Config) (*BlockCreator, error) {
 		nextBlockNumber:             height + 1,
 		logger:                      conf.Logger,
 		blockStore:                  conf.BlockStore,
+		pendingTxs:                  conf.PendingTxs,
 		started:                     make(chan struct{}),
 		stop:                        make(chan struct{}),
 		stopped:                     make(chan struct{}),

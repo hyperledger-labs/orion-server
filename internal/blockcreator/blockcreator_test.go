@@ -24,6 +24,7 @@ import (
 type testEnv struct {
 	creator        *blockcreator.BlockCreator
 	txBatchQueue   *queue.Queue
+	pendingTxs     *queue.PendingTxs //TODO test the release of txs
 	blockQueue     *queue.Queue
 	db             worldstate.DB
 	dbPath         string
@@ -73,9 +74,11 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
-	txBatchQ := queue.New(10) // Input: transactions
+	txBatchQ := queue.New(10)
+	pendingTxs := queue.NewPendingTxs(logger)
 	b, err := blockcreator.New(&blockcreator.Config{
 		TxBatchQueue: txBatchQ,
+		PendingTxs:   pendingTxs,
 		Logger:       logger,
 		BlockStore:   blockStore,
 	})
@@ -113,6 +116,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		creator:        b,
 		txBatchQueue:   txBatchQ,   // Input
 		blockQueue:     blockQueue, // Output
+		pendingTxs:     pendingTxs, // Output
 		db:             db,
 		dbPath:         dir,
 		blockStore:     blockStore,
