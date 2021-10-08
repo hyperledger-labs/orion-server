@@ -191,20 +191,20 @@ func TestConstructIndexEntries(t *testing.T) {
 				IndexDB("db1"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a1","t":0,"m":"` + PositiveNumber + `","vp":2,"v":"` + encoded10 + `","kp":2,"k":"person1"}`,
+							Key: `{"a":"a1","t":0,"vp":2,"v":"` + encoded10 + `","kp":2,"k":"person1"}`,
 						},
 						{
-							Key: `{"a":"a2","t":1,"m":"","vp":2,"v":"ten","kp":2,"k":"person1"}`,
+							Key: `{"a":"a2","t":1,"vp":2,"v":"ten","kp":2,"k":"person1"}`,
 						},
 						{
-							Key: `{"a":"a3","t":2,"m":"","vp":2,"v":true,"kp":2,"k":"person1"}`,
+							Key: `{"a":"a3","t":2,"vp":2,"v":true,"kp":2,"k":"person1"}`,
 						},
 					},
 				},
 				IndexDB("db2"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a2","t":1,"m":"","vp":2,"v":"eleven","kp":2,"k":"person2"}`,
+							Key: `{"a":"a2","t":1,"vp":2,"v":"eleven","kp":2,"k":"person2"}`,
 						},
 					},
 				},
@@ -256,25 +256,25 @@ func TestConstructIndexEntries(t *testing.T) {
 				IndexDB("db1"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a3","t":2,"m":"","vp":2,"v":true,"kp":2,"k":"person1"}`,
+							Key: `{"a":"a3","t":2,"vp":2,"v":true,"kp":2,"k":"person1"}`,
 						},
 						{
-							Key: `{"a":"a2","t":1,"m":"","vp":2,"v":"10","kp":2,"k":"person1"}`,
+							Key: `{"a":"a2","t":1,"vp":2,"v":"10","kp":2,"k":"person1"}`,
 						},
 					},
 					Deletes: []string{
-						`{"a":"a3","t":2,"m":"","vp":2,"v":false,"kp":2,"k":"person1"}`,
-						`{"a":"a2","t":1,"m":"","vp":2,"v":"ten","kp":2,"k":"person1"}`,
+						`{"a":"a3","t":2,"vp":2,"v":false,"kp":2,"k":"person1"}`,
+						`{"a":"a2","t":1,"vp":2,"v":"ten","kp":2,"k":"person1"}`,
 					},
 				},
 				IndexDB("db2"): {
 					Writes: []*worldstate.KVWithMetadata{
 						{
-							Key: `{"a":"a2","t":1,"m":"","vp":2,"v":"eleven","kp":2,"k":"person2"}`,
+							Key: `{"a":"a2","t":1,"vp":2,"v":"eleven","kp":2,"k":"person2"}`,
 						},
 					},
 					Deletes: []string{
-						`{"a":"a2","t":1,"m":"","vp":2,"v":"ten","kp":2,"k":"person2"}`,
+						`{"a":"a2","t":1,"vp":2,"v":"ten","kp":2,"k":"person2"}`,
 					},
 				},
 			},
@@ -314,14 +314,14 @@ func TestConstructIndexEntries(t *testing.T) {
 			expectedIndexEntries: map[string]*worldstate.DBUpdates{
 				IndexDB("db1"): {
 					Deletes: []string{
-						`{"a":"a1","t":0,"m":"` + PositiveNumber + `","vp":2,"v":"` + encoded10 + `","kp":2,"k":"person1"}`,
-						`{"a":"a2","t":1,"m":"","vp":2,"v":"ten","kp":2,"k":"person1"}`,
-						`{"a":"a3","t":2,"m":"","vp":2,"v":true,"kp":2,"k":"person1"}`,
+						`{"a":"a1","t":0,"vp":2,"v":"` + encoded10 + `","kp":2,"k":"person1"}`,
+						`{"a":"a2","t":1,"vp":2,"v":"ten","kp":2,"k":"person1"}`,
+						`{"a":"a3","t":2,"vp":2,"v":true,"kp":2,"k":"person1"}`,
 					},
 				},
 				IndexDB("db2"): {
 					Deletes: []string{
-						`{"a":"a2","t":1,"m":"","vp":2,"v":"eleven","kp":2,"k":"person2"}`,
+						`{"a":"a2","t":1,"vp":2,"v":"eleven","kp":2,"k":"person2"}`,
 					},
 				},
 			},
@@ -400,7 +400,6 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.IndexAttributeType_NUMBER,
-					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded25,
 					KeyPosition:   Existing,
@@ -409,7 +408,6 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.IndexAttributeType_NUMBER,
-					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded26,
 					KeyPosition:   Existing,
@@ -524,7 +522,6 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.IndexAttributeType_NUMBER,
-					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded25,
 					KeyPosition:   Existing,
@@ -533,7 +530,6 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.IndexAttributeType_NUMBER,
-					Metadata:      NegativeNumber,
 					ValuePosition: Existing,
 					Value:         encodedNegative26,
 					KeyPosition:   Existing,
@@ -542,7 +538,6 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.IndexAttributeType_NUMBER,
-					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encoded0,
 					KeyPosition:   Existing,
@@ -551,7 +546,6 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 				{
 					Attribute:     "age",
 					Type:          types.IndexAttributeType_NUMBER,
-					Metadata:      PositiveNumber,
 					ValuePosition: Existing,
 					Value:         encodedMax,
 					KeyPosition:   Existing,
@@ -579,7 +573,6 @@ func TestPartialIndexEntriesForValue(t *testing.T) {
 			{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         encoded10,
 				KeyPosition:   Existing,
@@ -840,11 +833,10 @@ func TestLoadIndexEntry(t *testing.T) {
 	}{
 		{
 			name:       "load correctly formatted full entry",
-			indexEntry: []byte(`{"a":"age","t":0,"m":"","vp":2,"v":25,"kp":2,"k":"person1"}`),
+			indexEntry: []byte(`{"a":"age","t":0,"vp":2,"v":25,"kp":2,"k":"person1"}`),
 			expectedIndexEntry: &IndexEntry{
 				Attribute:     "age",
 				Type:          0,
-				Metadata:      "",
 				ValuePosition: Existing,
 				Value:         float64(25),
 				KeyPosition:   Existing,
@@ -853,11 +845,10 @@ func TestLoadIndexEntry(t *testing.T) {
 		},
 		{
 			name:       "load correctly formatted partial entry",
-			indexEntry: []byte(`{"a":"age","t":0,"m":"","vp":2,"v":25,"kp":2}`),
+			indexEntry: []byte(`{"a":"age","t":0,"vp":2,"v":25,"kp":2}`),
 			expectedIndexEntry: &IndexEntry{
 				Attribute:     "age",
 				Type:          0,
-				Metadata:      "",
 				ValuePosition: Existing,
 				Value:         float64(25),
 				KeyPosition:   Existing,
@@ -898,26 +889,24 @@ func TestIndexEntryToString(t *testing.T) {
 			indexEntry: &IndexEntry{
 				Attribute:     "age",
 				Type:          0,
-				Metadata:      "",
 				ValuePosition: Existing,
 				Value:         25,
 				KeyPosition:   Existing,
 				Key:           "person1",
 			},
-			expectedIndexEntry: `{"a":"age","t":0,"m":"","vp":2,"v":25,"kp":2,"k":"person1"}`,
+			expectedIndexEntry: `{"a":"age","t":0,"vp":2,"v":25,"kp":2,"k":"person1"}`,
 		},
 		{
 			name: "load correctly formatted partial entry",
 			indexEntry: &IndexEntry{
 				Attribute:     "age",
 				Type:          0,
-				Metadata:      "",
 				ValuePosition: Existing,
 				Value:         25,
 				KeyPosition:   Existing,
 				Key:           "",
 			},
-			expectedIndexEntry: `{"a":"age","t":0,"m":"","vp":2,"v":25,"kp":2,"k":""}`,
+			expectedIndexEntry: `{"a":"age","t":0,"vp":2,"v":25,"kp":2,"k":""}`,
 		},
 	}
 
@@ -988,6 +977,10 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 					Key:   "p7",
 					Value: []byte(`{"a1":25}`),
 				},
+				{
+					Key:   "p8",
+					Value: []byte(`{"a1":-1}`),
+				},
 			},
 		},
 	}
@@ -1007,13 +1000,13 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
-				ValuePosition: Beginning,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(0),
+				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
 				ValuePosition: Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1028,13 +1021,13 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
-				ValuePosition: Beginning,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(0),
+				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
 				KeyPosition:   Ending,
@@ -1050,7 +1043,6 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
 				KeyPosition:   Beginning,
@@ -1058,7 +1050,6 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
 				ValuePosition: Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1072,7 +1063,6 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
 				KeyPosition:   Beginning,
@@ -1080,7 +1070,6 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      PositiveNumber,
 				ValuePosition: Existing,
 				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
 				KeyPosition:   Ending,
@@ -1095,20 +1084,21 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
 				ValuePosition: Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
-				ValuePosition: Ending,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(1),
+				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
 				"p0": -200,
 				"p1": -100,
 				"p2": -10,
 				"p3": -5,
+				"p8": -1,
 			},
 		},
 		{
@@ -1116,13 +1106,11 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
 				ValuePosition: Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(10)),
 				KeyPosition:   Ending,
@@ -1138,7 +1126,6 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(100)),
 				KeyPosition:   Beginning,
@@ -1146,13 +1133,15 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
-				ValuePosition: Ending,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(1),
+				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
 				"p1": -100,
 				"p2": -10,
 				"p3": -5,
+				"p8": -1,
 			},
 		},
 		{
@@ -1160,7 +1149,6 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			start: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(100)),
 				KeyPosition:   Beginning,
@@ -1168,7 +1156,6 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
-				Metadata:      NegativeNumber,
 				ValuePosition: Existing,
 				Value:         EncodeReverseOrderVarUint64(uint64(10)),
 				KeyPosition:   Ending,
@@ -1176,6 +1163,100 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 			expectedKVs: map[string]int64{
 				"p1": -100,
 				"p2": -10,
+			},
+		},
+		{
+			name: "fetch all negative and positive values",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p0": -200,
+				"p1": -100,
+				"p2": -10,
+				"p3": -5,
+				"p8": -1,
+				"p4": 0,
+				"p5": 10,
+				"p6": 15,
+				"p7": 25,
+			},
+		},
+		{
+			name: "fetch some negative and all positive values",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(uint64(100)),
+				KeyPosition:   Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p1": -100,
+				"p2": -10,
+				"p3": -5,
+				"p8": -1,
+				"p4": 0,
+				"p5": 10,
+				"p6": 15,
+				"p7": 25,
+			},
+		},
+		{
+			name: "fetch some negative and some positive values",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Existing,
+				Value:         EncodeReverseOrderVarUint64(uint64(1)),
+				KeyPosition:   Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
+				KeyPosition:   Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p8": -1,
+				"p4": 0,
+				"p5": 10,
+			},
+		},
+		{
+			name: "fetch all negative and some positive values",
+			start: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Beginning,
+			},
+			end: &IndexEntry{
+				Attribute:     "a1",
+				Type:          types.IndexAttributeType_NUMBER,
+				ValuePosition: Existing,
+				Value:         EncodeOrderPreservingVarUint64(uint64(0)),
+				KeyPosition:   Ending,
+			},
+			expectedKVs: map[string]int64{
+				"p0": -200,
+				"p1": -100,
+				"p2": -10,
+				"p3": -5,
+				"p8": -1,
+				"p4": 0,
 			},
 		},
 	}
@@ -1197,14 +1278,12 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				require.NoError(t, json.Unmarshal(itr.Key(), ie))
 
 				var v int64
+				vTemp, et, err := decodeVarUint64(ie.Value.(string))
+				require.NoError(t, err)
 
-				if tt.start.Metadata == PositiveNumber {
-					vTemp, err := decodeOrderPreservingVarUint64(ie.Value.(string))
-					require.NoError(t, err)
+				if et == normalOrder {
 					v = int64(vTemp)
 				} else {
-					vTemp, err := decodeReverseOrderVarUint64(ie.Value.(string))
-					require.NoError(t, err)
 					v = -int64(vTemp)
 				}
 				kvs[ie.Key] = v

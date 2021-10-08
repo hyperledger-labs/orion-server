@@ -21,8 +21,9 @@ func testEncodeAndDecode(t *testing.T, n uint64) {
 		t.Fatalf("A smaller integer should result into smaller bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
 			n, value, n+1, nextValue)
 	}
-	decodedValue, err := decodeOrderPreservingVarUint64(value)
+	decodedValue, nt, err := decodeVarUint64(value)
 	require.NoError(t, err)
+	require.Equal(t, normalOrder, nt)
 	if decodedValue != n {
 		t.Fatalf("Value not same after decoding. Original value = [%d], decode value = [%d]", n, decodedValue)
 	}
@@ -42,7 +43,8 @@ func testReverseOrderEncodingAndDecoding(t *testing.T, n uint64) {
 		t.Fatalf("A smaller integer should result into greater bytes. Encoded bytes for [%d] is [%x] and for [%d] is [%x]",
 			n, value, n+1, nextValue)
 	}
-	decodedValue, err := decodeReverseOrderVarUint64(value)
+	decodedValue, nt, err := decodeVarUint64(value)
+	require.Equal(t, reverseOrder, nt)
 	require.NoError(t, err)
 	if decodedValue != n {
 		t.Fatalf("Value not same after decoding. Original value = [%d], decode value = [%d]", n, decodedValue)
