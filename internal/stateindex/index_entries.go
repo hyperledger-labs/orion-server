@@ -17,10 +17,6 @@ const (
 	// indexDBPrefix is the prefix added to each user database to create an index
 	// database for that user database
 	indexDBPrefix = "_index_"
-	// PositiveNumber and NegativeNumber are metadata that denote whether the value being
-	// index is positive or negative
-	PositiveNumber = "p"
-	NegativeNumber = "n"
 )
 
 const (
@@ -122,7 +118,6 @@ func indexEntriesForDeletes(deletes []string, index map[string]types.IndexAttrib
 type IndexEntry struct {
 	Attribute     string                   `json:"a"`
 	Type          types.IndexAttributeType `json:"t"`
-	Metadata      string                   `json:"m"`
 	ValuePosition int8                     `json:"vp"` // ValuePosition is used such that range query for lesser than, greater than can be executed easily
 	Value         interface{}              `json:"v"`
 	KeyPosition   int8                     `json:"kp"` // KeyPosition is used such that range query for lesser than, greater than can be executed easily
@@ -229,7 +224,7 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.IndexAt
 					ValuePosition: Existing,
 					KeyPosition:   Existing,
 				}
-				e.Metadata, e.Value = GetMetadataAndValue(value, valueType)
+				e.Value = GetMetadataAndValue(value, valueType)
 				partialIndexEntries = append(partialIndexEntries, e)
 			}
 			break
@@ -240,16 +235,16 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.IndexAt
 }
 
 // GetMetadataAndValue returns the value used by the index creator and the associated metadata
-func GetMetadataAndValue(value interface{}, t types.IndexAttributeType) (string, interface{}) {
+func GetMetadataAndValue(value interface{}, t types.IndexAttributeType) interface{} {
 	if t != types.IndexAttributeType_NUMBER {
-		return "", value
+		return value
 	}
 
 	num := value.(int64)
 	if num >= 0 {
-		return PositiveNumber, EncodeOrderPreservingVarUint64(uint64(num))
+		return EncodeOrderPreservingVarUint64(uint64(num))
 	}
-	return NegativeNumber, EncodeReverseOrderVarUint64(uint64(-num))
+	return EncodeReverseOrderVarUint64(uint64(-num))
 }
 
 func getType(v reflect.Value) reflect.Kind {

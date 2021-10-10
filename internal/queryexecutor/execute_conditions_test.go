@@ -81,7 +81,6 @@ func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
 					&stateindex.IndexEntry{
 						Attribute:     attr,
 						Type:          ty,
-						Metadata:      "",
 						ValuePosition: stateindex.Existing,
 						Value:         v,
 						KeyPosition:   stateindex.Existing,

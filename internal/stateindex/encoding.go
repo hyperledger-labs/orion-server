@@ -5,11 +5,16 @@ import (
 	"math"
 )
 
-const hextable = "0123456789abcdef"
+const (
+	hextable     = "0123456789abcdef"
+	reverseOrder = '0'
+	normalOrder  = '1'
+)
 
 // EncodeOrderPreservingVarUint64 returns a string-representation for a uint64 number such that
 // all zero-bits starting bytes are trimmed in order to reduce the length of the array
-// For preserving the order in a default bytes-comparison, first byte contains the number of remaining bytes.
+// For preserving the order in a default bytes-comparison, first byte contains the type of
+// encoding and the second byte contains the number of remaining bytes.
 func EncodeOrderPreservingVarUint64(n uint64) string {
 	var bytePosition int
 	for bytePosition = 0; bytePosition <= 7; bytePosition++ {
@@ -21,8 +26,9 @@ func EncodeOrderPreservingVarUint64(n uint64) string {
 	size := int8(8 - bytePosition)
 	encodedBytes := make([]byte, encodedLen(int(size)+1))
 	b := byte(size)
-	// given that the size is <= 8, the 4 most significant bits would always be 0
-	encodedBytes[0] = '0'
+	// given that size will never be greater than 8, we use the first
+	// byte to denote the normal order encoding
+	encodedBytes[0] = normalOrder
 	encodedBytes[1] = hextable[b]
 
 	j := 2
@@ -33,29 +39,6 @@ func EncodeOrderPreservingVarUint64(n uint64) string {
 		j += 2
 	}
 	return string(encodedBytes)
-}
-
-// decodeOrderPreservingVarUint64 decodes the number from the string obtained from method 'EncodeOrderPreservingVarUint64'.
-// It returns the decoded number and error if any occurred during the decoding process.
-func decodeOrderPreservingVarUint64(s string) (uint64, error) {
-	bs := []byte(s)
-	sizeByte, err := convertHexAtLocationToBinary(bs, 0)
-	if err != nil {
-		return 0, err
-	}
-	size := int(sizeByte)
-	var v uint64
-
-	for i := 7; i >= 8-size; i-- {
-		location := (size - (7 - i)) * 2 // 2 character per hex
-		b, err := convertHexAtLocationToBinary(bs, location)
-		if err != nil {
-			return 0, err
-		}
-		v = v | uint64(b)<<(56-(i*8))
-	}
-
-	return v, nil
 }
 
 // EncodeReverseOrderVarUint64 returns a string-representation for a uint64 number such that
@@ -76,7 +59,9 @@ func EncodeReverseOrderVarUint64(n uint64) string {
 	size := int8(8 - bytePosition)
 	encodedBytes := make([]byte, encodedLen(int(size)+1))
 	b := byte(bytePosition)
-	encodedBytes[0] = '0'
+	// given that size will never be greater than 8, we use the first
+	// byte to denote the reverse order encoding
+	encodedBytes[0] = reverseOrder
 	encodedBytes[1] = hextable[b]
 
 	j := 2
@@ -89,9 +74,53 @@ func EncodeReverseOrderVarUint64(n uint64) string {
 	return string(encodedBytes)
 }
 
-// decodeReverseOrderVarUint64 decodes the number from the string obtained from function 'encodeReverseOrderVarUint64'.
-func decodeReverseOrderVarUint64(s string) (uint64, error) {
+func decodeVarUint64(s string) (uint64, int32, error) {
 	bs := []byte(s)
+	encodingType := bs[0]
+	switch encodingType {
+	case normalOrder:
+		bs[0] = '0'
+		n, err := decodeOrderPreservingVarUint64(bs)
+		if err != nil {
+			return 0, 0, err
+		}
+		return n, normalOrder, nil
+	case reverseOrder:
+		bs[0] = '0'
+		n, err := decodeReverseOrderVarUint64(bs)
+		if err != nil {
+			return 0, 0, err
+		}
+		return n, reverseOrder, nil
+	default:
+		return 0, 0, errors.New("unexpected prefix [" + string(bs[0]) + "]")
+	}
+}
+
+// decodeOrderPreservingVarUint64 decodes the number from the string obtained from method 'EncodeOrderPreservingVarUint64'.
+// It returns the decoded number and error if any occurred during the decoding process.
+func decodeOrderPreservingVarUint64(bs []byte) (uint64, error) {
+	sizeByte, err := convertHexAtLocationToBinary(bs, 0)
+	if err != nil {
+		return 0, err
+	}
+	size := int(sizeByte)
+	var v uint64
+
+	for i := 7; i >= 8-size; i-- {
+		location := (size - (7 - i)) * 2 // 2 character per hex
+		b, err := convertHexAtLocationToBinary(bs, location)
+		if err != nil {
+			return 0, err
+		}
+		v = v | uint64(b)<<(56-(i*8))
+	}
+
+	return v, nil
+}
+
+// decodeReverseOrderVarUint64 decodes the number from the string obtained from function 'encodeReverseOrderVarUint64'.
+func decodeReverseOrderVarUint64(bs []byte) (uint64, error) {
 	bytePosition, err := convertHexAtLocationToBinary(bs, 0)
 	if err != nil {
 		return 0, err

@@ -29,7 +29,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Beginning,
@@ -37,7 +36,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Ending,
@@ -57,7 +55,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Ending,
@@ -65,7 +62,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Ending,
 				},
 			},
@@ -83,7 +79,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Beginning,
@@ -91,7 +86,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Ending,
 				},
 			},
@@ -109,13 +103,11 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Beginning,
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Beginning,
@@ -135,13 +127,11 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Beginning,
 				},
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Ending,
@@ -162,7 +152,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Ending,
@@ -170,7 +159,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",
 					KeyPosition:   stateindex.Beginning,
@@ -191,7 +179,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Ending,
@@ -199,7 +186,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",
 					KeyPosition:   stateindex.Ending,
@@ -220,7 +206,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Beginning,
@@ -228,7 +213,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",
 					KeyPosition:   stateindex.Beginning,
@@ -249,7 +233,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				startKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-a",
 					KeyPosition:   stateindex.Beginning,
@@ -257,7 +240,6 @@ func TestCreateQueryPlan(t *testing.T) {
 				endKey: &stateindex.IndexEntry{
 					Attribute:     "attr1",
 					Type:          types.IndexAttributeType_STRING,
-					Metadata:      "",
 					ValuePosition: stateindex.Existing,
 					Value:         "value-z",
 					KeyPosition:   stateindex.Ending,

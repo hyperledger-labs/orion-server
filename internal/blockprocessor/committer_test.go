@@ -372,22 +372,22 @@ func TestStateDBCommitterForDataBlockWithIndex(t *testing.T) {
 
 	expectedIndexBefore := []*worldstate.KVWithMetadata{
 		{
-			Key: `{"a":"title","t":1,"m":"","vp":2,"v":"book1","kp":2,"k":"key1"}`,
+			Key: `{"a":"title","t":1,"vp":2,"v":"book1","kp":2,"k":"key1"}`,
 		},
 		{
-			Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":2,"v":"` + encoded2015 + `","kp":2,"k":"key1"}`,
+			Key: `{"a":"year","t":0,"vp":2,"v":"` + encoded2015 + `","kp":2,"k":"key1"}`,
 		},
 		{
-			Key: `{"a":"bestseller","t":2,"m":"","vp":2,"v":true,"kp":2,"k":"key1"}`,
+			Key: `{"a":"bestseller","t":2,"vp":2,"v":true,"kp":2,"k":"key1"}`,
 		},
 		{
-			Key: `{"a":"title","t":1,"m":"","vp":2,"v":"book2","kp":2,"k":"key2"}`,
+			Key: `{"a":"title","t":1,"vp":2,"v":"book2","kp":2,"k":"key2"}`,
 		},
 		{
-			Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":2,"v":"` + encoded2016 + `","kp":2,"k":"key2"}`,
+			Key: `{"a":"year","t":0,"vp":2,"v":"` + encoded2016 + `","kp":2,"k":"key2"}`,
 		},
 		{
-			Key: `{"a":"bestseller","t":2,"m":"","vp":2,"v":false,"kp":2,"k":"key2"}`,
+			Key: `{"a":"bestseller","t":2,"vp":2,"v":false,"kp":2,"k":"key2"}`,
 		},
 	}
 
@@ -541,22 +541,22 @@ func TestStateDBCommitterForDataBlockWithIndex(t *testing.T) {
 			},
 			expectedIndexAfter: []*worldstate.KVWithMetadata{
 				{
-					Key: `{"a":"title","t":1,"m":"","vp":2,"v":"book2","kp":2,"k":"key2"}`,
+					Key: `{"a":"title","t":1,"vp":2,"v":"book2","kp":2,"k":"key2"}`,
 				},
 				{
-					Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":2,"v":"` + encoded2018 + `","kp":2,"k":"key2"}`,
+					Key: `{"a":"year","t":0,"vp":2,"v":"` + encoded2018 + `","kp":2,"k":"key2"}`,
 				},
 				{
-					Key: `{"a":"bestseller","t":2,"m":"","vp":2,"v":true,"kp":2,"k":"key2"}`,
+					Key: `{"a":"bestseller","t":2,"vp":2,"v":true,"kp":2,"k":"key2"}`,
 				},
 				{
-					Key: `{"a":"title","t":1,"m":"","vp":2,"v":"book3","kp":2,"k":"key3"}`,
+					Key: `{"a":"title","t":1,"vp":2,"v":"book3","kp":2,"k":"key3"}`,
 				},
 				{
-					Key: `{"a":"year","t":0,"m":"` + stateindex.PositiveNumber + `","vp":2,"v":"` + encoded2021 + `","kp":2,"k":"key3"}`,
+					Key: `{"a":"year","t":0,"vp":2,"v":"` + encoded2021 + `","kp":2,"k":"key3"}`,
 				},
 				{
-					Key: `{"a":"bestseller","t":2,"m":"","vp":2,"v":false,"kp":2,"k":"key3"}`,
+					Key: `{"a":"bestseller","t":2,"vp":2,"v":false,"kp":2,"k":"key3"}`,
 				},
 			},
 		},
