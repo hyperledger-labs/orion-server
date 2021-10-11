@@ -254,7 +254,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 				if err != nil {
 					switch err.(type) {
 					case *ierrors.NotLeaderError:
-						require.EqualError(t, err, "not a leader, leader is: 0")
+						require.EqualError(t, err, "not a leader, leader is RaftID: 0, with HostPort: ")
 					case *ierrors.ClosedError:
 						require.EqualError(t, err, "block replicator closed")
 					default:
