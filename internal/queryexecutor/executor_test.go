@@ -81,29 +81,7 @@ func TestExecuteJSONQuery(t *testing.T) {
 			name: "neither and nor or is set",
 			query: []byte(
 				`{
-					"attr1": {
-						"$gte": "a",
-						"$lt": "b"
-					},
-					"attr2": {
-						"$eq": true
-					},
-					"attr3": {
-						"$lt": "a2"
-					}
-				}`,
-			),
-			expectedKeys: map[string]bool{
-				"key1": true,
-				"key2": true,
-				"key3": true,
-			},
-		},
-		{
-			name: "and is set",
-			query: []byte(
-				`{
-					"$and": {
+					"selector": {
 						"attr1": {
 							"$gte": "a",
 							"$lt": "b"
@@ -124,19 +102,47 @@ func TestExecuteJSONQuery(t *testing.T) {
 			},
 		},
 		{
+			name: "and is set",
+			query: []byte(
+				`{
+					"selector": {
+						"$and": {
+							"attr1": {
+								"$gte": "a",
+								"$lt": "b"
+							},
+							"attr2": {
+								"$eq": true
+							},
+							"attr3": {
+								"$lt": "a2"
+							}
+						}
+					}
+				}`,
+			),
+			expectedKeys: map[string]bool{
+				"key1": true,
+				"key2": true,
+				"key3": true,
+			},
+		},
+		{
 			name: "or is set",
 			query: []byte(
 				`{
-					"$or": {
-						"attr1": {
-							"$gte": "b",
-							"$lt": "c"
-						},
-						"attr2": {
-							"$eq": false
-						},
-						"attr3": {
-							"$gte": "a2"
+					"selector": {
+						"$or": {
+							"attr1": {
+								"$gte": "b",
+								"$lt": "c"
+							},
+							"attr2": {
+								"$eq": false
+							},
+							"attr3": {
+								"$gte": "a2"
+							}
 						}
 					}
 				}`,
@@ -176,21 +182,23 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			name: "both and - or are set",
 			query: []byte(
 				`{
-					"$and": {
-						"attr1": {
-							"$gte": "a",
-							"$lt": "b"
+					"selector": {
+						"$and": {
+							"attr1": {
+								"$gte": "a",
+								"$lt": "b"
+							},
+							"attr2": {
+								"$eq": true
+							}
 						},
-						"attr2": {
-							"$eq": true
-						}
-					},
-					"$or": {
-						"attr3": {
-							"$lt": "a2"
-						},
-						"attr2": {
-							"$eq": true
+						"$or": {
+							"attr3": {
+								"$lt": "a2"
+							},
+							"attr2": {
+								"$eq": true
+							}
 						}
 					}
 				}`,
@@ -201,11 +209,13 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			name: "extra commas: query syntax error",
 			query: []byte(
 				`{
-					"$and": {
-						"attr1": {
-							"$gte": "a",
-							"$lt": "b",
-						},
+					"selector": {
+						"$and": {
+							"attr1": {
+								"$gte": "a",
+								"$lt": "b",
+							},
+						}
 					}
 				}`,
 			),
@@ -215,14 +225,16 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			name: "and is not with correct syntax",
 			query: []byte(
 				`{
-					"$and": [
-						{
-							"attr1": "bc"
-						},
-						{
-							"attr2": "bc"
-						}
-					]
+					"selector": {
+						"$and": [
+							{
+								"attr1": "bc"
+							},
+							{
+								"attr2": "bc"
+							}
+						]
+					}
 				}`,
 			),
 			expectedError: "query syntax error near $and",
@@ -231,14 +243,16 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			name: "or is not with correct syntax",
 			query: []byte(
 				`{
-					"$or": [
-						{
-							"attr1": "bc"
-						},
-						{
-							"attr2": "bc"
-						}
-					]
+					"selector": {
+						"$or": [
+							{
+								"attr1": "bc"
+							},
+							{
+								"attr2": "bc"
+							}
+						]
+					}
 				}`,
 			),
 			expectedError: "query syntax error near $or",
@@ -247,9 +261,11 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			name: "attribute used in and is not indexed",
 			query: []byte(
 				`{
-					"$and": {
-						"attr5": {
-							"$eq": true
+					"selector": {
+						"$and": {
+							"attr5": {
+								"$eq": true
+							}
 						}
 					}
 				}`,
@@ -260,9 +276,11 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			name: "attribute used in or is not indexed",
 			query: []byte(
 				`{
-					"$or": {
-						"attr5": {
-							"$eq": true
+					"selector": {
+						"$or": {
+							"attr5": {
+								"$eq": true
+							}
 						}
 					}
 				}`,
@@ -273,12 +291,25 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			name: "attribute used in default combination is not indexed",
 			query: []byte(
 				`{
+					"selector": {
+						"attr5": {
+							"$eq": true
+						}
+					}
+				}`,
+			),
+			expectedError: "attribute [attr5] given in the query condition is not indexed",
+		},
+		{
+			name: "selector field is missing",
+			query: []byte(
+				`{
 					"attr5": {
 						"$eq": true
 					}
 				}`,
 			),
-			expectedError: "attribute [attr5] given in the query condition is not indexed",
+			expectedError: "selector field is missing in the query",
 		},
 	}
 

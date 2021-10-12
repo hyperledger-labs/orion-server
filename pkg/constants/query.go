@@ -14,4 +14,7 @@ const (
 	QueryOpLesserThan         = "$lt"
 	QueryOpGreaterThanOrEqual = "$gte"
 	QueryOpLesserThanOrEqual  = "$lte"
+
+	// Top-level fields allowed in the query
+	QueryFieldSelector = "selector"
 )

@@ -43,6 +43,14 @@ func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byt
 
 	// in the future, we will allow nested "$and", "$or" semantics
 
+	if _, ok := query[constants.QueryFieldSelector]; !ok {
+		return nil, errors.New("selector field is missing in the query")
+	}
+	query, ok := query[constants.QueryFieldSelector].(map[string]interface{})
+	if !ok {
+		return nil, errors.New("query syntax error near " + constants.QueryFieldSelector)
+	}
+
 	_, and := query[constants.QueryOpAnd]
 	_, or := query[constants.QueryOpOr]
 

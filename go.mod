@@ -1,6 +1,6 @@
 module github.com/IBM-Blockchain/bcdb-server
 
-go 1.15
+go 1.16
 
 require (
 	github.com/cayleygraph/cayley v0.7.7

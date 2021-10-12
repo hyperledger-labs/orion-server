@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -195,6 +196,28 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			Id:      params["id"],
 			Version: version,
 		}
+	case constants.PostDataQuery:
+		if r.Body == nil {
+			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: "query is empty"})
+			return nil, true
+		}
+
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
+		q, err := strconv.Unquote(string(b))
+		if err != nil {
+			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+		payload = &types.DataJSONQuery{
+			UserId: querierUserID,
+			DbName: params["dbname"],
+			Query:  q,
+		}
 	}
 
 	err, status := VerifyRequestSignature(signVerifier, querierUserID, signature, payload)
@@ -259,4 +282,3 @@ func validateAndParseTxPostHeader(h *http.Header) (time.Duration, error) {
 	}
 	return timeout, nil
 }
-

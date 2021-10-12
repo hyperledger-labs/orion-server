@@ -19,9 +19,10 @@ const (
 	GetUser      = "/user/{userid}"
 	PostUserTx   = "/user/tx"
 
-	DataEndpoint = "/data/"
-	GetData      = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
-	PostDataTx   = "/data/tx"
+	DataEndpoint  = "/data/"
+	GetData       = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
+	PostDataTx    = "/data/tx"
+	PostDataQuery = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/jsonquery"
 
 	DBEndpoint  = "/db/"
 	GetDBStatus = "/db/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
@@ -57,6 +58,13 @@ const (
 // value of the key present in the dbName
 func URLForGetData(dbName, key string) string {
 	return DataEndpoint + path.Join(dbName, key)
+}
+
+// URLForJSONQuery returns url for GET request to retrieve
+// key-value pairs present in the dbName which are matching the
+// given JSON query criteria
+func URLForJSONQuery(dbName string) string {
+	return DataEndpoint + path.Join(dbName, "jsonquery")
 }
 
 // URLForGetUser returns url for GET request to retrieve
