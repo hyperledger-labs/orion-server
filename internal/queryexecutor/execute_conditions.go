@@ -141,6 +141,7 @@ func (e *WorldStateJSONQueryExecutor) execute(dbName string, attribute string, c
 	}
 
 	keys := make(map[string]bool)
+
 	for iter.Next() {
 		if iter.Error() != nil {
 			return nil, err
@@ -151,7 +152,37 @@ func (e *WorldStateJSONQueryExecutor) execute(dbName string, attribute string, c
 			return nil, err
 		}
 
-		keys[indexEntry.Key] = true
+		if len(plan.excludeKeys) == 0 {
+			keys[indexEntry.Key] = true
+			continue
+		}
+
+		// we may need to skip entries continously
+		for {
+			if _, ok := plan.excludeKeys[indexEntry.Value]; !ok {
+				keys[indexEntry.Key] = true
+				break
+			}
+
+			seekKey := plan.excludeKeys[indexEntry.Value]
+			key, err := seekKey.String()
+			if err != nil {
+				return nil, err
+			}
+			e.logger.Debug("skipping to the next entry of [" + key + "]")
+
+			itemExist := iter.Seek([]byte(key))
+			if !itemExist {
+				break
+			}
+
+			delete(plan.excludeKeys, indexEntry.Value)
+
+			indexEntry = &stateindex.IndexEntry{}
+			if err := indexEntry.Load(iter.Key()); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	return keys, nil

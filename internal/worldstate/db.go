@@ -121,6 +121,10 @@ type Iterator interface {
 	// Next moves the iterator to the next key/value pair.
 	// It returns false if the iterator is exhausted.
 	Next() bool
+	// Seek moves the iterator to the first key/value pair whose key is greater
+	// than or equal to the given key.
+	// It returns whether such pair exist
+	Seek(key []byte) bool
 	// Error returns any accumulated error during 'Next()'. An error could occur
 	// when the 'Next()' is called on the closed iterator or closed database.
 	Error() error

@@ -52,6 +52,10 @@ func (e *WorldStateJSONQueryExecutor) ExecuteQuery(dbName string, selector []byt
 		return nil, errors.New("query syntax error near " + constants.QueryFieldSelector)
 	}
 
+	if len(query) == 0 {
+		return nil, errors.New("query conditions cannot be empty")
+	}
+
 	_, and := query[constants.QueryOpAnd]
 	_, or := query[constants.QueryOpOr]
 
@@ -135,6 +139,10 @@ func (e *WorldStateJSONQueryExecutor) validateAndDisectConditions(dbName string,
 			return nil, errors.New("query syntax error near the attribute [" + attr + "]")
 		}
 
+		if len(cond) == 0 {
+			return nil, errors.New("no condition provided for the attribute [" + attr + "]. All given attributes must have a condition")
+		}
+
 		attrType := indexDef[attr]
 		conds := &attributeTypeAndConditions{
 			valueType:  attrType,
@@ -146,19 +154,22 @@ func (e *WorldStateJSONQueryExecutor) validateAndDisectConditions(dbName string,
 				return nil, errors.New("invalid logical operator [" + opr + "] provided for the attribute [" + attr + "]")
 			}
 
-			if err := validateType(v, attrType); err != nil {
-				return nil, errors.WithMessage(err, "attribute ["+attr+"] is indexed but the value type provided in the query does not match the actual indexed type")
-			}
-
-			if attrType == types.IndexAttributeType_NUMBER {
-				v, err = v.(json.Number).Int64()
+			var internalVal interface{}
+			if opr == constants.QueryOpNotEqual {
+				internalVal, err = constructInternalValueForSliceType(v, attrType)
 				if err != nil {
-					return nil, err
+					return nil, errors.WithMessage(err, "attribute ["+attr+"] is indexed but incorrect value type provided in the query")
 				}
-				v = stateindex.EncodeInt64(v.(int64))
+			} else {
+				internalVal, err = constructInternalValueForNonSliceType(v, attrType)
+				if err != nil {
+					return nil, errors.WithMessage(err, "attribute ["+attr+"] is indexed but the value type provided in the query does not match the actual indexed type")
+				}
 			}
 
-			conds.conditions[opr] = v
+			if internalVal != nil {
+				conds.conditions[opr] = internalVal
+			}
 		}
 
 		if err := validateAttrConditions(conds.conditions); err != nil {
@@ -184,34 +195,80 @@ func isValidLogicalOperator(opt string) bool {
 	}
 }
 
-func validateType(v interface{}, t types.IndexAttributeType) error {
-	kind := reflect.TypeOf(v).Kind()
-	switch kind {
-	case reflect.String:
-		isNumber := reflect.TypeOf(v).Name() == "Number"
-
-		if t == types.IndexAttributeType_STRING && !isNumber {
-			return nil
-		} else if t == types.IndexAttributeType_NUMBER && isNumber {
-			return nil
-		} else {
-			providedType := kind.String()
-			if isNumber {
-				providedType = "number"
+func constructInternalValueForNonSliceType(v interface{}, t types.IndexAttributeType) (interface{}, error) {
+	switch v.(type) {
+	case json.Number:
+		if t == types.IndexAttributeType_NUMBER {
+			n, err := v.(json.Number).Int64()
+			if err != nil {
+				return nil, err
 			}
-			return errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
-				" does not match the provided type [" + providedType + "]")
+			return stateindex.EncodeInt64(n), nil
+		}
+		return nil, errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
+			" does not match the provided type [number]")
+	case string:
+		if t == types.IndexAttributeType_STRING {
+			return v, nil
+		}
+		return nil, errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
+			" does not match the provided type [string]")
+
+	case bool:
+		if t == types.IndexAttributeType_BOOLEAN {
+			return v, nil
+		}
+		return nil, errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
+			" does not match the provided type [bool]")
+
+	default:
+		return nil, errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
+			" does not match the provided type [" + reflect.TypeOf(v).Kind().String() + "]")
+	}
+}
+func constructInternalValueForSliceType(v interface{}, t types.IndexAttributeType) (interface{}, error) {
+	switch v.(type) {
+	case []interface{}:
+		var s []string
+		var b []bool
+
+		for _, item := range v.([]interface{}) {
+			switch t {
+			case types.IndexAttributeType_STRING:
+				if i, ok := item.(string); ok {
+					s = append(s, i)
+					continue
+				}
+			case types.IndexAttributeType_BOOLEAN:
+				if i, ok := item.(bool); ok {
+					b = append(b, i)
+					continue
+				}
+			case types.IndexAttributeType_NUMBER:
+				jNum, ok := item.(json.Number)
+				if ok {
+					v, err := jNum.Int64()
+					if err == nil {
+						s = append(s, stateindex.EncodeInt64(v))
+						continue
+					}
+				}
+
+			}
+
+			return nil, errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
+				" does not match the provided type")
+		}
+		if len(s) > 0 {
+			return s, nil
+		} else if len(b) > 0 {
+			return b, nil
 		}
 
-	case reflect.Bool:
-		if t == types.IndexAttributeType_BOOLEAN {
-			return nil
-		}
-		return errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
-			" does not match the provided type [" + kind.String() + "]")
+		return nil, nil
+
 	default:
-		return errors.New("the actual type [" + strings.ToLower(t.String()) + "]" +
-			" does not match the provided type [" + kind.String() + "]")
+		return nil, errors.New("query syntex error: array should be used for $neq condition")
 	}
 }
 
@@ -223,10 +280,6 @@ func validateType(v interface{}, t types.IndexAttributeType) error {
 //   4. when $lt (lesser than) operator is used, there should not be a $lte (lesser than or equal to) operator
 //   5. when $lte (lesser than or equal to) operator is used, there should not be a $lt (lesser than) operator
 func validateAttrConditions(conds map[string]interface{}) error {
-	if _, ok := conds[constants.QueryOpNotEqual]; ok {
-		return errors.New("currently [" + constants.QueryOpNotEqual + "] condition is not supported")
-	}
-
 	if _, ok := conds[constants.QueryOpEqual]; ok {
 		if len(conds) > 1 {
 			return errors.New("with [" + constants.QueryOpEqual + "] condition, no other condition should be provided")
