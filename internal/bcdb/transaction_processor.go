@@ -65,6 +65,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	p.txQueue = queue.New(localConfig.Server.QueueLength.Transaction)
 	p.txBatchQueue = queue.New(localConfig.Server.QueueLength.ReorderedTransactionBatch)
 	p.blockOneQueueBarrier = queue.NewOneQueueBarrier(conf.logger)
+	p.pendingTxs = queue.NewPendingTxs(conf.logger)
 
 	p.txReorderer = txreorderer.New(
 		&txreorderer.Config{
@@ -113,6 +114,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			TxBatchQueue: p.txBatchQueue,
 			Logger:       conf.logger,
 			BlockStore:   conf.blockStore,
+			PendingTxs:   p.pendingTxs,
 		},
 	)
 	if err != nil {
@@ -141,6 +143,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			LedgerReader:         conf.blockStore,
 			Transport:            p.peerTransport,
 			BlockOneQueueBarrier: p.blockOneQueueBarrier,
+			PendingTxs:           p.pendingTxs,
 			Logger:               conf.logger,
 		},
 	)
@@ -170,7 +173,6 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	go p.blockProcessor.Start()
 	p.blockProcessor.WaitTillStart()
 
-	p.pendingTxs = queue.NewPendingTxs()
 	p.blockStore = conf.blockStore
 
 	return p, nil

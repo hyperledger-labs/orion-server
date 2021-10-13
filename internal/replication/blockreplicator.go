@@ -45,6 +45,7 @@ type BlockReplicator struct {
 	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver with the block-processor commit
 	transport       *comm.HTTPTransport
 	ledgerReader    BlockLedgerReader
+	pendingTxs      *queue.PendingTxs //TODO release blocks when not leader or error from Raft on proposal
 
 	stopCh        chan struct{}
 	stopOnce      sync.Once
@@ -75,6 +76,7 @@ type Config struct {
 	LedgerReader         BlockLedgerReader
 	Transport            *comm.HTTPTransport
 	BlockOneQueueBarrier *queue.OneQueueBarrier
+	PendingTxs           *queue.PendingTxs
 	Logger               *logger.SugarLogger
 }
 
@@ -119,6 +121,7 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 		clusterConfig:    conf.ClusterConfig,
 		transport:        conf.Transport,
 		ledgerReader:     conf.LedgerReader,
+		pendingTxs:       conf.PendingTxs,
 		sizeLimit:        conf.ClusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize,
 		confState:        confState,
 		lastSnapBlockNum: snapBlkNum,

@@ -120,6 +120,7 @@ func (n *nodeEnv) Restart() error {
 		},
 	)
 	n.conf.BlockOneQueueBarrier = queue.NewOneQueueBarrier(n.conf.Logger)
+	n.conf.PendingTxs = queue.NewPendingTxs(n.conf.Logger)
 	n.stopServeCh = make(chan struct{})
 	n.blockReplicator, err = replication.NewBlockReplicator(n.conf)
 	if err != nil {
@@ -265,7 +266,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 	}
 
 	qBarrier := queue.NewOneQueueBarrier(lg)
-
+	pendingTxs := queue.NewPendingTxs(lg) //TODO test release blocks when not leader or error from Raft on proposal
 	ledger := &memLedger{}
 	proposedBlock := &types.Block{
 		Header: &types.BlockHeader{
@@ -290,6 +291,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 		LedgerReader:         ledger,
 		Transport:            peerTransport,
 		BlockOneQueueBarrier: qBarrier,
+		PendingTxs:           pendingTxs,
 		Logger:               lg,
 	}
 

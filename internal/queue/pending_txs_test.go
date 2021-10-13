@@ -1,22 +1,24 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package queue
+package queue_test
 
 import (
+	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPendingTxs_Async(t *testing.T) {
-	pendingTxs := NewPendingTxs()
+	pendingTxs := queue.NewPendingTxs(testLogger(t, "debug"))
 
-	var p *CompletionPromise
+	var p *queue.CompletionPromise
 	require.True(t, pendingTxs.Empty())
 	pendingTxs.Add("tx1", p)
 	require.True(t, pendingTxs.Has("tx1"))
@@ -28,7 +30,7 @@ func TestPendingTxs_Async(t *testing.T) {
 }
 
 func TestPendingTxs_Sync(t *testing.T) {
-	pendingTxs := NewPendingTxs()
+	pendingTxs := queue.NewPendingTxs(testLogger(t, "debug"))
 
 	blockHeader := &types.BlockHeader{
 		BaseHeader: &types.BlockHeaderBase{
@@ -42,11 +44,11 @@ func TestPendingTxs_Sync(t *testing.T) {
 	}
 
 	t.Run("Wait before Done", func(t *testing.T) {
-		p := NewCompletionPromise(time.Hour)
+		p := queue.NewCompletionPromise(time.Hour)
 		pendingTxs.Add("tx3", p)
 
 		go func() {
-			time.Sleep(10*time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 			pendingTxs.DoneWithReceipt([]string{"tx3"}, blockHeader)
 		}()
 
@@ -56,19 +58,42 @@ func TestPendingTxs_Sync(t *testing.T) {
 	})
 
 	t.Run("Done before Wait", func(t *testing.T) {
-		p := NewCompletionPromise(time.Hour)
+		p := queue.NewCompletionPromise(time.Hour)
 		pendingTxs.Add("tx3", p)
 		pendingTxs.DoneWithReceipt([]string{"tx3"}, blockHeader)
 		actualReceipt, err := p.Wait()
 		require.NoError(t, err)
 		require.True(t, proto.Equal(expectedReceipt, actualReceipt))
 	})
+
+	t.Run("Wait before Release with Error", func(t *testing.T) {
+		p := queue.NewCompletionPromise(time.Hour)
+		pendingTxs.Add("tx3", p)
+
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			pendingTxs.ReleaseWithError([]string{"tx3"}, &ierrors.NotLeaderError{LeaderID: 1, LeaderHostPort: "10.10.10.10:666"})
+		}()
+
+		actualReceipt, err := p.Wait()
+		require.EqualError(t, err, "not a leader, leader is RaftID: 1, with HostPort: 10.10.10.10:666")
+		require.Nil(t, actualReceipt)
+	})
+
+	t.Run("Release with Error before Wait", func(t *testing.T) {
+		p := queue.NewCompletionPromise(time.Hour)
+		pendingTxs.Add("tx3", p)
+		pendingTxs.ReleaseWithError([]string{"tx3"}, &ierrors.NotLeaderError{LeaderID: 1, LeaderHostPort: "10.10.10.10:666"})
+		actualReceipt, err := p.Wait()
+		require.EqualError(t, err, "not a leader, leader is RaftID: 1, with HostPort: 10.10.10.10:666")
+		require.Nil(t, actualReceipt)
+	})
 }
 
 func TestPendingTxs_Timeout(t *testing.T) {
-	pendingTxs := NewPendingTxs()
+	pendingTxs := queue.NewPendingTxs(testLogger(t, "debug"))
 
-	p := NewCompletionPromise(1 * time.Millisecond)
+	p := queue.NewCompletionPromise(1 * time.Millisecond)
 	pendingTxs.Add("tx3", p)
 
 	var wg sync.WaitGroup
