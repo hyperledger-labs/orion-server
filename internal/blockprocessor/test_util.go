@@ -1,8 +1,8 @@
 package blockprocessor
 
 import (
-	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 func ConstructDBUpdatesForBlock(block *types.Block, bp *BlockProcessor) (map[string]*worldstate.DBUpdates, error) {

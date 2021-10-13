@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 
 	"github.com/stretchr/testify/require"
 )

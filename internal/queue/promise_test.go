@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )

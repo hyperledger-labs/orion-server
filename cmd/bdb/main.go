@@ -8,8 +8,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/config"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/server"
+	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/pkg/server"
 	"github.com/spf13/cobra"
 )
 

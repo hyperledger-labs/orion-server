@@ -5,17 +5,17 @@ package bcdb
 import (
 	"fmt"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/blockstore"
-	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
-	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
-	"github.com/IBM-Blockchain/bcdb-server/internal/mtree"
-	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
-	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/blockstore"
+	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/internal/identity"
+	"github.com/hyperledger-labs/orion-server/internal/mptrie"
+	"github.com/hyperledger-labs/orion-server/internal/mtree"
+	"github.com/hyperledger-labs/orion-server/internal/provenance"
+	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 )
 

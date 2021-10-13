@@ -11,12 +11,12 @@ import (
 	"path"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
-	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb/mocks"
-	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/bcdb"
+	"github.com/hyperledger-labs/orion-server/internal/bcdb/mocks"
+	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/pkg/constants"
+	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )

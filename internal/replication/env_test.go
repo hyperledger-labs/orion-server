@@ -10,12 +10,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/config"
-	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
-	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
-	"github.com/IBM-Blockchain/bcdb-server/internal/replication"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/internal/comm"
+	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/internal/replication"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )

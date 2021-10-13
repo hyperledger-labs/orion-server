@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/pkg/constants"
+	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/gorilla/mux"
 )
 

@@ -7,7 +7,7 @@ import (
 	"crypto/x509"
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
+	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 )
 
 type UserDBQuerier struct {

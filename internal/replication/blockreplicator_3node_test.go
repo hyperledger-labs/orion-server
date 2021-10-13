@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

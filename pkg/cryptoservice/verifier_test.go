@@ -10,11 +10,11 @@ import (
 	"path"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice/mocks"
+	"github.com/hyperledger-labs/orion-server/pkg/crypto"
+	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
+	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice/mocks"
 	"github.com/stretchr/testify/require"
 )
 

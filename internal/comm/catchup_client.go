@@ -18,9 +18,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )

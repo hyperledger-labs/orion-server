@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 )
 
 var help = "all the following two flags must be set. An example command is shown below: \n\n" +

@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/internal/mptrie"
+	"github.com/hyperledger-labs/orion-server/pkg/crypto"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )

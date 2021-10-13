@@ -4,15 +4,15 @@ package server
 
 import (
 	"fmt"
-	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"net"
 	"net/http"
 
-	"github.com/IBM-Blockchain/bcdb-server/config"
-	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
-	"github.com/IBM-Blockchain/bcdb-server/internal/httphandler"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/internal/bcdb"
+	"github.com/hyperledger-labs/orion-server/internal/httphandler"
+	"github.com/hyperledger-labs/orion-server/pkg/constants"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/pkg/errors"
 )
 

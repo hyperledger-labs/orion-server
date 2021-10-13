@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/bcdb"
-	internalerror "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/internal/httputils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/bcdb"
+	internalerror "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 type txHandler struct {

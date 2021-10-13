@@ -5,7 +5,7 @@ package mtree
 import (
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/crypto"
+	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/stretchr/testify/require"
 )
 

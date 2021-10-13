@@ -3,8 +3,8 @@ package queryexecutor
 import (
 	"errors"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
+	"github.com/hyperledger-labs/orion-server/internal/stateindex"
+	"github.com/hyperledger-labs/orion-server/pkg/constants"
 )
 
 type rangeQueryPlan struct {

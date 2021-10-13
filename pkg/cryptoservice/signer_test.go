@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/httphandler"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/cryptoservice/mocks"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/httphandler"
+	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
+	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice/mocks"
+	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 

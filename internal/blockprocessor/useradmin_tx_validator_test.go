@@ -6,10 +6,10 @@ import (
 	"crypto/x509"
 	"testing"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/identity"
-	"github.com/IBM-Blockchain/bcdb-server/internal/worldstate"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/identity"
+	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )

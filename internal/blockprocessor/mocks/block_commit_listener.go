@@ -5,7 +5,7 @@
 package mocks
 
 import (
-	types "github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	types "github.com/hyperledger-labs/orion-server/pkg/types"
 	mock "github.com/stretchr/testify/mock"
 )
 

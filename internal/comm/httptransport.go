@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/config"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"

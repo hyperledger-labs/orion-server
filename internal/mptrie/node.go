@@ -3,7 +3,7 @@
 package mptrie
 
 import (
-	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 )
 
 type TrieNode interface {

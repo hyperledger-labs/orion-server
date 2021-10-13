@@ -3,7 +3,7 @@ package queryexecutor
 import (
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
+	"github.com/hyperledger-labs/orion-server/internal/stateindex"
 )
 
 func (e *WorldStateJSONQueryExecutor) executeAND(dbName string, attrsConds attributeToConditions) (map[string]bool, error) {

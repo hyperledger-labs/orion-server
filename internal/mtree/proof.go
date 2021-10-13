@@ -5,7 +5,7 @@ package mtree
 import (
 	"fmt"
 
-	interrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/pkg/errors"
 )
 

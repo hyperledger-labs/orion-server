@@ -5,9 +5,9 @@ package txreorderer
 import (
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 // TxReorderer holds queue and other components needed to reorder

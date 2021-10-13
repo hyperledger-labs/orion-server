@@ -4,8 +4,8 @@ package mocks
 import (
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/comm"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 type LedgerReader struct {
