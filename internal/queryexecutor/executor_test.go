@@ -91,13 +91,14 @@ func TestExecuteJSONQuery(t *testing.T) {
 						},
 						"attr3": {
 							"$lt": "a2"
+						},
+						"attr4": {
+							"$lt": -125
 						}
 					}
 				}`,
 			),
 			expectedKeys: map[string]bool{
-				"key1": true,
-				"key2": true,
 				"key3": true,
 			},
 		},
@@ -116,6 +117,9 @@ func TestExecuteJSONQuery(t *testing.T) {
 							},
 							"attr3": {
 								"$lt": "a2"
+							},
+							"attr4": {
+								"$lte": -125
 							}
 						}
 					}
@@ -142,6 +146,10 @@ func TestExecuteJSONQuery(t *testing.T) {
 							},
 							"attr3": {
 								"$gte": "a2"
+							},
+							"attr4": {
+								"$gte": -5,
+								"$lte": 6
 							}
 						}
 					}
@@ -152,6 +160,12 @@ func TestExecuteJSONQuery(t *testing.T) {
 				"key5":  true,
 				"key11": true,
 				"key21": true,
+				"key6":  true,
+				"key7":  true,
+				"key15": true,
+				"key16": true,
+				"key17": true,
+				"key10": true,
 			},
 		},
 	}
@@ -397,7 +411,7 @@ func TestValidateAndDisectConditions(t *testing.T) {
 				"year": {
 					valueType: types.IndexAttributeType_NUMBER,
 					conditions: map[string]interface{}{
-						constants.QueryOpGreaterThan: int64(2010),
+						constants.QueryOpGreaterThan: stateindex.EncodeInt64(2010),
 					},
 				},
 				"bestseller": {
@@ -426,8 +440,8 @@ func TestValidateAndDisectConditions(t *testing.T) {
 				"year": {
 					valueType: types.IndexAttributeType_NUMBER,
 					conditions: map[string]interface{}{
-						constants.QueryOpGreaterThan: int64(2010),
-						constants.QueryOpLesserThan:  int64(2020),
+						constants.QueryOpGreaterThan: stateindex.EncodeInt64(2010),
+						constants.QueryOpLesserThan:  stateindex.EncodeInt64(2020),
 					},
 				},
 			},
@@ -454,8 +468,8 @@ func TestValidateAndDisectConditions(t *testing.T) {
 				"year": {
 					valueType: types.IndexAttributeType_NUMBER,
 					conditions: map[string]interface{}{
-						constants.QueryOpGreaterThan: int64(2010),
-						constants.QueryOpLesserThan:  int64(2020),
+						constants.QueryOpGreaterThan: stateindex.EncodeInt64(2010),
+						constants.QueryOpLesserThan:  stateindex.EncodeInt64(2020),
 					},
 				},
 				"title": {

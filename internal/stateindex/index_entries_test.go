@@ -80,7 +80,7 @@ func TestConstructIndexEntries(t *testing.T) {
 	indexDB2Json, err := json.Marshal(indexDB2)
 	require.NoError(t, err)
 
-	encoded10 := EncodeOrderPreservingVarUint64(uint64(10))
+	encoded10 := EncodeInt64(10)
 	createDBsWithIndex := map[string]*worldstate.DBUpdates{
 		worldstate.DatabasesDBName: {
 			Writes: []*worldstate.KVWithMetadata{
@@ -348,8 +348,8 @@ func TestIndexEntriesForNewValues(t *testing.T) {
 		"age": types.IndexAttributeType_NUMBER,
 	}
 
-	encoded25 := EncodeOrderPreservingVarUint64(uint64(25))
-	encoded26 := EncodeOrderPreservingVarUint64(uint64(26))
+	encoded25 := EncodeInt64(25)
+	encoded26 := EncodeInt64(26)
 
 	testCases := []struct {
 		name                 string
@@ -431,10 +431,10 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 		"age": types.IndexAttributeType_NUMBER,
 	}
 
-	encoded25 := EncodeOrderPreservingVarUint64(uint64(25))
-	encodedNegative26 := EncodeReverseOrderVarUint64(uint64(26))
-	encoded0 := EncodeOrderPreservingVarUint64(uint64(0))
-	encodedMax := EncodeOrderPreservingVarUint64(math.MaxInt64)
+	encoded25 := EncodeInt64(25)
+	encodedNegative26 := EncodeInt64(-26)
+	encoded0 := EncodeInt64(0)
+	encodedMax := EncodeInt64(math.MaxInt64)
 
 	testCases := []struct {
 		name                 string
@@ -567,7 +567,7 @@ func TestIndexEntriesOfExistingValues(t *testing.T) {
 }
 
 func TestPartialIndexEntriesForValue(t *testing.T) {
-	encoded10 := EncodeOrderPreservingVarUint64(uint64(10))
+	encoded10 := EncodeInt64(10)
 	expectedIndexEntries :=
 		[]*IndexEntry{
 			{
@@ -1001,7 +1001,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(0),
+				Value:         EncodeInt64(0),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
@@ -1022,14 +1022,14 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(0),
+				Value:         EncodeInt64(0),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
+				Value:         EncodeInt64(15),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1044,7 +1044,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
+				Value:         EncodeInt64(10),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
@@ -1064,14 +1064,14 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
+				Value:         EncodeInt64(10),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(uint64(15)),
+				Value:         EncodeInt64(15),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1090,7 +1090,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(1),
+				Value:         EncodeInt64(-1),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1112,7 +1112,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(uint64(10)),
+				Value:         EncodeInt64(-10),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1127,14 +1127,14 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(uint64(100)),
+				Value:         EncodeInt64(-100),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(1),
+				Value:         EncodeInt64(-1),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1150,14 +1150,14 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(uint64(100)),
+				Value:         EncodeInt64(-100),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(uint64(10)),
+				Value:         EncodeInt64(-10),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1195,7 +1195,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(uint64(100)),
+				Value:         EncodeInt64(-100),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
@@ -1220,14 +1220,14 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeReverseOrderVarUint64(uint64(1)),
+				Value:         EncodeInt64(-1),
 				KeyPosition:   Beginning,
 			},
 			end: &IndexEntry{
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(uint64(10)),
+				Value:         EncodeInt64(10),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{
@@ -1247,7 +1247,7 @@ func TestOrderPreservingIndexingOfNumber(t *testing.T) {
 				Attribute:     "a1",
 				Type:          types.IndexAttributeType_NUMBER,
 				ValuePosition: Existing,
-				Value:         EncodeOrderPreservingVarUint64(uint64(0)),
+				Value:         EncodeInt64(0),
 				KeyPosition:   Ending,
 			},
 			expectedKVs: map[string]int64{

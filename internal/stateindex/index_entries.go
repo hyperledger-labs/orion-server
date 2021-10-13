@@ -224,7 +224,7 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.IndexAt
 					ValuePosition: Existing,
 					KeyPosition:   Existing,
 				}
-				e.Value = GetMetadataAndValue(value, valueType)
+				e.Value = GetValue(value, valueType)
 				partialIndexEntries = append(partialIndexEntries, e)
 			}
 			break
@@ -234,17 +234,13 @@ func partialIndexEntriesForValue(v reflect.Value, index map[string]types.IndexAt
 	return partialIndexEntries
 }
 
-// GetMetadataAndValue returns the value used by the index creator and the associated metadata
-func GetMetadataAndValue(value interface{}, t types.IndexAttributeType) interface{} {
+// GetValue returns the value used by the index creator and the associated metadata
+func GetValue(value interface{}, t types.IndexAttributeType) interface{} {
 	if t != types.IndexAttributeType_NUMBER {
 		return value
 	}
 
-	num := value.(int64)
-	if num >= 0 {
-		return EncodeOrderPreservingVarUint64(uint64(num))
-	}
-	return EncodeReverseOrderVarUint64(uint64(-num))
+	return EncodeInt64(value.(int64))
 }
 
 func getType(v reflect.Value) reflect.Kind {

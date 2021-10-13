@@ -15,6 +15,7 @@ func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
 		"attr1": types.IndexAttributeType_STRING,
 		"attr2": types.IndexAttributeType_BOOLEAN,
 		"attr3": types.IndexAttributeType_STRING,
+		"attr4": types.IndexAttributeType_NUMBER,
 	}
 	marshaledIndexDef, err := json.Marshal(indexDef)
 	require.NoError(t, err)
@@ -63,6 +64,17 @@ func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
 			"a1": {"key1", "key2", "key3"},
 			"a2": {"key5", "key11", "key21"},
 		},
+		"attr4": {
+			int64(-210):   {"key3", "key4"},
+			int64(-125):   {"key1", "key2"},
+			int64(-50):    {"key5"},
+			int64(-1):     {"key6", "key7"},
+			int64(0):      {"key15", "key16", "key17"},
+			int64(5):      {"key10", "key11"},
+			int64(1234):   {"key8", "key9"},
+			int64(2020):   {"key13", "key12"},
+			int64(923421): {"key14"},
+		},
 	}
 
 	dbUpdate := &worldstate.DBUpdates{}
@@ -74,25 +86,27 @@ func setupDBForTestingExecutes(t *testing.T, db worldstate.DB, dbName string) {
 				ty = types.IndexAttributeType_STRING
 			case bool:
 				ty = types.IndexAttributeType_BOOLEAN
+			case int64:
+				ty = types.IndexAttributeType_NUMBER
+				v = stateindex.EncodeInt64(v.(int64))
 			}
 
 			for _, k := range keys {
-				indexKey, err := json.Marshal(
-					&stateindex.IndexEntry{
-						Attribute:     attr,
-						Type:          ty,
-						ValuePosition: stateindex.Existing,
-						Value:         v,
-						KeyPosition:   stateindex.Existing,
-						Key:           k,
-					},
-				)
+				indexKey := &stateindex.IndexEntry{
+					Attribute:     attr,
+					Type:          ty,
+					ValuePosition: stateindex.Existing,
+					Value:         v,
+					KeyPosition:   stateindex.Existing,
+					Key:           k,
+				}
+				idx, err := indexKey.String()
 				require.NoError(t, err)
 
 				dbUpdate.Writes = append(
 					dbUpdate.Writes,
 					&worldstate.KVWithMetadata{
-						Key: string(indexKey),
+						Key: string(idx),
 					},
 				)
 			}
@@ -144,6 +158,12 @@ func TestExecuteAND(t *testing.T) {
 						"$gte": "a2",
 					},
 				},
+				"attr4": {
+					valueType: types.IndexAttributeType_NUMBER,
+					conditions: map[string]interface{}{
+						"$lt": stateindex.EncodeInt64(100),
+					},
+				},
 			},
 			expectedKeys: map[string]bool{
 				"key5": true,
@@ -171,9 +191,15 @@ func TestExecuteAND(t *testing.T) {
 						"$gte": "a2",
 					},
 				},
+				"attr4": {
+					valueType: types.IndexAttributeType_NUMBER,
+					conditions: map[string]interface{}{
+						"$gte": stateindex.EncodeInt64(-10),
+						"$lte": stateindex.EncodeInt64(5),
+					},
+				},
 			},
 			expectedKeys: map[string]bool{
-				"key5":  true,
 				"key11": true,
 			},
 		},
@@ -275,6 +301,13 @@ func TestExecuteOR(t *testing.T) {
 						"$lt":  "a2",
 					},
 				},
+				"attr4": {
+					valueType: types.IndexAttributeType_NUMBER,
+					conditions: map[string]interface{}{
+						"$lt":  stateindex.EncodeInt64(0),
+						"$gte": stateindex.EncodeInt64(-125),
+					},
+				},
 			},
 			expectedKeys: map[string]bool{
 				"key4": true,
@@ -282,6 +315,8 @@ func TestExecuteOR(t *testing.T) {
 				"key1": true,
 				"key2": true,
 				"key3": true,
+				"key6": true,
+				"key7": true,
 			},
 		},
 		{
@@ -306,6 +341,12 @@ func TestExecuteOR(t *testing.T) {
 						"$gte": "a2",
 					},
 				},
+				"attr4": {
+					valueType: types.IndexAttributeType_NUMBER,
+					conditions: map[string]interface{}{
+						"$gte": stateindex.EncodeInt64(900000),
+					},
+				},
 			},
 			expectedKeys: map[string]bool{
 				"key1":  true,
@@ -319,6 +360,7 @@ func TestExecuteOR(t *testing.T) {
 				"key9":  true,
 				"key11": true,
 				"key21": true,
+				"key14": true,
 			},
 		},
 		{
@@ -352,7 +394,7 @@ func TestExecuteOR(t *testing.T) {
 	}
 }
 
-func TestExecute(t *testing.T) {
+func TestExecuteOnly(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.cleanup()
 
@@ -421,6 +463,28 @@ func TestExecute(t *testing.T) {
 			expectedKeys: []string{"key11", "key21", "key4", "key5"},
 		},
 		{
+			name:      "equal to -125",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$eq": stateindex.EncodeInt64(-125),
+				},
+			},
+			expectedKeys: []string{"key1", "key2"},
+		},
+		{
+			name:      "equal to 923421",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$eq": stateindex.EncodeInt64(923421),
+				},
+			},
+			expectedKeys: []string{"key14"},
+		},
+		{
 			name:      "greater than n",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
@@ -443,6 +507,28 @@ func TestExecute(t *testing.T) {
 			expectedKeys: nil,
 		},
 		{
+			name:      "greater than -125",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt": stateindex.EncodeInt64(-125),
+				},
+			},
+			expectedKeys: []string{"key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11", "key8", "key9", "key13", "key12", "key14"},
+		},
+		{
+			name:      "greater than 0",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt": stateindex.EncodeInt64(0),
+				},
+			},
+			expectedKeys: []string{"key10", "key11", "key8", "key9", "key13", "key12", "key14"},
+		},
+		{
 			name:      "greater than or eq to z",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
@@ -452,6 +538,28 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			expectedKeys: []string{"key20", "key21", "key22", "key23"},
+		},
+		{
+			name:      "greater than or equal to -125",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(-125),
+				},
+			},
+			expectedKeys: []string{"key1", "key2", "key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11", "key8", "key9", "key13", "key12", "key14"},
+		},
+		{
+			name:      "greater than or equal to 0",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(0),
+				},
+			},
+			expectedKeys: []string{"key15", "key16", "key17", "key10", "key11", "key8", "key9", "key13", "key12", "key14"},
 		},
 		{
 			name:      "lesser than d",
@@ -476,6 +584,28 @@ func TestExecute(t *testing.T) {
 			expectedKeys: nil,
 		},
 		{
+			name:      "lesser than -125",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$lt": stateindex.EncodeInt64(-125),
+				},
+			},
+			expectedKeys: []string{"key3", "key4"},
+		},
+		{
+			name:      "lesser than 2020",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$lt": stateindex.EncodeInt64(2020),
+				},
+			},
+			expectedKeys: []string{"key3", "key4", "key1", "key2", "key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11", "key8", "key9"},
+		},
+		{
 			name:      "lesser than or eq to b",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
@@ -485,6 +615,28 @@ func TestExecute(t *testing.T) {
 				},
 			},
 			expectedKeys: []string{"key1", "key2", "key3", "key4", "key5"},
+		},
+		{
+			name:      "lesser than or equal to -125",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$lte": stateindex.EncodeInt64(-125),
+				},
+			},
+			expectedKeys: []string{"key3", "key4", "key1", "key2"},
+		},
+		{
+			name:      "lesser than or equal to 2020",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$lte": stateindex.EncodeInt64(2020),
+				},
+			},
+			expectedKeys: []string{"key3", "key4", "key1", "key2", "key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11", "key8", "key9", "key13", "key12"},
 		},
 		{
 			name:      "greater than c and lesser than m",
@@ -535,6 +687,150 @@ func TestExecute(t *testing.T) {
 			expectedKeys: []string{"key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15"},
 		},
 		{
+			name:      "greater than -125 and lesser than 1234",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt": stateindex.EncodeInt64(-125),
+					"$lt": stateindex.EncodeInt64(1234),
+				},
+			},
+			expectedKeys: []string{"key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11"},
+		},
+		{
+			name:      "greater than or equal to -125 and lesser than 1234",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(-125),
+					"$lt":  stateindex.EncodeInt64(1234),
+				},
+			},
+			expectedKeys: []string{"key1", "key2", "key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11"},
+		},
+		{
+			name:      "greater than -125 and lesser than or equal to 1234",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt":  stateindex.EncodeInt64(-125),
+					"$lte": stateindex.EncodeInt64(1234),
+				},
+			},
+			expectedKeys: []string{"key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11", "key8", "key9"},
+		},
+		{
+			name:      "greater than or equal to -125 and lesser than or equal to 1234",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(-125),
+					"$lte": stateindex.EncodeInt64(1234),
+				},
+			},
+			expectedKeys: []string{"key1", "key2", "key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11", "key8", "key9"},
+		},
+		{
+			name:      "greater than -500 and lesser than -2",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt": stateindex.EncodeInt64(-500),
+					"$lt": stateindex.EncodeInt64(-2),
+				},
+			},
+			expectedKeys: []string{"key3", "key4", "key1", "key2", "key5"},
+		},
+		{
+			name:      "greater than or equal to -210 and lesser than -2",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(-210),
+					"$lt":  stateindex.EncodeInt64(-1),
+				},
+			},
+			expectedKeys: []string{"key3", "key4", "key1", "key2", "key5"},
+		},
+		{
+			name:      "greater than -210 and lesser than or equal to -2",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt":  stateindex.EncodeInt64(-210),
+					"$lte": stateindex.EncodeInt64(-1),
+				},
+			},
+			expectedKeys: []string{"key1", "key2", "key5", "key6", "key7"},
+		},
+		{
+			name:      "greater than or equal to -210 and lesser than or equal to -2",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(-210),
+					"$lte": stateindex.EncodeInt64(-1),
+				},
+			},
+			expectedKeys: []string{"key3", "key4", "key1", "key2", "key5", "key6", "key7"},
+		},
+		{
+			name:      "greater than 0 and lesser than 2020",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt": stateindex.EncodeInt64(0),
+					"$lt": stateindex.EncodeInt64(2020),
+				},
+			},
+			expectedKeys: []string{"key10", "key11", "key8", "key9"},
+		},
+		{
+			name:      "greater than or equal to 0 and lesser than 2020",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(0),
+					"$lt":  stateindex.EncodeInt64(2020),
+				},
+			},
+			expectedKeys: []string{"key15", "key16", "key17", "key10", "key11", "key8", "key9"},
+		},
+		{
+			name:      "greater than 0 and lesser than or equal to 2020",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt":  stateindex.EncodeInt64(0),
+					"$lte": stateindex.EncodeInt64(2020),
+				},
+			},
+			expectedKeys: []string{"key10", "key11", "key8", "key9", "key13", "key12"},
+		},
+		{
+			name:      "greater than or equal to 0 and lesser than or equal to 2020",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(0),
+					"$lte": stateindex.EncodeInt64(2020),
+				},
+			},
+			expectedKeys: []string{"key15", "key16", "key17", "key10", "key11", "key8", "key9", "key13", "key12"},
+		},
+		{
 			name:      "all values",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
@@ -547,13 +843,47 @@ func TestExecute(t *testing.T) {
 			expectedKeys: []string{"key1", "key2", "key3", "key4", "key5", "key6", "key7", "key8", "key9", "key0", "key10", "key11", "key13", "key14", "key15", "key31", "key16", "key17", "key18", "key19", "key20", "key21", "key22", "key23"},
 		},
 		{
-			name:      "all values",
+			name:      "empty values",
 			attribute: "attr1",
 			condition: &attributeTypeAndConditions{
 				valueType: types.IndexAttributeType_STRING,
 				conditions: map[string]interface{}{
 					"$gt": "zzz",
 					"$lt": "",
+				},
+			},
+			expectedKeys: []string{},
+		},
+		{
+			name:      "all values - number",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gte": stateindex.EncodeInt64(-10000),
+				},
+			},
+			expectedKeys: []string{"key3", "key4", "key1", "key2", "key5", "key6", "key7", "key15", "key16", "key17", "key10", "key11", "key8", "key9", "key13", "key12", "key14"},
+		},
+		{
+			name:      "empty values number",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt": stateindex.EncodeInt64(10000000),
+				},
+			},
+			expectedKeys: []string{},
+		},
+		{
+			name:      "empty results for gt 0 and lt -1",
+			attribute: "attr4",
+			condition: &attributeTypeAndConditions{
+				valueType: types.IndexAttributeType_NUMBER,
+				conditions: map[string]interface{}{
+					"$gt": stateindex.EncodeInt64(0),
+					"$lt": stateindex.EncodeInt64(-1),
 				},
 			},
 			expectedKeys: []string{},

@@ -5,7 +5,6 @@ import (
 
 	"github.com/IBM-Blockchain/bcdb-server/internal/stateindex"
 	"github.com/IBM-Blockchain/bcdb-server/pkg/constants"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
 )
 
 type rangeQueryPlan struct {
@@ -18,11 +17,6 @@ func createQueryPlan(attribute string, conds *attributeTypeAndConditions) (*rang
 	//   - eq and no other conditions
 	//   - lt and lte do not appear together
 	//   - gt and gte do not appear together
-
-	if conds.valueType == types.IndexAttributeType_NUMBER {
-		// TODO: support number values
-		return nil, errors.New("numbers are not supported currently")
-	}
 
 	for c := range conds.conditions {
 		if c == constants.QueryOpNotEqual {
