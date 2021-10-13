@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/stretchr/testify/require"
 )
 

@@ -6,8 +6,8 @@ package queue
 import (
 	"sync"
 
-	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
 )
 
 // OneQueueBarrier is used to synchronize a single producing go-routine and a single consuming go-routine.

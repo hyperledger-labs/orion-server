@@ -4,8 +4,8 @@ package mocks
 import (
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/blockcreator"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/blockcreator"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 type Replicator struct {

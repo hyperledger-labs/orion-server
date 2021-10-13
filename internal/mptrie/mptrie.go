@@ -6,7 +6,7 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 
 	"github.com/pkg/errors"
 )

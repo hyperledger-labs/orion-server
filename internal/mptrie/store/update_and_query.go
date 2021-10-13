@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/mptrie"
+	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"

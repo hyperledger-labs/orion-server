@@ -5,7 +5,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
+	"github.com/hyperledger-labs/orion-server/internal/comm"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 )

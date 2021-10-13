@@ -4,13 +4,13 @@
 package queue_test
 
 import (
-	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/internal/queue"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )

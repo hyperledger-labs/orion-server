@@ -3,9 +3,9 @@
 package bcdb
 
 import (
-	"github.com/IBM-Blockchain/bcdb-server/internal/provenance"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/internal/provenance"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 type provenanceQueryProcessor struct {

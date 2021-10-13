@@ -1,4 +1,4 @@
-module github.com/IBM-Blockchain/bcdb-server
+module github.com/hyperledger-labs/orion-server
 
 go 1.16
 

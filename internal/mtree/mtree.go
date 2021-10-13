@@ -3,7 +3,7 @@
 package mtree
 
 import (
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 // BuildTreeForBlockTx builds Merkle tree from block transactions.

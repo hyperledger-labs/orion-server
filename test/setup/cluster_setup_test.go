@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/pkg/server/testutils"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
-	"github.com/IBM-Blockchain/bcdb-server/test/setup"
+	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/stretchr/testify/require"
 )
 

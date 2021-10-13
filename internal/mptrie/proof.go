@@ -1,8 +1,8 @@
 package mptrie
 
 import (
-	"github.com/IBM-Blockchain/bcdb-server/pkg/state"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 // GetProof calculates proof (path) from node contains value to root node in trie

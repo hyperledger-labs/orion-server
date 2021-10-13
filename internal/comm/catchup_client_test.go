@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/IBM-Blockchain/bcdb-server/config"
-	"github.com/IBM-Blockchain/bcdb-server/internal/comm"
-	"github.com/IBM-Blockchain/bcdb-server/internal/comm/mocks"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/logger"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/internal/comm"
+	"github.com/hyperledger-labs/orion-server/internal/comm/mocks"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -288,7 +288,7 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 
 	go pullBlocksLoop()
 
-	//TODO do "eventually" on `Retry interval max reached` instead, as this `Sleep` may creates a flake, see: https://github.com/IBM-Blockchain/bcdb-server/issues/188
+	//TODO do "eventually" on `Retry interval max reached` instead, as this `Sleep` may creates a flake, see: https://github.com/hyperledger-labs/orion-server/issues/188
 	time.Sleep(100 * time.Millisecond)
 	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 100)
 	require.NoError(t, err)

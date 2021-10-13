@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	ierrors "github.com/IBM-Blockchain/bcdb-server/internal/errors"
-	"github.com/IBM-Blockchain/bcdb-server/pkg/types"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 type CompletionPromise struct {
