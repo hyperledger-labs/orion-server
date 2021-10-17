@@ -1,11 +1,11 @@
 ARG GO_VER=1.16.5
 ARG ALPINE_VER=3.13
 
-FROM alpine:${ALPINE_VER} as bcdb-base
+FROM alpine:${ALPINE_VER} as orion-base
 RUN apk add --no-cache tzdata
 RUN echo 'hosts: files dns' > /etc/nsswitch.conf
-RUN mkdir /etc/bcdb-server
-RUN mkdir /var/bcdb-server
+RUN mkdir /etc/orion-server
+RUN mkdir /var/orion-server
 
 FROM golang:${GO_VER}-alpine${ALPINE_VER} as golang
 RUN apk add --no-cache \
@@ -15,16 +15,16 @@ RUN apk add --no-cache \
     git \
     make \
     musl-dev
-ADD . $GOPATH/src/github.com/IBM-Blockchain/bcdb-server
-WORKDIR $GOPATH/src/github.com/IBM-Blockchain/bcdb-server
+ADD . $GOPATH/src/github.com/hyperledger-labs/orion-server
+WORKDIR $GOPATH/src/github.com/hyperledger-labs/orion-server
 
-FROM golang as bcdb
+FROM golang as orion-server
 RUN make binary
 
-FROM bcdb-base
-VOLUME /etc/bcdb-server
-VOLUME /var/bcdb-server
-COPY --from=bcdb /go/src/github.com/IBM-Blockchain/bcdb-server/bin/bdb /usr/local/bin
-COPY --from=bcdb /go/src/github.com/IBM-Blockchain/bcdb-server/sampleconfig/ /etc/bcdb-server
+FROM orion-base
+VOLUME /etc/orion-server
+VOLUME /var/orion-server
+COPY --from=orion-server /go/src/github.com/hyperledger-labs/orion-server/bin/bdb /usr/local/bin
+COPY --from=orion-server /go/src/github.com/hyperledger-labs/orion-server/sampleconfig/ /etc/orion-server
 EXPOSE 6001
-CMD ["bdb", "start", "--configpath", "/etc/bcdb-server/config/."]
+CMD ["bdb", "start", "--configpath", "/etc/orion-server/config/."]
