@@ -16,10 +16,10 @@ the blockchain DB will be deployed.
 
 To build the executable binary, the following steps need to be executed
 
-  1. To clone the repository, first, create required directories using the command `mkdir -p github.com/IBM-Blockchain`
-  2. Change the current working directory to the above created folder by issing the command `cd github.com/IBM-Blockchain`
-  3. Clone this repository with `git clone https://github.com/IBM-Blockchain/bcdb-server`
-  4. Change the current working directory to the repository root directory by issuing `cd bcdb-server`
+  1. To clone the repository, first, create required directories using the command `mkdir -p github.com/hyperledger-labs`
+  2. Change the current working directory to the above created folder by issing the command `cd github.com/hyperledger-labs`
+  3. Clone this repository with `git clone https://github.com/hyperledger-labs/orion-server`
+  4. Change the current working directory to the repository root directory by issuing `cd orion-server`
   5. To build the binary executable file, issue the command `make binary` which will create a `bin` folder in the current directory. The `bin` would holds two executable
   files named `bdb` and `signer`.
   6. Run the `bdb` executable by issuing the command `./bin/bdb`. If the following output is printed, the build was successful.
@@ -105,9 +105,9 @@ To generate docker image, after you generated crypto materials, run:
 make docker
 ```
 #### Start docker container
-To invoke bcdb docker container, you can run:
+To invoke the orion server docker container, you can run:
 ```
-docker run -it --rm -v $(pwd)/sampleconfig/:/etc/bcdb-server -p 6001:6001 -p 7050:7050 bcdb-server
+docker run -it --rm -v $(pwd)/sampleconfig/:/etc/orion-server -p 6001:6001 -p 7050:7050 orion-server
 ``` 
 
 ## Build and Use Signer Utility

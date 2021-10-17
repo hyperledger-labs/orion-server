@@ -3,14 +3,14 @@ server:
   # The identity and credentials of this server.
   identity:
     # identity.id denotes the id of the server.
-    id: bcdb-node1
+    id: orion-node1
     # identity.certificatePath denotes the path to the x509 certificate
     # of the node. This certificate and associated key is used in all
     # client facing communication, as well as for signing blocks and
     # transaction replies.
-    certificatePath: /etc/bcdb-server/crypto/node/node.pem
+    certificatePath: /etc/orion-server/crypto/node/node.pem
     # identity.keyPath denotes the path to the private key of the node.
-    keyPath: /etc/bcdb-server/crypto/node/node.key
+    keyPath: /etc/orion-server/crypto/node/node.key
   # The listen address and port of the network interface used for client
   # communication. The external address (or host name) of this interface
   # must be accessible to clients, and is declared in:
@@ -28,7 +28,7 @@ server:
     name: leveldb
     # database.ledgerDirectory denotes the root path
     # where we store all ledger data
-    ledgerdirectory: /etc/bcdb-server/ledger
+    ledgerdirectory: /etc/orion-server/ledger
   queueLength:
     # queueLength.transaction denotes the maximum
     # queue length of waiting transactions
@@ -57,10 +57,10 @@ blockCreation:
 # The replication settings specific to this server.
 replication:
   # The directory for the Raft WAL (write ahead log).
-  walDir: "/var/bcdb-server/ledger/etcdraft/wal"
+  walDir: "/var/orion-server/ledger/etcdraft/wal"
 
   # The directory for the Raft snapshots.
-  snapDir: "/var/bcdb-server/ledger/etcdraft/snapshot"
+  snapDir: "/var/orion-server/ledger/etcdraft/snapshot"
 
   # The listen address and port for intra-cluster communication.
   # The external address (or host name) of this interface
@@ -82,20 +82,20 @@ replication:
     # Require client certificates / mutual TLS for inbound connections.
     clientAuthRequired: false
     # X.509 certificate used for TLS server
-    serverCertificatePath: /etc/bcdb-server/crypto/cluster/server.cert
+    serverCertificatePath: /etc/orion-server/crypto/cluster/server.cert
     # Private key for TLS server
-    serverKeyPath: /etc/bcdb-server/crypto/cluster/server.key
+    serverKeyPath: /etc/orion-server/crypto/cluster/server.key
     # X.509 certificate used for creating TLS client connections.
-    clientCertificatePath: /etc/bcdb-server/crypto/cluster/client.cert
+    clientCertificatePath: /etc/orion-server/crypto/cluster/client.cert
     # Private key used for creating TLS client connections.
-    clientKeyPath: /etc/bcdb-server/crypto/cluster/client.key
+    clientKeyPath: /etc/orion-server/crypto/cluster/client.key
     # cluster.tls.caConfig defines the paths to the x509 certificates
     # of the root and intermediate certificate authorities that issued
     # all the certificates used for intra-cluster communication.
     caConfig:
       # The paths to root certificates. At least one is required. for example:
       #   rootCACertsPath: ./testdata/rootcaA.cert, ./testdata/rootcaB.cert
-      rootCACertsPath: /etc/bcdb-server/crypto/cluster/rootca.cert
+      rootCACertsPath: /etc/orion-server/crypto/cluster/rootca.cert
 
       # The paths to intermediate certificates. Optional. For example:
       # intermediateCACertsPath: ./testdata/cluster/midcaA.cert, ./testdata/cluster/midcaB.cert
@@ -111,4 +111,4 @@ bootstrap:
   #    and on-board by fetching the ledger from them, rebuilding the database in the process (not supported yet).
   method: genesis
   # file contains the initial configuration that will be used to bootstrap the node, as specified by the method, above.
-  file: /etc/bcdb-server/config/1node-shared-config-bootstrap.yml
+  file: /etc/orion-server/config/1node-shared-config-bootstrap.yml

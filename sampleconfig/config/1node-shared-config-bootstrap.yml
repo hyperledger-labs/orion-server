@@ -11,10 +11,10 @@
 # The host and port are those that are accessible from clients.
 # The certificate is the one used to authenticate with clients and sign blocks and transaction/query responses.
 nodes:
-  - nodeId: bcdb-node1
+  - nodeId: orion-node1
     host: 127.0.0.1
     port: 6001
-    certificatePath: /etc/bcdb-server/crypto/node/node.pem
+    certificatePath: /etc/orion-server/crypto/node/node.pem
 
 # consensus carries the definitions of the clustered consensus algorithm, members, and parameters.
 consensus:
@@ -25,7 +25,7 @@ consensus:
   # The nodeId correlates the peer definition here with the node definition in the nodes section.
   # The host and port are those that are accessible from other peers.
   members:
-    - nodeId: bcdb-node1            
+    - nodeId: orion-node1
       raftId: 1
       peerHost: raft1.example.com
       peerPort: 7050
@@ -33,7 +33,7 @@ consensus:
   # observers contains the set of servers that are allowed to communicate
   # with consensus.members, and fetch their state.
   observers:
-    - nodeId: bcdb-node4
+    - nodeId: orion-node4
       raftId: 0
       peerHost: raft4.example.com
       peerPort: 7050
@@ -70,7 +70,7 @@ consensus:
 caConfig:
   # The paths to root certificates. At least one is required. for example:
   #   rootCACertsPath: ./pki/rootcaA.cert, ./pki/rootcaB.cert
-  rootCACertsPath: /etc/bcdb-server/crypto/CA/CA.pem
+  rootCACertsPath: /etc/orion-server/crypto/CA/CA.pem
 
   # The paths to intermediate certificates. Optional. For example:
   #   intermediateCACertsPath: ./pki/midcaA.cert, ./pki/midcaB.cert
@@ -81,4 +81,4 @@ admin:
   id: admin
   # identity.certificatePath denotes the path
   # to the x509 certificate of the cluster admin
-  certificatePath: /etc/bcdb-server/crypto/admin/admin.pem
+  certificatePath: /etc/orion-server/crypto/admin/admin.pem
