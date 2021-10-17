@@ -3,21 +3,25 @@
 package blockcreator_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockcreator"
 	"github.com/hyperledger-labs/orion-server/internal/blockcreator/mocks"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,12 +29,14 @@ type testEnv struct {
 	creator        *blockcreator.BlockCreator
 	txBatchQueue   *queue.Queue
 	pendingTxs     *queue.PendingTxs //TODO test the release of txs
+	mockReplicator *mocks.Replicator
 	blockQueue     *queue.Queue
 	db             worldstate.DB
 	dbPath         string
 	blockStore     *blockstore.Store
 	blockStorePath string
-	cleanup        func()
+
+	cleanup func()
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -86,12 +92,6 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	blockQueue := queue.New(10) // Output: accumulates the blocks that are submitted to the Replicator.
 	mockReplicator := &mocks.Replicator{}
-	mockReplicator.SubmitCalls(
-		func(block *types.Block) error {
-			blockQueue.Enqueue(block)
-			return nil
-		},
-	)
 	b.RegisterReplicator(mockReplicator)
 	go b.Start()
 	b.WaitTillStart()
@@ -114,9 +114,10 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	return &testEnv{
 		creator:        b,
-		txBatchQueue:   txBatchQ,   // Input
-		blockQueue:     blockQueue, // Output
-		pendingTxs:     pendingTxs, // Output
+		txBatchQueue:   txBatchQ,       // Input
+		mockReplicator: mockReplicator, // Define behavior
+		blockQueue:     blockQueue,     // Output
+		pendingTxs:     pendingTxs,     // Output
 		db:             db,
 		dbPath:         dir,
 		blockStore:     blockStore,
@@ -125,113 +126,137 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 }
 
-func TestBatchCreator(t *testing.T) {
-	dataTx1 := &types.DataTxEnvelope{
-		Payload: &types.DataTx{
-			MustSignUserIds: []string{"user1"},
-			DbOperations: []*types.DBOperation{
-				{
-					DbName: "db1",
-					DataDeletes: []*types.DataDelete{
-						{
-							Key: "key1",
-						},
-					},
+var genesisBlock = &types.Block{
+	Header: &types.BlockHeader{
+		BaseHeader: &types.BlockHeaderBase{
+			Number:                1,
+			LastCommittedBlockNum: 0,
+		},
+		ValidationInfo: []*types.ValidationInfo{
+			{
+				Flag: types.Flag_VALID,
+			},
+		},
+	},
+	Payload: &types.Block_ConfigTxEnvelope{
+		ConfigTxEnvelope: configTx,
+	},
+}
+
+var userAdminTx = &types.UserAdministrationTxEnvelope{
+	Payload: &types.UserAdministrationTx{
+		TxId:   "txid:1",
+		UserId: "user1",
+		UserReads: []*types.UserRead{
+			{
+				UserId: "user1",
+			},
+		},
+		UserWrites: []*types.UserWrite{
+			{
+				User: &types.User{
+					Id:          "user2",
+					Certificate: []byte("certificate"),
 				},
 			},
 		},
-	}
+	},
+}
 
-	dataTx2 := &types.DataTxEnvelope{
-		Payload: &types.DataTx{
-			MustSignUserIds: []string{"user2"},
-			DbOperations: []*types.DBOperation{
-				{
-					DbName: "db2",
-					DataDeletes: []*types.DataDelete{
-						{
-							Key: "key2",
-						},
-					},
-				},
-			},
-		},
-	}
+var dbAdminTx = &types.DBAdministrationTxEnvelope{
+	Payload: &types.DBAdministrationTx{
+		TxId:      "txid:2",
+		UserId:    "user1",
+		CreateDbs: []string{"db1", "db2"},
+		DeleteDbs: []string{"db3", "db4"},
+	},
+}
 
-	userAdminTx := &types.UserAdministrationTxEnvelope{
-		Payload: &types.UserAdministrationTx{
-			UserId: "user1",
-			UserReads: []*types.UserRead{
-				{
-					UserId: "user1",
-				},
-			},
-			UserWrites: []*types.UserWrite{
-				{
-					User: &types.User{
-						Id:          "user2",
-						Certificate: []byte("certificate"),
-					},
-				},
-			},
-		},
-	}
-
-	dbAdminTx := &types.DBAdministrationTxEnvelope{
-		Payload: &types.DBAdministrationTx{
-			UserId:    "user1",
-			CreateDbs: []string{"db1", "db2"},
-			DeleteDbs: []string{"db3", "db4"},
-		},
-	}
-
-	configTx := &types.ConfigTxEnvelope{
-		Payload: &types.ConfigTx{
-			UserId: "user1",
-			NewConfig: &types.ClusterConfig{
-				Nodes: []*types.NodeConfig{
+var dataTx1 = &types.DataTxEnvelope{
+	Payload: &types.DataTx{
+		TxId:            "txid:3",
+		MustSignUserIds: []string{"user1"},
+		DbOperations: []*types.DBOperation{
+			{
+				DbName: "db1",
+				DataDeletes: []*types.DataDelete{
 					{
-						Id: "node1",
+						Key: "key1",
 					},
-				},
-				Admins: []*types.Admin{
-					{
-						Id: "admin1",
-					},
-				},
-				CertAuthConfig: &types.CAConfig{
-					Roots: [][]byte{[]byte("root-ca")},
 				},
 			},
 		},
-	}
+	},
+}
 
+var dataTx2 = &types.DataTxEnvelope{
+	Payload: &types.DataTx{
+		TxId:            "txid:4",
+		MustSignUserIds: []string{"user2"},
+		DbOperations: []*types.DBOperation{
+			{
+				DbName: "db2",
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: "key2",
+					},
+				},
+			},
+		},
+	},
+}
+
+var configTx = &types.ConfigTxEnvelope{
+	Payload: &types.ConfigTx{
+		TxId:   "txid:5",
+		UserId: "user1",
+		NewConfig: &types.ClusterConfig{
+			Nodes: []*types.NodeConfig{
+				{
+					Id: "node1",
+				},
+			},
+			Admins: []*types.Admin{
+				{
+					Id: "admin1",
+				},
+			},
+			CertAuthConfig: &types.CAConfig{
+				Roots: [][]byte{[]byte("root-ca")},
+			},
+		},
+	},
+}
+
+var txBatches = []interface{}{
+	&types.Block_UserAdministrationTxEnvelope{
+		UserAdministrationTxEnvelope: userAdminTx,
+	},
+	&types.Block_DbAdministrationTxEnvelope{
+		DbAdministrationTxEnvelope: dbAdminTx,
+	},
+	&types.Block_DataTxEnvelopes{
+		DataTxEnvelopes: &types.DataTxEnvelopes{
+			Envelopes: []*types.DataTxEnvelope{
+				dataTx1,
+				dataTx2,
+			},
+		},
+	},
+	&types.Block_ConfigTxEnvelope{
+		ConfigTxEnvelope: configTx,
+	},
+}
+
+func TestBlockCreator(t *testing.T) {
 	testCases := []struct {
 		name           string
 		txBatches      []interface{}
 		expectedBlocks []*types.Block
 	}{
 		{
-			name: "enqueue all types of transactions",
-			txBatches: []interface{}{
-				&types.Block_UserAdministrationTxEnvelope{
-					UserAdministrationTxEnvelope: userAdminTx,
-				},
-				&types.Block_DbAdministrationTxEnvelope{
-					DbAdministrationTxEnvelope: dbAdminTx,
-				},
-				&types.Block_DataTxEnvelopes{
-					DataTxEnvelopes: &types.DataTxEnvelopes{
-						Envelopes: []*types.DataTxEnvelope{
-							dataTx1,
-							dataTx2,
-						},
-					},
-				},
-				&types.Block_ConfigTxEnvelope{
-					ConfigTxEnvelope: configTx,
-				},
-			},
+			name:      "enqueue all types of transactions",
+			txBatches: txBatches,
 			expectedBlocks: []*types.Block{
 				{
 					Header: &types.BlockHeader{
@@ -334,7 +359,7 @@ func TestBatchCreator(t *testing.T) {
 		hasBlockCountMatched := func() bool {
 			return len(expectedBlocks) == testEnv.blockQueue.Size()
 		}
-		require.Eventually(t, hasBlockCountMatched, 2*time.Second, 1000*time.Millisecond)
+		require.Eventually(t, hasBlockCountMatched, 2*time.Second, 10*time.Millisecond)
 
 		for _, expectedBlock := range expectedBlocks {
 			block := testEnv.blockQueue.Dequeue().(*types.Block)
@@ -351,10 +376,78 @@ func TestBatchCreator(t *testing.T) {
 			testEnv := newTestEnv(t)
 			defer testEnv.cleanup()
 
+			testEnv.mockReplicator.SubmitCalls(
+				func(block *types.Block) error {
+					testEnv.blockQueue.Enqueue(block)
+					return nil
+				},
+			)
 			// storing only first block in block store, to simulate last committed block
 			require.NoError(t, testEnv.blockStore.Commit(tt.expectedBlocks[0]))
 
 			enqueueTxBatchesAndAssertBlocks(t, testEnv, tt.txBatches, tt.expectedBlocks)
 		})
 	}
+}
+
+func TestBlockCreator_ReleaseAsync(t *testing.T) {
+	testEnv := newTestEnv(t)
+	defer testEnv.cleanup()
+
+	// storing only first block in block store, to simulate last committed block
+	require.NoError(t, testEnv.blockStore.Commit(genesisBlock))
+
+	testEnv.mockReplicator.SubmitReturns(&ierrors.NotLeaderError{
+		LeaderID:       1,
+		LeaderHostPort: "10.10.10.10:1111",
+	})
+
+	for i := 1; i < 6; i++ {
+		testEnv.pendingTxs.Add(fmt.Sprintf("txid:%d", i), nil)
+	}
+
+	for _, txBatch := range txBatches {
+		testEnv.txBatchQueue.Enqueue(txBatch)
+	}
+
+	allReleased := func() bool {
+		return testEnv.pendingTxs.Empty()
+	}
+	require.Eventually(t, allReleased, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestBlockCreator_ReleaseSync(t *testing.T) {
+	testEnv := newTestEnv(t)
+	defer testEnv.cleanup()
+
+	// storing only first block in block store, to simulate last committed block
+	require.NoError(t, testEnv.blockStore.Commit(genesisBlock))
+
+	testEnv.mockReplicator.SubmitReturns(&ierrors.NotLeaderError{
+		LeaderID:       1,
+		LeaderHostPort: "10.10.10.10:1111",
+	})
+
+	wg := sync.WaitGroup{}
+	wg.Add(5)
+	for i := 1; i < 6; i++ {
+		promise := queue.NewCompletionPromise(5 * time.Second)
+		testEnv.pendingTxs.Add(fmt.Sprintf("txid:%d", i), promise)
+		go func() {
+			receipt, err := promise.Wait()
+			assert.Nil(t, receipt)
+			assert.EqualError(t, err, "not a leader, leader is RaftID: 1, with HostPort: 10.10.10.10:1111")
+			wg.Done()
+		}()
+	}
+
+	for _, txBatch := range txBatches {
+		testEnv.txBatchQueue.Enqueue(txBatch)
+	}
+
+	allReleased := func() bool {
+		return testEnv.pendingTxs.Empty()
+	}
+	require.Eventually(t, allReleased, 2*time.Second, 10*time.Millisecond)
+	wg.Wait()
 }
