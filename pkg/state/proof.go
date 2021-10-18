@@ -10,14 +10,18 @@ import (
 
 var KeyDeleteMarkerBytes = []byte{1}
 
+// Proof contains correct path in Merkle-Patricia Trie
 type Proof struct {
-	// For each node in trie path, it contains bytes of all node fields and []byte{1} in case of deleted flag true
-	// path is from rom node contains value to root node
+	// Each node in path contains bytes of trie node fields and []byte{1} in case of deleted flag true.
+	// Branch Node represented by all its children nodes hashes, value hash and deleted flag.
+	// Value Node represented by key, value hash and deleted flag.
 	// Exactly same byte slices used to calculate node hash.
 	path []*types.MPTrieProofElement
 }
 
-func (p *Proof) Verify(leafHash, rootHash []byte, isDeleted bool) (bool, error) {
+// Verify validates correctness of path and checks is path first element contains valueHash
+// and last element is trie root
+func (p *Proof) Verify(valueHash, rootHash []byte, isDeleted bool) (bool, error) {
 	pathLen := len(p.path)
 
 	if pathLen == 0 {
@@ -38,10 +42,10 @@ func (p *Proof) Verify(leafHash, rootHash []byte, isDeleted bool) (bool, error) 
 		}
 	}
 
-	hashToFind := leafHash
+	hashToFind := valueHash
 
 	// Validation algorithm just checks is hashToFind (current node/value hash) is part of hashes/bytes
-	// list in node above. We start from value hash (leafHash) and continue to root stored in block
+	// list in node above. We start from value hash (valueHash) and continue to root stored in block
 	for i := 0; i < pathLen; i++ {
 		isHashFound := false
 		for _, hash := range p.path[i].GetHashes() {
