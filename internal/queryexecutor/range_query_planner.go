@@ -1,15 +1,19 @@
 package queryexecutor
 
 import (
-	"errors"
-
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 type rangeQueryPlan struct {
-	startKey *stateindex.IndexEntry
-	endKey   *stateindex.IndexEntry
+	startKey    *stateindex.IndexEntry
+	endKey      *stateindex.IndexEntry
+	excludeKeys map[interface{}]*stateindex.IndexEntry
+}
+
+type toSeek interface {
+	Seek(key []byte) bool
 }
 
 func createQueryPlan(attribute string, conds *attributeTypeAndConditions) (*rangeQueryPlan, error) {
@@ -17,12 +21,43 @@ func createQueryPlan(attribute string, conds *attributeTypeAndConditions) (*rang
 	//   - eq and no other conditions
 	//   - lt and lte do not appear together
 	//   - gt and gte do not appear together
+	//   - neq can appear alone or with lt, lte, gt, and gte
+	//   - neq can appear more than once
+	//   - correct value type for both slice and other types
 
-	for c := range conds.conditions {
-		if c == constants.QueryOpNotEqual {
-			// TODO: support not equal
-			return nil, errors.New(constants.QueryOpNotEqual + " is not supported currently")
+	var excludeKeys map[interface{}]*stateindex.IndexEntry
+	for c, v := range conds.conditions {
+		if c != constants.QueryOpNotEqual {
+			continue
 		}
+
+		excludeKeys = make(map[interface{}]*stateindex.IndexEntry)
+
+		switch conds.valueType {
+		case types.IndexAttributeType_BOOLEAN:
+			for _, item := range v.([]bool) {
+				excludeKeys[item] = &stateindex.IndexEntry{
+					Attribute:     attribute,
+					Type:          conds.valueType,
+					ValuePosition: stateindex.Existing,
+					Value:         item,
+					KeyPosition:   stateindex.Ending,
+				}
+			}
+		case types.IndexAttributeType_STRING, types.IndexAttributeType_NUMBER:
+			for _, item := range v.([]string) {
+				excludeKeys[item] = &stateindex.IndexEntry{
+					Attribute:     attribute,
+					Type:          conds.valueType,
+					ValuePosition: stateindex.Existing,
+					Value:         item,
+					KeyPosition:   stateindex.Ending,
+				}
+			}
+		}
+
+		delete(conds.conditions, c)
+		break
 	}
 
 	p := &rangeQueryPlan{
@@ -36,15 +71,24 @@ func createQueryPlan(attribute string, conds *attributeTypeAndConditions) (*rang
 		},
 	}
 
+	if len(excludeKeys) > 0 && len(conds.conditions) == 0 {
+		// full scan with a seek to not equal to
+		p.startKey.ValuePosition = stateindex.Beginning
+		p.excludeKeys = excludeKeys
+		p.endKey.ValuePosition = stateindex.Ending
+
+		return p, nil
+	}
+
 	if len(conds.conditions) == 1 {
 		for c, v := range conds.conditions {
 			setPlanForSingleCondition(c, v, p)
-			return p, nil
 		}
+	} else {
+		setPlanForMultipleConditions(conds, p)
 	}
 
-	setPlanForMultipleConditions(conds, p)
-
+	p.excludeKeys = excludeKeys
 	return p, nil
 }
 

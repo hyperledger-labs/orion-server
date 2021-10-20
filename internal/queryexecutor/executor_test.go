@@ -121,7 +121,8 @@ func TestExecuteJSONQuery(t *testing.T) {
 								"$lt": "a2"
 							},
 							"attr4": {
-								"$lte": -125
+								"$lte": -125,
+								"$neq": [-210]
 							}
 						}
 					}
@@ -130,7 +131,6 @@ func TestExecuteJSONQuery(t *testing.T) {
 			expectedKeys: map[string]bool{
 				"key1": true,
 				"key2": true,
-				"key3": true,
 			},
 		},
 		{
@@ -141,16 +141,18 @@ func TestExecuteJSONQuery(t *testing.T) {
 						"$or": {
 							"attr1": {
 								"$gte": "b",
-								"$lt": "c"
+								"$neq": ["c", "d", "e"],
+								"$lt": "f"
 							},
 							"attr2": {
-								"$eq": false
+								"$neq": [true]
 							},
 							"attr3": {
 								"$gte": "a2"
 							},
 							"attr4": {
 								"$gte": -5,
+								"$neq": [0, 4, 5],
 								"$lte": 6
 							}
 						}
@@ -164,10 +166,6 @@ func TestExecuteJSONQuery(t *testing.T) {
 				"key21": true,
 				"key6":  true,
 				"key7":  true,
-				"key15": true,
-				"key16": true,
-				"key17": true,
-				"key10": true,
 			},
 		},
 	}
@@ -332,6 +330,47 @@ func TestExecuteJSONQueryErrorCases(t *testing.T) {
 			),
 			expectedError: "selector field is missing in the query",
 		},
+		{
+			name: "selector filed is empty",
+			query: []byte(
+				`{
+					"selector":{
+					}
+				}`,
+			),
+			expectedError: "query conditions cannot be empty",
+		},
+		{
+			name: "attribute has no condition",
+			query: []byte(
+				`{
+					"selector": {
+						"attr1": {
+						}
+					}
+				}`,
+			),
+			expectedError: "no condition provided for the attribute [attr1]. All given attributes must have a condition",
+		},
+		{
+			name: "no slice for neq",
+			query: []byte(
+				`{
+					"selector": {
+						"$and": {
+							"attr1": {
+								"$gte": "a",
+								"$lt": "b"
+							},
+							"attr2": {
+								"$neq": true
+							}
+						}
+					}
+				}`,
+			),
+			expectedError: "array should be used for $neq condition",
+		},
 	}
 
 	snapshots, err := env.db.GetDBsSnapshot([]string{worldstate.DatabasesDBName, stateindex.IndexDB(dbName)})
@@ -382,7 +421,7 @@ func TestValidateAndDisectConditions(t *testing.T) {
 		expectedDisectedConditions attributeToConditions
 	}{
 		{
-			name:   "single attribute and single condition",
+			name:   "single attribute and single equal condition",
 			dbName: "db1",
 			setup: func(t *testing.T, db worldstate.DB) {
 				require.NoError(t, db.Commit(createDbs, 1))
@@ -404,7 +443,95 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			},
 		},
 		{
-			name:   "two attribute and singe condition per attribute",
+			name:   "single attribute and single not equal condition with string",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `
+				{
+					"title": {
+						"$neq": ["book1"]
+					}
+				}
+			`,
+			expectedDisectedConditions: attributeToConditions{
+				"title": {
+					valueType: types.IndexAttributeType_STRING,
+					conditions: map[string]interface{}{
+						constants.QueryOpNotEqual: []string{"book1"},
+					},
+				},
+			},
+		},
+		{
+			name:   "single attribute and single not equal condition with bool",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `
+				{
+					"bestseller": {
+						"$neq": [false]
+					}
+				}
+			`,
+			expectedDisectedConditions: attributeToConditions{
+				"bestseller": {
+					valueType: types.IndexAttributeType_BOOLEAN,
+					conditions: map[string]interface{}{
+						constants.QueryOpNotEqual: []bool{false},
+					},
+				},
+			},
+		},
+		{
+			name:   "single attribute and mutiple not equal condition with int64",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `
+				{
+					"year": {
+						"$neq": [2001, 2002, 2003]
+					}
+				}
+			`,
+			expectedDisectedConditions: attributeToConditions{
+				"year": {
+					valueType: types.IndexAttributeType_NUMBER,
+					conditions: map[string]interface{}{
+						constants.QueryOpNotEqual: []string{stateindex.EncodeInt64(2001), stateindex.EncodeInt64(2002), stateindex.EncodeInt64(2003)},
+					},
+				},
+			},
+		},
+		{
+			name:   "single attribute and multiple not equal conditions",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `
+				{
+					"title": {
+						"$neq": ["book1","book2","book3"]
+					}
+				}
+			`,
+			expectedDisectedConditions: attributeToConditions{
+				"title": {
+					valueType: types.IndexAttributeType_STRING,
+					conditions: map[string]interface{}{
+						constants.QueryOpNotEqual: []string{"book1", "book2", "book3"},
+					},
+				},
+			},
+		},
+		{
+			name:   "two attribute and singe condition per attribute and empty $neq",
 			dbName: "db1",
 			setup: func(t *testing.T, db worldstate.DB) {
 				require.NoError(t, db.Commit(createDbs, 1))
@@ -415,7 +542,8 @@ func TestValidateAndDisectConditions(t *testing.T) {
 						"$gt": 2010
 					},
 					"bestseller": {
-						"$eq": true
+						"$eq": true,
+						"$neq": []
 					}
 				}
 			`,
@@ -435,7 +563,7 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			},
 		},
 		{
-			name:   "single attribute and multiple conditions",
+			name:   "single attribute and multiple conditions and empty $neq",
 			dbName: "db1",
 			setup: func(t *testing.T, db worldstate.DB) {
 				require.NoError(t, db.Commit(createDbs, 1))
@@ -444,7 +572,8 @@ func TestValidateAndDisectConditions(t *testing.T) {
 				{
 					"year": {
 						"$gt": 2010,
-						"$lt": 2020
+						"$lt": 2020,
+						"$neq": []
 					}
 				}
 			`,
@@ -459,7 +588,7 @@ func TestValidateAndDisectConditions(t *testing.T) {
 			},
 		},
 		{
-			name:   "multiple attributes and multiple conditions per attribute",
+			name:   "multiple attributes and multiple conditions per attribute and empty $neq",
 			dbName: "db1",
 			setup: func(t *testing.T, db worldstate.DB) {
 				require.NoError(t, db.Commit(createDbs, 1))
@@ -468,11 +597,13 @@ func TestValidateAndDisectConditions(t *testing.T) {
 				{
 					"year": {
 						"$gt": 2010,
-						"$lt": 2020
+						"$lt": 2020,
+						"$neq": []
 					},
 					"title": {
 						"$gt": "book1",
-						"$lt": "book100"
+						"$lt": "book100",
+						"$neq": []
 					}
 				}
 			`,
@@ -489,6 +620,54 @@ func TestValidateAndDisectConditions(t *testing.T) {
 					conditions: map[string]interface{}{
 						constants.QueryOpGreaterThan: "book1",
 						constants.QueryOpLesserThan:  "book100",
+					},
+				},
+			},
+		},
+		{
+			name:   "multiple attributes and multiple conditions including not equal to per attribute",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `
+				{
+					"year": {
+						"$gt": 2010,
+						"$lt": 2020,
+						"$neq": [2015, 2017]
+					},
+					"title": {
+						"$gt": "book1",
+						"$lt": "book100",
+						"$neq": ["book3", "book5"]
+					},
+					"bestseller": {
+						"$neq": [false]
+					}
+				}
+			`,
+			expectedDisectedConditions: attributeToConditions{
+				"year": {
+					valueType: types.IndexAttributeType_NUMBER,
+					conditions: map[string]interface{}{
+						constants.QueryOpGreaterThan: stateindex.EncodeInt64(2010),
+						constants.QueryOpLesserThan:  stateindex.EncodeInt64(2020),
+						constants.QueryOpNotEqual:    []string{stateindex.EncodeInt64(2015), stateindex.EncodeInt64(2017)},
+					},
+				},
+				"title": {
+					valueType: types.IndexAttributeType_STRING,
+					conditions: map[string]interface{}{
+						constants.QueryOpGreaterThan: "book1",
+						constants.QueryOpLesserThan:  "book100",
+						constants.QueryOpNotEqual:    []string{"book3", "book5"},
+					},
+				},
+				"bestseller": {
+					valueType: types.IndexAttributeType_BOOLEAN,
+					conditions: map[string]interface{}{
+						constants.QueryOpNotEqual: []bool{false},
 					},
 				},
 			},
@@ -647,6 +826,58 @@ func TestValidateAndDisectConditionsErrorCases(t *testing.T) {
 			expectedError: "attribute [title] is indexed but the value type provided in the query does not match the actual indexed type: the actual type [string] does not match the provided type [slice]",
 		},
 		{
+			name:   "attribute indexed type is string but we pass non-slice string in the $neq",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `{
+				"title": {
+					"$neq": "book1"
+				}
+			}`,
+			expectedError: "attribute [title] is indexed but incorrect value type provided in the query: query syntex error: array should be used for $neq condition",
+		},
+		{
+			name:   "attribute indexed type is string but we pass both string and bool in the slice to $neq",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `{
+				"title": {
+					"$neq": [false, "book1"]
+				}
+			}`,
+			expectedError: "attribute [title] is indexed but incorrect value type provided in the query: the actual type [string] does not match the provided type",
+		},
+		{
+			name:   "attribute indexed type is bool but we pass both string and bool in the slice to $neq",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `{
+				"bestseller": {
+					"$neq": [false, "book1"]
+				}
+			}`,
+			expectedError: "attribute [bestseller] is indexed but incorrect value type provided in the query: the actual type [boolean] does not match the provided type",
+		},
+		{
+			name:   "attribute indexed type is int64 but we pass both int64 and string in the slice to $neq",
+			dbName: "db1",
+			setup: func(t *testing.T, db worldstate.DB) {
+				require.NoError(t, db.Commit(createDbs, 1))
+			},
+			conditions: `{
+				"year": {
+					"$neq": [2100, "book1"]
+				}
+			}`,
+			expectedError: "attribute [year] is indexed but incorrect value type provided in the query: the actual type [number] does not match the provided type",
+		},
+		{
 			name:   "query syntax error due to more conditions with $eq",
 			dbName: "db1",
 			setup: func(t *testing.T, db worldstate.DB) {
@@ -720,13 +951,6 @@ func TestValidateAttrConditions(t *testing.T) {
 		conditions    map[string]interface{}
 		expectedError string
 	}{
-		{
-			name: "$neq is not supported yet",
-			conditions: map[string]interface{}{
-				constants.QueryOpNotEqual: 10,
-			},
-			expectedError: "currently [$neq] condition is not supported",
-		},
 		{
 			name: "more than one condition with $eq",
 			conditions: map[string]interface{}{
@@ -808,15 +1032,6 @@ func TestValidateAttrConditions(t *testing.T) {
 				constants.QueryOpGreaterThanOrEqual: 5,
 				constants.QueryOpLesserThan:         10,
 			},
-		},
-		{
-			name: "$lt and $gt and $neq",
-			conditions: map[string]interface{}{
-				constants.QueryOpGreaterThan: 5,
-				constants.QueryOpLesserThan:  10,
-				constants.QueryOpNotEqual:    7,
-			},
-			expectedError: "currently [$neq] condition is not supported",
 		},
 	}
 

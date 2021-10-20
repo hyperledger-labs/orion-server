@@ -482,6 +482,24 @@ func TestCommitAndQuery(t *testing.T) {
 		iter3.Release()
 		iter3.Next()
 		require.EqualError(t, iter3.Error(), "leveldb: iterator released")
+
+		iter4, err := l.GetIterator("db2", "", "")
+		defer iter4.Release()
+		require.NoError(t, err)
+		// let's skip "db1-key1" by seeking to "db2-key10"
+		// as the next greater value to "db2-key10" is "db2-key2",
+		// seek would return true
+		require.True(t, iter4.Seek([]byte("db2-key2")))
+		require.Equal(t, []byte("db2-key2"), iter4.Key())
+		require.False(t, iter4.Next())
+
+		iter5, err := l.GetIterator("db2", "", "")
+		defer iter5.Release()
+		require.NoError(t, err)
+		// let's skip to the end. As there is no value equal to or
+		// greater than "db2-key3", seek would return a false
+		require.False(t, iter4.Seek([]byte("db2-key3")))
+		require.False(t, iter4.Next())
 	})
 
 	// Scenario-2: For both databases (db1, db2), update
