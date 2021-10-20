@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/blockcreator"
 	"github.com/hyperledger-labs/orion-server/internal/blockprocessor"
@@ -22,7 +23,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 

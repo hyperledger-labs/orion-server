@@ -6,17 +6,18 @@ package replication
 import (
 	"context"
 	"fmt"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -35,6 +36,12 @@ type BlockLedgerReader interface {
 	Get(blockNumber uint64) (*types.Block, error)
 }
 
+//go:generate counterfeiter -o mocks/pending_txs.go --fake-name PendingTxsReleaser . PendingTxsReleaser
+
+type PendingTxsReleaser interface {
+	ReleaseWithError(txIDs []string, err error)
+}
+
 type BlockReplicator struct {
 	localConf *config.LocalConfiguration
 
@@ -45,17 +52,18 @@ type BlockReplicator struct {
 	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver with the block-processor commit
 	transport       *comm.HTTPTransport
 	ledgerReader    BlockLedgerReader
-	pendingTxs      *queue.PendingTxs //TODO release blocks when not leader or error from Raft on proposal
+	pendingTxs      PendingTxsReleaser
 
 	stopCh        chan struct{}
 	stopOnce      sync.Once
 	doneProposeCh chan struct{}
 	doneEventCh   chan struct{}
 
-	mutex               sync.Mutex
-	clusterConfig       *types.ClusterConfig
-	lastKnownLeader     uint64
-	lastKnownLeaderHost string // cache the leader's Node host:port for client request redirection
+	mutex                sync.Mutex
+	clusterConfig        *types.ClusterConfig
+	lastKnownLeader      uint64
+	lastKnownLeaderHost  string // cache the leader's Node host:port for client request redirection
+	cancelProposeContext func() // cancels the propose if leadership is lost
 
 	appliedIndex uint64
 	lastBlock    *types.Block
@@ -76,7 +84,7 @@ type Config struct {
 	LedgerReader         BlockLedgerReader
 	Transport            *comm.HTTPTransport
 	BlockOneQueueBarrier *queue.OneQueueBarrier
-	PendingTxs           *queue.PendingTxs
+	PendingTxs           PendingTxsReleaser
 	Logger               *logger.SugarLogger
 }
 
@@ -110,22 +118,23 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 	}
 
 	br := &BlockReplicator{
-		localConf:        conf.LocalConf,
-		proposeCh:        make(chan *types.Block, 1),
-		raftID:           raftID,
-		raftStorage:      storage,
-		oneQueueBarrier:  conf.BlockOneQueueBarrier,
-		stopCh:           make(chan struct{}),
-		doneProposeCh:    make(chan struct{}),
-		doneEventCh:      make(chan struct{}),
-		clusterConfig:    conf.ClusterConfig,
-		transport:        conf.Transport,
-		ledgerReader:     conf.LedgerReader,
-		pendingTxs:       conf.PendingTxs,
-		sizeLimit:        conf.ClusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize,
-		confState:        confState,
-		lastSnapBlockNum: snapBlkNum,
-		lg:               lg,
+		localConf:            conf.LocalConf,
+		proposeCh:            make(chan *types.Block, 1),
+		raftID:               raftID,
+		raftStorage:          storage,
+		oneQueueBarrier:      conf.BlockOneQueueBarrier,
+		stopCh:               make(chan struct{}),
+		doneProposeCh:        make(chan struct{}),
+		doneEventCh:          make(chan struct{}),
+		clusterConfig:        conf.ClusterConfig,
+		cancelProposeContext: func() {}, //NOOP
+		transport:            conf.Transport,
+		ledgerReader:         conf.LedgerReader,
+		pendingTxs:           conf.PendingTxs,
+		sizeLimit:            conf.ClusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize,
+		confState:            confState,
+		lastSnapBlockNum:     snapBlkNum,
+		lg:                   lg,
 	}
 
 	height, err := br.ledgerReader.Height()
@@ -276,6 +285,18 @@ Event_Loop:
 				br.mutex.Lock()
 				if leader != br.lastKnownLeader {
 					br.lg.Infof("Leader changed: %d to %d", br.lastKnownLeader, leader)
+
+					// TODO take care of in-flight blocks when leadership is either assumed or lost, see
+					// https://github.com/hyperledger-labs/orion-server/issues/210
+					if br.lastKnownLeader == br.raftID {
+						br.lg.Info("Lost leadership")
+						// cancel the current proposal to free the propose-loop go-routine, as it might block for a long time.
+						br.cancelProposeContext()
+						br.cancelProposeContext = func() {} // NOOP
+					} else if leader == br.raftID {
+						br.lg.Info("Assumed leadership")
+					}
+
 					br.lastKnownLeader = leader
 					br.lastKnownLeaderHost = br.nodeHostPortFromRaftID(leader)
 				}
@@ -509,17 +530,41 @@ Propose_Loop:
 		select {
 		case blockToPropose := <-br.proposeCh:
 
-			//TODO check if leader, if not, refuse to propose
+			br.mutex.Lock()
+
+			if errLeader := br.isLeader(); errLeader != nil {
+				br.lg.Infof("Declined to propose block: %+v; because: %s", blockToPropose.GetHeader(), errLeader)
+				if txIDs, err := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); err == nil {
+					br.pendingTxs.ReleaseWithError(txIDs, errLeader)
+				} else {
+					br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), err)
+				}
+
+				br.mutex.Unlock()
+				continue Propose_Loop
+			}
+
+			//TODO number the block and set hash, see: https://github.com/hyperledger-labs/orion-server/issues/200
 
 			blockBytes, err := proto.Marshal(blockToPropose)
 			if err != nil {
 				br.lg.Panicf("Error marshaling a block: %s", err)
 			}
 
-			err = br.raftNode.Propose(context.Background(), blockBytes)
+			ctx, cancel := context.WithCancel(context.Background())
+			br.cancelProposeContext = cancel
+
+			br.mutex.Unlock()
+
+			// the call to raft.Node.Propose() may block when a leader loses its leadership and has no quorum
+			err = br.raftNode.Propose(ctx, blockBytes)
 			if err != nil {
 				br.lg.Warnf("Failed to propose block: Num: %d; error: %s", blockToPropose.GetHeader().GetBaseHeader().GetNumber(), err)
-				//TODO reject all TXs in that block,
+				if txIDs, errIDs := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); errIDs == nil {
+					br.pendingTxs.ReleaseWithError(txIDs, errors.WithMessage(err, "failed to propose to Raft")) // will reject the TXs within
+				} else {
+					br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), errIDs)
+				}
 			}
 
 		case <-br.stopCh:
@@ -560,6 +605,10 @@ func (br *BlockReplicator) IsLeader() *ierrors.NotLeaderError {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
 
+	return br.isLeader()
+}
+
+func (br *BlockReplicator) isLeader() *ierrors.NotLeaderError {
 	if br.lastKnownLeader == br.raftID {
 		return nil
 	}

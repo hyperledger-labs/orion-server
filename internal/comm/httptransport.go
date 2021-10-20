@@ -176,11 +176,11 @@ func (p *HTTPTransport) Close() {
 	p.logger.Info("closing http transport")
 	close(p.stopCh)
 
+	p.transport.Stop()
+
 	if err := p.httpServer.Close(); err != nil {
 		p.logger.Errorf("http transport failed to close http server: %s", err)
 	}
-
-	p.transport.Stop()
 
 	select {
 	case <-p.doneCh:
