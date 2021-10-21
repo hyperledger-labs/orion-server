@@ -3,6 +3,7 @@ package replication_test
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // Scenario:
@@ -20,7 +23,7 @@ import (
 // - Stop the leader, wait for new leader,
 // - Stop the leader, remaining node has no leader.
 func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
-	env := createClusterEnv(t, "info", 3, nil)
+	env := createClusterEnv(t, 3, nil, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -90,7 +93,7 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 // - Start 2nd node, wait for leader,
 // - Start 3rd, wait for consistent leader on all
 func TestBlockReplicator_3Node_StartStepClose(t *testing.T) {
-	env := createClusterEnv(t, "info", 3, nil)
+	env := createClusterEnv(t, 3, nil, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -127,7 +130,7 @@ func TestBlockReplicator_3Node_StartStepClose(t *testing.T) {
 // - Stop a follower, wait for consistent leader on two,
 // - Restart the node, wait for consistent leader on all
 func TestBlockReplicator_3Node_Restart(t *testing.T) {
-	env := createClusterEnv(t, "info", 3, nil)
+	env := createClusterEnv(t, 3, nil, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -193,7 +196,7 @@ func TestBlockReplicator_3Node_Restart(t *testing.T) {
 // - Start 3 nodes together, wait for leader,
 // - Submit 100 blocks, wait for all ledgers to get them.
 func TestBlockReplicator_3Node_Submit(t *testing.T) {
-	env := createClusterEnv(t, "info", 3, nil)
+	env := createClusterEnv(t, 3, nil, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -256,7 +259,7 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 // - Stop a leader node,  wait for new leader, submit 100 blocks, wait for 2 ledgers to get them.
 // - Restart the node, wait for leader, wait for node to get missing blocks.
 func TestBlockReplicator_3Node_SubmitRecover(t *testing.T) {
-	env := createClusterEnv(t, "info", 3, nil)
+	env := createClusterEnv(t, 3, nil, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -361,7 +364,7 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 	raftConfig := proto.Clone(raftConfigNoSnapshots).(*types.RaftConfig)
 	raftConfig.SnapshotIntervalSize = uint64(4*len(httputils.MarshalOrPanic(block)) + 1) // snapshot every ~5 blocks
 
-	env := createClusterEnv(t, "info", 3, raftConfig)
+	env := createClusterEnv(t, 3, raftConfig, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -442,7 +445,7 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 // - Continue to submit blocks, anticipating that from some point they will be rejected.
 // - Wait for a ReleaseWithError to be called from within the block replicator as it drains the internal proposal channel.
 func TestBlockReplicator_3Node_LeadershipLoss(t *testing.T) {
-	env := createClusterEnv(t, "info", 3, nil)
+	env := createClusterEnv(t, 3, nil, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -555,7 +558,7 @@ func TestBlockReplicator_3Node_LeadershipLoss(t *testing.T) {
 // - Check for consistent ledgers.
 // This tests for consistent block numbering at the leader after re-election.
 func TestBlockReplicator_3Node_LeaderReElected(t *testing.T) {
-	env := createClusterEnv(t, "info", 3, nil)
+	env := createClusterEnv(t, 3, nil, "info")
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -609,7 +612,7 @@ func TestBlockReplicator_3Node_LeaderReElected(t *testing.T) {
 	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks) }, 30*time.Second, 100*time.Millisecond)
 
 	// kill leader, wait for new one, submit some blocks, restart prev. leader; repeat until first leader re-elected
-	timeout := time.After(5*time.Minute)
+	timeout := time.After(5 * time.Minute)
 	for {
 		err := env.nodes[currentLeaderIdx].Close()
 		require.NoError(t, err)
@@ -630,7 +633,7 @@ func TestBlockReplicator_3Node_LeaderReElected(t *testing.T) {
 			require.NoError(t, err)
 			numBlocks++
 		}
-		require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks,follower1idx,follower2idx) }, 30*time.Second, 100*time.Millisecond)
+		require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks, follower1idx, follower2idx) }, 30*time.Second, 100*time.Millisecond)
 
 		env.nodes[prevLeaderIdx].Restart()
 		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
@@ -657,4 +660,82 @@ func TestBlockReplicator_3Node_LeaderReElected(t *testing.T) {
 	}
 
 	require.NoError(t, env.AssertEqualLedger())
+}
+
+// Scenario:
+// - Start 3 nodes together, wait for leader.
+// - Submit blocks fast, until the leader exceeds the maximal number in-flight-blocks a few times.
+func TestBlockReplicator_3Node_InFlightBlocks(t *testing.T) {
+	var countMutex sync.Mutex
+	var inFlightLogMsgCount int
+
+	inFlightLogMsgHook := func(entry zapcore.Entry) error {
+		if strings.Contains(entry.Message, "Number of in-flight blocks exceeds max") {
+			countMutex.Lock()
+			defer countMutex.Unlock()
+
+			inFlightLogMsgCount++
+		}
+		return nil
+	}
+
+	isCountOver := func(num int) bool {
+		countMutex.Lock()
+		defer countMutex.Unlock()
+
+		return inFlightLogMsgCount > num
+	}
+
+	env := createClusterEnv(t, 3, nil, "debug", zap.Hooks(inFlightLogMsgHook))
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                1,
+				LastCommittedBlockNum: 1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{},
+	}
+
+	leaderIdx := env.AgreedLeaderIndex()
+	var numBlocks uint64
+	for {
+		b := proto.Clone(block).(*types.Block)
+		b.Header.BaseHeader.Number = 2 + numBlocks
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+		numBlocks++
+		if isCountOver(4) {
+			break
+		}
+	}
+
+	t.Logf("Num blocks: %d", numBlocks)
+	assert.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	t.Log("Closing")
+	for _, node := range env.nodes {
+		err := node.Close()
+		require.NoError(t, err)
+	}
+
+	for _, node := range env.nodes {
+		require.Equal(t, 0, node.pendingTxs.ReleaseWithErrorCallCount())
+	}
+
+	require.True(t, isCountOver(4))
 }
