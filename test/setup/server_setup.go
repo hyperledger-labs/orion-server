@@ -1,9 +1,14 @@
+// Copyright IBM Corp. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package setup
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -11,29 +16,30 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
+	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/mock"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/pkg/errors"
 )
-
-var baseNodePort int = 32000
-var basePeerPort int = 33000
-var mutex sync.Mutex
 
 // Server holds parameters related to the server
 type Server struct {
 	serverNum            uint64
 	serverID             string
 	address              string // For testing, the node-host and peer-host address are the same.
-	nodePort             int
-	peerPort             int
+	nodePort             uint32
+	peerPort             uint32
 	configDir            string
 	configFilePath       string
 	bootstrapFilePath    string
@@ -48,34 +54,28 @@ type Server struct {
 	cmd                  *exec.Cmd
 	outBuffer            *gbytes.Buffer
 	errBuffer            *gbytes.Buffer
-	client               *mock.Client
+	clientCheckRedirect  func(req *http.Request, via []*http.Request) error
 	logger               *logger.SugarLogger
 	mu                   sync.RWMutex
 }
 
 // NewServer creates a new blockchain database server
-func NewServer(id uint64, dir string, logger *logger.SugarLogger) (*Server, error) {
-
-	mutex.Lock()
-	nPort := baseNodePort
-	pPort := basePeerPort
-	baseNodePort++
-	basePeerPort++
-	mutex.Unlock()
+func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint32, checkRedirect func(req *http.Request, via []*http.Request) error, logger *logger.SugarLogger) (*Server, error) {
 
 	sNumber := strconv.FormatInt(int64(id+1), 10)
 	s := &Server{
-		serverNum:          id + 1,
-		serverID:           "node-" + sNumber,
-		address:            "127.0.0.1",
-		nodePort:           nPort,
-		peerPort:           pPort,
-		adminID:            "admin",
-		configDir:          filepath.Join(dir, "node-"+sNumber),
-		configFilePath:     filepath.Join(dir, "node-"+sNumber, "config.yml"),
-		bootstrapFilePath:  filepath.Join(dir, "node-"+sNumber, "shared-config-bootstrap.yml"),
-		cryptoMaterialsDir: filepath.Join(dir, "node-"+sNumber, "crypto"),
-		logger:             logger,
+		serverNum:           id + 1,
+		serverID:            "node-" + sNumber,
+		address:             "127.0.0.1",
+		nodePort:            baseNodePort + uint32(id),
+		peerPort:            basePeerPort + uint32(id),
+		adminID:             "admin",
+		configDir:           filepath.Join(clusterBaseDir, "node-"+sNumber),
+		configFilePath:      filepath.Join(clusterBaseDir, "node-"+sNumber, "config.yml"),
+		bootstrapFilePath:   filepath.Join(clusterBaseDir, "node-"+sNumber, "shared-config-bootstrap.yml"),
+		cryptoMaterialsDir:  filepath.Join(clusterBaseDir, "node-"+sNumber, "crypto"),
+		clientCheckRedirect: checkRedirect,
+		logger:              logger,
 	}
 
 	if err := fileops.CreateDir(s.configDir); err != nil {
@@ -85,6 +85,7 @@ func NewServer(id uint64, dir string, logger *logger.SugarLogger) (*Server, erro
 		return nil, err
 	}
 
+	logger.Infof("Server %s on %s:%d", s.serverID, s.address, s.nodePort)
 	return s, nil
 }
 
@@ -100,6 +101,124 @@ func (s *Server) AdminSigner() crypto.Signer {
 	defer s.mu.Unlock()
 
 	return s.adminSigner
+}
+
+func (s *Server) QueryConfig(t *testing.T) (*types.GetConfigResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetConfigQuery{
+		UserId: s.AdminID(),
+	}
+	response, err := client.GetConfig(
+		&types.GetConfigQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) QueryData(t *testing.T, db, key string) (*types.GetDataResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataQuery{
+		UserId: s.AdminID(),
+		DbName: db,
+		Key:    key,
+	}
+	response, err := client.GetData(
+		&types.GetDataQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string, *types.TxReceipt, error) {
+	client, err := s.NewRESTClient(s.clientCheckRedirect)
+	if err != nil {
+		return "", nil, err
+	}
+
+	txID := uuid.New().String()
+	dataTx := &types.DataTx{
+		MustSignUserIds: []string{"admin"},
+		TxId:            txID,
+		DbOperations: []*types.DBOperation{
+			{
+				DbName: db,
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   key,
+						Value: value,
+					},
+				},
+			},
+		},
+	}
+
+	// Post transaction into new database
+	response, err := client.SubmitTransaction(constants.PostDataTx,
+		&types.DataTxEnvelope{
+			Payload: dataTx,
+			Signatures: map[string][]byte{
+				"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx),
+			},
+		})
+
+	if err != nil {
+		return txID, nil, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		var errMsg string
+		if response.StatusCode == http.StatusAccepted {
+			return txID, nil, errors.Errorf("ServerTimeout TxID: %s", txID)
+		}
+		if response.Body != nil {
+			errRes := &types.HttpResponseErr{}
+			if err := json.NewDecoder(response.Body).Decode(errRes); err != nil {
+				errMsg = "(failed to parse the server's error message)"
+			} else {
+				errMsg = errRes.Error()
+			}
+		}
+
+		return txID, nil, errors.Errorf("failed to submit transaction, server returned: status: %s, message: %s", response.Status, errMsg)
+	}
+
+	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
+	err = json.NewDecoder(response.Body).Decode(txResponseEnvelope)
+	if err != nil {
+		t.Errorf("error: %s", err)
+		return txID, nil, err
+	}
+
+	receipt := txResponseEnvelope.GetResponse().GetReceipt()
+
+	if receipt != nil {
+		validationInfo := receipt.GetHeader().GetValidationInfo()
+		if validationInfo == nil {
+			return txID, receipt, errors.Errorf("server error: validation info is nil")
+		} else {
+			validFlag := validationInfo[receipt.TxIndex].GetFlag()
+			if validFlag != types.Flag_VALID {
+				return txID, receipt, errors.Errorf("TxValidation TxID: %s, Flag: %s, Reason: %s", txID, validFlag, validationInfo[receipt.TxIndex].ReasonIfInvalid)
+			}
+		}
+	}
+
+	return txID, receipt, nil
 }
 
 func (s *Server) createCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
@@ -158,53 +277,55 @@ func (s *Server) createConfigFile() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	f, err := os.Create(s.configFilePath)
-	if err != nil {
+	localCofig := &config.LocalConfiguration{
+		Server: config.ServerConf{
+			Identity: config.IdentityConf{
+				ID:              s.serverID,
+				CertificatePath: s.serverCertPath,
+				KeyPath:         s.serverKeyPath,
+			},
+			Network: config.NetworkConf{
+				Address: s.address,
+				Port:    uint32(s.nodePort),
+			},
+			Database: config.DatabaseConf{
+				Name:            "leveldb",
+				LedgerDirectory: filepath.Join(s.configDir, "ledger"),
+			},
+			QueueLength: config.QueueLengthConf{
+				Transaction:               1000,
+				ReorderedTransactionBatch: 100,
+				Block:                     100,
+			},
+			LogLevel: "info",
+		},
+		BlockCreation: config.BlockCreationConf{
+			MaxBlockSize:                1024 * 1024,
+			MaxTransactionCountPerBlock: 10,
+			BlockTimeout:                50 * time.Millisecond,
+		},
+		Replication: config.ReplicationConf{
+			WALDir:  filepath.Join(s.configDir, "etcdraft", "wal"),
+			SnapDir: filepath.Join(s.configDir, "etcdraft", "snap"),
+			Network: config.NetworkConf{
+				Address: s.address,
+				Port:    uint32(s.peerPort),
+			},
+			TLS: config.TLSConf{
+				Enabled: false,
+			},
+		},
+		Bootstrap: config.BootstrapConf{
+			Method: "genesis",
+			File:   s.bootstrapFilePath,
+		},
+	}
+
+	if err := WriteLocalConfig(localCofig, s.configFilePath); err != nil {
 		return err
 	}
 
-	if _, err = f.WriteString(
-		"# Integration test config.yml\n\n" +
-			"server:\n" +
-			"  identity:\n" +
-			"    id: " + s.serverID + "\n" +
-			"    certificatePath: " + s.serverCertPath + "\n" +
-			"    keyPath: " + s.serverKeyPath + "\n" +
-			"  network:\n" +
-			"    address: " + s.address + "\n" +
-			"    port: " + strconv.FormatInt(int64(s.nodePort), 10) + "\n" +
-			"  database:\n" +
-			"    name: leveldb\n" +
-			"    ledgerDirectory: " + filepath.Join(s.configDir, "ledger") + "\n" +
-			"  queueLength:\n" +
-			"    transaction: 1000\n" +
-			"    reorderedTransactionBatch: 100\n" +
-			"    block: 100\n" +
-			"  logLevel: info\n" +
-			"blockCreation:\n" +
-			"  maxBlockSize: 2\n" +
-			"  maxTransactionCountPerBlock: 1\n" +
-			"  blockTimeout: 50ms\n" +
-			"replication:\n" +
-			"  walDir: " + filepath.Join(s.configDir, "etcdraft", "wal") + "\n" + //TODO create path
-			"  snapDir: " + filepath.Join(s.configDir, "etcdraft", "snap") + "\n" + //TODO create path
-			"  network:\n" +
-			"    address: " + s.address + "\n" +
-			"    port: " + strconv.FormatInt(int64(s.peerPort), 10) + "\n" +
-			"  tls:\n" + //TODO add rest of fields when security is supported
-			"    enabled: false\n" +
-			"bootstrap:\n" +
-			"  method: genesis\n" +
-			"  file: " + s.bootstrapFilePath + "\n",
-	); err != nil {
-		return err
-	}
-
-	if err = f.Sync(); err != nil {
-		return err
-	}
-
-	return f.Close()
+	return nil
 }
 
 func (s *Server) createCmdToStartServers(executablePath string) {
@@ -245,9 +366,8 @@ func (s *Server) start(timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	s.nodePort = port
 
-	s.logger.Debug("Successfully started server " + s.serverID + " on " + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10))
+	s.logger.Debug("Successfully started server " + s.serverID + " on " + s.address + ":" + strconv.FormatInt(int64(port), 10))
 	return nil
 }
 
@@ -287,13 +407,23 @@ func retrievePort(output string, addr string) (int, error) {
 	return port, nil
 }
 
-// NewRESTClient creates a new REST client for the user to submit requests and transactions
-// to the server
-func (s *Server) NewRESTClient() (*mock.Client, error) {
+func (s *Server) URL() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return mock.NewRESTClient("http://" + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10))
+	return "http://" + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10)
+}
+
+// NewRESTClient creates a new REST client for the user to submit requests and transactions
+// to the server
+func (s *Server) NewRESTClient(checkRedirect func(req *http.Request, via []*http.Request) error) (*mock.Client, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return mock.NewRESTClient(
+		s.URL(),
+		checkRedirect,
+	)
 }
 
 // testFailure is in lieu of *testing.T for gomega's types.GomegaTestingT

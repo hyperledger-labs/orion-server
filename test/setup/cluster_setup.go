@@ -1,13 +1,17 @@
+// Copyright IBM Corp. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package setup
 
 import (
 	"crypto/tls"
+	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"sync"
 	"time"
 
+	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -22,6 +26,8 @@ type Cluster struct {
 	testDirAbsPath string
 	bdbBinaryPath  string
 	cmdTimeout     time.Duration
+	baseNodePort   uint32
+	basePeerPort   uint32
 	logger         *logger.SugarLogger
 	rootCAPath     string
 	rootCAPemCert  []byte
@@ -35,6 +41,9 @@ type Config struct {
 	TestDirAbsolutePath string
 	BDBBinaryPath       string
 	CmdTimeout          time.Duration
+	BaseNodePort        uint32
+	BasePeerPort        uint32
+	CheckRedirectFunc   func(req *http.Request, via []*http.Request) error // rest client checks redirects
 }
 
 // NewCluster creates a new cluster environment for the blockchain database
@@ -49,6 +58,10 @@ func NewCluster(conf *Config) (*Cluster, error) {
 	}
 	if !exist {
 		return nil, errors.New(conf.BDBBinaryPath + " executable does not exist")
+	}
+
+	if conf.BaseNodePort == 0 || conf.BasePeerPort == 0 {
+		return nil, errors.New("set BaseNodePort >0 & BasePeerPort >0")
 	}
 
 	l, err := logger.New(&logger.Config{
@@ -69,6 +82,8 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		bdbBinaryPath:  conf.BDBBinaryPath,
 		cmdTimeout:     conf.CmdTimeout,
 		rootCAPath:     path.Join(conf.TestDirAbsolutePath, "ca"),
+		baseNodePort:   conf.BaseNodePort,
+		basePeerPort:   conf.BasePeerPort,
 	}
 
 	if err := cluster.createRootCA(); err != nil {
@@ -76,7 +91,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 	}
 
 	for i := 0; i < conf.NumberOfServers; i++ {
-		cluster.Servers[i], err = NewServer(uint64(i), conf.TestDirAbsolutePath, l)
+		cluster.Servers[i], err = NewServer(uint64(i), conf.TestDirAbsolutePath, conf.BaseNodePort, conf.BasePeerPort, conf.CheckRedirectFunc, l)
 		if err != nil {
 			return nil, err
 		}
@@ -345,56 +360,53 @@ func (c *Cluster) createConfigFile() error {
 }
 
 func (c *Cluster) createBootstrapFile() error {
-
-	members := "  members:\n"
-	for _, s := range c.Servers {
-		members = members +
-			"    - nodeId: " + s.serverID + "\n" +
-			"      raftId: " + strconv.FormatInt(int64(s.serverNum), 10) + "\n" +
-			"      peerHost: " + s.address + "\n" +
-			"      peerPort: " + strconv.FormatInt(int64(s.peerPort), 10) + "\n"
+	sharedConfig := &config.SharedConfiguration{
+		Nodes: nil,
+		Consensus: &config.ConsensusConf{
+			Algorithm: "raft",
+			Members:   nil,
+			Observers: nil,
+			RaftConfig: &config.RaftConf{
+				TickInterval:         "100ms",
+				ElectionTicks:        50,
+				HeartbeatTicks:       5,
+				MaxInflightBlocks:    50,
+				SnapshotIntervalSize: 64 * 1024 * 1024,
+			},
+		},
+		CAConfig: config.CAConfiguration{
+			RootCACertsPath:         []string{path.Join(c.rootCAPath, "rootCA.pem")},
+			IntermediateCACertsPath: nil,
+		},
+		Admin: config.AdminConf{
+			ID:              "admin",
+			CertificatePath: path.Join(c.testDirAbsPath, "users", "admin.pem"),
+		},
 	}
 
-	nodes := "nodes:\n"
 	for _, s := range c.Servers {
-		nodes = nodes +
-			"  - nodeId: " + s.serverID + "\n" +
-			"    host: " + s.address + "\n" +
-			"    port: " + strconv.FormatInt(int64(s.nodePort), 10) + "\n" +
-			"    certificatePath: " + s.serverCertPath + "\n"
+		sharedConfig.Consensus.Members = append(
+			sharedConfig.Consensus.Members,
+			&config.PeerConf{
+				NodeId:   s.serverID,
+				RaftId:   s.serverNum,
+				PeerHost: s.address,
+				PeerPort: uint32(s.peerPort),
+			},
+		)
 	}
 
-	bootstrap := "# Integration test shared-config-bootstrap.yml\n" +
-		"consensus:\n" + //TODO add additional fields when supported
-		"  algorithm: raft\n" +
-		members +
-		"  raftConfig:\n" +
-		"    tickInterval: 100ms" + "\n" +
-		"    electionTicks: 50" + "\n" +
-		"    heartbeatTicks: 5" + "\n" +
-		"    maxInflightBlocks: 50" + "\n" +
-		"    snapshotIntervalSize: 1000000000000" + "\n" +
-		"admin:\n" +
-		"  id: admin\n" +
-		"  certificatePath: " + path.Join(c.testDirAbsPath, "users", "admin.pem") + "\n" +
-		"caconfig:\n" +
-		"  rootCACertsPath: " + path.Join(c.rootCAPath, "rootCA.pem") + "\n" +
-		nodes
+	for _, s := range c.Servers {
+		sharedConfig.Nodes = append(sharedConfig.Nodes, config.NodeConf{
+			NodeID:          s.serverID,
+			Host:            s.address,
+			Port:            uint32(s.nodePort),
+			CertificatePath: s.serverCertPath,
+		})
+	}
 
 	for _, s := range c.Servers {
-		f, err := os.Create(s.bootstrapFilePath)
-		if err != nil {
-			return err
-		}
-		if _, err = f.WriteString(bootstrap); err != nil {
-			return err
-		}
-
-		if err = f.Sync(); err != nil {
-			return err
-		}
-
-		if err = f.Close(); err != nil {
+		if err := WriteSharedConfig(sharedConfig, s.bootstrapFilePath); err != nil {
 			return err
 		}
 	}

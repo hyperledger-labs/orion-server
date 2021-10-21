@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
@@ -26,7 +27,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/server/mock"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,7 +66,7 @@ func (env *serverTestEnv) restart(t *testing.T) {
 
 	port, err := env.bcdbHTTPServer.Port()
 	require.NoError(t, err)
-	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
+	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port), nil)
 	require.NoError(t, err)
 
 	env.client = client
@@ -261,7 +261,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 
 	port, err := server.Port()
 	require.NoError(t, err)
-	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port))
+	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port), nil)
 	require.NoError(t, err)
 	env.client = client
 
@@ -329,13 +329,15 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 		},
 	}
 
-	_, err = env.client.SubmitTransaction(constants.PostDataTx,
+	httpResp, err := env.client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
 			Payload: dataTx,
 			Signatures: map[string][]byte{
 				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
 			},
 		})
+	require.NoError(t, err)
+	err = httpResp.Body.Close()
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -416,11 +418,13 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 			},
 		},
 	}
-	_, err = env.client.SubmitTransaction(constants.PostUserTx,
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
 		&types.UserAdministrationTxEnvelope{
 			Payload:   userTx,
 			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
 		})
+	require.NoError(t, err)
+	err = httpResp.Body.Close()
 	require.NoError(t, err)
 
 	verifier, err := env.getNodeSigVerifier(t)
@@ -466,11 +470,13 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 		CreateDbs: []string{"testDB"},
 	}
 	// Create new database
-	_, err := env.client.SubmitTransaction(constants.PostDBTx,
+	httpResp, err := env.client.SubmitTransaction(constants.PostDBTx,
 		&types.DBAdministrationTxEnvelope{
 			Payload:   dbTx,
 			Signature: testutils.SignatureFromTx(t, env.adminSigner, dbTx),
 		})
+	require.NoError(t, err)
+	httpResp.Body.Close()
 	require.NoError(t, err)
 
 	verifier, err := env.getNodeSigVerifier(t)
@@ -514,13 +520,15 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	}
 
 	// Post transaction into new database
-	_, err = env.client.SubmitTransaction(constants.PostDataTx,
+	httpResp, err = env.client.SubmitTransaction(constants.PostDataTx,
 		&types.DataTxEnvelope{
 			Payload: dataTx,
 			Signatures: map[string][]byte{
 				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
 			},
 		})
+	require.NoError(t, err)
+	httpResp.Body.Close()
 	require.NoError(t, err)
 
 	// Make sure key was created and we can query it
@@ -635,11 +643,13 @@ func TestServerWithRestart(t *testing.T) {
 			},
 		},
 	}
-	_, err = env.client.SubmitTransaction(constants.PostUserTx,
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
 		&types.UserAdministrationTxEnvelope{
 			Payload:   userTx,
 			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
 		})
+	require.NoError(t, err)
+	httpResp.Body.Close()
 	require.NoError(t, err)
 
 	verifier, err := env.getNodeSigVerifier(t)
