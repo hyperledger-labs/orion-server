@@ -5,6 +5,7 @@ package blockcreator
 import (
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -107,7 +108,7 @@ func (b *BlockCreator) Start() {
 				continue
 			}
 
-			blkNum := b.nextBlockNumber
+			blkNum := b.nextBlockNumber //TODO move block numbering to replication, see: https://github.com/hyperledger-labs/orion-server/issues/200
 
 			baseHeader, err := b.createBaseHeader(blkNum)
 			if err != nil {
@@ -148,13 +149,17 @@ func (b *BlockCreator) Start() {
 				// This may happen when shutting down the server. 'continue' will eventually pick up the stop signal.
 				b.logger.Warnf("block submission to block-replicator failed, dropping block, shutting down, because: %s", err)
 				continue
+
 			case *ierrors.NotLeaderError:
 				b.logger.Warnf("block submission to block-replicator failed, because this node is not a leader: %s", err)
-				//TODO reject or redirect all TXs in the block via the pending-tx component.
-				// If there is another leader then redirect, else reject.
+				// Releasing with an error will reject or redirect all sync TXs in the block via the pending-tx component.
+				// If there is another leader it will redirect, else reject. Async TXs will be removed.
 				// This will drain the pipeline and eventually there will be no more transactions coming in.
-				// See issue:
-				// https://github.ibm.com/blockchaindb/server/issues/401
+				if txIDs, errID := httputils.BlockPayloadToTxIDs(block.Payload); errID == nil {
+					b.pendingTxs.ReleaseWithError(txIDs, err)
+				} else {
+					b.logger.Errorf("failed to extract TXIDs from block: %s", errID)
+				}
 				continue
 
 			default:
