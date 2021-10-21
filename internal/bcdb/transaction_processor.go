@@ -167,7 +167,10 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	go p.blockCreator.Start()
 	p.blockCreator.WaitTillStart()
 
-	p.peerTransport.Start() // Starts internal goroutine
+	err = p.peerTransport.Start() // Starts internal goroutine
+	if err != nil {
+		return nil, err
+	}
 
 	p.blockReplicator.Start() // Starts internal goroutine
 

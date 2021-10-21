@@ -11,14 +11,23 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 const MultiPartFormData = "multipart/form-data"
 
 func MarshalOrPanic(m proto.Message) []byte {
 	bytes, err := proto.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes
+}
+
+func MarshalJsonOrPanic(o interface{}) []byte {
+	bytes, err := json.Marshal(o)
 	if err != nil {
 		panic(err)
 	}
@@ -129,4 +138,3 @@ func GetVersion(params map[string]string) (*types.Version, error) {
 		TxNum:    txNum,
 	}, nil
 }
-

@@ -25,7 +25,7 @@ type ResponseErr struct {
 	Error string `json:"error,omitempty"`
 }
 
-func NewRESTClient(rawurl string) (*Client, error) {
+func NewRESTClient(rawurl string, checkRedirect func(req *http.Request, via []*http.Request) error) (*Client, error) {
 	res := new(Client)
 	var err error
 	res.RawURL = rawurl
@@ -37,14 +37,9 @@ func NewRESTClient(rawurl string) (*Client, error) {
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
 		},
+		CheckRedirect: checkRedirect,
 	}
 	res.httpClient = httpClient
-
-	//TODO using the default client which allows keep-alives exposes a bug in the server. The when stopped, the server
-	// does not close (or shutdown) the http server, and keeps the old connections. The client sends requests that need
-	// to get to the new server on the old connections, and they get processed by the old http server, in which the
-	// handlers lead nowhere. See: https://github.ibm.com/blockchaindb/server/issues/429
-	//res.httpClient = http.DefaultClient
 
 	return res, nil
 }
@@ -185,6 +180,8 @@ func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*ht
 	return resp, nil
 }
 
+// SubmitTransaction to the server.
+// If the returned error is nil, the response body must be closed after consuming it.
 func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*http.Response, error) {
 	u := c.BaseURL.ResolveReference(
 		&url.URL{
@@ -209,16 +206,6 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*http.Respon
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		errorRes := &ResponseErr{}
-		if err = json.NewDecoder(resp.Body).Decode(errorRes); err != nil {
-			return nil, err
-		}
-
-		return nil, errors.New(errorRes.Error)
-	}
-
-	return resp, err
+	return resp, nil
 }

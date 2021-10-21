@@ -4,12 +4,12 @@ package server
 
 import (
 	"fmt"
-	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"net"
 	"net/http"
 
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/httphandler"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -55,16 +55,19 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 
 	netConf := conf.LocalConfig.Server.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
-	listen, err := net.Listen("tcp", addr)
+
+	netListener, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, errors.Wrap(err, "error while creating a tcp listener")
+		lg.Errorf("Failed to create a tcp listener on: %s, error: %s", addr, err)
+		return nil, errors.Wrapf(err, "error while creating a tcp listener on: %s", addr)
 	}
+
 	server := &http.Server{Handler: mux}
 
 	return &BCDBHTTPServer{
 		db:      db,
 		handler: mux,
-		listen:  listen,
+		listen:  netListener,
 		server:  server,
 		conf:    conf,
 		logger:  lg,

@@ -1,3 +1,6 @@
+// Copyright IBM Corp. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package setup_test
 
 import (
@@ -12,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCluster(t *testing.T) {
+func TestClusterSetup(t *testing.T) {
 	dir, err := ioutil.TempDir("", "int-test")
 	require.NoError(t, err)
 	setupConfig := &setup.Config{
@@ -20,6 +23,8 @@ func TestCluster(t *testing.T) {
 		TestDirAbsolutePath: dir,
 		BDBBinaryPath:       "../../bin/bdb",
 		CmdTimeout:          10 * time.Second,
+		BaseNodePort: 64000,
+		BasePeerPort: 64100,
 	}
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
@@ -62,10 +67,20 @@ func TestClusterErrorCases(t *testing.T) {
 			setupConfig: &setup.Config{
 				NumberOfServers:     3,
 				TestDirAbsolutePath: "/tmp",
-				BDBBinaryPath:       "../bdb",
+				BDBBinaryPath:       "../../bin/bdb",
 				CmdTimeout:          5 * time.Millisecond,
 			},
 			expected: errors.New("cmd timeout must be at least 1 second"),
+		},
+		{
+			name: "set base ports",
+			setupConfig: &setup.Config{
+				NumberOfServers:     3,
+				TestDirAbsolutePath: "/tmp",
+				BDBBinaryPath:       "../../bin/bdb",
+				CmdTimeout:          5 * time.Second,
+			},
+			expected: errors.New("set BaseNodePort >0 & BasePeerPort >0"),
 		},
 	}
 
@@ -82,7 +97,7 @@ func TestClusterErrorCases(t *testing.T) {
 
 func testQueryOnServer(t *testing.T, c *setup.Cluster) {
 	for _, s := range c.Servers {
-		client, err := s.NewRESTClient()
+		client, err := s.NewRESTClient(nil)
 		require.NoError(t, err)
 
 		query := &types.GetConfigQuery{
@@ -100,7 +115,7 @@ func testQueryOnServer(t *testing.T, c *setup.Cluster) {
 }
 
 func testConnectionRefused(t *testing.T, s *setup.Server) {
-	client, err := s.NewRESTClient()
+	client, err := s.NewRESTClient(nil)
 	require.NoError(t, err)
 	_, err = client.GetDBStatus(&types.GetDBStatusQueryEnvelope{
 		Payload: &types.GetDBStatusQuery{
