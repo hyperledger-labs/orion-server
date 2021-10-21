@@ -2,8 +2,6 @@ package replication_test
 
 import (
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger-labs/orion-server/internal/replication/mocks"
 	"io/ioutil"
 	"math"
 	"os"
@@ -11,14 +9,17 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/replication"
+	"github.com/hyperledger-labs/orion-server/internal/replication/mocks"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 var nodePortBase = uint32(22000)
@@ -192,8 +193,8 @@ type clusterEnv struct {
 }
 
 // create a clusterEnv
-func createClusterEnv(t *testing.T, logLevel string, nNodes int, raftConf *types.RaftConfig) *clusterEnv {
-	lg := testLogger(t, logLevel)
+func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logLevel string, logOpts ...zap.Option) *clusterEnv {
+	lg := testLogger(t, logLevel, logOpts...)
 
 	testDir, err := ioutil.TempDir("", "replication-test")
 	require.NoError(t, err)
@@ -456,14 +457,14 @@ func (l *memLedger) Get(blockNum uint64) (*types.Block, error) {
 	return l.ledger[blockNum-1], nil
 }
 
-func testLogger(t *testing.T, level string) *logger.SugarLogger {
+func testLogger(t *testing.T, level string, opts ...zap.Option) *logger.SugarLogger {
 	c := &logger.Config{
 		Level:         level,
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
 	}
-	lg, err := logger.New(c)
+	lg, err := logger.New(c, opts...)
 	require.NoError(t, err)
 	return lg
 }

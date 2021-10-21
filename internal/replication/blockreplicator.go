@@ -69,6 +69,8 @@ type BlockReplicator struct {
 	lastProposedBlockNumber         uint64
 	lastProposedBlockHeaderBaseHash []byte
 	lastCommittedBlock              *types.Block
+	numInFlightBlocks               uint32 // number of in-flight blocks
+	condTooManyInFlightBlocks       *sync.Cond
 
 	appliedIndex uint64
 
@@ -140,6 +142,7 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 		lastSnapBlockNum:     snapBlkNum,
 		lg:                   lg,
 	}
+	br.condTooManyInFlightBlocks = sync.NewCond(&br.mutex)
 
 	height, err := br.ledgerReader.Height()
 	if err != nil {
@@ -312,6 +315,13 @@ Event_Loop:
 
 		case <-br.stopCh:
 			br.lg.Info("Stopping block replicator")
+
+			// notify the propose-loop go-routine in case it is waiting for blocks to commit
+			br.mutex.Lock()
+			br.numInFlightBlocks = 0
+			br.condTooManyInFlightBlocks.Broadcast()
+			br.mutex.Unlock()
+
 			break Event_Loop
 		}
 	}
@@ -331,9 +341,6 @@ func (br *BlockReplicator) processLeaderChanges(leader uint64) {
 
 	if leader != br.lastKnownLeader {
 		br.lg.Infof("Leader changed: %d to %d", br.lastKnownLeader, leader)
-
-		// TODO take care of in-flight blocks when leadership is either assumed or lost, see
-		// https://github.com/hyperledger-labs/orion-server/issues/210
 
 		lostLeadership := br.lastKnownLeader == br.raftID
 		assumedLeadership := leader == br.raftID
@@ -355,6 +362,8 @@ func (br *BlockReplicator) processLeaderChanges(leader uint64) {
 				br.lg.Panicf("Error computing base header hash of last commited block: %+v; error: %s",
 					br.lastCommittedBlock.GetHeader(), err)
 			}
+			br.numInFlightBlocks = 0
+			br.condTooManyInFlightBlocks.Broadcast()
 		}
 
 		br.lastKnownLeader = leader
@@ -638,6 +647,22 @@ func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
 		} else {
 			br.lg.Panicf("Failed to compute last block base hash: %s", err)
 		}
+		br.numInFlightBlocks++
+
+		if br.numInFlightBlocks > br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks {
+			br.lg.Debugf("Number of in-flight blocks exceeds max, %d > %d, waiting for blocks to commit", //Tested side effect
+				br.numInFlightBlocks, br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks)
+
+			for br.numInFlightBlocks > br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks {
+				// the go-routine will be notified when:
+				// - a block commits, or
+				// - when leadership is lost or assumed, or
+				// - when the event-loop go-routine detects a stop signal. This is done in order to remain
+				//   reactive to server shutdown while waiting for blocks to commit.
+				br.condTooManyInFlightBlocks.Wait()
+			}
+			br.lg.Debugf("Number of in-flight blocks back to normal: %d", br.numInFlightBlocks)
+		}
 	}
 }
 
@@ -719,6 +744,10 @@ func (br *BlockReplicator) setLastCommittedBlock(block *types.Block) {
 	defer br.mutex.Unlock()
 
 	br.lastCommittedBlock = block
+	if br.numInFlightBlocks > 0 { // only reduce on the leader
+		br.numInFlightBlocks--
+		br.condTooManyInFlightBlocks.Broadcast()
+	}
 }
 
 func (br *BlockReplicator) getLastCommittedBlockNumber() uint64 {
@@ -791,6 +820,7 @@ func (br *BlockReplicator) ReportUnreachable(id uint64) {
 	br.lg.Debugf("ReportUnreachable: %d", id)
 	br.raftNode.ReportUnreachable(id)
 }
+
 func (br *BlockReplicator) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	br.lg.Debugf("> ReportSnapshot: %d, %+v", id, status)
 	// see: rafthttp.RAFT
