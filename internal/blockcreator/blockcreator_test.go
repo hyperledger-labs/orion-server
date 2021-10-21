@@ -17,7 +17,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
-	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -30,10 +29,6 @@ type testEnv struct {
 	pendingTxs     *queue.PendingTxs //TODO test the release of txs
 	mockReplicator *mocks.Replicator
 	blockQueue     *queue.Queue
-	db             worldstate.DB
-	dbPath         string
-	blockStore     *blockstore.Store
-	blockStorePath string
 
 	cleanup func()
 }
@@ -117,10 +112,6 @@ func newTestEnv(t *testing.T) *testEnv {
 		mockReplicator: mockReplicator, // Define behavior
 		blockQueue:     blockQueue,     // Output
 		pendingTxs:     pendingTxs,     // Output
-		db:             db,
-		dbPath:         dir,
-		blockStore:     blockStore,
-		blockStorePath: blockStorePath,
 		cleanup:        cleanup,
 	}
 }
@@ -128,8 +119,7 @@ func newTestEnv(t *testing.T) *testEnv {
 var genesisBlock = &types.Block{
 	Header: &types.BlockHeader{
 		BaseHeader: &types.BlockHeaderBase{
-			Number:                1,
-			LastCommittedBlockNum: 0,
+			Number: 1,
 		},
 		ValidationInfo: []*types.ValidationInfo{
 			{
@@ -247,154 +237,107 @@ var txBatches = []interface{}{
 	},
 }
 
-func TestBlockCreator(t *testing.T) {
-	testCases := []struct {
-		name           string
-		txBatches      []interface{}
-		expectedBlocks []*types.Block
-	}{
+func TestBlockCreator_EnqueueAllTypes(t *testing.T) {
+	expectedBlocks := []*types.Block{
 		{
-			name:      "enqueue all types of transactions",
-			txBatches: txBatches,
-			expectedBlocks: []*types.Block{
-				{
-					Header: &types.BlockHeader{
-						BaseHeader: &types.BlockHeaderBase{
-							Number:                1,
-							LastCommittedBlockNum: 0,
-						},
-						ValidationInfo: []*types.ValidationInfo{
-							{
-								Flag: types.Flag_VALID,
-							},
-						},
-					},
-					Payload: &types.Block_UserAdministrationTxEnvelope{
-						UserAdministrationTxEnvelope: userAdminTx,
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 1,
+				},
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
 					},
 				},
-				{
-					Header: &types.BlockHeader{
-						BaseHeader: &types.BlockHeaderBase{
-							Number: 2,
-						},
-						ValidationInfo: []*types.ValidationInfo{
-							{
-								Flag: types.Flag_VALID,
-							},
-						},
-					},
-					Payload: &types.Block_DbAdministrationTxEnvelope{
-						DbAdministrationTxEnvelope: dbAdminTx,
+			},
+			Payload: &types.Block_UserAdministrationTxEnvelope{
+				UserAdministrationTxEnvelope: userAdminTx,
+			},
+		},
+		{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 2,
+				},
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
 					},
 				},
-				{
-					Header: &types.BlockHeader{
-						BaseHeader: &types.BlockHeaderBase{
-							Number: 3,
-						},
-						ValidationInfo: []*types.ValidationInfo{
-							{
-								Flag: types.Flag_VALID,
-							},
-							{
-								Flag: types.Flag_VALID,
-							},
-						},
+			},
+			Payload: &types.Block_DbAdministrationTxEnvelope{
+				DbAdministrationTxEnvelope: dbAdminTx,
+			},
+		},
+		{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 3,
+				},
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
 					},
-					Payload: &types.Block_DataTxEnvelopes{
-						DataTxEnvelopes: &types.DataTxEnvelopes{
-							Envelopes: []*types.DataTxEnvelope{
-								dataTx1,
-								dataTx2,
-							},
-						},
+					{
+						Flag: types.Flag_VALID,
 					},
 				},
-				{
-					Header: &types.BlockHeader{
-						BaseHeader: &types.BlockHeaderBase{
-							Number: 4,
-						},
-						ValidationInfo: []*types.ValidationInfo{
-							{
-								Flag: types.Flag_VALID,
-							},
-						},
-					},
-					Payload: &types.Block_ConfigTxEnvelope{
-						ConfigTxEnvelope: configTx,
+			},
+			Payload: &types.Block_DataTxEnvelopes{
+				DataTxEnvelopes: &types.DataTxEnvelopes{
+					Envelopes: []*types.DataTxEnvelope{
+						dataTx1,
+						dataTx2,
 					},
 				},
 			},
 		},
-	}
-	for _, tt := range testCases {
-		// updating test case blocks PrevCommitted block. We make it block 0, to keep thing simple
-		genesisBlockHash, err := blockstore.ComputeBlockHash(tt.expectedBlocks[0])
-		require.NoError(t, err)
-		for _, expectedBlock := range tt.expectedBlocks[1:] {
-			expectedBlock.Header.BaseHeader.LastCommittedBlockNum = 1
-			expectedBlock.Header.BaseHeader.LastCommittedBlockHash = genesisBlockHash
-		}
-		// Update test case blocks prev hashes
-		for index, expectedBlock := range tt.expectedBlocks {
-			var prevBlockHash []byte
-			prevBlockHash = nil
-			if index > 0 {
-				var err error
-				prevBlockHash, err = blockstore.ComputeBlockBaseHash(tt.expectedBlocks[index-1])
-				require.NoError(t, err)
-			}
-			expectedBlock.Header.BaseHeader.PreviousBaseHeaderHash = prevBlockHash
-		}
-	}
-
-	enqueueTxBatchesAndAssertBlocks := func(t *testing.T, testEnv *testEnv, txBatches []interface{}, expectedBlocks []*types.Block) {
-		for _, txBatch := range txBatches {
-			testEnv.txBatchQueue.Enqueue(txBatch)
-		}
-
-		hasBlockCountMatched := func() bool {
-			return len(expectedBlocks) == testEnv.blockQueue.Size()
-		}
-		require.Eventually(t, hasBlockCountMatched, 2*time.Second, 10*time.Millisecond)
-
-		for _, expectedBlock := range expectedBlocks {
-			block := testEnv.blockQueue.Dequeue().(*types.Block)
-			block.Header.ValidationInfo = expectedBlock.Header.ValidationInfo
-			require.True(t, proto.Equal(expectedBlock, block), "Expected block  %v, received block %v", expectedBlock, block)
-		}
-	}
-
-	for _, tt := range testCases {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			testEnv := newTestEnv(t)
-			defer testEnv.cleanup()
-
-			testEnv.mockReplicator.SubmitCalls(
-				func(block *types.Block) error {
-					testEnv.blockQueue.Enqueue(block)
-					return nil
+		{
+			Header: &types.BlockHeader{
+				BaseHeader: &types.BlockHeaderBase{
+					Number: 4,
 				},
-			)
-			// storing only first block in block store, to simulate last committed block
-			require.NoError(t, testEnv.blockStore.Commit(tt.expectedBlocks[0]))
+				ValidationInfo: []*types.ValidationInfo{
+					{
+						Flag: types.Flag_VALID,
+					},
+				},
+			},
+			Payload: &types.Block_ConfigTxEnvelope{
+				ConfigTxEnvelope: configTx,
+			},
+		},
+	}
 
-			enqueueTxBatchesAndAssertBlocks(t, testEnv, tt.txBatches, tt.expectedBlocks)
-		})
+	testEnv := newTestEnv(t)
+	defer testEnv.cleanup()
+
+	testEnv.mockReplicator.SubmitCalls(
+		func(block *types.Block) error {
+			testEnv.blockQueue.Enqueue(block)
+			return nil
+		},
+	)
+
+	for _, txBatch := range txBatches {
+		testEnv.txBatchQueue.Enqueue(txBatch)
+	}
+
+	hasBlockCountMatched := func() bool {
+		return len(expectedBlocks) == testEnv.blockQueue.Size()
+	}
+	require.Eventually(t, hasBlockCountMatched, 2*time.Second, 10*time.Millisecond)
+
+	for _, expectedBlock := range expectedBlocks {
+		block := testEnv.blockQueue.Dequeue().(*types.Block)
+		block.Header.ValidationInfo = expectedBlock.Header.ValidationInfo
+		require.True(t, proto.Equal(expectedBlock, block), "Expected block  %v, received block %v", expectedBlock, block)
 	}
 }
 
 func TestBlockCreator_ReleaseAsync(t *testing.T) {
 	testEnv := newTestEnv(t)
 	defer testEnv.cleanup()
-
-	// storing only first block in block store, to simulate last committed block
-	require.NoError(t, testEnv.blockStore.Commit(genesisBlock))
 
 	testEnv.mockReplicator.SubmitReturns(&ierrors.NotLeaderError{
 		LeaderID:       1,
@@ -418,9 +361,6 @@ func TestBlockCreator_ReleaseAsync(t *testing.T) {
 func TestBlockCreator_ReleaseSync(t *testing.T) {
 	testEnv := newTestEnv(t)
 	defer testEnv.cleanup()
-
-	// storing only first block in block store, to simulate last committed block
-	require.NoError(t, testEnv.blockStore.Commit(genesisBlock))
 
 	testEnv.mockReplicator.SubmitReturns(&ierrors.NotLeaderError{
 		LeaderID:       1,
