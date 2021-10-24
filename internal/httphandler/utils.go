@@ -12,11 +12,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/gorilla/mux"
 )
 
 func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string, signVerifier *cryptoservice.SignatureVerifier) (interface{}, bool) {
@@ -65,6 +65,10 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		payload = &types.GetBlockQuery{
 			UserId:      querierUserID,
 			BlockNumber: blockNum,
+		}
+	case constants.GetLastBlockHeader:
+		payload = &types.GetLastBlockQuery{
+			UserId: querierUserID,
 		}
 	case constants.GetPath:
 		startBlockNum, endBlockNum, err := httputils.GetStartAndEndBlockNum(params)

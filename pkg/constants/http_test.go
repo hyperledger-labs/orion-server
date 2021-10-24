@@ -210,6 +210,14 @@ func TestURLConstruction(t *testing.T) {
 			},
 			expectedURL: "/provenance/user/user1?blocknumber=10&transactionnumber=5",
 		},
+		{
+			name: "URLForLastLedgerBlock",
+			execute: func() string {
+				return URLForLastLedgerBlock()
+			},
+			expectedURL: "/ledger/block/last",
+		},
+		// URLForLastLedgerBlock
 	}
 
 	for _, tt := range tests {
