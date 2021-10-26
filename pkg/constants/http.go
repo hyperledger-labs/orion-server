@@ -36,6 +36,7 @@ const (
 
 	LedgerEndpoint     = "/ledger/"
 	GetBlockHeader     = "/ledger/block/{blockId:[0-9]+}"
+	GetLastBlockHeader = "/ledger/block/last"
 	GetPath            = "/ledger/path"
 	GetTxProofPrefix   = "/ledger/proof/tx"
 	GetTxProof         = "/ledger/proof/tx/{blockId:[0-9]+}"
@@ -87,6 +88,10 @@ func URLForGetConfig() string {
 
 func URLForLedgerBlock(blockNum uint64) string {
 	return LedgerEndpoint + path.Join("block", strconv.FormatUint(blockNum, 10))
+}
+
+func URLForLastLedgerBlock() string {
+	return GetLastBlockHeader
 }
 
 func URLForLedgerPath(start, end uint64) string {

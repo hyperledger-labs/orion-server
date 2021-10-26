@@ -67,6 +67,39 @@ func TestBlockQuery(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 		},
 		{
+			name: "valid get last block header request",
+			expectedResponse: &types.GetBlockResponseEnvelope{
+				Response: &types.GetBlockResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					BlockHeader: &types.BlockHeader{
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 100,
+						},
+					},
+				},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLastLedgerBlock(), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLastBlockQuery{UserId: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetBlockHeader", submittingUserName, uint64(100)).Return(response, nil)
+				db.On("Height").Return(uint64(100), nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
 			name:             "user doesn't exist",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
@@ -107,6 +140,28 @@ func TestBlockQuery(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusNotFound,
 			expectedErr:        "error while processing 'GET /ledger/block/1' because block not found: 1",
+		},
+		{
+			name: "ledger height returns error",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLastLedgerBlock(), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetLastBlockQuery{UserId: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(nil, &interrors.NotFoundErr{Message: "block not found: 1"})
+				db.On("Height").Return(uint64(0), errors.Errorf("unable to retrieve the state database height due to missing metadataDB"))
+				return db
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /ledger/block/last' because unable to retrieve the state database height due to missing metadataDB",
 		},
 	}
 

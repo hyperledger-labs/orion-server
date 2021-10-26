@@ -70,6 +70,15 @@ message GetBlockQueryEnvelope {
   bytes signature = 2;
 }
 
+message GetLastBlockQuery {
+  string user_id = 1;
+}
+
+message GetLastBlockQueryEnvelope {
+  GetLastBlockQuery payload = 1;
+  bytes signature = 2;
+}
+
 message GetLedgerPathQuery {
   string user_id = 1;
   uint64 start_block_number = 2;

@@ -5,6 +5,7 @@ package httphandler
 import (
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	"github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/httputils"
@@ -12,7 +13,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/gorilla/mux"
 )
 
 // ledgerRequestHandler handles query associated with the
@@ -35,6 +35,8 @@ func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handle
 
 	// HTTP GET "/ledger/block/{blockId}" gets block header
 	handler.router.HandleFunc(constants.GetBlockHeader, handler.blockQuery).Methods(http.MethodGet)
+	// HTTP GET "/ledger/block/last" gets last ledger block header
+	handler.router.HandleFunc(constants.GetLastBlockHeader, handler.lastBlockQuery).Methods(http.MethodGet)
 	// HTTP GET "/ledger/path?start={startId}&end={endId}" gets shortest path between blocks
 	handler.router.HandleFunc(constants.GetPath, handler.pathQuery).Methods(http.MethodGet).Queries("start", "{startId:[0-9]+}", "end", "{endId:[0-9]+}")
 	// HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" gets proof for tx with index idx inside block blockId
@@ -74,6 +76,43 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 	query := payload.(*types.GetBlockQuery)
 
 	data, err := p.db.GetBlockHeader(query.UserId, query.BlockNumber)
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *errors.PermissionErr:
+			status = http.StatusForbidden
+		case *errors.NotFoundErr:
+			status = http.StatusNotFound
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		httputils.SendHTTPResponse(
+			response,
+			status,
+			&types.HttpResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	httputils.SendHTTPResponse(response, http.StatusOK, data)
+}
+
+func (p *ledgerRequestHandler) lastBlockQuery(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetLastBlockHeader, p.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetLastBlockQuery)
+
+	var data *types.GetBlockResponseEnvelope
+
+	height, err := p.db.Height()
+	if err == nil {
+		data, err = p.db.GetBlockHeader(query.UserId, height)
+	}
 	if err != nil {
 		var status int
 
