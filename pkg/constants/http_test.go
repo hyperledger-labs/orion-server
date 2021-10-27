@@ -55,9 +55,16 @@ func TestURLConstruction(t *testing.T) {
 		{
 			name: "URLForLedgerBlock",
 			execute: func() string {
-				return URLForLedgerBlock(10)
+				return URLForLedgerBlock(10, false)
 			},
 			expectedURL: "/ledger/block/10",
+		},
+		{
+			name: "URLForLedgerBlock_Augmented",
+			execute: func() string {
+				return URLForLedgerBlock(10, true)
+			},
+			expectedURL: "/ledger/block/10?augmented=true",
 		},
 		{
 			name: "URLForLedgerPath",

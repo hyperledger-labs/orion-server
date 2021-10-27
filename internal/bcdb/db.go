@@ -85,6 +85,9 @@ type DB interface {
 	// GetBlockHeader returns ledger block header
 	GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResponseEnvelope, error)
 
+	// GetAugmentedBlockHeader returns ledger block header
+	GetAugmentedBlockHeader(userID string, blockNum uint64) (*types.GetAugmentedBlockHeaderResponseEnvelope, error)
+
 	// GetTxProof returns intermediate hashes to recalculate merkle tree root from tx hash
 	GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error)
 
@@ -117,7 +120,7 @@ type DB interface {
 	// GetValuesReadByUser returns all values read by a given user
 	GetValuesReadByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error)
 
-	// GetValuesReadByUser returns all values read by a given user
+	// GetValuesWrittenByUser returns all values written by a given user
 	GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error)
 
 	// GetValuesDeletedByUser returns all values deleted by a given user
@@ -126,7 +129,7 @@ type DB interface {
 	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
 	GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error)
 
-	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
+	// GetWriters returns all userIDs who have updated a given key as well as the access frequency
 	GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error)
 
 	// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
@@ -462,6 +465,24 @@ func (d *db) GetBlockHeader(userID string, blockNum uint64) (*types.GetBlockResp
 	}
 
 	return &types.GetBlockResponseEnvelope{
+		Response:  blockHeader,
+		Signature: sign,
+	}, nil
+}
+
+func (d *db) GetAugmentedBlockHeader(userID string, blockNum uint64) (*types.GetAugmentedBlockHeaderResponseEnvelope, error) {
+	blockHeader, err := d.ledgerQueryProcessor.getAugmentedBlockHeader(userID, blockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	blockHeader.Header = d.responseHeader()
+	sign, err := d.signature(blockHeader)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetAugmentedBlockHeaderResponseEnvelope{
 		Response:  blockHeader,
 		Signature: sign,
 	}, nil

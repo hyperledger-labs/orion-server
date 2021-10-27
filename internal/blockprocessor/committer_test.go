@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	mptrieStore "github.com/hyperledger-labs/orion-server/internal/mptrie/store"
@@ -19,7 +20,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -179,6 +179,7 @@ func TestCommitter(t *testing.T) {
 						{
 							Payload: &types.DataTx{
 								MustSignUserIds: []string{"testUser"},
+								TxId:            "dataTx1",
 								DbOperations: []*types.DBOperation{
 									{
 										DbName: "db1",
@@ -268,6 +269,7 @@ func TestBlockStoreCommitter(t *testing.T) {
 					Envelopes: []*types.DataTxEnvelope{
 						{
 							Payload: &types.DataTx{
+								TxId: fmt.Sprintf("tx1_%d", number),
 								DbOperations: []*types.DBOperation{
 									{
 										DbName: "db1",
@@ -283,6 +285,7 @@ func TestBlockStoreCommitter(t *testing.T) {
 						},
 						{
 							Payload: &types.DataTx{
+								TxId: fmt.Sprintf("tx1_%d", number),
 								DbOperations: []*types.DBOperation{
 									{
 										DbName: "db2",

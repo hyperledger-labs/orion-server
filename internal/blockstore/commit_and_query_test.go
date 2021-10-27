@@ -8,11 +8,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -99,11 +99,11 @@ func TestCommitAndQuery(t *testing.T) {
 		defer env.cleanup(false)
 
 		totalBlocks := uint64(1000)
-		var preBlockBaseHash, preBlockHash []byte
+		var prevBlockBaseHash, prevBlockHash []byte
 		blockHashes := [][]byte{nil}
 
 		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-			b := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
+			b := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
 
 			require.NoError(t, env.s.AddSkipListLinks(b))
 			require.NoError(t, env.s.Commit(b))
@@ -114,22 +114,22 @@ func TestCommitAndQuery(t *testing.T) {
 
 			blockHeaderBaseBytes, err := proto.Marshal(b.GetHeader().GetBaseHeader())
 			require.NoError(t, err)
-			preBlockBaseHash, err = crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
+			prevBlockBaseHash, err = crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
 			require.NoError(t, err)
 
 			blockHeaderBytes, err := proto.Marshal(b.GetHeader())
 			require.NoError(t, err)
-			preBlockHash, err = crypto.ComputeSHA256Hash(blockHeaderBytes)
+			prevBlockHash, err = crypto.ComputeSHA256Hash(blockHeaderBytes)
 			require.NoError(t, err)
 
-			blockHashes = append(blockHashes, preBlockHash)
+			blockHashes = append(blockHashes, prevBlockHash)
 		}
 
 		assertBlocks := func() {
-			var preBlockBaseHash, preBlockHash []byte
+			var prevBlockBaseHash, prevBlockHash []byte
 
 			for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-				expectedBlock := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
+				expectedBlock := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
 				expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, blockHashes, blockNumber)
 
 				block, err := env.s.Get(blockNumber)
@@ -138,6 +138,10 @@ func TestCommitAndQuery(t *testing.T) {
 				blockHeader, err := env.s.GetHeader(blockNumber)
 				require.NoError(t, err)
 				require.True(t, proto.Equal(expectedBlock.GetHeader(), blockHeader))
+				augmentedBlockHeader, err := env.s.GetAugmentedHeader(blockNumber)
+				require.NoError(t, err)
+				require.True(t, proto.Equal(augmentedBlockHeader.GetHeader(), blockHeader))
+				require.Equal(t, augmentedBlockHeader.GetTxIds()[0], fmt.Sprintf("txid-%d", blockNumber))
 				for i, linkedBlockNum := range CalculateSkipListLinks(blockNumber) {
 					linkedBlockHash, err := env.s.GetHash(linkedBlockNum)
 					require.NoError(t, err)
@@ -162,8 +166,8 @@ func TestCommitAndQuery(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, expectedBaseHash, baseHash)
 
-				preBlockBaseHash = baseHash
-				preBlockHash = blockHash
+				prevBlockBaseHash = baseHash
+				prevBlockHash = blockHash
 			}
 		}
 
@@ -219,6 +223,7 @@ func TestCommitAndQuery(t *testing.T) {
 				UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 					Payload: &types.UserAdministrationTx{
 						UserId: "user1",
+						TxId:   "tx1",
 						UserDeletes: []*types.UserDelete{
 							{
 								UserId: "user1",
@@ -418,6 +423,40 @@ func TestTxValidationInfo(t *testing.T) {
 	})
 }
 
+func TestGetAugmentedHeader(t *testing.T) {
+
+	t.Run("data tx blocks", func(t *testing.T) {
+		t.Parallel()
+
+		env := newTestEnv(t)
+		defer env.cleanup(true)
+
+		var prevBlockBaseHash, prevBlockHash []byte
+		blockHeaders := make([]*types.BlockHeader, 0)
+
+		for blockNumber := uint64(1); blockNumber < 10; blockNumber++ {
+			b := createSampleDataTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash, 10)
+			require.NoError(t, env.s.Commit(b))
+
+			height, err := env.s.Height()
+			require.NoError(t, err)
+			require.Equal(t, blockNumber, height)
+			blockHeaders = append(blockHeaders, b.GetHeader())
+		}
+
+		for blockNumber := uint64(1); blockNumber < 10; blockNumber++ {
+			augmentedHeader, err := env.s.GetAugmentedHeader(blockNumber)
+			require.NoError(t, err)
+			require.NotNil(t, augmentedHeader)
+			require.True(t, proto.Equal(augmentedHeader.GetHeader(), blockHeaders[blockNumber-1]))
+			require.Equal(t, len(augmentedHeader.GetTxIds()), 10)
+			for i, id := range augmentedHeader.GetTxIds() {
+				require.Equal(t, id, fmt.Sprintf("tx-%d-%d", blockNumber, i))
+			}
+		}
+	})
+}
+
 func calculateBlockHashes(t *testing.T, blockHashes [][]byte, blockNum uint64) [][]byte {
 	var res [][]byte
 	distance := uint64(1)
@@ -431,13 +470,13 @@ func calculateBlockHashes(t *testing.T, blockHashes [][]byte, blockNum uint64) [
 	return res
 }
 
-func createSampleUserTxBlock(blockNumber uint64, preBlockBaseHash []byte, preBlockHash []byte) *types.Block {
+func createSampleUserTxBlock(blockNumber uint64, prevBlockBaseHash []byte, prevBlockHash []byte) *types.Block {
 	return &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
 				Number:                 blockNumber,
-				PreviousBaseHeaderHash: preBlockBaseHash,
-				LastCommittedBlockHash: preBlockHash,
+				PreviousBaseHeaderHash: prevBlockBaseHash,
+				LastCommittedBlockHash: prevBlockHash,
 				LastCommittedBlockNum:  blockNumber - 1,
 			},
 			TxMerkelTreeRootHash:    []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
@@ -463,4 +502,38 @@ func createSampleUserTxBlock(blockNumber uint64, preBlockBaseHash []byte, preBlo
 			},
 		},
 	}
+}
+
+func createSampleDataTxBlock(blockNumber uint64, prevBlockBaseHash []byte, prevBlockHash []byte, txNum int) *types.Block {
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                 blockNumber,
+				PreviousBaseHeaderHash: prevBlockBaseHash,
+				LastCommittedBlockHash: prevBlockHash,
+				LastCommittedBlockNum:  blockNumber - 1,
+			},
+			TxMerkelTreeRootHash:    []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
+			StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
+			ValidationInfo:          []*types.ValidationInfo{},
+		},
+	}
+
+	envelopes := make([]*types.DataTxEnvelope, 0)
+	for i := 0; i < txNum; i++ {
+		block.Header.ValidationInfo = append(block.Header.ValidationInfo, &types.ValidationInfo{Flag: types.Flag_VALID})
+		envelopes = append(envelopes, &types.DataTxEnvelope{
+			Payload: &types.DataTx{
+				TxId: fmt.Sprintf("tx-%d-%d", blockNumber, i),
+			},
+		})
+	}
+
+	block.Payload = &types.Block_DataTxEnvelopes{
+		DataTxEnvelopes: &types.DataTxEnvelopes{
+			Envelopes: envelopes,
+		},
+	}
+
+	return block
 }

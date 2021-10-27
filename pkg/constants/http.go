@@ -5,7 +5,6 @@ package constants
 import (
 	"fmt"
 	"path"
-	"strconv"
 
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
@@ -86,8 +85,11 @@ func URLForGetConfig() string {
 	return GetConfig
 }
 
-func URLForLedgerBlock(blockNum uint64) string {
-	return LedgerEndpoint + path.Join("block", strconv.FormatUint(blockNum, 10))
+func URLForLedgerBlock(blockNum uint64, augmented bool) string {
+	if augmented {
+		return LedgerEndpoint + fmt.Sprintf("block/%d?augmented=%t", blockNum, augmented)
+	}
+	return LedgerEndpoint + fmt.Sprintf("block/%d", blockNum)
 }
 
 func URLForLastLedgerBlock() string {

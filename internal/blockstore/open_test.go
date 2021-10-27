@@ -12,12 +12,12 @@ import (
 
 	"github.com/hyperledger-labs/orion-server/internal/errors"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/snappy"
 	"github.com/stretchr/testify/require"
 )
 
@@ -189,6 +189,7 @@ func TestOpenStore(t *testing.T) {
 					UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 						Payload: &types.UserAdministrationTx{
 							UserId: "user1",
+							TxId:   "tx1",
 							UserDeletes: []*types.UserDelete{
 								{
 									UserId: "user1",

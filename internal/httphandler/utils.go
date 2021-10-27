@@ -56,15 +56,25 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			NodeId: params["nodeId"],
 		}
 	case constants.GetBlockHeader:
-		blockNum, err := httputils.GetUintParam("blockId", params)
+		blockNum, err := httputils.GetBlockNum(params)
 		if err != nil {
 			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
+		augmented := false
+		if _, ok := params["isAugmented"]; ok {
+			augmented, err = strconv.ParseBool(params["isAugmented"])
+			if err != nil {
+				httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+				return nil, true
+			}
+		}
+
 		payload = &types.GetBlockQuery{
 			UserId:      querierUserID,
 			BlockNumber: blockNum,
+			Augmented:   augmented,
 		}
 	case constants.GetLastBlockHeader:
 		payload = &types.GetLastBlockQuery{

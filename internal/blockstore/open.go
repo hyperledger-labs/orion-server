@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -51,6 +51,8 @@ var (
 	headerHashToBlockNumNs = []byte{2}
 	// number -> base header (without validation info) hash
 	headerBaseHashNs = []byte{3}
+	// number -> block tx ids array
+	blockTxsIDNs = []byte{4}
 )
 
 // Store maintains a chain of blocks in an append-only

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 syntax = "proto3";
 
-option go_package = "github.com/IBM-Blockchain/bcdb-server/pkg/types";
+option go_package = "github.com/hyperledger-labs/orion-server/pkg/types";
 
 package types;
 
@@ -226,4 +226,9 @@ message ConsensusMetadata {
   uint64 raft_term = 1;
   // The Raft index associated with the block
   uint64 raft_index = 2;
+}
+
+message AugmentedBlockHeader {
+  BlockHeader header = 1;
+  repeated string tx_ids = 2;
 }

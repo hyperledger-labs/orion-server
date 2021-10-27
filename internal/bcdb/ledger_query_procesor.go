@@ -67,6 +67,25 @@ func (p *ledgerQueryProcessor) getBlockHeader(userId string, blockNum uint64) (*
 	}, nil
 }
 
+func (p *ledgerQueryProcessor) getAugmentedBlockHeader(userId string, blockNum uint64) (*types.GetAugmentedBlockHeaderResponse, error) {
+	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !hasAccess {
+		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
+	}
+	data, err := p.blockStore.GetAugmentedHeader(blockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetAugmentedBlockHeaderResponse{
+		BlockHeader: data,
+	}, nil
+}
+
 func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx uint64) (*types.GetLedgerPathResponse, error) {
 	if endBlockIdx < startBlockIdx {
 		return nil, errors.Errorf("can't find path from smaller block %d to bigger %d", endBlockIdx, startBlockIdx)
