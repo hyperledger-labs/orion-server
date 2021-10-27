@@ -232,10 +232,6 @@ The above command results in the following output:
 
 ## Querying a Block Header
 
-A block is a collection of ordererd transactions in blokchain database. The header object within a block holds the block number,
-root hash of the transaction merkle tree, root hash of the state merkle tree, and validation information. The root hash of
-merkle tree helps in proving immutability and more detail can be found [here]().
-
 To query a block header of a given block, the user can issue a GET request on `/ledger/block/{blocknumber}` endpoint where 
 `{blocknumber}` denotes the block whose header needs to be fetched.
 
