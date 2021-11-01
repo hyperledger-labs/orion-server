@@ -1,0 +1,49 @@
+name: Docker
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+env:
+  IMAGE_NAME: orion-server
+  DOCKER_USER: orionbcdb
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      # Login against a Docker registry except on PR
+      # https://github.com/docker/login-action
+      - name: Log into registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1.10.0
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PWD }}
+
+      # Build and tag Docker image
+      - name: Build and tag Docker image
+        run: |
+          make docker
+          docker tag ${{ env.IMAGE_NAME }}:latest ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:latest
+
+      # Push Docker image (don't push on PR)
+      - name: Push docker image
+        if: github.event_name != 'pull_request'
+        run: docker push ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:latest
