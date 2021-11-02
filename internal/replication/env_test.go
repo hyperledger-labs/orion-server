@@ -3,6 +3,7 @@ package replication_test
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/orion-server/internal/replication/mocks"
 	"io/ioutil"
 	"math"
 	"os"
@@ -60,6 +61,7 @@ type nodeEnv struct {
 	conf            *replication.Config
 	blockReplicator *replication.BlockReplicator
 	ledger          *memLedger
+	pendingTxs      *mocks.PendingTxsReleaser
 	stopServeCh     chan struct{}
 }
 
@@ -91,11 +93,9 @@ func (n *nodeEnv) Start() error {
 
 func (n *nodeEnv) Close() error {
 	close(n.stopServeCh)
-	if err := n.blockReplicator.Close(); err != nil {
-		return err
-	}
+	err := n.blockReplicator.Close()
 	n.conf.Transport.Close()
-	return nil
+	return err
 }
 
 // Restart a closed node.
@@ -266,7 +266,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 	}
 
 	qBarrier := queue.NewOneQueueBarrier(lg)
-	pendingTxs := queue.NewPendingTxs(lg) //TODO test release blocks when not leader or error from Raft on proposal
+	pendingTxs := &mocks.PendingTxsReleaser{}
 	ledger := &memLedger{}
 	proposedBlock := &types.Block{
 		Header: &types.BlockHeader{
@@ -315,6 +315,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 		conf:            conf,
 		blockReplicator: blockReplicator,
 		ledger:          ledger,
+		pendingTxs:      pendingTxs,
 		stopServeCh:     make(chan struct{}),
 	}
 

@@ -3,13 +3,14 @@ package replication_test
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -203,7 +204,7 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 
 	// wait for some node to become a leader
 	isLeaderCond := func() bool {
-		return env.FindLeaderIndex() >= 0
+		return env.AgreedLeaderIndex() >= 0
 	}
 	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
 
@@ -217,7 +218,10 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 		Payload: &types.Block_DataTxEnvelopes{},
 	}
 
-	leaderIdx := env.FindLeaderIndex()
+	leaderIdx := env.AgreedLeaderIndex()
+	expectedNotLeaderErr := fmt.Sprintf("not a leader, leader is RaftID: %d, with HostPort: 127.0.0.1:2200%d", leaderIdx+1, leaderIdx+1)
+	follower1 := (leaderIdx + 1) % 3
+	follower2 := (leaderIdx + 2) % 3
 	numBlocks := uint64(100)
 	for i := uint64(0); i < numBlocks; i++ {
 		b := proto.Clone(block).(*types.Block)
@@ -225,13 +229,23 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
 		require.NoError(t, err)
 
+		// submission to a follower will cause an error
+		err = env.nodes[follower1].blockReplicator.Submit(b)
+		require.EqualError(t, err, expectedNotLeaderErr)
+		err = env.nodes[follower2].blockReplicator.Submit(b)
+		require.EqualError(t, err, expectedNotLeaderErr)
 	}
 
 	assert.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
 
+	t.Log("Closing")
 	for _, node := range env.nodes {
 		err := node.Close()
 		require.NoError(t, err)
+	}
+
+	for _, node := range env.nodes {
+		require.Equal(t, 0, node.pendingTxs.ReleaseWithErrorCallCount())
 	}
 }
 
@@ -412,6 +426,230 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Restarted old leader node, index: %d", leaderIdx)
 	assert.Eventually(t, func() bool { return env.AssertEqualHeight(3*numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	for _, node := range env.nodes {
+		err := node.Close()
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, env.AssertEqualLedger())
+}
+
+// Scenario:
+// - Start 2 nodes out of 3 together, wait for leader.
+// - Continuously submit blocks to fill the leader's pipeline.
+// - After 100 blocks close the follower, so that the current leader loses its leadership.
+// - Continue to submit blocks, anticipating that from some point they will be rejected.
+// - Wait for a ReleaseWithError to be called from within the block replicator as it drains the internal proposal channel.
+func TestBlockReplicator_3Node_LeadershipLoss(t *testing.T) {
+	env := createClusterEnv(t, "info", 3, nil)
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	//start 2 of 3
+	for i, node := range env.nodes {
+		if i == 2 {
+			continue
+		}
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex(0, 1) >= 0
+	}
+	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                1,
+				LastCommittedBlockNum: 1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:1",
+						},
+					},
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:2",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	leaderIdx := env.AgreedLeaderIndex(0, 1)
+	numBlocks := uint64(100)
+	stopCh := make(chan interface{})
+	wg100 := sync.WaitGroup{}
+	wg100.Add(1)
+	wgStop := sync.WaitGroup{}
+	wgStop.Add(1)
+
+	var iLostLeadership uint64
+
+	go func() {
+		defer wgStop.Done()
+
+	LOOP:
+		for i := uint64(0); ; i++ {
+			select {
+			case <-stopCh:
+				t.Logf("Submiter stopped: %d", i)
+				break LOOP
+			default:
+				b := proto.Clone(block).(*types.Block)
+				b.Header.BaseHeader.Number = 2 + i
+				err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+				if i <= numBlocks {
+					require.NoError(t, err)
+				} else {
+					if err != nil && iLostLeadership == 0 {
+						require.Contains(t, err.Error(), "not a leader")
+						iLostLeadership = i
+						t.Logf("Lost leadership: %d", i)
+					}
+				}
+
+				if i == numBlocks {
+					t.Logf("Submitted: %d", i)
+					wg100.Done() // stop a node and eventually loose leadership
+				}
+			}
+		}
+	}()
+
+	wg100.Wait()
+
+	// close the follower
+	err := env.nodes[(leaderIdx+1)%2].Close()
+	require.NoError(t, err)
+
+	// eventually there will be a Release, as the internal proposal channel drains
+	assert.Eventually(t, func() bool { return env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCallCount() > 0 }, 60*time.Second, 100*time.Millisecond)
+	close(stopCh)
+	t.Log("before stopped: ")
+	wgStop.Wait()
+	t.Log("stopped: ")
+	err = env.nodes[leaderIdx].Close()
+	require.NoError(t, err)
+}
+
+// Scenario:
+// - Start 3 together, wait for leader.
+// - Submit a few blocks to the leader (node X).
+// - Repeat:
+//   1. close the leader
+//   2. wait for new leader
+//   3. submit a few blocks
+//   4. restart the stopped node.
+//   5. Until node X, the first leader, is elected again.
+// - Check for consistent ledgers.
+// This tests for consistent block numbering at the leader after re-election.
+func TestBlockReplicator_3Node_LeaderReElected(t *testing.T) {
+	env := createClusterEnv(t, "info", 3, nil)
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	//start 3
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+	firstLeaderIdx := env.AgreedLeaderIndex()
+	t.Logf("First leader index is: %d", firstLeaderIdx)
+	currentLeaderIdx := firstLeaderIdx
+
+	// submit a few blocks
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                1,
+				LastCommittedBlockNum: 1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:1",
+						},
+					},
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:2",
+						},
+					},
+				},
+			},
+		},
+	}
+	numBlocks := uint64(1)
+	for n := 0; n < 5; n++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[firstLeaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+		numBlocks++
+	}
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks) }, 30*time.Second, 100*time.Millisecond)
+
+	// kill leader, wait for new one, submit some blocks, restart prev. leader; repeat until first leader re-elected
+	timeout := time.After(5*time.Minute)
+	for {
+		err := env.nodes[currentLeaderIdx].Close()
+		require.NoError(t, err)
+
+		follower1idx := (currentLeaderIdx + 1) % 3
+		follower2idx := (currentLeaderIdx + 1) % 3
+		isLeaderOf2Cond := func() bool {
+			return env.AgreedLeaderIndex(follower1idx, follower2idx) >= 0
+		}
+		assert.Eventually(t, isLeaderOf2Cond, 30*time.Second, 100*time.Millisecond)
+		prevLeaderIdx := currentLeaderIdx
+		currentLeaderIdx = env.AgreedLeaderIndex(follower1idx, follower2idx)
+		t.Logf("Current leader index is: %d", currentLeaderIdx)
+
+		for n := 0; n < 5; n++ {
+			b := proto.Clone(block).(*types.Block)
+			err := env.nodes[currentLeaderIdx].blockReplicator.Submit(b)
+			require.NoError(t, err)
+			numBlocks++
+		}
+		require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks,follower1idx,follower2idx) }, 30*time.Second, 100*time.Millisecond)
+
+		env.nodes[prevLeaderIdx].Restart()
+		assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+		// until the first leader is re-elected
+		if currentLeaderIdx == firstLeaderIdx {
+			t.Logf("First leader (index: %d) was re-elected", currentLeaderIdx)
+			break
+		}
+
+		select {
+		case <-timeout:
+			t.Fatalf("test failed, leader never re-elected after %s", 5*time.Minute)
+		default:
+			continue
+		}
+	}
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks) }, 30*time.Second, 100*time.Millisecond)
 
 	for _, node := range env.nodes {
 		err := node.Close()

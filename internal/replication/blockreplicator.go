@@ -10,13 +10,15 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -35,6 +37,12 @@ type BlockLedgerReader interface {
 	Get(blockNumber uint64) (*types.Block, error)
 }
 
+//go:generate counterfeiter -o mocks/pending_txs.go --fake-name PendingTxsReleaser . PendingTxsReleaser
+
+type PendingTxsReleaser interface {
+	ReleaseWithError(txIDs []string, err error)
+}
+
 type BlockReplicator struct {
 	localConf *config.LocalConfiguration
 
@@ -45,20 +53,24 @@ type BlockReplicator struct {
 	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver with the block-processor commit
 	transport       *comm.HTTPTransport
 	ledgerReader    BlockLedgerReader
-	pendingTxs      *queue.PendingTxs //TODO release blocks when not leader or error from Raft on proposal
+	pendingTxs      PendingTxsReleaser
 
 	stopCh        chan struct{}
 	stopOnce      sync.Once
 	doneProposeCh chan struct{}
 	doneEventCh   chan struct{}
 
-	mutex               sync.Mutex
-	clusterConfig       *types.ClusterConfig
-	lastKnownLeader     uint64
-	lastKnownLeaderHost string // cache the leader's Node host:port for client request redirection
+	// shared state between the propose-loop go-routine and event-loop go-routine
+	mutex                           sync.Mutex
+	clusterConfig                   *types.ClusterConfig
+	lastKnownLeader                 uint64
+	lastKnownLeaderHost             string // cache the leader's Node host:port for client request redirection
+	cancelProposeContext            func() // cancels the propose-context if leadership is lost
+	lastProposedBlockNumber         uint64
+	lastProposedBlockHeaderBaseHash []byte
+	lastCommittedBlock              *types.Block
 
 	appliedIndex uint64
-	lastBlock    *types.Block
 
 	// needed by snapshotting
 	sizeLimit        uint64 // SnapshotIntervalSize in bytes
@@ -76,7 +88,7 @@ type Config struct {
 	LedgerReader         BlockLedgerReader
 	Transport            *comm.HTTPTransport
 	BlockOneQueueBarrier *queue.OneQueueBarrier
-	PendingTxs           *queue.PendingTxs
+	PendingTxs           PendingTxsReleaser
 	Logger               *logger.SugarLogger
 }
 
@@ -110,38 +122,45 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 	}
 
 	br := &BlockReplicator{
-		localConf:        conf.LocalConf,
-		proposeCh:        make(chan *types.Block, 1),
-		raftID:           raftID,
-		raftStorage:      storage,
-		oneQueueBarrier:  conf.BlockOneQueueBarrier,
-		stopCh:           make(chan struct{}),
-		doneProposeCh:    make(chan struct{}),
-		doneEventCh:      make(chan struct{}),
-		clusterConfig:    conf.ClusterConfig,
-		transport:        conf.Transport,
-		ledgerReader:     conf.LedgerReader,
-		pendingTxs:       conf.PendingTxs,
-		sizeLimit:        conf.ClusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize,
-		confState:        confState,
-		lastSnapBlockNum: snapBlkNum,
-		lg:               lg,
+		localConf:            conf.LocalConf,
+		proposeCh:            make(chan *types.Block, 1),
+		raftID:               raftID,
+		raftStorage:          storage,
+		oneQueueBarrier:      conf.BlockOneQueueBarrier,
+		stopCh:               make(chan struct{}),
+		doneProposeCh:        make(chan struct{}),
+		doneEventCh:          make(chan struct{}),
+		clusterConfig:        conf.ClusterConfig,
+		cancelProposeContext: func() {}, //NOOP
+		transport:            conf.Transport,
+		ledgerReader:         conf.LedgerReader,
+		pendingTxs:           conf.PendingTxs,
+		sizeLimit:            conf.ClusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize,
+		confState:            confState,
+		lastSnapBlockNum:     snapBlkNum,
+		lg:                   lg,
 	}
 
 	height, err := br.ledgerReader.Height()
 	if err != nil {
-		br.lg.Panic("Failed to read block height")
+		br.lg.Panicf("Failed to read block height: %s", err)
 	}
 
 	if height > 0 {
-		br.lastBlock, err = br.ledgerReader.Get(height)
+		br.lastCommittedBlock, err = br.ledgerReader.Get(height)
 		if err != nil {
-			br.lg.Panic("Failed to read last block")
+			br.lg.Panicf("Failed to read last block: %s", err)
+		}
+		br.lastProposedBlockNumber = br.lastCommittedBlock.GetHeader().GetBaseHeader().GetNumber()
+		if baseHash, err := blockstore.ComputeBlockBaseHash(br.lastCommittedBlock); err == nil {
+			br.lastProposedBlockHeaderBaseHash = baseHash
+		} else {
+			br.lg.Panicf("Failed to compute last block base hash: %s", err)
 		}
 	}
 
 	if height > 1 {
-		metadata := br.lastBlock.GetConsensusMetadata()
+		metadata := br.lastCommittedBlock.GetConsensusMetadata()
 		br.appliedIndex = metadata.GetRaftIndex()
 		br.lg.Debugf("last block [%d], consensus metadata: %+v", height, metadata)
 	}
@@ -264,24 +283,6 @@ Event_Loop:
 				br.lg.Warningf("WAL sync took %v seconds and the network is configured to start elections after %v seconds. Your disk is too slow and may cause loss of quorum and trigger leadership election.", duration, electionTimeout)
 			}
 
-			// update last known leader
-			if rd.SoftState != nil {
-				leader := atomic.LoadUint64(&rd.SoftState.Lead) // etcdraft requires atomic access to this var
-				if leader != raft.None {
-					br.lg.Debugf("Leader %d is present", leader)
-				} else {
-					br.lg.Debug("No leader")
-				}
-
-				br.mutex.Lock()
-				if leader != br.lastKnownLeader {
-					br.lg.Infof("Leader changed: %d to %d", br.lastKnownLeader, leader)
-					br.lastKnownLeader = leader
-					br.lastKnownLeaderHost = br.nodeHostPortFromRaftID(leader)
-				}
-				br.mutex.Unlock()
-			}
-
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				if err := br.catchUp(rd.Snapshot); err != nil {
 					br.lg.Panicf("Failed to catch-up to snapshot: %+v", rd.Snapshot)
@@ -293,6 +294,18 @@ Event_Loop:
 			if ok := br.deliverEntries(rd.CommittedEntries); !ok {
 				br.lg.Warningf("Failed to deliver committed entries, breaking out of event loop")
 				break Event_Loop
+			}
+
+			// update last known leader
+			if rd.SoftState != nil {
+				leader := atomic.LoadUint64(&rd.SoftState.Lead) // etcdraft requires atomic access to this var
+				if leader != raft.None {
+					br.lg.Debugf("Leader %d is present", leader)
+				} else {
+					br.lg.Debug("No leader")
+				}
+
+				br.processLeaderChanges(leader)
 			}
 
 			br.raftNode.Advance()
@@ -312,6 +325,43 @@ Event_Loop:
 	br.lg.Info("Exiting block replicator event loop")
 }
 
+func (br *BlockReplicator) processLeaderChanges(leader uint64) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if leader != br.lastKnownLeader {
+		br.lg.Infof("Leader changed: %d to %d", br.lastKnownLeader, leader)
+
+		// TODO take care of in-flight blocks when leadership is either assumed or lost, see
+		// https://github.com/hyperledger-labs/orion-server/issues/210
+
+		lostLeadership := br.lastKnownLeader == br.raftID
+		assumedLeadership := leader == br.raftID
+
+		if lostLeadership {
+			br.lg.Info("Lost leadership")
+			// cancel the current proposal to free the propose-loop go-routine, as it might block for a long time.
+			br.cancelProposeContext()
+			br.cancelProposeContext = func() {} // NOOP
+		} else if assumedLeadership {
+			br.lg.Info("Assumed leadership")
+		}
+
+		if lostLeadership || assumedLeadership {
+			var err error
+			br.lastProposedBlockNumber = br.lastCommittedBlock.GetHeader().GetBaseHeader().GetNumber()
+			br.lastProposedBlockHeaderBaseHash, err = blockstore.ComputeBlockBaseHash(br.lastCommittedBlock)
+			if err != nil {
+				br.lg.Panicf("Error computing base header hash of last commited block: %+v; error: %s",
+					br.lastCommittedBlock.GetHeader(), err)
+			}
+		}
+
+		br.lastKnownLeader = leader
+		br.lastKnownLeaderHost = br.nodeHostPortFromRaftID(leader)
+	}
+}
+
 // When a node lags behind the cluster more than the last checkpoint of the leader, the leader will send a snapshot to
 // it. A snapshot is a block with some raft information. A received snapshot serves as a trigger for the node to
 // perform catch-up, or state transfer. It will contact one of the active members of the cluster (preferably the
@@ -327,10 +377,11 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 		return errors.Errorf("failed to unmarshal snapshot data to block: %s", err)
 	}
 
-	br.lg.Debugf("last block: %+v", br.lastBlock)
+	initBlockNumber := br.getLastCommittedBlockNumber()
+	br.lg.Debugf("initial last block number: %+v", initBlockNumber)
 	br.lg.Debugf("snap block: %+v", snapBlock)
-	initBlockNumber := br.lastBlock.Header.BaseHeader.Number
-	if br.lastBlock.Header.BaseHeader.Number >= snapBlock.Header.BaseHeader.Number {
+
+	if initBlockNumber >= snapBlock.Header.BaseHeader.Number {
 		br.lg.Errorf("Snapshot is at block [%d], local block number is %d, no catch-up needed", snapBlock.Header.BaseHeader.Number, initBlockNumber)
 		return nil
 	}
@@ -361,12 +412,14 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 			return &ierrors.ClosedError{ErrMsg: "server stopped during catch-up"}
 		case <-blocksReadyCh:
 			if err != nil {
+				lastBlockNumber := br.getLastCommittedBlockNumber()
 				switch err.(type) {
 				case *ierrors.ClosedError:
-					br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d], snapshot: %+v", br.lastBlock.Header.BaseHeader.Number, snap)
+
+					br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d], snapshot: %+v", lastBlockNumber, snap)
 					return nil
 				default:
-					return errors.Wrapf(err, "failed to pull blocks from cluster; last block number [%d], snapshot: %+v", br.lastBlock.Header.BaseHeader.Number, snap)
+					return errors.Wrapf(err, "failed to pull blocks from cluster; last block number [%d], snapshot: %+v", lastBlockNumber, snap)
 				}
 			}
 
@@ -378,9 +431,10 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 					blockToCommit.GetConsensusMetadata())
 
 				if err := br.commitBlock(blockToCommit); err != nil {
+					lastBlockNumber := br.getLastCommittedBlockNumber()
 					switch err.(type) {
 					case *ierrors.ClosedError:
-						br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d], snapshot: %+v", br.lastBlock.Header.BaseHeader.Number, snap)
+						br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d], snapshot: %+v", lastBlockNumber, snap)
 						return nil
 					default:
 						return err
@@ -392,7 +446,8 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 		}
 	}
 
-	br.lg.Infof("Finished syncing with cluster up to and including block [%d]", br.lastBlock.Header.BaseHeader.Number)
+	lastBlockNumber := br.getLastCommittedBlockNumber()
+	br.lg.Infof("Finished syncing with cluster up to and including block [%d]", lastBlockNumber)
 
 	return nil
 
@@ -508,19 +563,25 @@ Propose_Loop:
 	for {
 		select {
 		case blockToPropose := <-br.proposeCh:
-
-			//TODO check if leader, if not, refuse to propose
-
-			blockBytes, err := proto.Marshal(blockToPropose)
-			if err != nil {
-				br.lg.Panicf("Error marshaling a block: %s", err)
+			ctx, blockBytes, doPropose := br.prepareProposal(blockToPropose)
+			if !doPropose {
+				continue Propose_Loop
 			}
 
-			err = br.raftNode.Propose(context.Background(), blockBytes)
+			// Propose to raft: the call to raft.Node.Propose() may block when a leader loses its leadership and has no quorum.
+			// It is cancelled when the node loses leadership, by the event-loop go-routine.
+			err := br.raftNode.Propose(ctx, blockBytes)
 			if err != nil {
 				br.lg.Warnf("Failed to propose block: Num: %d; error: %s", blockToPropose.GetHeader().GetBaseHeader().GetNumber(), err)
-				//TODO reject all TXs in that block,
+				if txIDs, errIDs := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); errIDs == nil {
+					br.pendingTxs.ReleaseWithError(txIDs, errors.WithMessage(err, "failed to propose to Raft")) // will reject the TXs within
+				} else {
+					br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), errIDs)
+				}
+				continue Propose_Loop
 			}
+
+			br.updateLastProposal(blockToPropose)
 
 		case <-br.stopCh:
 			br.lg.Debug("Stopping block replicator")
@@ -529,6 +590,55 @@ Propose_Loop:
 	}
 
 	br.lg.Info("Exiting the block replicator propose loop")
+}
+
+// prepareProposal Prepares the Raft proposal context and bytes, and determine whether to propose (only the leader can
+// propose). This also numbers the block and sets the base header hash.
+func (br *BlockReplicator) prepareProposal(blockToPropose *types.Block) (ctx context.Context, blockBytes []byte, doPropose bool) {
+	br.mutex.Lock()
+
+	if errLeader := br.isLeader(); errLeader != nil {
+		br.mutex.Unlock() //do not call the pendingTxs component with a mutex locked
+
+		br.lg.Infof("Declined to propose block: %+v; because: %s", blockToPropose.GetHeader(), errLeader)
+		if txIDs, err := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); err == nil {
+			br.pendingTxs.ReleaseWithError(txIDs, errLeader)
+		} else {
+			br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), err)
+		}
+
+		return nil, nil, false //skip proposing
+	}
+
+	// number the block and set the base header hash
+	br.insertBlockBaseHeader(blockToPropose)
+
+	var err error
+	blockBytes, err = proto.Marshal(blockToPropose)
+	if err != nil {
+		br.lg.Panicf("Error marshaling a block: %s", err)
+	}
+
+	ctx, br.cancelProposeContext = context.WithCancel(context.Background())
+
+	br.mutex.Unlock()
+
+	return ctx, blockBytes, true
+}
+
+// updateLastProposal updates the last block proposed in order to keep track of block numbering.
+func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if br.isLeader() == nil {
+		br.lastProposedBlockNumber = lastBlockProposed.GetHeader().GetBaseHeader().GetNumber()
+		if baseHash, err := blockstore.ComputeBlockBaseHash(lastBlockProposed); err == nil {
+			br.lastProposedBlockHeaderBaseHash = baseHash
+		} else {
+			br.lg.Panicf("Failed to compute last block base hash: %s", err)
+		}
+	}
 }
 
 // Close signals the internal go-routine to stop and waits for it to exit.
@@ -560,6 +670,10 @@ func (br *BlockReplicator) IsLeader() *ierrors.NotLeaderError {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
 
+	return br.isLeader()
+}
+
+func (br *BlockReplicator) isLeader() *ierrors.NotLeaderError {
 	if br.lastKnownLeader == br.raftID {
 		return nil
 	}
@@ -585,7 +699,7 @@ func (br *BlockReplicator) commitBlock(block *types.Block) error {
 		return err
 	}
 
-	br.lastBlock = block
+	br.setLastCommittedBlock(block)
 
 	if reConfig == nil {
 		return nil
@@ -598,6 +712,20 @@ func (br *BlockReplicator) commitBlock(block *types.Block) error {
 	}
 
 	return nil
+}
+
+func (br *BlockReplicator) setLastCommittedBlock(block *types.Block) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	br.lastCommittedBlock = block
+}
+
+func (br *BlockReplicator) getLastCommittedBlockNumber() uint64 {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	return br.lastCommittedBlock.GetHeader().GetBaseHeader().GetNumber()
 }
 
 func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfig) error {
@@ -667,4 +795,26 @@ func (br *BlockReplicator) ReportSnapshot(id uint64, status raft.SnapshotStatus)
 	br.lg.Debugf("> ReportSnapshot: %d, %+v", id, status)
 	// see: rafthttp.RAFT
 	//TODO see issue: https://github.com/ibm-blockchain/bcdb-server/issues/41
+}
+
+// called inside a br.mutex.Lock()
+func (br *BlockReplicator) insertBlockBaseHeader(proposedBlock *types.Block) {
+	blockNum := br.lastProposedBlockNumber + 1
+	baseHeader := &types.BlockHeaderBase{
+		Number:                 blockNum,
+		PreviousBaseHeaderHash: br.lastProposedBlockHeaderBaseHash,
+	}
+
+	if blockNum > 1 {
+		lastCommittedBlockNum := br.lastCommittedBlock.GetHeader().GetBaseHeader().GetNumber()
+		lastCommittedBlockHash, err := blockstore.ComputeBlockHash(br.lastCommittedBlock)
+		if err != nil {
+			br.lg.Panicf("Error while creating block header for proposed block: %d; possible problems at last commited block header: %+v; error: %s",
+				blockNum, br.lastCommittedBlock.GetHeader(), err)
+		}
+		baseHeader.LastCommittedBlockHash = lastCommittedBlockHash
+		baseHeader.LastCommittedBlockNum = lastCommittedBlockNum
+	}
+
+	proposedBlock.Header = &types.BlockHeader{BaseHeader: baseHeader}
 }
