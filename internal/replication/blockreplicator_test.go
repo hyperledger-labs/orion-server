@@ -10,12 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -270,7 +270,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 		block2commit, err := env.conf.BlockOneQueueBarrier.Dequeue()
 		require.NoError(t, err)
 		require.NotNil(t, block2commit)
-		require.Equal(t, uint64(1), block2commit.(*types.Block).GetHeader().GetBaseHeader().GetNumber())
+		require.Equal(t, uint64(2), block2commit.(*types.Block).GetHeader().GetBaseHeader().GetNumber())
 		err = env.conf.BlockOneQueueBarrier.Reply(nil)
 		require.NoError(t, err)
 
@@ -555,7 +555,7 @@ func TestBlockReplicator_Snapshots(t *testing.T) {
 	// - submit 6 blocks, and make sure the ledger is correct, then close.
 	// Correct behavior after restart is checked by submitting more blocks and checking that they commit.
 	t.Run("restart from a snapshot", func(t *testing.T) {
-		lg := testLogger(t, "debug")
+		lg := testLogger(t, "info")
 		testDir, err := ioutil.TempDir("", "replication-test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
@@ -563,18 +563,19 @@ func TestBlockReplicator_Snapshots(t *testing.T) {
 		block := &types.Block{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{
-					Number:                1,
-					LastCommittedBlockNum: 1,
+					Number:                 1,
+					PreviousBaseHeaderHash: make([]byte, 32), //just to get the length right
+					LastCommittedBlockHash: make([]byte, 32), //just to get the length right
+					LastCommittedBlockNum:  0,
 				},
 			},
-			Payload: &types.Block_DataTxEnvelopes{},
 		}
 		blockData, err := proto.Marshal(block)
 		require.NoError(t, err)
 		blockLen := uint64(len(blockData))
 
 		clusterConfig := proto.Clone(clusterConfig1node).(*types.ClusterConfig)
-		clusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize = 3*blockLen + 1 // take a snapshot every 4 data blocks
+		clusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize = 3*blockLen + blockLen/2 // take a snapshot every 4 data blocks
 		env, err := newNodeEnv(1, testDir, lg, clusterConfig)
 		require.NoError(t, err)
 		require.NotNil(t, env)

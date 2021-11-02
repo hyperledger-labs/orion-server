@@ -9,7 +9,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/pkg/errors"
 )
 
 //go:generate counterfeiter -o mocks/replicator.go --fake-name Replicator . Replicator
@@ -19,15 +18,15 @@ type Replicator interface {
 	Submit(block *types.Block) error
 }
 
-// BlockCreator uses transactions batch queue to construct the
-// block and stores the created block in the block queue
+// BlockCreator uses transactions batch queue to construct a block proposal and submits the proposed block to the
+// block-replicator. The block-replicator is in charge of numbering the blocks and setting the previous
+// BlockHeaderBase hash.
 type BlockCreator struct {
-	txBatchQueue                *queue.Queue
-	blockReplicator             Replicator
-	pendingTxs                  *queue.PendingTxs //TODO release blocks rejected from blockReplicator
-	nextBlockNumber             uint64
-	previousBlockHeaderBaseHash []byte
-	blockStore                  *blockstore.Store
+	txBatchQueue       *queue.Queue
+	blockReplicator    Replicator
+	pendingTxs         *queue.PendingTxs
+	nextProposalNumber uint64 // this numbers the local blocks proposed throughout the life cycle of the node
+	blockStore         *blockstore.Store
 
 	started chan struct{}
 	stop    chan struct{}
@@ -47,25 +46,15 @@ type Config struct {
 
 // New creates a new block assembler
 func New(conf *Config) (*BlockCreator, error) {
-	height, err := conf.BlockStore.Height()
-	if err != nil {
-		return nil, err
-	}
-
-	lastBlockBaseHash, err := conf.BlockStore.GetBaseHeaderHash(height)
-	if err != nil {
-		return nil, err
-	}
 	return &BlockCreator{
-		txBatchQueue:                conf.TxBatchQueue,
-		nextBlockNumber:             height + 1,
-		logger:                      conf.Logger,
-		blockStore:                  conf.BlockStore,
-		pendingTxs:                  conf.PendingTxs,
-		started:                     make(chan struct{}),
-		stop:                        make(chan struct{}),
-		stopped:                     make(chan struct{}),
-		previousBlockHeaderBaseHash: lastBlockBaseHash,
+		txBatchQueue:       conf.TxBatchQueue,
+		nextProposalNumber: 1,
+		logger:             conf.Logger,
+		blockStore:         conf.BlockStore,
+		pendingTxs:         conf.PendingTxs,
+		started:            make(chan struct{}),
+		stop:               make(chan struct{}),
+		stopped:            make(chan struct{}),
 	}, nil
 }
 
@@ -108,15 +97,12 @@ func (b *BlockCreator) Start() {
 				continue
 			}
 
-			blkNum := b.nextBlockNumber //TODO move block numbering to replication, see: https://github.com/hyperledger-labs/orion-server/issues/200
-
-			baseHeader, err := b.createBaseHeader(blkNum)
-			if err != nil {
-				b.logger.Panicf("Error while filling block header, possible problems with block indexes {%v}", err)
-			}
+			blkNum := b.nextProposalNumber //Exact block numbering is done in replication
 			block := &types.Block{
 				Header: &types.BlockHeader{
-					BaseHeader: baseHeader,
+					BaseHeader: &types.BlockHeaderBase{
+						Number: blkNum,
+					},
 				},
 			}
 
@@ -141,7 +127,7 @@ func (b *BlockCreator) Start() {
 				b.logger.Debugf("created block %d with a DB administrative transaction", blkNum)
 			}
 
-			err = b.blockReplicator.Submit(block)
+			err := b.blockReplicator.Submit(block)
 			switch err.(type) {
 			case nil:
 				// All is well
@@ -166,12 +152,7 @@ func (b *BlockCreator) Start() {
 				b.logger.Panicf("block submission to block-replicator failed: %v", err)
 			}
 
-			h, err := blockstore.ComputeBlockBaseHash(block)
-			if err != nil {
-				b.logger.Panicf("Error calculating block hash {%v}", err)
-			}
-			b.previousBlockHeaderBaseHash = h
-			b.nextBlockNumber++
+			b.nextProposalNumber++
 		}
 	}
 }
@@ -186,28 +167,4 @@ func (b *BlockCreator) Stop() {
 	b.txBatchQueue.Close()
 	close(b.stop)
 	<-b.stopped
-}
-
-func (b *BlockCreator) createBaseHeader(blockNum uint64) (*types.BlockHeaderBase, error) {
-	baseHeader := &types.BlockHeaderBase{
-		Number:                 blockNum,
-		PreviousBaseHeaderHash: b.previousBlockHeaderBaseHash,
-	}
-
-	if blockNum > 1 {
-		lastCommittedBlockNum, err := b.blockStore.Height()
-		if err != nil {
-			return nil, err
-		}
-		lastCommittedBlockHash, err := b.blockStore.GetHash(lastCommittedBlockNum)
-		if err != nil {
-			return nil, err
-		}
-		if lastCommittedBlockHash == nil && !(lastCommittedBlockNum == 0) {
-			return nil, errors.Errorf("can't get hash of last committed block {%d}", lastCommittedBlockNum)
-		}
-		baseHeader.LastCommittedBlockHash = lastCommittedBlockHash
-		baseHeader.LastCommittedBlockNum = lastCommittedBlockNum
-	}
-	return baseHeader, nil
 }
