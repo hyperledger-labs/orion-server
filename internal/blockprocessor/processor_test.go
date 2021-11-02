@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/hyperledger-labs/orion-server/pkg/state"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockprocessor/mocks"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
@@ -28,7 +30,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -182,6 +183,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Payload: &types.Block_ConfigTxEnvelope{
 			ConfigTxEnvelope: &types.ConfigTxEnvelope{
 				Payload: &types.ConfigTx{
+					TxId:      "configTx1",
 					NewConfig: genesisConfig,
 				},
 			},
@@ -296,7 +298,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 
 		setup(t, env)
 
-		tx := createSampleTx(t, []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
+		tx := createSampleTx(t, "dataTx1", []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
 
 		testCases := []struct {
 			block               *types.Block
@@ -369,7 +371,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 		genesisHash, err := env.blockStore.GetHash(uint64(1))
 		require.NoError(t, err)
 
-		tx := createSampleTx(t, []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
+		tx := createSampleTx(t, "dataTx1", []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
 		testCases := []struct {
 			blocks              []*types.Block
 			key                 string
@@ -483,7 +485,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
+		block2 := createSampleBlock(2, createSampleTx(t, "dataTx1", []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -529,7 +531,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
+		block2 := createSampleBlock(2, createSampleTx(t, "dataTx1", []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
 				Flag: types.Flag_VALID,
@@ -565,7 +567,7 @@ func TestFailureAndRecovery(t *testing.T) {
 
 		setup(t, env)
 
-		tx := createSampleTx(t, []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
+		tx := createSampleTx(t, "dataTx1", []string{"key1", "key1"}, [][]byte{[]byte("value-1"), []byte("value-2")}, env.userSigner)
 		block2 := createSampleBlock(2, tx[:1])
 		block2.Header.ValidationInfo = []*types.ValidationInfo{
 			{
@@ -608,7 +610,7 @@ func TestBlockCommitListener(t *testing.T) {
 	defer env.cleanup(true)
 
 	setup(t, env)
-	block2 := createSampleBlock(2, createSampleTx(t, []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
+	block2 := createSampleBlock(2, createSampleTx(t, "dataTx1", []string{"key1"}, [][]byte{[]byte("value-1")}, env.userSigner))
 	block2.Header.ValidationInfo = []*types.ValidationInfo{
 		{
 			Flag: types.Flag_VALID,
@@ -687,11 +689,12 @@ func createSampleBlock(blockNumber uint64, env []*types.DataTxEnvelope) *types.B
 	}
 }
 
-func createSampleTx(t *testing.T, key []string, value [][]byte, signer crypto.Signer) []*types.DataTxEnvelope {
+func createSampleTx(t *testing.T, txId string, key []string, value [][]byte, signer crypto.Signer) []*types.DataTxEnvelope {
 	envelopes := make([]*types.DataTxEnvelope, 0)
 	for i := 0; i < len(key); i++ {
 		e := testutils.SignedDataTxEnvelope(t, []crypto.Signer{signer}, &types.DataTx{
 			MustSignUserIds: []string{"testUser"},
+			TxId:            fmt.Sprintf("%s_%d", txId, i),
 			DbOperations: []*types.DBOperation{
 				{
 					DbName: worldstate.DefaultDBName,

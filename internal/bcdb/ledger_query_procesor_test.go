@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperledger-labs/orion-server/pkg/state"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockprocessor"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
@@ -26,7 +27,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -155,6 +155,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 			ConfigTxEnvelope: &types.ConfigTxEnvelope{
 				Payload: &types.ConfigTx{
 					UserId:               "adminUser",
+					TxId:                 "configTx1",
 					ReadOldConfigVersion: nil,
 					NewConfig: &types.ClusterConfig{
 						Nodes: []*types.NodeConfig{
@@ -380,6 +381,7 @@ func TestGetBlock(t *testing.T) {
 		name                string
 		blockNumber         uint64
 		expectedBlockHeader *types.BlockHeader
+		expectedBlockTx     []*types.DataTxEnvelope
 		user                string
 		expectedErr         error
 	}{
@@ -387,24 +389,28 @@ func TestGetBlock(t *testing.T) {
 			name:                "Getting block 5 - correct",
 			blockNumber:         5,
 			expectedBlockHeader: env.blocks[4],
+			expectedBlockTx:     env.blockTx[4].Envelopes,
 			user:                "testUser",
 		},
 		{
 			name:                "Getting block 17 - correct",
 			blockNumber:         17,
 			expectedBlockHeader: env.blocks[16],
+			expectedBlockTx:     env.blockTx[16].Envelopes,
 			user:                "testUser",
 		},
 		{
 			name:                "Getting block 12 - correct",
 			blockNumber:         12,
 			expectedBlockHeader: env.blocks[11],
+			expectedBlockTx:     env.blockTx[11].Envelopes,
 			user:                "testUser",
 		},
 		{
 			name:                "Getting block 9 - correct",
 			blockNumber:         9,
 			expectedBlockHeader: env.blocks[8],
+			expectedBlockTx:     env.blockTx[8].Envelopes,
 			user:                "testUser",
 		},
 		{
@@ -439,6 +445,24 @@ func TestGetBlock(t *testing.T) {
 					require.True(t, proto.Equal(testCase.expectedBlockHeader, payload.GetBlockHeader()))
 				} else {
 					require.Nil(t, payload.GetBlockHeader())
+				}
+			} else {
+				require.Error(t, err)
+				require.EqualError(t, err, testCase.expectedErr.Error())
+				require.IsType(t, testCase.expectedErr, err)
+			}
+			augmentedPayload, err := env.p.getAugmentedBlockHeader(testCase.user, testCase.blockNumber)
+			if testCase.expectedErr == nil {
+				require.NoError(t, err)
+				if testCase.expectedBlockHeader != nil {
+					require.True(t, proto.Equal(testCase.expectedBlockHeader, augmentedPayload.GetBlockHeader().GetHeader()))
+					require.Equal(t, len(testCase.expectedBlockTx), len(augmentedPayload.GetBlockHeader().GetTxIds()))
+					for _, tx := range testCase.expectedBlockTx {
+						require.Contains(t, augmentedPayload.GetBlockHeader().GetTxIds(), tx.GetPayload().GetTxId())
+
+					}
+				} else {
+					require.Nil(t, augmentedPayload.GetBlockHeader())
 				}
 			} else {
 				require.Error(t, err)

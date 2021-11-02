@@ -33,6 +33,8 @@ func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handle
 		logger:      logger,
 	}
 
+	// HTTP GET "/ledger/block/{blockId}?augmented=true" gets augmented block header
+	handler.router.HandleFunc(constants.GetBlockHeader, handler.blockQuery).Methods(http.MethodGet).Queries("augmented", "{isAugmented:true|false}")
 	// HTTP GET "/ledger/block/{blockId}" gets block header
 	handler.router.HandleFunc(constants.GetBlockHeader, handler.blockQuery).Methods(http.MethodGet)
 	// HTTP GET "/ledger/block/last" gets last ledger block header
@@ -75,7 +77,13 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 	}
 	query := payload.(*types.GetBlockQuery)
 
-	data, err := p.db.GetBlockHeader(query.UserId, query.BlockNumber)
+	var data interface{}
+	var err error
+	if query.Augmented {
+		data, err = p.db.GetAugmentedBlockHeader(query.UserId, query.BlockNumber)
+	} else {
+		data, err = p.db.GetBlockHeader(query.UserId, query.BlockNumber)
+	}
 	if err != nil {
 		var status int
 

@@ -6,8 +6,7 @@ option go_package = "github.com/hyperledger-labs/orion-server/internal/blockstor
 
 package blockstore;
 
-message BlockLocation {
-    uint64 file_chunk_num = 1;
-    int64 offset = 2;
-    int64 length = 3;
+message BlockTxIDs {
+  repeated string tx_ids = 1;
 }
+

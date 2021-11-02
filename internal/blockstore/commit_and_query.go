@@ -10,12 +10,14 @@ import (
 	"os"
 	"sync"
 
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/snappy"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/snappy"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -138,7 +140,7 @@ func (s *Store) storeMetadataInDB(block *types.Block, location *BlockLocation) e
 
 	go func() {
 		defer wg.Done()
-		if err := s.storeBlockHeaders(block.Header); err != nil {
+		if err := s.storeBlockHeaders(block); err != nil {
 			errC <- err
 		}
 	}()
@@ -246,8 +248,9 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 	return s.txValidationInfoDB.Put(key, value, &opt.WriteOptions{Sync: true})
 }
 
-func (s *Store) storeBlockHeaders(header *types.BlockHeader) error {
-	number := header.BaseHeader.Number
+func (s *Store) storeBlockHeaders(block *types.Block) error {
+	header := block.GetHeader()
+	number := header.GetBaseHeader().GetNumber()
 	blockHeaderBaseBytes, err := proto.Marshal(header.GetBaseHeader())
 	if err != nil {
 		return errors.Wrapf(err, "can't marshal block base header {%d, %v}", number, header)
@@ -268,11 +271,22 @@ func (s *Store) storeBlockHeaders(header *types.BlockHeader) error {
 		return errors.Wrapf(err, "can't calculate block hash {%d, %v}", number, header)
 	}
 
+	txsID, err := httputils.BlockPayloadToTxIDs(block.GetPayload())
+	blockTxsID := &BlockTxIDs{TxIds: txsID}
+	if err != nil {
+		return errors.Wrapf(err, "can't access block tx ids {%d, %v}", number, block)
+	}
+	txsIdBytes, err := proto.Marshal(blockTxsID)
+	if err != nil {
+		return errors.Wrapf(err, "can't marshal block txs ids {%d, %v}", number, blockTxsID)
+	}
+
 	batch := &leveldb.Batch{}
 	batch.Put(constructHeaderBaseHashKey(number), blockHeaderBaseHash)
 	batch.Put(constructHeaderHashKey(number), blockHash)
 	batch.Put(constructHeaderBytesKey(number), blockHeaderBytes)
 	batch.Put(constructHeaderHashIndexKey(blockHash), encodeOrderPreservingVarUint64(number))
+	batch.Put(constructBlockTxsIDKey(number), txsIdBytes)
 
 	return s.blockHeaderDB.Write(batch, &opt.WriteOptions{Sync: true})
 }
@@ -351,6 +365,40 @@ func (s *Store) GetHeader(blockNumber uint64) (*types.BlockHeader, error) {
 		return nil, errors.Wrap(err, "error while unmarshalling block header")
 	}
 	return blockHeader, nil
+}
+
+// GetAugmentedHeader returns block header with slice of block tx ids
+func (s *Store) GetAugmentedHeader(blockNumber uint64) (*types.AugmentedBlockHeader, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	val, err := s.blockHeaderDB.Get(constructHeaderBytesKey(blockNumber), nil)
+	if err == leveldb.ErrNotFound {
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block not found: %d", blockNumber)}
+	}
+	if err != nil {
+		return nil, errors.Wrapf(err, "can't access block's %d hash", blockNumber)
+	}
+
+	txsBytes, err := s.blockHeaderDB.Get(constructBlockTxsIDKey(blockNumber), nil)
+	if err == leveldb.ErrNotFound {
+		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block tx slice not found: %d", blockNumber)}
+	}
+
+	blockHeader := &types.BlockHeader{}
+	if err := proto.Unmarshal(val, blockHeader); err != nil {
+		return nil, errors.Wrap(err, "error while unmarshalling block header")
+	}
+
+	txIds := &BlockTxIDs{}
+	if err := proto.Unmarshal(txsBytes, txIds); err != nil {
+		return nil, errors.Wrap(err, "error while unmarshalling block tx ids slice")
+	}
+
+	augmentedBlockHeader := &types.AugmentedBlockHeader{
+		Header: blockHeader,
+		TxIds:  txIds.GetTxIds(),
+	}
+	return augmentedBlockHeader, nil
 }
 
 // GetHash returns block hash by block number
@@ -527,4 +575,8 @@ func constructHeaderBytesKey(blockNum uint64) []byte {
 
 func constructHeaderHashKey(blockNum uint64) []byte {
 	return append(headerHashNs, encodeOrderPreservingVarUint64(blockNum)...)
+}
+
+func constructBlockTxsIDKey(blockNum uint64) []byte {
+	return append(blockTxsIDNs, encodeOrderPreservingVarUint64(blockNum)...)
 }

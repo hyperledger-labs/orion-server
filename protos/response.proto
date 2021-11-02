@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 syntax = "proto3";
 
-option go_package = "github.com/IBM-Blockchain/bcdb-server/pkg/types";
+option go_package = "github.com/hyperledger-labs/orion-server/pkg/types";
 
 package types;
 
@@ -82,6 +82,17 @@ message GetBlockResponseEnvelope {
 message GetBlockResponse {
   ResponseHeader header = 1;
   BlockHeader block_header = 2;
+}
+
+// GetAugmentedBlockHeader
+message GetAugmentedBlockHeaderResponseEnvelope {
+  GetAugmentedBlockHeaderResponse response = 1;
+  bytes signature = 2;
+}
+
+message GetAugmentedBlockHeaderResponse {
+  ResponseHeader header = 1;
+  AugmentedBlockHeader block_header = 2;
 }
 
 // GetLedgerPath

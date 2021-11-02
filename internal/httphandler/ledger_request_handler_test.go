@@ -11,6 +11,8 @@ import (
 	"path"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb/mocks"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
@@ -27,10 +29,13 @@ func TestBlockQuery(t *testing.T) {
 	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
-		name               string
-		requestFactory     func() (*http.Request, error)
-		dbMockFactory      func(response *types.GetBlockResponseEnvelope) bcdb.DB
-		expectedResponse   *types.GetBlockResponseEnvelope
+		name           string
+		requestFactory func() (*http.Request, error)
+		dbMockFactory  func(response proto.Message) bcdb.DB
+		//		dbMockFactory      func(response *types.GetBlockResponseEnvelope) bcdb.DB
+		expectedResponse proto.Message
+		//		expectedResponse   *types.GetBlockResponseEnvelope
+		augmentedHeader    bool
 		expectedStatusCode int
 		expectedErr        string
 	}{
@@ -49,7 +54,7 @@ func TestBlockQuery(t *testing.T) {
 				},
 			},
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1, false), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -58,13 +63,65 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response proto.Message) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
+			augmentedHeader:    false,
+		},
+		{
+			name: "valid get augmented header request",
+			expectedResponse: &types.GetAugmentedBlockHeaderResponseEnvelope{
+				Response: &types.GetAugmentedBlockHeaderResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					BlockHeader: &types.AugmentedBlockHeader{
+						Header: &types.BlockHeader{
+							BaseHeader: &types.BlockHeaderBase{
+								Number: 1,
+							},
+							ValidationInfo: []*types.ValidationInfo{
+								{
+									Flag: types.Flag_VALID,
+								},
+								{
+									Flag: types.Flag_VALID,
+								},
+							},
+						},
+						TxIds: []string{
+								"tx1",
+								"tx2",
+						},
+					},
+				},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1, true), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 1,
+					Augmented:   true,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response proto.Message) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetAugmentedBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+			augmentedHeader:    true,
 		},
 		{
 			name: "valid get last block header request",
@@ -90,7 +147,7 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response proto.Message) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetBlockHeader", submittingUserName, uint64(100)).Return(response, nil)
@@ -103,7 +160,7 @@ func TestBlockQuery(t *testing.T) {
 			name:             "user doesn't exist",
 			expectedResponse: nil,
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1, false), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -112,7 +169,7 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response proto.Message) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
 				return db
@@ -123,7 +180,7 @@ func TestBlockQuery(t *testing.T) {
 		{
 			name: "no block exist",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForLedgerBlock(1, false), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -132,7 +189,7 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response proto.Message) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(nil, &interrors.NotFoundErr{Message: "block not found: 1"})
@@ -140,6 +197,7 @@ func TestBlockQuery(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusNotFound,
 			expectedErr:        "error while processing 'GET /ledger/block/1' because block not found: 1",
+			augmentedHeader:    false,
 		},
 		{
 			name: "ledger height returns error",
@@ -153,7 +211,7 @@ func TestBlockQuery(t *testing.T) {
 				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
 				return req, nil
 			},
-			dbMockFactory: func(response *types.GetBlockResponseEnvelope) bcdb.DB {
+			dbMockFactory: func(response proto.Message) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(nil, &interrors.NotFoundErr{Message: "block not found: 1"})
@@ -189,7 +247,13 @@ func TestBlockQuery(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetBlockResponseEnvelope{}
+				var res proto.Message
+				if tt.augmentedHeader {
+					res = &types.GetAugmentedBlockHeaderResponseEnvelope{}
+				} else {
+					res = &types.GetBlockResponseEnvelope{}
+				}
+
 				err = json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResponse, res)

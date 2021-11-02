@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 syntax = "proto3";
 
-option go_package = "github.com/IBM-Blockchain/bcdb-server/pkg/types";
+option go_package = "github.com/hyperledger-labs/orion-server/pkg/types";
 
 package types;
 
@@ -63,6 +63,7 @@ message GetNodeConfigQuery {
 message GetBlockQuery {
   string user_id = 1;
   uint64 block_number = 2;
+  bool augmented = 3;
 }
 
 message GetBlockQueryEnvelope {
