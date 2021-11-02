@@ -21,7 +21,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -435,8 +434,8 @@ func TestBlockCreator_ReleaseSync(t *testing.T) {
 		testEnv.pendingTxs.Add(fmt.Sprintf("txid:%d", i), promise)
 		go func() {
 			receipt, err := promise.Wait()
-			assert.Nil(t, receipt)
-			assert.EqualError(t, err, "not a leader, leader is RaftID: 1, with HostPort: 10.10.10.10:1111")
+			require.Nil(t, receipt)
+			require.EqualError(t, err, "not a leader, leader is RaftID: 1, with HostPort: 10.10.10.10:1111")
 			wg.Done()
 		}()
 	}

@@ -3,13 +3,14 @@ package replication_test
 import (
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -203,7 +204,7 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 
 	// wait for some node to become a leader
 	isLeaderCond := func() bool {
-		return env.FindLeaderIndex() >= 0
+		return env.AgreedLeaderIndex() >= 0
 	}
 	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
 
@@ -217,7 +218,10 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 		Payload: &types.Block_DataTxEnvelopes{},
 	}
 
-	leaderIdx := env.FindLeaderIndex()
+	leaderIdx := env.AgreedLeaderIndex()
+	expectedNotLeaderErr := fmt.Sprintf("not a leader, leader is RaftID: %d, with HostPort: 127.0.0.1:2200%d", leaderIdx+1, leaderIdx+1)
+	follower1 := (leaderIdx + 1) % 3
+	follower2 := (leaderIdx + 2) % 3
 	numBlocks := uint64(100)
 	for i := uint64(0); i < numBlocks; i++ {
 		b := proto.Clone(block).(*types.Block)
@@ -225,6 +229,11 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
 		require.NoError(t, err)
 
+		// submission to a follower will cause an error
+		err = env.nodes[follower1].blockReplicator.Submit(b)
+		require.EqualError(t, err, expectedNotLeaderErr)
+		err = env.nodes[follower2].blockReplicator.Submit(b)
+		require.EqualError(t, err, expectedNotLeaderErr)
 	}
 
 	assert.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
@@ -232,6 +241,10 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 	for _, node := range env.nodes {
 		err := node.Close()
 		require.NoError(t, err)
+	}
+
+	for _, node := range env.nodes {
+		require.Equal(t, 0, node.pendingTxs.ReleaseWithErrorCallCount())
 	}
 }
 
@@ -419,4 +432,112 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 	}
 
 	require.NoError(t, env.AssertEqualLedger())
+}
+
+// Scenario:
+// - Start 2 nodes out of 3 together, wait for leader,
+// - Continuously submit blocks to fill the leader's pipeline
+// - After 100 blocks close the follower, so that the current leader loses its leadership
+// - Continue to submit blocks, anticipating that from some point they will be rejected
+// - Wait for a ReleaseWithError to be called from within the block replicator as it drains the internal channel
+func TestBlockReplicator_3Node_LeadershipLoss(t *testing.T) {
+	env := createClusterEnv(t, "info", 3, nil)
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	//start 2 of 3
+	for i, node := range env.nodes {
+		if i == 2 {
+			continue
+		}
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex(0, 1) >= 0
+	}
+	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                1,
+				LastCommittedBlockNum: 1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:1",
+						},
+					},
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:2",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	leaderIdx := env.AgreedLeaderIndex(0, 1)
+	numBlocks := uint64(100)
+	stopCh := make(chan interface{})
+	wg100 := sync.WaitGroup{}
+	wg100.Add(1)
+	wgStop := sync.WaitGroup{}
+	wgStop.Add(1)
+
+	var iLostLeadership uint64
+
+	go func() {
+		defer wgStop.Done()
+
+	LOOP:
+		for i := uint64(0); ; i++ {
+			select {
+			case <-stopCh:
+				t.Logf("Submiter stopped: %d", i)
+				break LOOP
+			default:
+				b := proto.Clone(block).(*types.Block)
+				b.Header.BaseHeader.Number = 2 + i
+				err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+				if i <= numBlocks {
+					require.NoError(t, err)
+				} else {
+					if err != nil && iLostLeadership == 0 {
+						require.Contains(t, err.Error(), "not a leader")
+						iLostLeadership = i
+						t.Logf("Lost leadership: %d", i)
+					}
+				}
+
+				if i == numBlocks {
+					t.Logf("Submitted: %d", i)
+					wg100.Done() // stop a node and eventually loose leadership
+				}
+			}
+		}
+	}()
+
+	wg100.Wait()
+
+	// close the follower
+	err := env.nodes[(leaderIdx+1)%2].Close()
+	require.NoError(t, err)
+
+	// eventually there will be a Release, as the internal proposal channel drains
+	assert.Eventually(t, func() bool { return env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCallCount() > 0 }, 60*time.Second, 100*time.Millisecond)
+	close(stopCh)
+	t.Log("before stopped: ")
+	wgStop.Wait()
+	t.Log("stopped: ")
+	err = env.nodes[leaderIdx].Close()
+	require.NoError(t, err)
 }
