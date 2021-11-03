@@ -122,11 +122,14 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		return nil, err
 	}
 
-	p.peerTransport = comm.NewHTTPTransport(&comm.Config{
+	p.peerTransport, err = comm.NewHTTPTransport(&comm.Config{
 		LocalConf:    localConfig,
 		Logger:       conf.logger,
 		LedgerReader: conf.blockStore,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	clusterConfig, _, err := conf.db.GetConfig()
 	if err != nil {

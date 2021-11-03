@@ -3,6 +3,8 @@
 package certificateauthority
 
 import (
+	"github.com/hyperledger-labs/orion-server/config"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -188,4 +190,23 @@ func TestCACertCollection_VerifyCollection(t *testing.T) {
 		require.NoError(t, err)
 		assertVerify(t, caCertCollection, false, true, false)
 	})
+}
+
+func TestLoadCAConfig(t *testing.T) {
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"user", "node"}, true)
+
+	rootCAFileName := path.Join(cryptoDir, testutils.RootCAFileName+".pem")
+	interCAFileName := path.Join(cryptoDir, testutils.IntermediateCAFileName+".pem")
+
+	caConfiguration := &config.CAConfiguration{
+		RootCACertsPath:         []string{rootCAFileName},
+		IntermediateCACertsPath: []string{interCAFileName},
+	}
+
+	caConfig, err := LoadCAConfig(caConfiguration)
+	require.NoError(t, err)
+	require.NotNil(t, caConfig)
+	caColl, err := NewCACertCollection(caConfig.GetRoots(), caConfig.GetIntermediates())
+	require.NoError(t, err)
+	require.NotNil(t, caColl)
 }

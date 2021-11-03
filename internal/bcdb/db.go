@@ -19,6 +19,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
+	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -840,7 +841,6 @@ type certsInGenesisConfig struct {
 func readCerts(conf *config.Configurations) (*certsInGenesisConfig, error) {
 	certsInGen := &certsInGenesisConfig{
 		nodeCertificates: make(map[string][]byte),
-		caCerts:          &types.CAConfig{},
 	}
 
 	for _, node := range conf.SharedConfig.Nodes {
@@ -859,22 +859,9 @@ func readCerts(conf *config.Configurations) (*certsInGenesisConfig, error) {
 	adminPemCert, _ := pem.Decode(adminCert)
 	certsInGen.adminCert = adminPemCert.Bytes
 
-	for _, certPath := range conf.SharedConfig.CAConfig.RootCACertsPath {
-		rootCACert, err := ioutil.ReadFile(certPath)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error while reading root CA certificate %s", certPath)
-		}
-		caPemCert, _ := pem.Decode(rootCACert)
-		certsInGen.caCerts.Roots = append(certsInGen.caCerts.Roots, caPemCert.Bytes)
-	}
-
-	for _, certPath := range conf.SharedConfig.CAConfig.IntermediateCACertsPath {
-		caCert, err := ioutil.ReadFile(certPath)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error while reading intermediate CA certificate %s", certPath)
-		}
-		caPemCert, _ := pem.Decode(caCert)
-		certsInGen.caCerts.Intermediates = append(certsInGen.caCerts.Intermediates, caPemCert.Bytes)
+	certsInGen.caCerts, err = certificateauthority.LoadCAConfig(&conf.SharedConfig.CAConfig)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while loading CA certificates from: %+v", conf.SharedConfig.CAConfig)
 	}
 
 	return certsInGen, nil

@@ -5,19 +5,25 @@ package comm
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
+	"go.etcd.io/etcd/pkg/transport"
 	etcd_types "go.etcd.io/etcd/pkg/types"
 	"go.etcd.io/etcd/raft/raftpb"
 )
@@ -37,10 +43,13 @@ type HTTPTransport struct {
 
 	raftID uint64
 
-	transport      *rafthttp.Transport
-	catchUpClient  *catchUpClient
-	catchupHandler *catchupHandler
-	httpServer     *http.Server
+	tlsInfo         transport.TLSInfo //for use as a rafthttp client
+	tlsServerConfig *tls.Config       //for use as a server
+	tlsClientConfig *tls.Config       //for use as a catchup client
+	transport       *rafthttp.Transport
+	catchUpClient   *catchUpClient
+	catchupHandler  *catchupHandler
+	httpServer      *http.Server
 
 	stopCh chan struct{} // signals HTTPTransport to shutdown
 	doneCh chan struct{} // signals HTTPTransport shutdown complete
@@ -54,21 +63,105 @@ type Config struct {
 	LedgerReader LedgerReader
 }
 
-func NewHTTPTransport(config *Config) *HTTPTransport {
-	if config.LocalConf.Replication.TLS.Enabled {
-		config.Logger.Panic("TLS not supported yet")
+func NewHTTPTransport(config *Config) (*HTTPTransport, error) {
+	if config.LocalConf.Replication.TLS.Enabled && config.LocalConf.Replication.TLS.ClientAuthRequired {
+		return nil, errors.New("TLS Client authentication not supported yet")
 	}
 
 	tr := &HTTPTransport{
 		logger:         config.Logger,
 		localConf:      config.LocalConf,
-		catchUpClient:  NewCatchUpClient(config.Logger),
+		catchUpClient:  NewCatchUpClient(config.Logger, nil),
 		catchupHandler: NewCatchupHandler(config.Logger, config.LedgerReader, 0), //TODO make max-response-bytes configurable
 		stopCh:         make(chan struct{}),
 		doneCh:         make(chan struct{}),
 	}
 
-	return tr
+	if config.LocalConf.Replication.TLS.Enabled {
+		// load and check the CA certificates
+		caCerts, err := certificateauthority.LoadCAConfig(&tr.localConf.Replication.TLS.CaConfig)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while loading CA certificates from local configuration Replication.TLS.CaConfig: %+v", tr.localConf.Replication.TLS.CaConfig)
+		}
+		caColl, err := certificateauthority.NewCACertCollection(caCerts.GetRoots(), caCerts.GetIntermediates())
+		if err != nil {
+			return nil, errors.Wrap(err, "error while creating a CA certificate collection")
+		}
+		if err := caColl.VerifyCollection(); err != nil {
+			return nil, errors.Wrap(err, "error while verifying the CA certificate collection")
+		}
+
+		// get a x509.CertPool of all the CA crtificates for tls.Config
+		caCertPool := caColl.GetCertPool()
+
+		// combine all the root & intermediate CA certificates we have into a single file for Raft TLSInfo
+		caBundleFile := path.Join(tr.localConf.Replication.AuxDir, "ca-bundle.pem")
+		if err := tr.localConf.Replication.TLS.CaConfig.WriteBundle(caBundleFile); err != nil {
+			return nil, errors.Wrapf(err, "failed to create CA bundle file")
+		}
+
+		tr.tlsInfo = transport.TLSInfo{
+			CertFile:            tr.localConf.Replication.TLS.ClientCertificatePath,
+			KeyFile:             tr.localConf.Replication.TLS.ClientKeyPath,
+			TrustedCAFile:       caBundleFile,
+			ClientCertAuth:      config.LocalConf.Replication.TLS.ClientAuthRequired,
+			CRLFile:             "",
+			InsecureSkipVerify:  false,
+			SkipClientSANVerify: false,
+			ServerName:          "",
+			HandshakeFailure:    nil,
+			CipherSuites:        nil,
+			AllowedCN:           "",
+			AllowedHostname:     "",
+			Logger:              config.Logger.Desugar().Named("tls"),
+			EmptyCN:             false,
+		}
+
+		// catch-up client tls.Config
+		clientKeyBytes, err := os.ReadFile(tr.localConf.Replication.TLS.ClientKeyPath)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read local config Replication.TLS.ClientKeyPath")
+		}
+		clientCertBytes, err := os.ReadFile(tr.localConf.Replication.TLS.ClientCertificatePath)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read local config Replication.TLS.ClientCertificatePath")
+		}
+		clientKeyPair, err := tls.X509KeyPair(clientCertBytes, clientKeyBytes)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create client tls.X509KeyPair")
+		}
+
+		tr.tlsClientConfig = &tls.Config{
+			Certificates: []tls.Certificate{clientKeyPair},
+			RootCAs:      caCertPool,
+			ClientCAs:    caCertPool,
+			MinVersion:   tls.VersionTLS12,
+		}
+		tr.catchUpClient = NewCatchUpClient(config.Logger, tr.tlsClientConfig)
+
+		// server tls.Config
+		serverKeyBytes, err := os.ReadFile(tr.localConf.Replication.TLS.ServerKeyPath)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read local config Replication.TLS.ServerKeyPath")
+		}
+		serverCertBytes, err := os.ReadFile(tr.localConf.Replication.TLS.ServerCertificatePath)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read local config Replication.TLS.ServerCertificatePath")
+		}
+		serverKeyPair, err := tls.X509KeyPair(serverCertBytes, serverKeyBytes)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create server tls.X509KeyPair")
+		}
+
+		tr.tlsServerConfig = &tls.Config{
+			Certificates: []tls.Certificate{serverKeyPair},
+			RootCAs:      caCertPool,
+			ClientCAs:    caCertPool,
+			MinVersion:   tls.VersionTLS12,
+		}
+	}
+
+	return tr, nil
 }
 
 func (p *HTTPTransport) SetConsensusListener(l ConsensusListener) error {
@@ -124,6 +217,7 @@ func (p *HTTPTransport) Start() error {
 
 	p.transport = &rafthttp.Transport{
 		Logger:      p.logger.Desugar(),
+		TLSInfo:     p.tlsInfo,
 		ID:          etcd_types.ID(p.raftID),
 		ClusterID:   0x1000, // TODO compute a ClusterID from the genesis block?
 		Raft:        p.consensusListener,
@@ -140,9 +234,13 @@ func (p *HTTPTransport) Start() error {
 	for _, peer := range p.clusterConfig.ConsensusConfig.Members {
 		if peer.RaftId != p.raftID {
 			membersList = append(membersList, peer)
+			schema := "http"
+			if p.localConf.Replication.TLS.Enabled {
+				schema = "https"
+			}
 			p.transport.AddPeer(
 				etcd_types.ID(peer.RaftId),
-				[]string{fmt.Sprintf("http://%s:%d", peer.PeerHost, peer.PeerPort)}) //TODO unsecure for now, add TLS/https later
+				[]string{fmt.Sprintf("%s://%s:%d", schema, peer.PeerHost, peer.PeerPort)})
 		}
 	}
 	if err = p.catchUpClient.UpdateMembers(membersList); err != nil {
@@ -153,7 +251,14 @@ func (p *HTTPTransport) Start() error {
 	mux := http.NewServeMux()
 	mux.Handle(rafthttp.RaftPrefix, raftHandler)
 	mux.Handle(BCDBPeerEndpoint, p.catchupHandler)
-	p.httpServer = &http.Server{Handler: mux}
+
+	p.httpServer = &http.Server{
+		Handler:   mux,
+		TLSConfig: p.tlsServerConfig,
+		ErrorLog: log.New(
+			&LogAdapter{SugarLogger: p.logger, Debug: false}, //log all errors as Info
+			"peer-http-server: ", 0),
+	}
 
 	go p.servePeers(netListener)
 
@@ -162,7 +267,13 @@ func (p *HTTPTransport) Start() error {
 
 func (p *HTTPTransport) servePeers(l net.Listener) {
 	p.logger.Infof("http transport starting to serve peers on: %s", l.Addr().String())
-	err := p.httpServer.Serve(l)
+	var err error
+	if p.localConf.Replication.TLS.Enabled {
+		err = p.httpServer.ServeTLS(l, "", "")
+	} else {
+		err = p.httpServer.Serve(l)
+	}
+
 	select {
 	case <-p.stopCh:
 		p.logger.Info("http transport stopping to server peers")
@@ -191,10 +302,17 @@ func (p *HTTPTransport) Close() {
 }
 
 func (p *HTTPTransport) SendConsensus(msgs []raftpb.Message) error {
+	for i, m := range msgs {
+		p.logger.Debugf("SendConsensus (%d/%d): Type: %s, From: %d, To: %d", i+1, len(msgs), m.Type, p.raftID, m.To)
+	}
 
 	p.transport.Send(msgs)
 
 	return nil
+}
+
+func (p *HTTPTransport) ClientTLSConfig() *tls.Config {
+	return p.tlsClientConfig
 }
 
 // PullBlocks tries to pull as many blocks as possible from startBlock to endBlock (inclusive).

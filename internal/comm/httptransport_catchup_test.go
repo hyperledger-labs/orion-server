@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	"github.com/hyperledger-labs/orion-server/internal/comm/mocks"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,14 +30,14 @@ func TestHTTPTransport_CatchupService(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	localConfigs, sharedConfig := newTestSetup(1)
+	localConfigs, sharedConfig := newTestSetup(t, 1)
 
 	ledger1 := &memLedger{}
 	for n := uint64(1); n < 6; n++ {
 		ledger1.Append(&types.Block{Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: n}}})
 	}
 	cl1 := &mocks.ConsensusListener{}
-	tr1 := comm.NewHTTPTransport(&comm.Config{
+	tr1, _ := comm.NewHTTPTransport(&comm.Config{
 		LocalConf:    localConfigs[0],
 		Logger:       lg,
 		LedgerReader: ledger1,

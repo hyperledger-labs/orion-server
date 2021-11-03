@@ -113,7 +113,7 @@ func (n *nodeEnv) Restart() error {
 	}
 
 	//recreate
-	n.conf.Transport = comm.NewHTTPTransport(
+	n.conf.Transport, _ = comm.NewHTTPTransport(
 		&comm.Config{
 			LedgerReader: n.conf.LedgerReader,
 			LocalConf:    n.conf.LocalConf,
@@ -280,7 +280,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 		return nil, err
 	}
 
-	peerTransport := comm.NewHTTPTransport(&comm.Config{
+	peerTransport, _ := comm.NewHTTPTransport(&comm.Config{
 		LedgerReader: ledger,
 		LocalConf:    localConf,
 		Logger:       lg,

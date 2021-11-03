@@ -32,7 +32,7 @@ func TestNewCatchUpClient(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	h := comm.NewCatchUpClient(lg)
+	h := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, h)
 }
 
@@ -45,7 +45,7 @@ func TestCatchUpClient_UpdateMembers(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	h := comm.NewCatchUpClient(lg)
+	h := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, h)
 
 	peer1 := &types.PeerConfig{
@@ -78,13 +78,13 @@ func TestCatchUpClient_GetHeight(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	localConfigs, sharedConfig := newTestSetup(2)
+	localConfigs, sharedConfig := newTestSetup(t, 2)
 
 	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
 	require.NoError(t, err)
 	defer tr1.Close()
 
-	cc := comm.NewCatchUpClient(lg)
+	cc := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, cc)
 	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
 	require.NoError(t, err)
@@ -103,13 +103,13 @@ func TestCatchUpClient_GetBlocks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	localConfigs, sharedConfig := newTestSetup(2)
+	localConfigs, sharedConfig := newTestSetup(t, 2)
 
 	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
 	require.NoError(t, err)
 	defer tr1.Close()
 
-	cc := comm.NewCatchUpClient(lg)
+	cc := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, cc)
 	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
 	require.NoError(t, err)
@@ -139,7 +139,7 @@ func TestCatchUpClient_PullBlocks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	localConfigs, sharedConfig := newTestSetup(3)
+	localConfigs, sharedConfig := newTestSetup(t, 3)
 
 	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
 	require.NoError(t, err)
@@ -149,7 +149,7 @@ func TestCatchUpClient_PullBlocks(t *testing.T) {
 	require.NoError(t, err)
 	defer tr2.Close()
 
-	cc := comm.NewCatchUpClient(lg)
+	cc := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, cc)
 	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
 	require.NoError(t, err)
@@ -185,7 +185,7 @@ func TestCatchUpClient_PullBlocksLoop(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	localConfigs, sharedConfig := newTestSetup(4)
+	localConfigs, sharedConfig := newTestSetup(t, 4)
 
 	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func TestCatchUpClient_PullBlocksLoop(t *testing.T) {
 	require.NoError(t, err)
 	defer tr3.Close()
 
-	cc := comm.NewCatchUpClient(lg)
+	cc := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, cc)
 	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
 	require.NoError(t, err)
@@ -289,13 +289,13 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 		comm.RetryIntervalMax = mx
 	}()
 
-	localConfigs, sharedConfig := newTestSetup(3)
+	localConfigs, sharedConfig := newTestSetup(t, 3)
 
 	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
 	require.NoError(t, err)
 	defer tr1.Close()
 
-	cc := comm.NewCatchUpClient(lg)
+	cc := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, cc)
 	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
 	require.NoError(t, err)
@@ -357,13 +357,13 @@ func TestCatchUpClient_PullBlocksCancel(t *testing.T) {
 		comm.RetryIntervalMax = mx
 	}()
 
-	localConfigs, sharedConfig := newTestSetup(3)
+	localConfigs, sharedConfig := newTestSetup(t, 3)
 
 	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
 	require.NoError(t, err)
 	defer tr1.Close()
 
-	cc := comm.NewCatchUpClient(lg)
+	cc := comm.NewCatchUpClient(lg, nil)
 	require.NotNil(t, cc)
 	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
 	require.NoError(t, err)
@@ -384,19 +384,76 @@ func TestCatchUpClient_PullBlocksCancel(t *testing.T) {
 	wg.Wait()
 }
 
+func TestCatchUpClient_PullBlocksWithTLS(t *testing.T) {
+	lg, err := logger.New(&logger.Config{
+		Level:         "debug",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	})
+	require.NoError(t, err)
+
+	localConfigs, sharedConfig := newTestSetup(t, 3)
+	for _, conf := range localConfigs {
+		conf.Replication.TLS.Enabled = true
+	}
+
+	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
+	require.NoError(t, err)
+	defer tr1.Close()
+
+	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 10)
+	require.NoError(t, err)
+	defer tr2.Close()
+
+	tr3, err := comm.NewHTTPTransport(&comm.Config{
+		LocalConf:    localConfigs[2],
+		Logger:       lg,
+		LedgerReader: nil,
+	})
+	require.NoError(t, err)
+
+	cc := comm.NewCatchUpClient(lg, tr3.ClientTLSConfig())
+	require.NotNil(t, cc)
+	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
+	require.NoError(t, err)
+
+	//get all from the leader hint
+	blocks, err := cc.PullBlocks(context.Background(), 1, 3, 1)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(blocks))
+	//get some from the leader hint
+	blocks, err = cc.PullBlocks(context.Background(), 1, 8, 1)
+	require.NoError(t, err)
+	require.Equal(t, 5, len(blocks))
+	//get all from member 2, wrong leader hint
+	blocks, err = cc.PullBlocks(context.Background(), 6, 9, 1)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(blocks))
+	//get all from one of 1/2, no hint
+	blocks, err = cc.PullBlocks(context.Background(), 1, 3, 0)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(blocks))
+	//get all from member 2, no hint
+	blocks, err = cc.PullBlocks(context.Background(), 6, 9, 0)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(blocks))
+}
+
 func startTransportWithLedger(t *testing.T, lg *logger.SugarLogger, localConfigs []*config.LocalConfiguration, sharedConfig *types.ClusterConfig, index, height uint64) (*comm.HTTPTransport, error) {
 	ledger := &memLedger{}
 	for n := uint64(1); n <= height; n++ {
 		ledger.Append(&types.Block{Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: n}}})
 	}
 	cl := &mocks.ConsensusListener{}
-	tr := comm.NewHTTPTransport(&comm.Config{
+	tr, err := comm.NewHTTPTransport(&comm.Config{
 		LocalConf:    localConfigs[index],
 		Logger:       lg,
 		LedgerReader: ledger,
 	})
+	require.NoError(t, err)
 	require.NotNil(t, tr)
-	err := tr.SetConsensusListener(cl)
+	err = tr.SetConsensusListener(cl)
 	require.NoError(t, err)
 	err = tr.UpdateClusterConfig(sharedConfig)
 	require.NoError(t, err)

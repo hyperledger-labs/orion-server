@@ -4,7 +4,11 @@ package certificateauthority
 
 import (
 	"crypto/x509"
+	"encoding/pem"
+	"io/ioutil"
 
+	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 )
 
@@ -81,4 +85,47 @@ func (c *CACertCollection) VerifyCollection() error {
 	//TODO should we require a single chain?
 
 	return nil
+}
+
+// GetCertPool combines all the CA certificates, root & intermediate, into a single x509.CertPool.
+func (c *CACertCollection) GetCertPool() *x509.CertPool {
+	pool := x509.NewCertPool()
+
+	for _, cert := range c.roots {
+		pool.AddCert(cert)
+	}
+
+	for _, cert := range c.intermediates {
+		pool.AddCert(cert)
+	}
+
+	return pool
+}
+
+// LoadCAConfig loads the Root CA and Intermediate CA certificates defined in the configuration.
+func LoadCAConfig(caConfiguration *config.CAConfiguration) (*types.CAConfig, error) {
+	if len(caConfiguration.RootCACertsPath) == 0 {
+		return nil, errors.New("CA configuration paths have empty RootCACertsPath")
+	}
+
+	caCerts := &types.CAConfig{}
+	for _, certPath := range caConfiguration.RootCACertsPath {
+		rootCACert, err := ioutil.ReadFile(certPath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while reading root CA certificate %s", certPath)
+		}
+		caPemCert, _ := pem.Decode(rootCACert)
+		caCerts.Roots = append(caCerts.Roots, caPemCert.Bytes)
+	}
+
+	for _, certPath := range caConfiguration.IntermediateCACertsPath {
+		caCert, err := ioutil.ReadFile(certPath)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while reading intermediate CA certificate %s", certPath)
+		}
+		caPemCert, _ := pem.Decode(caCert)
+		caCerts.Intermediates = append(caCerts.Intermediates, caPemCert.Bytes)
+	}
+
+	return caCerts, nil
 }
