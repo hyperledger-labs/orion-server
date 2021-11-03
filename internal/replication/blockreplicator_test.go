@@ -92,7 +92,7 @@ func TestBlockReplicator_Restart(t *testing.T) {
 	env.conf.Transport.Close()
 
 	//recreate
-	env.conf.Transport = comm.NewHTTPTransport(&comm.Config{LocalConf: env.conf.LocalConf, Logger: env.conf.Logger})
+	env.conf.Transport, _ = comm.NewHTTPTransport(&comm.Config{LocalConf: env.conf.LocalConf, Logger: env.conf.Logger})
 	env.conf.BlockOneQueueBarrier = queue.NewOneQueueBarrier(env.conf.Logger)
 	env.blockReplicator, err = replication.NewBlockReplicator(env.conf)
 	require.NoError(t, err)
@@ -335,7 +335,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 		env.conf.Transport.Close()
 
 		//recreate
-		env.conf.Transport = comm.NewHTTPTransport(&comm.Config{LocalConf: env.conf.LocalConf, Logger: env.conf.Logger})
+		env.conf.Transport, _ = comm.NewHTTPTransport(&comm.Config{LocalConf: env.conf.LocalConf, Logger: env.conf.Logger})
 		env.conf.BlockOneQueueBarrier = queue.NewOneQueueBarrier(env.conf.Logger)
 		env.blockReplicator, err = replication.NewBlockReplicator(env.conf)
 		require.NoError(t, err)

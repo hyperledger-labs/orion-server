@@ -39,6 +39,7 @@ var expectedLocalConfig = &LocalConfiguration{
 	Replication: ReplicationConf{
 		WALDir:  "./tmp/etcdraft/wal",
 		SnapDir: "./tmp/etcdraft/snapshot",
+		AuxDir:  "./tmp/orion/auxiliary",
 		Network: NetworkConf{
 			Address: "127.0.0.1",
 			Port:    7050,

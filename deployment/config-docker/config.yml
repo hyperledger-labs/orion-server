@@ -62,6 +62,9 @@ replication:
   # The directory for the Raft snapshots.
   snapDir: "/var/orion-server/ledger/etcdraft/snapshot"
 
+  # The directory for the auxiliary files.
+  auxDir: "/var/orion-server/ledger/auxiliary"
+
   # The listen address and port for intra-cluster communication.
   # The external address (or host name) of this interface
   # must be accessible from all other servers (a.k.a. "peers"),

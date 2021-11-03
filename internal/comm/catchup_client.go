@@ -5,6 +5,7 @@ package comm
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -18,10 +19,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -31,14 +32,16 @@ var RetryIntervalMax = 10 * time.Second
 type catchUpClient struct {
 	httpClient *http.Client
 	logger     *logger.SugarLogger
+	tlsConfig  *tls.Config
 
 	mutex   sync.Mutex
 	members map[uint64]*url.URL
 }
 
-func NewCatchUpClient(lg *logger.SugarLogger) *catchUpClient {
+func NewCatchUpClient(lg *logger.SugarLogger, tlsConfig *tls.Config) *catchUpClient {
 	c := &catchUpClient{
-		httpClient: newHTTPClient(),
+		httpClient: newHTTPClient(tlsConfig),
+		tlsConfig: tlsConfig,
 		logger:     lg,
 		members:    make(map[uint64]*url.URL),
 	}
@@ -48,8 +51,14 @@ func NewCatchUpClient(lg *logger.SugarLogger) *catchUpClient {
 // UpdateMembers updates the peer member list, must not include the self RaftID.
 func (c *catchUpClient) UpdateMembers(memberList []*types.PeerConfig) error {
 	members := make(map[uint64]*url.URL)
+
+	scheme := "http"
+	if c.tlsConfig != nil {
+		scheme = "https"
+	}
+
 	for _, m := range memberList {
-		rawURL := fmt.Sprintf("http://%s:%d", m.PeerHost, m.PeerPort) //TODO insecure for now, add security later
+		rawURL := fmt.Sprintf("%s://%s:%d", scheme, m.PeerHost, m.PeerPort)
 		baseURL, err := url.Parse(rawURL)
 		if err != nil {
 			return errors.Wrapf(err, "failed to convert PeerConfig [%+v] to url", m)
@@ -156,7 +165,7 @@ func (c *catchUpClient) GetBlocks(ctx context.Context, targetID, start, end uint
 		},
 	)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url.String(), nil) //TODO add context for fast server shutdown
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +221,7 @@ func (c *catchUpClient) GetHeight(ctx context.Context, targetID uint64) (uint64,
 	return hRes.Height, nil
 }
 
-func newHTTPClient() *http.Client {
+func newHTTPClient(tlsConfig *tls.Config) *http.Client {
 	//TODO expose some transport parameters
 	httpClient := &http.Client{
 		Transport: &http.Transport{
@@ -221,12 +230,13 @@ func newHTTPClient() *http.Client {
 				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
-			ForceAttemptHTTP2:     true,
+			TLSClientConfig:       tlsConfig,
+			TLSHandshakeTimeout:   10 * time.Second,
 			MaxIdleConns:          100,
 			MaxIdleConnsPerHost:   100,
 			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
+			ForceAttemptHTTP2:     true,
 		},
 	}
 	return httpClient

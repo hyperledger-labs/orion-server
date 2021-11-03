@@ -1,5 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package config
 
 import (
@@ -36,13 +37,15 @@ type ReplicationConf struct {
 	WALDir string
 	// SnapDir defines the directory used to store snapshots produced by the consensus algorithm.
 	SnapDir string
+	// AuxDir defines the directory used to store auxiliary and temporary files during replication.
+	AuxDir string
 	// Network defines the listen address and port used for server to server communication.
 	Network NetworkConf
 	// TLS defines TLS settings for server to server communication.
 	TLS TLSConf
 }
 
-// TLS configuration settings.
+// TLSConf holds TLS configuration settings.
 type TLSConf struct {
 	// Require server-side TLS.
 	Enabled bool

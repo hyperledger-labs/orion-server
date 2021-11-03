@@ -85,12 +85,6 @@ type AdminConf struct {
 	CertificatePath string
 }
 
-// CAConfiguration holds the path to the x509 certificates of the certificate authorities who issues all certificates.
-type CAConfiguration struct {
-	RootCACertsPath         []string
-	IntermediateCACertsPath []string
-}
-
 // readSharedConfig reads the shared config from the file and returns it.
 func readSharedConfig(sharedConfigFile string) (*SharedConfiguration, error) {
 	if sharedConfigFile == "" {
