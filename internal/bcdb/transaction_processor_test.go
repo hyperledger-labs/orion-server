@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperledger-labs/orion-server/pkg/state"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/blockprocessor"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
+	internalerror "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	mptrieStore "github.com/hyperledger-labs/orion-server/internal/mptrie/store"
@@ -27,8 +27,8 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -505,7 +505,7 @@ func TestTransactionProcessor(t *testing.T) {
 		require.Eventually(t, noPendingTxs, time.Second*2, time.Millisecond*100)
 	})
 
-	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
+	t.Run("unexpected transaction type", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
 		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
@@ -518,8 +518,40 @@ func TestTransactionProcessor(t *testing.T) {
 		require.EqualError(t, err, "unexpected transaction type")
 		require.Nil(t, resp)
 	})
-}
 
+	t.Run("bad TxId", func(t *testing.T) {
+		cryptoDir, conf := testConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
+		defer env.cleanup()
+
+		setupTxProcessor(t, env, worldstate.DefaultDBName)
+
+		tx := testutils.SignedDataTxEnvelope(t, []crypto.Signer{env.userSigner}, &types.DataTx{
+			MustSignUserIds: []string{"testUser"},
+			TxId:            "txid/is/not/a/url-segment",
+			DbOperations: []*types.DBOperation{
+				{
+					DbName:    worldstate.DefaultDBName,
+					DataReads: []*types.DataRead{},
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   "test-key1",
+							Value: []byte("test-value1"),
+						},
+					},
+				},
+			},
+		})
+
+		resp, err := env.txProcessor.submitTransaction(tx, 5*time.Second)
+		require.EqualError(t, err, "bad TxId: un-safe for a URL segment: \"txid/is/not/a/url-segment\"")
+		require.IsType(t, &internalerror.BadRequestError{}, err)
+		require.Nil(t, resp)
+	})
+
+}
 
 func testConfiguration(t *testing.T) (string, *config.Configurations) {
 	ledgerDir, err := ioutil.TempDir("/tmp", "server")

@@ -21,6 +21,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/txreorderer"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
@@ -195,6 +196,10 @@ func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Du
 		txID = tx.(*types.ConfigTxEnvelope).Payload.TxId
 	default:
 		return nil, errors.Errorf("unexpected transaction type")
+	}
+
+	if err := constants.SafeURLSegmentNZ(txID); err != nil {
+		return nil, &internalerror.BadRequestError{ErrMsg: errors.WithMessage(err, "bad TxId").Error()}
 	}
 
 	if err := t.IsLeader(); err != nil {

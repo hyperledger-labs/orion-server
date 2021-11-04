@@ -5,9 +5,27 @@ package constants
 import (
 	"fmt"
 	"path"
+	"regexp"
 
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"github.com/pkg/errors"
 )
+
+var validURLSegmentNZ *regexp.Regexp
+
+func init() {
+	// from https://www.ietf.org/rfc/rfc3986.txt
+	// segment-nz  = pchar*1
+	// pchar       = unreserved / pct-encoded / sub-delims / ":" / "@"
+	// unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
+	// pct-encoded = % HEXDIGIT HEXDIGIT
+	// sub-delims  = "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+	unReserved := `[-\._~[:alnum:]]`
+	pctEncoded := "%[[:xdigit:]]{2}"
+	subDelim := `[!\$&'\(\)\*\+,;=]`
+	plus := `[:@]`
+	validURLSegmentNZ = regexp.MustCompile(`^(` + unReserved + `|` + pctEncoded + `|` + subDelim + `|` + plus + `)+$`)
+}
 
 const (
 	UserHeader      = "UserID"
@@ -206,4 +224,14 @@ func URLForGetMostRecentUserInfo(userID string, version *types.Version) string {
 func URLForGetMostRecentNodeConfig(nodeID string, version *types.Version) string {
 	return ProvenanceEndpoint + path.Join("node", nodeID) +
 		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum)
+}
+
+// SafeURLSegmentNZ checks that the string `s` is safe to use as a URL segment-nz.
+// For example: `http://example.com:8080/tx/my-id`, for s="my-id".
+// See: `https://www.ietf.org/rfc/rfc3986.txt`.
+func SafeURLSegmentNZ(s string) error {
+	if !validURLSegmentNZ.MatchString(s) {
+		return errors.Errorf("un-safe for a URL segment: %q", s)
+	}
+	return nil
 }

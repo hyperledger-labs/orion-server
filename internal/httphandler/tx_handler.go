@@ -23,6 +23,8 @@ func (t *txHandler) handleTransaction(w http.ResponseWriter, request *http.Reque
 	resp, err := t.db.SubmitTransaction(tx, timeout)
 	if err != nil {
 		switch err.(type) {
+		case *internalerror.BadRequestError:
+			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		case *internalerror.DuplicateTxIDError:
 			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		case *internalerror.TimeoutErr:
