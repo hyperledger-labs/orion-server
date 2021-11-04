@@ -24,7 +24,7 @@ type Config struct {
 	Name          string
 }
 
-func New(c *Config) (*SugarLogger, error) {
+func New(c *Config, opts ...zap.Option) (*SugarLogger, error) {
 	logLevel, err := getZapLogLevel(c.Level)
 	if err != nil {
 		return nil, err
@@ -56,6 +56,9 @@ func New(c *Config) (*SugarLogger, error) {
 	}
 
 	l, err := logCfg.Build()
+	if len(opts) > 0 {
+		l = l.WithOptions(opts...)
+	}
 
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating a logger")

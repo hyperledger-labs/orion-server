@@ -6,9 +6,11 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -299,7 +301,7 @@ func TestErrorPath(t *testing.T) {
 		require.Nil(t, l)
 	})
 
-	t.Run("error in New() fron Build()", func(t *testing.T) {
+	t.Run("error in New() from Build()", func(t *testing.T) {
 		l, err := New(
 			&Config{
 				Level: "debug",
@@ -419,6 +421,76 @@ func TestLoggerWith(t *testing.T) {
 			for _, unexpected := range tt.notExpectedMessages {
 				require.NotContains(t, string(content), unexpected)
 			}
+		})
+	}
+}
+
+func TestSugarLogger_Hooks(t *testing.T) {
+	logStatements := func(l1 *SugarLogger) {
+		l1.Debug("debug bing is logged")
+		l1.Info("info bing is logged")
+		l1.Warn("warning bing is logged")
+		l1.Error("error bing is logged")
+
+		l1.Debug("debug bang is logged")
+		l1.Info("info bang is logged")
+		l1.Warn("warning bang is logged")
+		l1.Error("error bang is logged")
+	}
+
+	tests := []struct {
+		level         string
+		expectedCount int
+	}{
+		{
+			level:         "debug",
+			expectedCount: 4,
+		},
+		{
+			level:         "info",
+			expectedCount: 3,
+		},
+
+		{
+			level:         "warn",
+			expectedCount: 2,
+		},
+
+		{
+			level:         "err",
+			expectedCount: 1,
+		},
+		{
+			level:         "panic",
+			expectedCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("hook-"+tt.level, func(t *testing.T) {
+			var count int
+			bangCountingHook := func(entry zapcore.Entry) error {
+				if strings.Contains(entry.Message, "bang") {
+					count++
+				}
+				return nil
+			}
+
+			l, err := New(
+				&Config{
+					Level:         tt.level,
+					OutputPath:    []string{"stdout"},
+					ErrOutputPath: []string{"stderr"},
+					Encoding:      "console",
+				},
+				zap.Hooks(bangCountingHook),
+			)
+			require.NoError(t, err)
+
+			logStatements(l)
+
+			require.Equal(t, tt.expectedCount, count)
+
 		})
 	}
 }
