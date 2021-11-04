@@ -66,3 +66,12 @@ func (n *NotLeaderError) GetLeaderID() uint64 {
 func (n *NotLeaderError) GetLeaderHostPort() string {
 	return n.LeaderHostPort
 }
+
+// BadRequestError is used for errors that should be translated to a bad request, for example as an illegal TxId.
+type BadRequestError struct {
+	ErrMsg string
+}
+
+func (c *BadRequestError) Error() string {
+	return c.ErrMsg
+}
