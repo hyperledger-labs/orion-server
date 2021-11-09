@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -18,6 +19,8 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func TestNewCatchUpClient(t *testing.T) {
@@ -35,7 +38,7 @@ func TestNewCatchUpClient(t *testing.T) {
 
 func TestCatchUpClient_UpdateMembers(t *testing.T) {
 	lg, err := logger.New(&logger.Config{
-		Level:         "debug",
+		Level:         "info",
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
@@ -68,7 +71,7 @@ func TestCatchUpClient_UpdateMembers(t *testing.T) {
 
 func TestCatchUpClient_GetHeight(t *testing.T) {
 	lg, err := logger.New(&logger.Config{
-		Level:         "debug",
+		Level:         "info",
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
@@ -129,7 +132,7 @@ func TestCatchUpClient_GetBlocks(t *testing.T) {
 
 func TestCatchUpClient_PullBlocks(t *testing.T) {
 	lg, err := logger.New(&logger.Config{
-		Level:         "debug",
+		Level:         "info",
 		OutputPath:    []string{"stdout"},
 		ErrOutputPath: []string{"stderr"},
 		Encoding:      "console",
@@ -234,22 +237,53 @@ func TestCatchUpClient_PullBlocksLoop(t *testing.T) {
 	}
 }
 
+// Scenario:
+// - Define a 3 node cluster.
+// - Start pulling blocks until block 150.
+// - Start 1st transport with ledger at height 50,
+// - Wait until client gets them all and starts retrying, until it gets to retry max
+// - Start 2nd transport with ledger at height 100,
+// - Wait until client gets them all and starts retrying, until it gets to retry max
+// - Start 3rd transport with ledger at height 150,
+// - Wait until client gets them all.
 func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 	dir, err := ioutil.TempDir("", "catchup")
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
-	lg, err := logger.New(&logger.Config{
-		Level:         "debug",
-		OutputPath:    []string{"stdout", path.Join(dir, "test.log")},
-		ErrOutputPath: []string{"stderr"},
-		Encoding:      "console",
-	})
+
+	var retryCount int
+	var wgRetry1 sync.WaitGroup
+	wgRetry1.Add(1)
+	var wgRetry2 sync.WaitGroup
+	wgRetry2.Add(1)
+
+	lg, err := logger.New(
+		&logger.Config{
+			Level:         "debug", //must be debug
+			OutputPath:    []string{"stdout", path.Join(dir, "test.log")},
+			ErrOutputPath: []string{"stderr"},
+			Encoding:      "console",
+		},
+		zap.Hooks(func(entry zapcore.Entry) error {
+			if strings.Contains(entry.Message, "Retry interval max reached") {
+				t.Logf("Retry is working! %s | %s", entry.Caller, entry.Message)
+				if retryCount == 0 {
+					wgRetry1.Done()
+				}
+				if retryCount == 1 {
+					wgRetry2.Done()
+				}
+				retryCount++
+			}
+			return nil
+		}),
+	)
 	require.NoError(t, err)
 
 	mn := comm.RetryIntervalMin
 	mx := comm.RetryIntervalMax
-	comm.RetryIntervalMin = 10 * time.Microsecond
-	comm.RetryIntervalMax = 100 * time.Microsecond
+	comm.RetryIntervalMin = 100 * time.Microsecond
+	comm.RetryIntervalMax = 1 * time.Millisecond
 	defer func() {
 		comm.RetryIntervalMin = mn
 		comm.RetryIntervalMax = mx
@@ -270,8 +304,8 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 
 	var num uint64
 	var target uint64 = 150
-	var wg sync.WaitGroup
-	wg.Add(1)
+	var wgTarget sync.WaitGroup
+	wgTarget.Add(1)
 
 	pullBlocksLoop := func() {
 		for num < target {
@@ -283,31 +317,26 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 				num = block.Header.BaseHeader.Number
 			}
 		}
-		wg.Done()
+		wgTarget.Done()
 	}
 
 	go pullBlocksLoop()
 
-	//TODO do "eventually" on `Retry interval max reached` instead, as this `Sleep` may creates a flake, see: https://github.com/hyperledger-labs/orion-server/issues/188
-	time.Sleep(100 * time.Millisecond)
+	wgRetry1.Wait()
 	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 100)
 	require.NoError(t, err)
 	defer tr2.Close()
 
-	time.Sleep(100 * time.Millisecond)
+	wgRetry2.Wait()
 	tr3, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 150)
 	require.NoError(t, err)
 	defer tr3.Close()
 
-	wg.Wait()
+	wgTarget.Wait()
 
 	h, err := ledger4.Height()
 	require.NoError(t, err)
 	require.Equal(t, target, h)
-
-	logBytes, err := ioutil.ReadFile(path.Join(dir, "test.log"))
-	require.NoError(t, err)
-	require.Contains(t, string(logBytes), "Retry interval max reached")
 }
 
 func TestCatchUpClient_PullBlocksCancel(t *testing.T) {
