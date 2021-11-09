@@ -315,16 +315,15 @@ Event_Loop:
 
 		case <-br.stopCh:
 			br.lg.Info("Stopping block replicator")
-
-			// notify the propose-loop go-routine in case it is waiting for blocks to commit
-			br.mutex.Lock()
-			br.numInFlightBlocks = 0
-			br.condTooManyInFlightBlocks.Broadcast()
-			br.mutex.Unlock()
-
 			break Event_Loop
 		}
 	}
+
+	// Notify the propose-loop go-routine in case it is waiting for blocks to commit or a leadership change.
+	br.mutex.Lock()
+	br.numInFlightBlocks = 0
+	br.condTooManyInFlightBlocks.Broadcast()
+	br.mutex.Unlock()
 
 	raftTicker.Stop()
 	br.raftNode.Stop()
@@ -654,10 +653,10 @@ func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
 				br.numInFlightBlocks, br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks)
 
 			for br.numInFlightBlocks > br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks {
-				// the go-routine will be notified when:
+				// the go-routine will be notified by the event-loop go-routine when:
 				// - a block commits, or
 				// - when leadership is lost or assumed, or
-				// - when the event-loop go-routine detects a stop signal. This is done in order to remain
+				// - when the event-loop go-routine exits. This is done in order to remain
 				//   reactive to server shutdown while waiting for blocks to commit.
 				br.condTooManyInFlightBlocks.Wait()
 			}
