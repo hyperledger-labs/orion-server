@@ -19,18 +19,26 @@ module.exports = {
                         "getting-started/launching-one-node/overview",
                         "getting-started/launching-one-node/binary",
                         "getting-started/launching-one-node/docker",
-                        "getting-started/launching-one-node/crypto-materials",
+                        // "getting-started/launching-one-node/crypto-materials",
                     ],
                 },
+                // {
+                //     type: "category",
+                //     label: "Launching a Orion Cluster",
+                //     items: [
+                //         "getting-started/launching-cluster/overview",
+                //         "getting-started/launching-cluster/private-configuration",
+                //         "getting-started/launching-cluster/shared-configuration",
+                //         "getting-started/launching-cluster/crypto-materials",
+                //         "getting-started/launching-cluster/docker-compose",
+                //     ],
+                // },
                 {
                     type: "category",
-                    label: "Launching a Orion Cluster",
+                    label: "Pre-requisite For Executing Transactions and Queries",
                     items: [
-                        "getting-started/launching-cluster/overview",
-                        "getting-started/launching-cluster/private-configuration",
-                        "getting-started/launching-cluster/shared-configuration",
-                        "getting-started/launching-cluster/crypto-materials",
-                        "getting-started/launching-cluster/docker-compose",
+                        "getting-started/pre-requisite/gosdk",
+                        "getting-started/pre-requisite/curl",
                     ],
                 },
                 {
@@ -39,22 +47,22 @@ module.exports = {
                     items: [
                         {
                             type: "category",
-                            label: "Using Curl command",
-                            items: [
-                                "getting-started/transactions/curl/dbtx",
-                                "getting-started/transactions/curl/usertx",
-                                "getting-started/transactions/curl/datatx",
-                                "getting-started/transactions/curl/configtx",
-                            ],
-                        },
-                        {
-                            type: "category",
                             label: "Using Go SDK",
                             items: [
                                 "getting-started/transactions/gosdk/dbtx",
                                 "getting-started/transactions/gosdk/usertx",
                                 "getting-started/transactions/gosdk/datatx",
-                                "getting-started/transactions/gosdk/configtx",
+                                // "getting-started/transactions/gosdk/configtx",
+                            ],
+                        },
+                        {
+                            type: "category",
+                            label: "Using Curl command",
+                            items: [
+                                "getting-started/transactions/curl/dbtx",
+                                "getting-started/transactions/curl/usertx",
+                                "getting-started/transactions/curl/datatx",
+                                // "getting-started/transactions/curl/configtx",
                             ],
                         },
                     ],
@@ -63,21 +71,6 @@ module.exports = {
                     type: "category",
                     label: "Executing Queries",
                     items: [
-                        {
-                            type: "category",
-                            label: "Using Curl command",
-                            items: [
-                                "getting-started/queries/curl/cluster-config",
-                                "getting-started/queries/curl/node-config",
-                                "getting-started/queries/curl/user",
-                                "getting-started/queries/curl/db",
-                                "getting-started/queries/curl/simple-data-query",
-                                "getting-started/queries/curl/complex-data-query",
-                                "getting-started/queries/curl/provenance",
-                                "getting-started/queries/curl/block-header",
-                                "getting-started/queries/curl/transaction-receipt",
-                            ],
-                        },
                         {
                             type: "category",
                             label: "Using Go SDK",
@@ -93,6 +86,21 @@ module.exports = {
                                 "getting-started/queries/gosdk/transaction-receipt",
                             ],
                         },
+                        {
+                            type: "category",
+                            label: "Using Curl command",
+                            items: [
+                                "getting-started/queries/curl/cluster-config",
+                                "getting-started/queries/curl/node-config",
+                                "getting-started/queries/curl/user",
+                                "getting-started/queries/curl/db",
+                                "getting-started/queries/curl/simple-data-query",
+                                "getting-started/queries/curl/complex-data-query",
+                                "getting-started/queries/curl/provenance",
+                                "getting-started/queries/curl/block-header",
+                                "getting-started/queries/curl/transaction-receipt",
+                            ],
+                        },
                     ],
                 },
                 {
@@ -101,20 +109,20 @@ module.exports = {
                     items: [
                         {
                             type: "category",
-                            label: "Using Curl command",
-                            items: [
-                                "getting-started/proofs-and-verification/curl/state",
-                                "getting-started/proofs-and-verification/curl/tx",
-                                "getting-started/proofs-and-verification/curl/block",
-                            ],
-                        },
-                        {
-                            type: "category",
                             label: "Using Go SDK",
                             items: [
                                 "getting-started/proofs-and-verification/gosdk/state",
                                 "getting-started/proofs-and-verification/gosdk/tx",
                                 "getting-started/proofs-and-verification/gosdk/block",
+                            ],
+                        },
+                        {
+                            type: "category",
+                            label: "Using Curl command",
+                            items: [
+                                "getting-started/proofs-and-verification/curl/state",
+                                "getting-started/proofs-and-verification/curl/tx",
+                                "getting-started/proofs-and-verification/curl/block",
                             ],
                         },
                     ],

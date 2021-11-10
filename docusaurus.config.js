@@ -109,8 +109,9 @@ const config = {
         copyright: `Copyright © ${new Date().getFullYear()} Hyperledger Orion`,
       },
       prism: {
-        theme: lightCodeTheme,
-        darkTheme: darkCodeTheme,
+        theme: require('prism-react-renderer/themes/dracula'),
+        // theme: lightCodeTheme,
+        // darkTheme: darkCodeTheme,
       },
     }),
 };
