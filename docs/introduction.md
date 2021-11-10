@@ -26,9 +26,9 @@ OrionB**DOES NOT** have the following two blockchain properties:
 
 ## High Level Architecture
 Figure 1 presents the high level architecture of Orion.
-<img src="./docs/figures/high-level-architecture.png" alt="drawing" width="800"/>
+![Architecture of Hyperledger Orion](/img/high-level-architecture.png)
 
-OrionBstores and manages the following five data elements:
+Orion stores and manages the following five data elements:
 
   1. **Users**: Storage of users' credentials such as digital certificate and their privileges. Only these users can access the Orion node.
   2. **Key-Value Pairs**: Storage of all current/active key-value pairs committed by users of the Orion node.
