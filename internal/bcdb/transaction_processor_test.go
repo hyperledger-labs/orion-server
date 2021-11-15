@@ -125,7 +125,13 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 		logger:          lg,
 	}
 	txProcessor, err := newTransactionProcessor(txProcConf)
-	require.NoError(t, err)
+	if conf.JoinBlock == nil {
+		require.NoError(t, err)
+	} else {
+		// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
+		require.EqualError(t, err, "not supported yet: BlockReplicator joinExistingCluster")
+		return nil
+	}
 
 	cleanup := func() {
 		if err := txProcessor.close(); err != nil {
@@ -551,6 +557,14 @@ func TestTransactionProcessor(t *testing.T) {
 		require.Nil(t, resp)
 	})
 
+	t.Run("create with a join block", func(t *testing.T) {
+		// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
+		cryptoDir, conf := testJoinConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
+		require.Nil(t, env)
+	})
 }
 
 func testConfiguration(t *testing.T) (string, *config.Configurations) {
@@ -627,6 +641,111 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 				CertificatePath: path.Join(cryptoDir, "admin.pem"),
 			},
 		},
+	}
+}
+
+func testJoinConfiguration(t *testing.T) (string, *config.Configurations) {
+	ledgerDir, err := ioutil.TempDir("/tmp", "server")
+	require.NoError(t, err)
+
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "bdb-node-1", "bdb-node-2", "admin"})
+
+	clusterConfig := &types.ClusterConfig{
+		Nodes: []*types.NodeConfig{
+			{
+				Id:          "bdb-node-1",
+				Address:     "127.0.0.1",
+				Port:        6091,
+				Certificate: []byte("bogus-cert"),
+			},
+			{
+				Id:          "bdb-node-2",
+				Address:     "127.0.0.1",
+				Port:        6092,
+				Certificate: []byte("bogus-cert"),
+			},
+		},
+		Admins: []*types.Admin{
+			{Id: "admin", Certificate: []byte("something")},
+		},
+		CertAuthConfig: &types.CAConfig{
+			Roots: [][]byte{[]byte("bogus-ca-cert")},
+		},
+		ConsensusConfig: &types.ConsensusConfig{
+			Algorithm: "raft",
+			Members: []*types.PeerConfig{
+				{
+					NodeId:   "bdb-node-1",
+					RaftId:   1,
+					PeerHost: "127.0.0.1",
+					PeerPort: 70901,
+				},
+				{
+					NodeId:   "bdb-node-2",
+					RaftId:   2,
+					PeerHost: "127.0.0.1",
+					PeerPort: 70902,
+				},
+			},
+			RaftConfig: &types.RaftConfig{
+				TickInterval:         "20ms",
+				ElectionTicks:        100,
+				HeartbeatTicks:       10,
+				MaxInflightBlocks:    50,
+				SnapshotIntervalSize: 1000000,
+				MaxRaftId:            2,
+			},
+		},
+	}
+
+	joinBlock := &types.Block{
+		Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: 10}},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					UserId:    "admin",
+					TxId:      "txid",
+					NewConfig: clusterConfig,
+				},
+			},
+		},
+	}
+
+	return cryptoDir, &config.Configurations{
+		LocalConfig: &config.LocalConfiguration{
+			Server: config.ServerConf{
+				Identity: config.IdentityConf{
+					ID:              "bdb-node-2",
+					CertificatePath: path.Join(cryptoDir, "bdb-node-2.pem"),
+					KeyPath:         path.Join(cryptoDir, "bdb-node-2.key"),
+				},
+				Network: config.NetworkConf{
+					Address: "127.0.0.1",
+					Port:    0,
+				},
+				Database: config.DatabaseConf{
+					Name:            "leveldb",
+					LedgerDirectory: ledgerDir,
+				},
+				QueueLength: config.QueueLengthConf{
+					Transaction:               1000,
+					ReorderedTransactionBatch: 100,
+					Block:                     100,
+				},
+				LogLevel: "info",
+			},
+			BlockCreation: config.BlockCreationConf{
+				MaxBlockSize:                2,
+				MaxTransactionCountPerBlock: 1,
+				BlockTimeout:                50 * time.Millisecond,
+			},
+			Replication: config.ReplicationConf{
+				WALDir:  path.Join(ledgerDir, "raft", "wal"),
+				SnapDir: path.Join(ledgerDir, "raft", "snap"),
+			},
+		},
+		SharedConfig: nil,
+		JoinBlock:    joinBlock,
 	}
 }
 
