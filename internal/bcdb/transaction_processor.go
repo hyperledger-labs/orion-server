@@ -107,17 +107,26 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		return nil, err
 	}
 	if ledgerHeight == 0 {
-		p.logger.Info("Bootstrapping the ledger and database")
-		tx, err := PrepareBootstrapConfigTx(conf.config)
-		if err != nil {
-			return nil, err
-		}
-		bootBlock, err := blockcreator.BootstrapBlock(tx)
-		if err != nil {
-			return nil, err
-		}
-		if err = p.blockProcessor.Bootstrap(bootBlock); err != nil {
-			return nil, err
+		p.logger.Info("Ledger is empty")
+		if conf.config.SharedConfig != nil {
+			p.logger.Info("Bootstrapping the ledger and database from SharedConfiguration")
+			tx, err := PrepareBootstrapConfigTx(conf.config)
+			if err != nil {
+				return nil, err
+			}
+			bootBlock, err := blockcreator.BootstrapBlock(tx)
+			if err != nil {
+				return nil, err
+			}
+			if err = p.blockProcessor.Bootstrap(bootBlock); err != nil {
+				return nil, err
+			}
+			ledgerHeight = 1 // genesis block generated
+		} else if conf.config.JoinBlock != nil {
+			p.logger.Info("Bootstrapping the ledger and database from the cluster using a join block, number: %d",
+				conf.config.JoinBlock.GetHeader().GetBaseHeader().GetNumber())
+		} else {
+			return nil, errors.New("missing bootstrap, no SharedConfig or JoinBlock")
 		}
 	}
 
@@ -142,11 +151,36 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		return nil, err
 	}
 
-	clusterConfig, _, err := conf.db.GetConfig()
-	if err != nil {
-		return nil, err
+	var clusterConfig *types.ClusterConfig
+	// A 'normal start' is when the server has the most current config known to it in the DB (and ledger), and has no
+	// join-block. This can happen when:
+	// - the server starts from genesis, or
+	// - had a join-block in the past to join the cluster but the join-block was removed after the server had caught up.
+	normalStart := conf.config.JoinBlock == nil
+	// A 'join start' is when the server starts with a join block, either with an empty ledger, or a ledger that is
+	// behind the join-block. This means that the join-block has the most recent config, and not the DB.
+	joinStart := !normalStart && (ledgerHeight < conf.config.JoinBlock.GetHeader().GetBaseHeader().GetNumber())
+	// A 'completed join start' is when the server starts with a join block, but the ledger is at or beyond the
+	// join-block. This means that the join process had completed and that the DB (and ledger) has the most recent
+	// config.
+	completedJoinStart := !normalStart && (ledgerHeight >= conf.config.JoinBlock.GetHeader().GetBaseHeader().GetNumber())
+
+	switch {
+	case normalStart, completedJoinStart:
+		clusterConfig, _, err = conf.db.GetConfig()
+		if err != nil {
+			return nil, err
+		}
+		conf.logger.Debugf("Using cluster config from DB: %+v", clusterConfig)
+
+	case joinStart:
+		clusterConfig = conf.config.JoinBlock.GetPayload().(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope.GetPayload().NewConfig
+		conf.logger.Debugf("Using cluster config from join-block: %+v", clusterConfig)
+
+	default:
+		return nil, errors.New("programming error, one of: 'normalStart || completedJoinStart || joinStart' must be true!")
 	}
-	conf.logger.Debugf("cluster config: %+v", clusterConfig)
+
 	if err = p.peerTransport.SetClusterConfig(clusterConfig); err != nil {
 		return nil, err
 	}
@@ -155,6 +189,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		&replication.Config{
 			LocalConf:            localConfig,
 			ClusterConfig:        clusterConfig,
+			JoinBlock:            conf.config.JoinBlock,
 			LedgerReader:         conf.blockStore,
 			Transport:            p.peerTransport,
 			BlockOneQueueBarrier: p.blockOneQueueBarrier,

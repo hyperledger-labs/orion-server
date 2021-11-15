@@ -44,7 +44,9 @@ type PendingTxsReleaser interface {
 }
 
 type BlockReplicator struct {
-	localConf *config.LocalConfiguration
+	localConf       *config.LocalConfiguration
+	joinBlock       *types.Block
+	joinBlockNumber uint64
 
 	proposeCh       chan *types.Block
 	raftID          uint64
@@ -63,6 +65,7 @@ type BlockReplicator struct {
 	// shared state between the propose-loop go-routine and event-loop go-routine
 	mutex                           sync.Mutex
 	clusterConfig                   *types.ClusterConfig
+	joinExistingCluster             bool
 	lastKnownLeader                 uint64
 	lastKnownLeaderHost             string // cache the leader's Node host:port for client request redirection
 	cancelProposeContext            func() // cancels the propose-context if leadership is lost
@@ -87,6 +90,7 @@ type BlockReplicator struct {
 type Config struct {
 	LocalConf            *config.LocalConfiguration
 	ClusterConfig        *types.ClusterConfig
+	JoinBlock            *types.Block
 	LedgerReader         BlockLedgerReader
 	Transport            *comm.HTTPTransport
 	BlockOneQueueBarrier *queue.OneQueueBarrier
@@ -125,6 +129,8 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 
 	br := &BlockReplicator{
 		localConf:            conf.LocalConf,
+		joinBlock:            conf.JoinBlock,
+		joinBlockNumber:      conf.JoinBlock.GetHeader().GetBaseHeader().GetNumber(), // if joinBlock==nil => 0
 		proposeCh:            make(chan *types.Block, 1),
 		raftID:               raftID,
 		raftStorage:          storage,
@@ -186,14 +192,15 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 
 	lg.Debugf("haveWAL: %v, Storage: %v, Raft config: %+v", haveWAL, storage, raftConfig)
 
-	joinExistingCluster := false // TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
+	// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
+	br.joinExistingCluster = (conf.JoinBlock != nil) && (height < br.joinBlockNumber)
 
 	if haveWAL {
 		br.raftNode = raft.RestartNode(raftConfig)
 	} else {
-		if joinExistingCluster {
+		if br.joinExistingCluster {
 			// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
-			br.lg.Panicf("not supported yet: joinExistingCluster")
+			return nil, errors.New("not supported yet: BlockReplicator joinExistingCluster")
 		} else {
 			startPeers := raftPeers(br.clusterConfig)
 			br.raftNode = raft.StartNode(raftConfig, startPeers)
