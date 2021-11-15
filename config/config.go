@@ -8,6 +8,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
@@ -20,6 +21,7 @@ const (
 type Configurations struct {
 	LocalConfig  *LocalConfiguration
 	SharedConfig *SharedConfiguration
+	JoinBlock    *types.Block
 }
 
 // LocalConfiguration holds the local configuration of the server.
@@ -127,8 +129,10 @@ type BootstrapConf struct {
 	// Method specifies how to use the bootstrap file:
 	// - 'genesis' means to load it as the initial configuration that will be converted into the ledger's genesis block and
 	//   loaded into the database when the server starts with an empty ledger.
-	// - 'cluster' means to load it as a temporary configuration that will be used to connect to existing cluster members
+	// - 'join' means to load it as a temporary configuration that will be used to connect to existing cluster members
 	//   and on-board by fetching the ledger from them, rebuilding the database in the process (not supported yet).
+	// - 'none' means the server will not load any bootstrap file. This appropriate for servers that already have a
+	//   database with a valid shared configuration in them.
 	Method string
 	// File contains the path to initial configuration that will be used to bootstrap the node,
 	// as specified by the`Method`.
@@ -157,11 +161,24 @@ func Read(configFilePath string) (*Configurations, error) {
 		return nil, errors.Wrapf(err, "failed to read the local configuration from: '%s'", fileName)
 	}
 
-	if conf.LocalConfig.Bootstrap.File != "" {
-		conf.SharedConfig, err = readSharedConfig(conf.LocalConfig.Bootstrap.File)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to read the shared configuration from: '%s'", conf.LocalConfig.Bootstrap.File)
+	switch conf.LocalConfig.Bootstrap.Method {
+	case "genesis":
+		if conf.LocalConfig.Bootstrap.File != "" {
+			conf.SharedConfig, err = readSharedConfig(conf.LocalConfig.Bootstrap.File)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to read the shared configuration from: '%s'", conf.LocalConfig.Bootstrap.File)
+			}
 		}
+	case "join":
+		conf.JoinBlock, err = readJoinBlock(conf.LocalConfig.Bootstrap.File)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to read the join block from: '%s'", conf.LocalConfig.Bootstrap.File)
+		}
+
+	case "none":
+		return conf, nil
+	default:
+		return nil, errors.Errorf("unsupported bootstrap.method %s", conf.LocalConfig.Bootstrap.Method)
 	}
 
 	return conf, nil
@@ -180,7 +197,7 @@ func readLocalConfig(localConfigFile string) (*LocalConfiguration, error) {
 	v.SetDefault("server.database.ledgerDirectory", "./tmp/")
 
 	if err := v.ReadInConfig(); err != nil {
-		return nil, errors.Wrapf(err, "error reading local config file: %s", localConfigFile)
+		return nil, errors.Wrap(err, "error reading local config file")
 	}
 
 	conf := &LocalConfiguration{}

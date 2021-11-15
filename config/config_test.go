@@ -66,13 +66,24 @@ var expectedLocalConfig = &LocalConfiguration{
 func TestConfig(t *testing.T) {
 	t.Parallel()
 
-	t.Run("successful", func(t *testing.T) {
+	t.Run("successful genesis", func(t *testing.T) {
 		t.Parallel()
 
 		config, err := Read("./testdata")
 		require.NoError(t, err)
 		require.Equal(t, expectedLocalConfig, config.LocalConfig)
 		require.Equal(t, expectedSharedConfig, config.SharedConfig)
+	})
+
+	t.Run("successful join", func(t *testing.T) {
+		t.Parallel()
+
+		config, err := Read("./testdata/config-join.yml")
+		require.NoError(t, err)
+		require.NotNil(t, config.LocalConfig)
+		require.Nil(t, config.SharedConfig)
+		require.NotNil(t, config.JoinBlock)
+		require.Equal(t, uint64(10), config.JoinBlock.GetHeader().GetBaseHeader().GetNumber())
 	})
 
 	t.Run("empty-config-path", func(t *testing.T) {
@@ -112,7 +123,7 @@ func TestLocalConfig(t *testing.T) {
 
 	t.Run("missing-config-file", func(t *testing.T) {
 		config, err := readLocalConfig("/abc.yml")
-		require.EqualError(t, err, "error reading local config file: /abc.yml: open /abc.yml: no such file or directory")
+		require.EqualError(t, err, "error reading local config file: open /abc.yml: no such file or directory")
 		require.Nil(t, config)
 	})
 
