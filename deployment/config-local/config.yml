@@ -107,7 +107,7 @@ bootstrap:
   # method specifies how to use the bootstrap file:
   # - 'genesis' means to load it as the initial configuration that will be converted into the ledger's genesis block and
   #    loaded into the database when the server starts with an empty ledger.
-  # - 'cluster' means to load it as a temporary configuration that will be used to connect to existing cluster members
+  # - 'join' means to load it as a temporary configuration that will be used to connect to existing cluster members
   #    and on-board by fetching the ledger from them, rebuilding the database in the process (not supported yet).
   method: genesis
   # file contains the initial configuration that will be used to bootstrap the node, as specified by the method, above.
