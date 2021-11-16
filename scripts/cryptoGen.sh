@@ -39,7 +39,7 @@ docker run -it --rm -v $BASE_DIR/crypto:/export frapsoft/openssl ecparam -name p
 echo "Generating self-signed root CA certificate"
 docker run -it --rm -v $BASE_DIR/crypto:/export frapsoft/openssl req -new -x509 -nodes -key "/export/CA/CA.key" -sha256 -days 365 -out "/export/CA/CA.pem" -subj "/C=IL/ST=Haifa/O=BCDB" -extensions v3_ca
 
-for f in "node" "admin" "user"
+for f in "server" "admin" "user"
 do
   create_pki "$f"
 done
