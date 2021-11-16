@@ -345,6 +345,13 @@ func PrepareBootstrapConfigTx(conf *config.Configurations) (*types.ConfigTxEnvel
 		return nil, errors.Errorf("Cannot find local Server.Identity.ID [%s] in SharedConfig.Nodes: %v", conf.LocalConfig.Server.Identity.ID, conf.SharedConfig.Nodes)
 	}
 
+	var maxRaftID uint64
+	for _, m := range conf.SharedConfig.Consensus.Members {
+		if m.RaftId > maxRaftID {
+			maxRaftID = m.RaftId
+		}
+	}
+
 	clusterConfig := &types.ClusterConfig{
 		Nodes: nodes,
 		Admins: []*types.Admin{
@@ -364,6 +371,7 @@ func PrepareBootstrapConfigTx(conf *config.Configurations) (*types.ConfigTxEnvel
 				HeartbeatTicks:       conf.SharedConfig.Consensus.RaftConfig.HeartbeatTicks,
 				MaxInflightBlocks:    conf.SharedConfig.Consensus.RaftConfig.MaxInflightBlocks,
 				SnapshotIntervalSize: conf.SharedConfig.Consensus.RaftConfig.SnapshotIntervalSize,
+				MaxRaftId:            maxRaftID,
 			},
 		},
 	}

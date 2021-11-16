@@ -1132,7 +1132,7 @@ func TestStateDBCommitterForDBBlock(t *testing.T) {
 func TestStateDBCommitterForConfigBlock(t *testing.T) {
 	t.Parallel()
 
-	generateSampleConfigBlock := func(number uint64, adminsID []string, nodeIDs []string, valInfo []*types.ValidationInfo) *types.Block {
+	generateSampleConfigBlock := func(number uint64, adminsID []string, nodeIDs []uint64, valInfo []*types.ValidationInfo) *types.Block {
 		var admins []*types.Admin
 		for _, id := range adminsID {
 			admins = append(admins, &types.Admin{
@@ -1145,12 +1145,29 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 		for _, id := range nodeIDs {
 			nodes = append(nodes, constructNodeEntryForTest(id))
 		}
+		var peers []*types.PeerConfig
+		for _, id := range nodeIDs {
+			peers = append(peers, constructPeerEntryForTest(id))
+		}
 
 		clusterConfig := &types.ClusterConfig{
 			Nodes:  nodes,
 			Admins: admins,
 			CertAuthConfig: &types.CAConfig{
 				Roots: [][]byte{[]byte("root-ca")},
+			},
+			ConsensusConfig: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members:   peers,
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            0,
+				},
 			},
 		}
 
@@ -1164,6 +1181,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			Payload: &types.Block_ConfigTxEnvelope{
 				ConfigTxEnvelope: &types.ConfigTxEnvelope{
 					Payload: &types.ConfigTx{
+						TxId:      fmt.Sprintf("tx-%d", number),
 						NewConfig: clusterConfig,
 					},
 				},
@@ -1189,39 +1207,81 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 		}
 	}
 
+	assertExpectedConsensus := func(t *testing.T, db *leveldb.LevelDB, expectedConsensus *types.ConsensusConfig) {
+		actualConfig, meta, err := db.GetConfig()
+		require.NoError(t, err)
+		require.NotNil(t, actualConfig)
+		require.NotNil(t, meta)
+		require.True(t, proto.Equal(expectedConsensus, actualConfig.GetConsensusConfig()), "actual %s", actualConfig.GetConsensusConfig())
+	}
+
 	tests := []struct {
 		name                        string
 		adminsInCommittedConfigTx   []string
-		nodesInCommittedConfigTx    []string
+		nodesInCommittedConfigTx    []uint64
 		adminsInNewConfigTx         []string
-		nodesInNewConfigTx          []string
+		nodesInNewConfigTx          []uint64
 		expectedClusterAdminsBefore []*types.User
 		expectedNodesBefore         []*types.NodeConfig
+		expectedConsensusBefore     *types.ConsensusConfig
 		expectedClusterAdminsAfter  []*types.User
 		expectedNodesAfter          []*types.NodeConfig
+		expectedConsensusAfter      *types.ConsensusConfig
 		valInfo                     []*types.ValidationInfo
 	}{
 		{
 			name:                      "no change in the set of admins and nodes",
 			adminsInCommittedConfigTx: []string{"admin1", "admin2"},
 			adminsInNewConfigTx:       []string{"admin1", "admin2"},
-			nodesInCommittedConfigTx:  []string{"node1", "node2"},
-			nodesInNewConfigTx:        []string{"node1", "node2"},
+			nodesInCommittedConfigTx:  []uint64{1, 2},
+			nodesInNewConfigTx:        []uint64{1, 2},
 			expectedClusterAdminsBefore: []*types.User{
 				constructAdminEntryForTest("admin1"),
 				constructAdminEntryForTest("admin2"),
 			},
 			expectedNodesBefore: []*types.NodeConfig{
-				constructNodeEntryForTest("node1"),
-				constructNodeEntryForTest("node2"),
+				constructNodeEntryForTest(1),
+				constructNodeEntryForTest(2),
+			},
+			expectedConsensusBefore: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(1),
+					constructPeerEntryForTest(2),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            2,
+				},
 			},
 			expectedClusterAdminsAfter: []*types.User{
 				constructAdminEntryForTest("admin1"),
 				constructAdminEntryForTest("admin2"),
 			},
 			expectedNodesAfter: []*types.NodeConfig{
-				constructNodeEntryForTest("node1"),
-				constructNodeEntryForTest("node2"),
+				constructNodeEntryForTest(1),
+				constructNodeEntryForTest(2),
+			},
+			expectedConsensusAfter: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(1),
+					constructPeerEntryForTest(2),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            2,
+				},
 			},
 			valInfo: []*types.ValidationInfo{
 				{
@@ -1233,17 +1293,34 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			name:                      "add and delete admins and nodes",
 			adminsInCommittedConfigTx: []string{"admin1", "admin2", "admin3"},
 			adminsInNewConfigTx:       []string{"admin3", "admin4", "admin5"},
-			nodesInCommittedConfigTx:  []string{"node1", "node2", "node3"},
-			nodesInNewConfigTx:        []string{"node3", "node4", "node5"},
+			nodesInCommittedConfigTx:  []uint64{1, 2, 3},
+			nodesInNewConfigTx:        []uint64{3, 4, 5},
 			expectedClusterAdminsBefore: []*types.User{
 				constructAdminEntryForTest("admin1"),
 				constructAdminEntryForTest("admin2"),
 				constructAdminEntryForTest("admin3"),
 			},
 			expectedNodesBefore: []*types.NodeConfig{
-				constructNodeEntryForTest("node1"),
-				constructNodeEntryForTest("node2"),
-				constructNodeEntryForTest("node3"),
+				constructNodeEntryForTest(1),
+				constructNodeEntryForTest(2),
+				constructNodeEntryForTest(3),
+			},
+			expectedConsensusBefore: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(1),
+					constructPeerEntryForTest(2),
+					constructPeerEntryForTest(3),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            3,
+				},
 			},
 			expectedClusterAdminsAfter: []*types.User{
 				constructAdminEntryForTest("admin3"),
@@ -1251,9 +1328,86 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 				constructAdminEntryForTest("admin5"),
 			},
 			expectedNodesAfter: []*types.NodeConfig{
-				constructNodeEntryForTest("node3"),
-				constructNodeEntryForTest("node4"),
-				constructNodeEntryForTest("node5"),
+				constructNodeEntryForTest(3),
+				constructNodeEntryForTest(4),
+				constructNodeEntryForTest(5),
+			},
+			expectedConsensusAfter: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(3),
+					constructPeerEntryForTest(4),
+					constructPeerEntryForTest(5),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            5,
+				},
+			},
+			valInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+			},
+		},
+		{
+			name:                      "deleting nodes does not change MaxRaftID",
+			adminsInCommittedConfigTx: []string{"admin1"},
+			adminsInNewConfigTx:       []string{"admin1"},
+			nodesInCommittedConfigTx:  []uint64{1, 2, 8},
+			nodesInNewConfigTx:        []uint64{1, 2},
+			expectedClusterAdminsBefore: []*types.User{
+				constructAdminEntryForTest("admin1"),
+			},
+			expectedNodesBefore: []*types.NodeConfig{
+				constructNodeEntryForTest(1),
+				constructNodeEntryForTest(2),
+				constructNodeEntryForTest(8),
+			},
+			expectedConsensusBefore: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(1),
+					constructPeerEntryForTest(2),
+					constructPeerEntryForTest(8),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            8,
+				},
+			},
+			expectedClusterAdminsAfter: []*types.User{
+				constructAdminEntryForTest("admin1"),
+			},
+			expectedNodesAfter: []*types.NodeConfig{
+				constructNodeEntryForTest(1),
+				constructNodeEntryForTest(2),
+			},
+			expectedConsensusAfter: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(1),
+					constructPeerEntryForTest(2),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            8,
+				},
 			},
 			valInfo: []*types.ValidationInfo{
 				{
@@ -1263,13 +1417,61 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 		},
 		{
 			name:                      "tx is marked invalid",
-			adminsInCommittedConfigTx: []string{"admin1"},
+			adminsInCommittedConfigTx: []string{"admin1", "admin2"},
+			adminsInNewConfigTx:       []string{"admin1", "admin2", "admin3"},
+			nodesInCommittedConfigTx:  []uint64{1, 2, 3},
+			nodesInNewConfigTx:        []uint64{1, 2, 3, 4},
 			expectedClusterAdminsBefore: []*types.User{
 				constructAdminEntryForTest("admin1"),
+				constructAdminEntryForTest("admin2"),
 			},
-			adminsInNewConfigTx: []string{"admin1", "admin2"},
+			expectedNodesBefore: []*types.NodeConfig{
+				constructNodeEntryForTest(1),
+				constructNodeEntryForTest(2),
+				constructNodeEntryForTest(3),
+			},
+			expectedConsensusBefore: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(1),
+					constructPeerEntryForTest(2),
+					constructPeerEntryForTest(3),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            3,
+				},
+			},
 			expectedClusterAdminsAfter: []*types.User{
 				constructAdminEntryForTest("admin1"),
+				constructAdminEntryForTest("admin2"),
+			},
+			expectedNodesAfter: []*types.NodeConfig{
+				constructNodeEntryForTest(1),
+				constructNodeEntryForTest(2),
+				constructNodeEntryForTest(3),
+			},
+			expectedConsensusAfter: &types.ConsensusConfig{
+				Algorithm: "raft",
+				Members: []*types.PeerConfig{
+					constructPeerEntryForTest(1),
+					constructPeerEntryForTest(2),
+					constructPeerEntryForTest(3),
+				},
+				Observers: nil,
+				RaftConfig: &types.RaftConfig{
+					TickInterval:         "100ms",
+					ElectionTicks:        10,
+					HeartbeatTicks:       1,
+					MaxInflightBlocks:    50,
+					SnapshotIntervalSize: 1000000,
+					MaxRaftId:            3,
+				},
 			},
 			valInfo: []*types.ValidationInfo{
 				{
@@ -1296,19 +1498,19 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 			}
 			blockNumber = 1
 			configBlock := generateSampleConfigBlock(blockNumber, tt.adminsInCommittedConfigTx, tt.nodesInCommittedConfigTx, validationInfo)
-			dbsUpdates, provenanceData, err := env.committer.constructDBAndProvenanceEntries(configBlock)
+			err := env.committer.commitBlock(configBlock)
 			require.NoError(t, err)
-			require.NoError(t, env.committer.commitToDBs(dbsUpdates, provenanceData, configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsBefore)
 			assertExpectedNodes(t, env.identityQuerier, tt.expectedNodesBefore)
+			assertExpectedConsensus(t, env.db, tt.expectedConsensusBefore)
 
 			blockNumber++
 			configBlock = generateSampleConfigBlock(blockNumber, tt.adminsInNewConfigTx, tt.nodesInNewConfigTx, tt.valInfo)
-			dbsUpdates, provenanceData, err = env.committer.constructDBAndProvenanceEntries(configBlock)
+			err = env.committer.commitBlock(configBlock)
 			require.NoError(t, err)
-			require.NoError(t, env.committer.commitToDBs(dbsUpdates, provenanceData, configBlock))
 			assertExpectedUsers(t, env.identityQuerier, tt.expectedClusterAdminsAfter)
 			assertExpectedNodes(t, env.identityQuerier, tt.expectedNodesAfter)
+			assertExpectedConsensus(t, env.db, tt.expectedConsensusAfter)
 		})
 	}
 }
@@ -1819,12 +2021,7 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 
 	clusterConfigWithOneNode := &types.ClusterConfig{
 		Nodes: []*types.NodeConfig{
-			{
-				Id:          "bdb-node-1",
-				Certificate: []byte("node-cert"),
-				Address:     "127.0.0.1",
-				Port:        0,
-			},
+			constructNodeEntryForTest(1),
 		},
 		Admins: []*types.Admin{
 			{
@@ -1835,15 +2032,26 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 		CertAuthConfig: &types.CAConfig{
 			Roots: [][]byte{[]byte("root-ca")},
 		},
+		ConsensusConfig: &types.ConsensusConfig{
+			Algorithm: "raft",
+			Members: []*types.PeerConfig{
+				constructPeerEntryForTest(1),
+			},
+			RaftConfig: &types.RaftConfig{
+				TickInterval:         "100ms",
+				ElectionTicks:        10,
+				HeartbeatTicks:       1,
+				MaxInflightBlocks:    50,
+				SnapshotIntervalSize: 1000000,
+				MaxRaftId:            1,
+			},
+		},
 	}
 
 	clusterConfigWithTwoNodes := proto.Clone(clusterConfigWithOneNode).(*types.ClusterConfig)
-	clusterConfigWithTwoNodes.Nodes = append(clusterConfigWithTwoNodes.Nodes, &types.NodeConfig{
-		Id:          "bdb-node-2",
-		Certificate: []byte("node-2-cert"),
-		Address:     "127.0.0.2",
-		Port:        0,
-	})
+	clusterConfigWithTwoNodes.Nodes = append(clusterConfigWithTwoNodes.Nodes, constructNodeEntryForTest(2))
+	clusterConfigWithTwoNodes.ConsensusConfig.Members = append(clusterConfigWithTwoNodes.ConsensusConfig.Members, constructPeerEntryForTest(2))
+	clusterConfigWithTwoNodes.ConsensusConfig.RaftConfig.MaxRaftId = 2
 	clusterConfigWithTwoNodes.Admins[0].Certificate = []byte("cert-new-admin1")
 	clusterConfigWithTwoNodesSerialized, err := proto.Marshal(clusterConfigWithTwoNodes)
 	require.NoError(t, err)
@@ -1869,23 +2077,9 @@ func TestProvenanceStoreCommitterForConfigBlockWithValidTxs(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	node1Serialized, err := proto.Marshal(
-		&types.NodeConfig{
-			Id:          "bdb-node-1",
-			Certificate: []byte("cert-node"),
-			Address:     "127.0.0.1",
-			Port:        0,
-		},
-	)
+	node1Serialized, err := proto.Marshal(constructNodeEntryForTest(1))
 	require.NoError(t, err)
-	node2Serialized, err := proto.Marshal(
-		&types.NodeConfig{
-			Id:          "bdb-node-2",
-			Certificate: []byte("node-2-cert"),
-			Address:     "127.0.0.2",
-			Port:        0,
-		},
-	)
+	node2Serialized, err := proto.Marshal(constructNodeEntryForTest(2))
 	require.NoError(t, err)
 
 	setup := func(env *committerTestEnv) {
@@ -2790,11 +2984,20 @@ func constructAdminEntryForTest(userID string) *types.User {
 	}
 }
 
-func constructNodeEntryForTest(nodeID string) *types.NodeConfig {
+func constructNodeEntryForTest(id uint64) *types.NodeConfig {
 	return &types.NodeConfig{
-		Id:          nodeID,
+		Id:          fmt.Sprintf("bdb-node-%d", id),
 		Address:     "192.168.0.5",
-		Port:        1234,
-		Certificate: []byte("certificate~" + nodeID),
+		Port:        uint32(10000 + id),
+		Certificate: []byte(fmt.Sprintf("certificate~%d", id)),
+	}
+}
+
+func constructPeerEntryForTest(id uint64) *types.PeerConfig {
+	return &types.PeerConfig{
+		NodeId:   fmt.Sprintf("bdb-node-%d", id),
+		RaftId:   id,
+		PeerHost: "192.168.0.6",
+		PeerPort: uint32(20000 + id),
 	}
 }

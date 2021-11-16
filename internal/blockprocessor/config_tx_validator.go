@@ -8,13 +8,13 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -71,17 +71,17 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		return r, nil
 	}
 
-	vi, err = v.mvccValidation(tx.ReadOldConfigVersion)
+	clusterConfig, configMetadata, err := v.db.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	vi, err = v.mvccValidation(tx.ReadOldConfigVersion, configMetadata)
 	if err != nil {
 		return nil, err
 	}
 	if vi.Flag != types.Flag_VALID {
 		return vi, nil
-	}
-
-	clusterConfig, _, err := v.db.GetConfig()
-	if err != nil {
-		return nil, err
 	}
 
 	return validateConfigUpdateRules(clusterConfig, tx.NewConfig)
@@ -459,13 +459,8 @@ func validateMembersNodesMatch(members []*types.PeerConfig, nodes []*types.NodeC
 	}
 }
 
-func (v *configTxValidator) mvccValidation(readOldConfigVersion *types.Version) (*types.ValidationInfo, error) {
-	_, metadata, err := v.db.GetConfig()
-	if err != nil {
-		return nil, errors.WithMessage(err, "error while executing mvcc validation on read config")
-	}
-
-	if !proto.Equal(metadata.GetVersion(), readOldConfigVersion) {
+func (v *configTxValidator) mvccValidation(readOldConfigVersion *types.Version, currentConfigMetadata *types.Metadata) (*types.ValidationInfo, error) {
+	if !proto.Equal(currentConfigMetadata.GetVersion(), readOldConfigVersion) {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
 			ReasonIfInvalid: "mvcc conflict has occurred as the read old configuration does not match the committed version",

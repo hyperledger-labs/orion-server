@@ -5,8 +5,7 @@ package blockprocessor
 import (
 	"encoding/json"
 
-	"github.com/hyperledger-labs/orion-server/pkg/state"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
@@ -14,8 +13,8 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -450,7 +449,18 @@ func constructDBEntriesForConfigTx(tx *types.ConfigTx, oldConfig *types.ClusterC
 		return nil, err
 	}
 
-	newConfigSerialized, err := proto.Marshal(tx.NewConfig)
+	// calculate the new max RaftID from the peers and old config
+	maxID := oldConfig.GetConsensusConfig().GetRaftConfig().GetMaxRaftId()
+	// avoid mutating the tx, as it continues to be processed later
+	newConfigClone := proto.Clone(tx.NewConfig).(*types.ClusterConfig)
+	for _, m := range newConfigClone.GetConsensusConfig().GetMembers() {
+		if id := m.GetRaftId(); id > maxID {
+			maxID = id
+		}
+	}
+	newConfigClone.ConsensusConfig.RaftConfig.MaxRaftId = maxID
+
+	newConfigSerialized, err := proto.Marshal(newConfigClone)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while marshaling new configuration")
 	}
