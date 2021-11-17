@@ -53,6 +53,15 @@ func TestValidateConfigTx(t *testing.T) {
 					Certificate: nodeCert.Raw,
 				},
 			},
+			Admins: []*types.Admin{
+				{
+					Id:          "admin1",
+					Certificate: adminCert.Raw,
+				},
+			},
+			CertAuthConfig: &types.CAConfig{
+				Roots: [][]byte{caCert.Raw},
+			},
 			ConsensusConfig: &types.ConsensusConfig{
 				Algorithm: "raft",
 				Members: []*types.PeerConfig{
@@ -239,7 +248,7 @@ func TestValidateConfigTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: unsupported nodes update ",
+			name: "valid: nodes update",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserId: "adminUser",
 				ReadOldConfigVersion: &types.Version{
@@ -284,12 +293,147 @@ func TestValidateConfigTx(t *testing.T) {
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "dynamic cluster re-config of Nodes & ConsensusConfig is not yet supported",
+				Flag: types.Flag_VALID,
 			},
 		},
 		{
-			name: "invalid: unsupported consensus update ",
+			name: "invalid: too many consensus peer membership changes",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserId: "adminUser",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+				NewConfig: &types.ClusterConfig{
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "node1",
+							Address:     "127.0.0.1",
+							Port:        6090,
+							Certificate: nodeCert.Raw,
+						},
+						{
+							Id:          "node2",
+							Address:     "127.0.0.1",
+							Port:        6091,
+							Certificate: nodeCert.Raw,
+						},
+						{
+							Id:          "node3",
+							Address:     "127.0.0.1",
+							Port:        6092,
+							Certificate: nodeCert.Raw,
+						},
+					},
+					Admins: []*types.Admin{
+						{
+							Id:          "admin1",
+							Certificate: adminCert.Raw,
+						},
+					},
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7090,
+							},
+							{
+								NodeId:   "node2",
+								RaftId:   2,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7091,
+							},
+							{
+								NodeId:   "node3",
+								RaftId:   3,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7092,
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  100,
+							HeartbeatTicks: 10,
+						},
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "error in ConsensusConfig: cannot make more than one membership change at a time: 2 added, 0 removed",
+			},
+		},
+		{
+			name: "invalid: unsupported yet: consensus peer membership change",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserId: "adminUser",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+				NewConfig: &types.ClusterConfig{
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "node1",
+							Address:     "127.0.0.1",
+							Port:        6090,
+							Certificate: nodeCert.Raw,
+						},
+						{
+							Id:          "node2",
+							Address:     "127.0.0.1",
+							Port:        6091,
+							Certificate: nodeCert.Raw,
+						},
+					},
+					Admins: []*types.Admin{
+						{
+							Id:          "admin1",
+							Certificate: adminCert.Raw,
+						},
+					},
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7090,
+							},
+							{
+								NodeId:   "node2",
+								RaftId:   2,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7091,
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  100,
+							HeartbeatTicks: 10,
+						},
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "error in ConsensusConfig: dynamic membership changes to the cluster are not supported yet",
+			},
+		},
+		{
+			name: "valid: consensus peer endpoint update",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserId: "adminUser",
 				ReadOldConfigVersion: &types.Version{
@@ -334,8 +478,56 @@ func TestValidateConfigTx(t *testing.T) {
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "dynamic cluster re-config of Nodes & ConsensusConfig is not yet supported",
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name: "valid: consensus raft config",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserId: "adminUser",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+				NewConfig: &types.ClusterConfig{
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "node1",
+							Address:     "127.0.0.1",
+							Port:        6090,
+							Certificate: nodeCert.Raw,
+						},
+					},
+					Admins: []*types.Admin{
+						{
+							Id:          "admin1",
+							Certificate: adminCert.Raw,
+						},
+					},
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7090,
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  101, //<<< changed
+							HeartbeatTicks: 11, //<<< changed
+						},
+					},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
 			},
 		},
 		{

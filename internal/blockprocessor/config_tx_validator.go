@@ -1,9 +1,11 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package blockprocessor
 
 import (
 	"fmt"
+	"hash/crc32"
 	"net"
 	"net/url"
 	"time"
@@ -50,25 +52,9 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		}, nil
 	}
 
-	vi, caCertCollection := validateCAConfig(tx.NewConfig.CertAuthConfig)
+	vi := validateConfig(tx.NewConfig)
 	if vi.Flag != types.Flag_VALID {
 		return vi, nil
-	}
-
-	if r := validateNodeConfig(tx.NewConfig.Nodes, caCertCollection); r.Flag != types.Flag_VALID {
-		return r, nil
-	}
-
-	if r := validateAdminConfig(tx.NewConfig.Admins, caCertCollection); r.Flag != types.Flag_VALID {
-		return r, nil
-	}
-
-	if r := validateConsensusConfig(tx.NewConfig.ConsensusConfig); r.Flag != types.Flag_VALID {
-		return r, nil
-	}
-
-	if r := validateMembersNodesMatch(tx.NewConfig.ConsensusConfig.Members, tx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
-		return r, nil
 	}
 
 	clusterConfig, configMetadata, err := v.db.GetConfig()
@@ -84,7 +70,43 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 		return vi, nil
 	}
 
-	return validateConfigUpdateRules(clusterConfig, tx.NewConfig)
+	return v.validateConfigTransitionRules(clusterConfig, tx.NewConfig)
+}
+
+func (v *configTxValidator) validateGenesis(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
+	configTx := txEnv.Payload
+
+	vi := validateConfig(configTx.NewConfig)
+	if vi.Flag != types.Flag_VALID {
+		return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", vi.ReasonIfInvalid)
+	}
+
+	return &types.ValidationInfo{Flag: types.Flag_VALID}, nil
+}
+
+func validateConfig(config *types.ClusterConfig) *types.ValidationInfo {
+	vi, caCertCollection := validateCAConfig(config.CertAuthConfig)
+	if vi.Flag != types.Flag_VALID {
+		return vi
+	}
+
+	if vi = validateNodeConfig(config.Nodes, caCertCollection); vi.Flag != types.Flag_VALID {
+		return vi
+	}
+
+	if vi = validateAdminConfig(config.Admins, caCertCollection); vi.Flag != types.Flag_VALID {
+		return vi
+	}
+
+	if vi = validateConsensusConfig(config.ConsensusConfig); vi.Flag != types.Flag_VALID {
+		return vi
+	}
+
+	if vi = validateMembersNodesMatch(config.ConsensusConfig.Members, config.Nodes); vi.Flag != types.Flag_VALID {
+		return vi
+	}
+
+	return vi
 }
 
 func validateCAConfig(caConfig *types.CAConfig) (*types.ValidationInfo, *certificateauthority.CACertCollection) {
@@ -496,17 +518,54 @@ func validateHostPort(host string, port uint32) error {
 	return nil
 }
 
-func validateConfigUpdateRules(currentConfig, updatedConfig *types.ClusterConfig) (*types.ValidationInfo, error) {
-	//TODO add rules for safe cluster re-config
-	nodes, consensus, _, _ := replication.ClassifyClusterReConfig(currentConfig, updatedConfig)
-	if nodes || consensus {
-		return &types.ValidationInfo{
-			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-			ReasonIfInvalid: "dynamic cluster re-config of Nodes & ConsensusConfig is not yet supported",
-		}, nil
+// validate whether the transition from currentConfig to updatedConfig is valid and safe.
+func (v *configTxValidator) validateConfigTransitionRules(currentConfig, updatedConfig *types.ClusterConfig) (*types.ValidationInfo, error) {
+	nodes, consensus, ca, admins := replication.ClassifyClusterReConfig(currentConfig, updatedConfig)
+
+	if nodes {
+		v.logger.Debugf("ClusterConfig Nodes changed: current: %s; updated: %s", nodeConfigSliceToString(currentConfig.Nodes), nodeConfigSliceToString(updatedConfig.Nodes))
+		// TODO add rules for nodes re-config safety
+	}
+	if ca {
+		v.logger.Debugf("ClusterConfig CA changed: current: %v; updated: %v", currentConfig.CertAuthConfig, updatedConfig.CertAuthConfig)
+		// TODO add rules for CA re-config safety: https://github.com/hyperledger-labs/orion-server/issues/154
+	}
+
+	if admins {
+		v.logger.Debugf("ClusterConfig Admins changed: current: %v; updated: %v", currentConfig.Admins, updatedConfig.Admins)
+		// TODO add rules for admin re-config safety: https://github.com/hyperledger-labs/orion-server/issues/262
+	}
+
+	if consensus {
+		err := replication.VerifyConsensusReConfig(currentConfig.GetConsensusConfig(), updatedConfig.GetConsensusConfig(), v.logger)
+		if err != nil {
+			v.logger.Errorf("ClusterConfig ConsensusConfig validation failed: error: %s", err)
+			v.logger.Debugf("ClusterConfig ConsensusConfig rejected change request: current: %v; updated: %v", currentConfig.ConsensusConfig, updatedConfig.ConsensusConfig)
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: fmt.Sprintf("error in ConsensusConfig: %s", err.Error()),
+			}, nil
+		}
+		v.logger.Debugf("ClusterConfig ConsensusConfig changed: current: %v; updated: %v", currentConfig.ConsensusConfig, updatedConfig.ConsensusConfig)
 	}
 
 	return &types.ValidationInfo{
 		Flag: types.Flag_VALID,
 	}, nil
+}
+
+func nodeConfigToString(n *types.NodeConfig) string {
+	return fmt.Sprintf("Id: %s, Address: %s, Port: %d, Cert-hash: %x", n.Id, n.Address, n.Port, crc32.ChecksumIEEE(n.Certificate))
+}
+
+func nodeConfigSliceToString(nodes []*types.NodeConfig) string {
+	str := "["
+	for i, n := range nodes {
+		str = str + nodeConfigToString(n)
+		if i != len(nodes)-1 {
+			str = str + "; "
+		}
+	}
+	str = str + "]"
+	return str
 }
