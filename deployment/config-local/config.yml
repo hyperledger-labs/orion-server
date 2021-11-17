@@ -3,14 +3,14 @@ server:
   # The identity and credentials of this server.
   identity:
     # identity.id denotes the id of the server.
-    id: bdb-node-1
+    id: orion-server1
     # identity.certificatePath denotes the path to the x509 certificate
     # of the node. This certificate and associated key is used in all
     # client facing communication, as well as for signing blocks and
     # transaction replies.
-    certificatePath: ./deployment/sample/crypto/server/server.pem
+    certificatePath: ./deployment/crypto/server/server.pem
     # identity.keyPath denotes the path to the private key of the node.
-    keyPath: ./deployment/sample/crypto/server/server.key
+    keyPath: ./deployment/crypto/server/server.key
   # The listen address and port of the network interface used for client
   # communication. The external address (or host name) of this interface
   # must be accessible to clients, and is declared in:
@@ -111,4 +111,4 @@ bootstrap:
   #    and on-board by fetching the ledger from them, rebuilding the database in the process (not supported yet).
   method: genesis
   # file contains the initial configuration that will be used to bootstrap the node, as specified by the method, above.
-  file: ./deployment/sample/bootstrap-shared-config.yaml
+  file: ./deployment/config-local/bootstrap-shared-config.yaml

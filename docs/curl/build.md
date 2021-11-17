@@ -105,9 +105,14 @@ To generate docker image, after you generated crypto materials, run:
 make docker
 ```
 #### Start docker container
+Newly created docker image has three mappable volumes:
+* `/etc/orion-server/config` - contains server configuration `yml` files. Mapping is optional, only if you want to use your own configuration.
+* `/var/orion-server/ledger` - blockchain ledger storage folder. Mapping is optional, but using without mapping docker container stop will erase all ledger data...
+* `/etc/orion-server/crypto` - certificates folder. Should be mapped to host folder.
+
 To invoke the orion server docker container, you can run:
 ```
-docker run -it --rm -v $(pwd)/sampleconfig/:/etc/orion-server -p 6001:6001 -p 7050:7050 orion-server
+docker run -it --rm -v $(pwd)/deployment/crypto/: -v $(pwd)/ledger:/etc/orion-server/ledger -p 6001:6001 -p 7050:7050 orion-server
 ``` 
 
 ## Build and Use Signer Utility

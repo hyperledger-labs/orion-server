@@ -11,10 +11,10 @@
 # The host and port are those that are accessible from clients.
 # The certificate is the one used to authenticate with clients and sign blocks and transaction/query responses.
 nodes:
-  - nodeId: orion-node1
+  - nodeId: orion-server1
     host: 127.0.0.1
     port: 6001
-    certificatePath: /etc/orion-server/crypto/node/node.pem
+    certificatePath: /etc/orion-server/crypto/server/server.pem
 
 # consensus carries the definitions of the clustered consensus algorithm, members, and parameters.
 consensus:
@@ -25,7 +25,7 @@ consensus:
   # The nodeId correlates the peer definition here with the node definition in the nodes section.
   # The host and port are those that are accessible from other peers.
   members:
-    - nodeId: orion-node1
+    - nodeId: orion-server1
       raftId: 1
       peerHost: raft1.example.com
       peerPort: 7050
@@ -33,7 +33,7 @@ consensus:
   # observers contains the set of servers that are allowed to communicate
   # with consensus.members, and fetch their state.
   observers:
-    - nodeId: orion-node4
+    - nodeId: orion-server4
       raftId: 0
       peerHost: raft4.example.com
       peerPort: 7050

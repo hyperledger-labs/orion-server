@@ -11,10 +11,10 @@
 # The host and port are those that are accessible from clients.
 # The certificate is the one used to authenticate with clients and sign blocks and transaction/query responses.
 nodes:
-  - nodeId: bdb-node-1
+  - nodeId: orion-server1
     host: 127.0.0.1
     port: 6001
-    certificatePath: ./deployment/sample/crypto/server/server.pem
+    certificatePath: ./deployment/crypto/server/server.pem
 
 # consensus carries the definitions of the clustered consensus algorithm, members, and parameters.
 consensus:
@@ -25,7 +25,7 @@ consensus:
   # The nodeId correlates the peer definition here with the node definition in the nodes section.
   # The host and port are those that are accessible from other peers.
   members:
-    - nodeId: bdb-node-1
+    - nodeId: orion-server1
       raftId: 1
       peerHost: 127.0.0.1
       peerPort: 7050
@@ -66,7 +66,7 @@ consensus:
 caConfig:
   # The paths to root certificates. At least one is required. for example:
   #   rootCACertsPath: ./testdata/rootcaA.cert, ./testdata/rootcaB.cert
-  rootCACertsPath: ./deployment/sample/crypto/CA/CA.pem
+  rootCACertsPath: ./deployment/crypto/CA/CA.pem
 
   # The paths to intermediate certificates. Optional. For example:
   #   intermediateCACertsPath: ./testdata/midcaA.cert, ./testdata/midcaB.cert
@@ -78,4 +78,4 @@ admin:
   id: admin
   # identity.certificatePath denotes the path
   # to the x509 certificate of the cluster admin
-  certificatePath: ./deployment/sample/crypto/admin/admin.pem
+  certificatePath: ./deployment/crypto/admin/admin.pem

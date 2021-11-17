@@ -3,14 +3,14 @@ server:
   # The identity and credentials of this server.
   identity:
     # identity.id denotes the id of the server.
-    id: orion-node1
+    id: orion-server1
     # identity.certificatePath denotes the path to the x509 certificate
     # of the node. This certificate and associated key is used in all
     # client facing communication, as well as for signing blocks and
     # transaction replies.
-    certificatePath: /etc/orion-server/crypto/node/node.pem
+    certificatePath: /etc/orion-server/crypto/server/server.pem
     # identity.keyPath denotes the path to the private key of the node.
-    keyPath: /etc/orion-server/crypto/node/node.key
+    keyPath: /etc/orion-server/crypto/server/server.key
   # The listen address and port of the network interface used for client
   # communication. The external address (or host name) of this interface
   # must be accessible to clients, and is declared in:
@@ -28,7 +28,7 @@ server:
     name: leveldb
     # database.ledgerDirectory denotes the root path
     # where we store all ledger data
-    ledgerdirectory: /etc/orion-server/ledger
+    ledgerdirectory: /var/orion-server/ledger
   queueLength:
     # queueLength.transaction denotes the maximum
     # queue length of waiting transactions
