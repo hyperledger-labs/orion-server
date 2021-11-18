@@ -6,12 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -1295,14 +1295,13 @@ func TestMVCCOnConfigTx(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		setup          func(db worldstate.DB)
-		readVersion    *types.Version
-		expectedResult *types.ValidationInfo
+		name            string
+		readVersion     *types.Version
+		currentMetadata *types.Metadata
+		expectedResult  *types.ValidationInfo
 	}{
 		{
-			name:  "invalid: readVersion does not match committed version as there is no existing config",
-			setup: func(db worldstate.DB) {},
+			name: "invalid: readVersion does not match committed version as there is no existing config",
 			readVersion: &types.Version{
 				BlockNum: 1,
 				TxNum:    1,
@@ -1313,29 +1312,10 @@ func TestMVCCOnConfigTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: readVersion does not match committed version",
-			setup: func(db worldstate.DB) {
-				config := map[string]*worldstate.DBUpdates{
-					worldstate.ConfigDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							{
-								Key: worldstate.ConfigKey,
-								Metadata: &types.Metadata{
-									Version: &types.Version{
-										BlockNum: 5,
-										TxNum:    1,
-									},
-								},
-							},
-						},
-					},
-				}
-
-				require.NoError(t, db.Commit(config, 5))
-			},
-			readVersion: &types.Version{
-				BlockNum: 1,
-				TxNum:    1,
+			name:        "invalid: readVersion does not match committed version",
+			readVersion: &types.Version{BlockNum: 1, TxNum: 1},
+			currentMetadata: &types.Metadata{
+				Version: &types.Version{BlockNum: 2, TxNum: 1},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
@@ -1344,37 +1324,21 @@ func TestMVCCOnConfigTx(t *testing.T) {
 		},
 		{
 			name: "valid as the read and committed version are the same",
-			setup: func(db worldstate.DB) {
-				config := map[string]*worldstate.DBUpdates{
-					worldstate.ConfigDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							{
-								Key: worldstate.ConfigKey,
-								Metadata: &types.Metadata{
-									Version: &types.Version{
-										BlockNum: 5,
-										TxNum:    1,
-									},
-								},
-							},
-						},
-					},
-				}
-
-				require.NoError(t, db.Commit(config, 5))
-			},
 			readVersion: &types.Version{
 				BlockNum: 5,
 				TxNum:    1,
+			},
+			currentMetadata: &types.Metadata{
+				Version: &types.Version{BlockNum: 5, TxNum: 1},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
 		},
 		{
-			name:        "valid as there is no committed config and read version is also nil",
-			setup:       func(db worldstate.DB) {},
-			readVersion: nil,
+			name:            "valid as there is no committed config and read version is also nil",
+			readVersion:     nil,
+			currentMetadata: nil,
 			expectedResult: &types.ValidationInfo{
 				Flag: types.Flag_VALID,
 			},
@@ -1389,9 +1353,7 @@ func TestMVCCOnConfigTx(t *testing.T) {
 			env := newValidatorTestEnv(t)
 			defer env.cleanup()
 
-			tt.setup(env.db)
-
-			result, err := env.validator.configTxValidator.mvccValidation(tt.readVersion)
+			result, err := env.validator.configTxValidator.mvccValidation(tt.readVersion, tt.currentMetadata)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})

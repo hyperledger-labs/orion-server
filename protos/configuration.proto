@@ -105,6 +105,14 @@ message RaftConfig {
 
   // Take a snapshot when cumulative data since last snapshot exceeds a certain size in bytes.
   uint64 snapshot_interval_size = 5;
+
+  // The maximal Raft ID in the cluster, during the entire lifetime of the cluster.
+  // This is internally computed by the server when a config transaction commits and is read-only for clients (admins).
+  // Raft IDs must be unique for all time, and may never be reused even for deleted peers. To enforce this Raft
+  // requirement, we require that the Raft ID of a new peer added to the cluster must be higher than 'max_raft_id'.
+  // We recommend to start a cluster with low ID numbers, e.g. (1,2,3) => 'max_raft_id'=3,
+  // and then set the Raft ID of a new peer added to the cluster to 'max_raft_id'+1.
+  uint64 max_raft_id = 6;
 }
 
 // Database configuration. Stores default read/write ACLs
