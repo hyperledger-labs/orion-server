@@ -54,7 +54,8 @@ For additional health checks, we can run `make test` to ensure all tests pass.
 ## 3) Start
 
 To start a node, we need a certificate authority and crypto materials for the node and admin users. To simplify this task, we have provided sample
-crypto materials and configuration files in `deployment/crypto/`.
+crypto materials and configuration files in `deployment/sample/`. In order to understand the configuration files and procedure to create crypto
+materials, refer to [crypto materials](crypto-materials).
 
 Let's start a node with the sample configuration:
 ```shell
