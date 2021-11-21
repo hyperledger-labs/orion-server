@@ -15,6 +15,8 @@ Note that all user administration transactions must be submitted by the admin.
 
 > As a pre-requisite, we need to first [create a connection](./../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and [open a database session](./../../pre-requisite/gosdk#opening-a-database-session).
 
+> In addition to this example, you can download and use user administration transaction example from gosdk examples folder: [orion-sdk-go/examples/api/user_tx/user_tx.go](https://github.com/hyperledger-labs/orion-sdk-go/blob/main/examples/api/user_tx/user_tx.go)
+
 Once a [database session](./../../pre-requisite/gosdk#opening-a-database-session) is created, we can call `session.UsersTx()` to start the users
 administration transaction context. On this transaction context, we have the support for following method calls:
 

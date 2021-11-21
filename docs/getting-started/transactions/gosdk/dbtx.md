@@ -14,6 +14,8 @@ Note that all database administration transactions must be submitted by the admi
 
 > As a pre-requisite, we need to first [create a connection](../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and [open a database session](../../pre-requisite/gosdk#opening-a-database-session).
 
+> In addition to this example, you can download and use the database administration transaction example from the go-sdk examples folder: [orion-sdk-go/examples/api/db_tx/db_tx.go](https://github.com/hyperledger-labs/orion-sdk-go/blob/main/examples/api/db_tx/db_tx.go)
+
 Once a [database session](../../pre-requisite/gosdk#opening-a-database-session) is created, we can call `session.DBsTx()` to start the database administration transaction context. On this transaction context, we have the support for following method calls:
 
 ```go 
@@ -73,15 +75,13 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := dbtx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+	// if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
 
-### (1.2) Source Code Commentry
+### (1.2) Source Code Commentary
 For simplicity, not all `errors` are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found [here](../../pre-requisite/gosdk).
 
 The `session.DBsTx()` starts a new database administration transaction and returns the database administration transaction context. We can then perform
@@ -125,7 +125,7 @@ func main() {
 }
 ```
 
-### Source Code Commentry
+### Source Code Commentary
 For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found [here](../../pre-requisite/gosdk).
 
 The `session.DBsTx()` starts a new database administration transaction and returns the database administration transaction context. We can then perform all
@@ -171,15 +171,13 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := dbtx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+	// if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
 
-### Source Code Commentry
+### Source Code Commentary
 For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found [here](../../pre-requisite/gosdk).
 
 The `session.DBsTx()` starts a new database administration transaction and returns the database administration transaction context. We can then perform all
@@ -231,15 +229,13 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := dbtx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+	// if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
 
-### Source Code Commentry
+### Source Code Commentary
 For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found [here](../../pre-requisite/gosdk).
 
 The `session.DBsTx()` starts a new database administration transaction and returns the database administration transaction context. We can then perform all
