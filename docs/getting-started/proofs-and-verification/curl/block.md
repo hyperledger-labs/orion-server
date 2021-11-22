@@ -6,7 +6,7 @@ title: Proof of Existence of a Block
 ## Path in ledger query
 
 This type of query used to prove that block X connected to block Y, based on skip chain hashes. Query result contains list of block headers, including block X, connecting blocks and block Y. X > Y, because connectivity in skip chain, like all blockchains, is from latter block to earlier.
-For more information about ledger consistency, see here (TODO) and here (TODO).
+For more information about ledger consistency, see here [Block Skip Chain](../../../architecture-and-design/block-skip-chain) and here [Block Structure](../../../architecture-and-design/block-structure).
 
 Server expose `ledger/path?start={startNum}&end={endNum}` GET query to access to ledger paths.
 
@@ -88,4 +88,4 @@ curl \
 
 As you can see, block 6 points to block 5 and block 5 to block 1 (Genesis)
 
->Worth to mention that block numbering in BCDB starts from 1 and not from 0. All power two operations related to block number, require decreasing block number by 1
+>Worth to mention that block numbering in Orion starts from 1 and not from 0. All power two operations related to block number, require decreasing block number by 1

@@ -5,9 +5,9 @@ title: Proof of Existence of a State/Data
 
 ### State proof query
 
-As it mentioned in BCDB description [here], BCDB maintains separated persisted graph data structure for historical data transitions, so a user can execute query on those historical changes to understand the lineage of each data item. For more explanation about **Provenance Queries** and different views they provide on historical data, see [here].
+As it mentioned in Orion description [here], Orion maintains separated persisted graph data structure for historical data transitions, so a user can execute query on those historical changes to understand the lineage of each data item. For more explanation about **Provenance Queries** and different views they provide on historical data, see [Provenance queries](../../queries/curl/provenance).
 
-As complimentary to provenance, BCDB uses Ethereum style Merkle-Particia Trie to provide cryptographically verifiable proofs of all state transitions. 
+As complimentary to provenance, Orion uses Ethereum style Merkle-Particia Trie to provide cryptographically verifiable proofs of all state transitions. 
 Although it provides only one  single type of proof - that specific key was associated with specific value while specific block was committed to ledger.
 
 For each block, root of Merkle-Particia Trie stored inside block header - `state_merkel_tree_root_hash` and because tamper-prove nature on ledger, trie root is enough to prove existence of specific value at time block was committed. 
