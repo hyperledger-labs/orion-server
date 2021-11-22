@@ -19,17 +19,20 @@ Using a data transaction, we can do the following:
   4. [Operations on multiple databases](#6-operations-on-multiple-databases-in-a-single-transaction)
   5. [Multi-signatures transaction](#7-multi-signatures-transaction)
 
-## (1) Pre-Requisite
+:::caution
 It is recommended to start a fresh orion server for executing these examples. Otherwise, you need to carefully change the block number specified
 as part of version in the read-set of the transaction payload. You will get more clarity as you read this doc.
+:::
 
+:::info  Pre-requisite
 Once a fresh orion server is started after removing the `ledger` directory,
   - [create two databases named db1 and db2](./dbtx#creation-of-databases), and
   - [create two users alice and bob](./usertx#addition-of-users).
+:::
 
-## (2) Creation of new states
+## 1) Creation of new states
 
-### (2.1) Create a state with key `key1`
+### 1.1) Create a state with key `key1`
 
 Let's store a new state with the key `key1` with the value `{"name":"abc","age":31,"graduated":true}`.
 
@@ -146,7 +149,7 @@ Once the above transaction gets committed, the submitter of the transaction woul
 </div>
 </details>
 
-### (2.2) Checking the existance of `key1`
+### 1.2) Checking the existance of `key1`
 
 Let's query the node to see whether `key1` exists. The query can be submitted by either `alice` or `bob` as both have
 the read permission to this key. No one else can read `key1` including the admin user of the node. In this example,
@@ -207,9 +210,9 @@ use the `base64_decoder` utility.
 The result contains the base64 decoded `value` associated with the key and also the `access_control` and `version` as part of the
 `metadata`. In order to verify the signature, do not use the output of `base64_decoder` utility but the `cURL` output.
 
-## (3) Updation of an existing state
+## 2) Updation of an existing state
 
-### (3.1) Update the key `key1`
+### 2.1) Update the key `key1`
 
 Let's update the value of `key1`. In order to do that, we need to execute the following three steps:
 
@@ -311,7 +314,7 @@ Once the above transaction gets committed, the submitter of the transaction woul
 }
 ```
 
-### (3.2) Checking the existance of the updated key `key1`
+### 2.2) Checking the existance of the updated key `key1`
 
 Let's query the node to see whether `key1` has been updated. The query can be submitted only by `alice` as `bob` is
 no longer in the reader's list of the `key1`. No one else can read `key1` including the admin user of the node.
@@ -368,9 +371,9 @@ curl \
 The result contains the updated `value` associated with the key and also the `access_control` and `version` as part of the
 `metadata`. In the update state, we can find that the `value`, `version`, and `access_control` have changed.
 
-## (4) Deletion of an existing state
+## 3) Deletion of an existing state
 
-### (4.1) Delete the key `key1`
+### 3.1) Delete the key `key1`
 
 Let's delete the key `key1`. In order to do that, we need to execute the following three steps:
 
@@ -459,7 +462,7 @@ Once the above transaction gets committed, the submitting user would get the fol
 }
 ```
 
-### (4.2) Checking the non-existance of the deleted key `key1`
+### 3.2) Checking the non-existance of the deleted key `key1`
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/alice/alice.key \
@@ -490,13 +493,13 @@ curl \
 }
 ```
 
-## (5) Creation, Updation, Deletion of states within a single transaction
+## 4) Creation, Updation, Deletion of states within a single transaction
 
 We can also use `data_writes`, `data_deletes` with multiple entries along with many `data_reads` within a single transaction.
 
 Let's create `key1` and `key2` so that in the next transaction we can do all three operations.
 
-### (5.1) Create `key1` and `key2`
+### 4.1) Create `key1` and `key2`
 
 ```shell
  curl \
@@ -562,7 +565,7 @@ The signature is computed on the payload as follows:
 MEUCIQDOz5CZKIlK/t4M/rnxU6Hy0saDDCl2RprtnFIkttE+RgIgGwGF6P5rbDlSTh2DREXyl1etTeHf+TYeCLpOJ3WE2jU=
 ```
 
-### (5.2) Create `key3`, update `key2`, and delete `key1`
+### 4.2) Create `key3`, update `key2`, and delete `key1`
 
 Now, we have required data in the server, we can execute creation, updation, and deletion within a single transaction.
 
@@ -644,7 +647,7 @@ The signature on the payload is computed as shown below:
 MEQCIG4+RtISyo/3ZEkwKVg1gCz9GrcUpgkuMPESz6LDcudyAiBDbiF74lNxmX1T1xK+a6iUqiyd3Z5NjeFhO6j5YxW+kg==
 ```
 
-### (5.3) Check the non-existence of `key1`
+### 4.3) Check the non-existence of `key1`
 
 Let's ensure the deletion of `key1`.
 
@@ -687,7 +690,7 @@ curl \
 
 As `key1` does not exist, the result is empty.
 
-### (5.4) Check the updated `key2`
+### 4.4) Check the updated `key2`
 
 Let's see whether `key2` has been updated from `year: 2018` to `year: 2019`.
 
@@ -742,7 +745,7 @@ curl \
 From the output, we can see that the `year` field in the value has been changed from `2018` to `2019`. After the update,
 the version has been changed.
 
-### (5.5) Check the newly created `key3`
+### 4.5) Check the newly created `key3`
 
 Let's fetch `key3`.
 
@@ -787,12 +790,12 @@ curl \
 }
 ```
 
-## (6) Operations on Multiple Databases in a Single Transaction
+## 5) Operations on Multiple Databases in a Single Transaction
 
 A data transaction can access or modify more than one user database in a transaction. In the below example,
 we perform operations on two databases `db1` and `db2` within a single transaction.
 
-### (6.1) Update `alice`'s privileges
+### 5.1) Update `alice`'s privileges
 
 As both `alice` and `bob` have only read permission on the database `db1`, first, we update the privilege of `alice`
 to have read-write permission on `db1` as shown below:
@@ -849,7 +852,7 @@ MEUCIQCEpAcCyD85v6TNooJP554XDLjyum5p0RauP3D0t8rXTwIgYq1ghLfvrulznP0tS311UrfCWXh/
 
 Now that `alice` has read-write permission on both `db1` and `db2`, we can perform the multi-database operation.
 
-### (6.2) Create `key1` in `db1` and `key1` in `db2`
+### 5.2) Create `key1` in `db1` and `key1` in `db2`
 
 Let's create
   1. the key `key1` with value `v` in `db1`
@@ -930,7 +933,7 @@ The signature on the payload is computed using the following command:
 MEQCIHYKWmSmsfrnyUKpKSH89K8BNAIO1/IW/uprJeHDu6mGAiBQTzVCiwm/t63pJtyUQ34AnOSk3apZFwFMz0GYXzNAaA==
 ```
 
-### (6.3) Check the existence of `key1` in `db1`
+### 5.3) Check the existence of `key1` in `db1`
 
 Let's fetch `key1` from `db1` to ensure that the key has been created successfully.
 
@@ -975,7 +978,7 @@ Next, execute the following command by setting the `UserID` and `Signature` head
 }
 ```
 
-### (6.4) Check the existence of `key1` in `db2`
+### 5.4) Check the existence of `key1` in `db2`
 
 Let's fetch `key1` from `db1` to ensure that the key has been created successfully.
 
@@ -1025,5 +1028,3 @@ Second, submit the query
   "signature": "MEUCIQCxVaLsp0gHWqzsuat7XdUY4OehLy2tN89viOzIpTajDgIgawoH+dBtI3tidwROYHGtkZmDE3RCgVtG24s7aFyTX1Q="
 }
 ```
-
-## (7) Multi-Signatures Transaction

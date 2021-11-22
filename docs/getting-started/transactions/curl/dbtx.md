@@ -18,9 +18,9 @@ Let's cover the following topics:
 
 Note that all database administration transactions must be submitted by the admin.
 
-## (1) Creation of Databases
+## 1) Creation of Databases
 
-### (1.1) Create databases named db1 and db2
+### 1.1) Create databases named db1 and db2
 The following `cURL` command submits a database administration transaction to create two new databases
 named `db1` and `db2`:
 
@@ -94,7 +94,7 @@ The receipt for the above transaction would look something like the following:
 
 Once the above transaction gets validated and committed, we can check the existance of `db1` and `db2`.
 
-### (1.2) Check the existance of db1
+### 1.2) Check the existance of db1
 
 In queries, we have to set the `UserID` and `Signature` headers. Whereas in the
 transaction, we need to pass both the `UserID` and `Signature` as part of the `txPayload` itself.
@@ -129,7 +129,7 @@ curl \
 }
 ```
 
-### (1.3) Check the existance of db2
+### 1.3) Check the existance of db2
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key
     -data='{"user_id":"admin","db_name":"db1"}'
@@ -159,7 +159,7 @@ curl \
 }
 ```
 
-## (2) Creation of a Database with Index Definition
+## 2) Creation of a Database with Index Definition
 
 The following `cURL` command submits a database administration transaction to create a databased named `db8`
 with index definition such that complex queries on fields in the JSON value can be executed.
@@ -206,12 +206,12 @@ Only indexed fields in a JSON document can be queried using JSON query. In the a
 `attr2`, and `attr3` are asked to be indexed for JSON values stored in the database `db8`. This enables JSON queries using
 these indexed fields. For more clarity refer to query [examples]
 
-## (3) Deletion of Databases
+## 3) Deletion of Databases
 
 We can delete an existing database by issuing a database administration transaction. Note that the database to be deleted should exist in the node.
 Otherwise, the transaction would be marked invalid.
 
-### (3.1) Delete databases named db1 and db2
+### 3.1) Delete databases named db1 and db2
 
 The following curl command can be used to delete two existing databases named `db1` and `db2`:
 ```webmanifest
@@ -255,7 +255,7 @@ The receipt for the above transaction would look something like the following:
 
 Once the above transaction gets validated and committed, we can check that the `db1` and `db2` do not exist anymore.
 
-### (3.2) Check the existance of db1
+### 3.2) Check the existance of db1
 ```shell
 curl \
     -H "Content-Type: application/json" \
@@ -275,7 +275,7 @@ curl \
 ```
 The default values are omitted and hence, the `exist = false` is not printed. 
 
-### (3.3) Check the existance of db2
+### 3.3) Check the existance of db2
 
 ```shell
 curl \
@@ -300,7 +300,7 @@ The default values are omitted and hence, the `exist = false` is not printed.
 
 
 
-## (4) Creation and Deletion of Databases in a Single Transaction
+## 4) Creation and Deletion of Databases in a Single Transaction
 
 Within a single transaction, we can create and delete as many number of databases we want. Note that we can only delete databases
 if exist. Otherwise, the transaction would be invalidated. Hence, first create two databases using this [example](#creation-of-databases).
@@ -336,11 +336,11 @@ The signature is computed using the following command
     -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-12d5-3733-1f31712add88","create_dbs":["db3","db4"],"delete_dbs":["db1","db2"]}'
 ```
 
-## (5) Invalid Database Administration Transaction
+## 5) Invalid Database Administration Transaction
 
 We cover the incorrect usage of administration transaction that can lead to invalidation of the submitted database administration transaction.
 
-### (5.1) Database to be created already exist
+### 5.1) Database to be created already exist
 
 Let's create a new database `db5`
 ```shell
@@ -437,7 +437,7 @@ In the transaction receipt, we can see that the following:
           }
         ]
 ```
-### (5.2) Database to be deleted does not exist
+### 5.2) Database to be deleted does not exist
 
 Let's try to delete `db6` which does not exist in the cluster
 ```shell
@@ -498,7 +498,7 @@ The following would be the transaction receipt that holds the reason for the inv
 }
 ```
 
-### (5.3) Database to be deleted is a system database
+### 5.3) Database to be deleted is a system database
 
 Let's try to delete a system database `_config`
 

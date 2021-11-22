@@ -8,21 +8,28 @@ We can create, update and delete states maintained by the Orion cluster using th
 
 Using a data transaction, we can do the following:
 
-  1. [Creation of new states](#2-creation-of-new-states)
-  2. [Updation of an existing states](#3-updation-of-an-existing-state)
-  3. [Deletion of an existing states](#4-deletion-of-an-existing-state)
-  3. [Creation, Updation, Deletion of states within a single transaction](#5-creation-updation-deletion-of-states-within-a-single-transaction)
-  4. [Operations on multiple databases](#6-operations-on-multiple-databases-in-a-single-transaction)
-  5. [Multi-signatures transaction](#7-multi-signatures-transaction)
+  1. [Creation of new states](#1-creation-of-new-states)
+  2. [Updation of an existing states](#2-updation-of-an-existing-state)
+  3. [Deletion of an existing states](#3-deletion-of-an-existing-state)
+  3. [Creation, Updation, Deletion of states within a single transaction](#4-creation-updation-deletion-of-states-within-a-single-transaction)
+  4. [Operations on multiple databases](#5-operations-on-multiple-databases-in-a-single-transaction)
+  5. [Multi-signatures transaction](#6-multi-signatures-transaction)
 
-> As a pre-requisite, we need to first [create a connection](./../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and [open a database session](./../../pre-requisite/gosdk#opening-a-database-session).
+:::info pre-requisite
+For all examples shown here to work, we need to have
 
-> In addition to this example, you can download and use the data transaction example from the go-sdk examples folder: [orion-sdk-go/examples/api/simple_tx/simple_tx.go](https://github.com/hyperledger-labs/orion-sdk-go/blob/main/examples/api/simple_tx/simple_tx.go) 
+ 1. Two databases named `db1` and `db2` in the orion-server. If you have not created these two databases,
+refer to [creates databases using SDK](./dbtx#creation-of-databases) to create `db1` and `db2`.
+ 2. Two users named `alice` and `bob`. If you have not created these users already, refer to [create users using SDK](./usertx##2-addition-of-users).
+
+Finally, [Create a connection](../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and
+[Open a database session](../../pre-requisite/gosdk#opening-a-database-session).
+:::
 
 Once a [database session](./../../pre-requisite/gosdk#opening-a-database-session) is created, a call to `session.DataTx()` will create new data transaction context and thus will start a new data
 transaction. The data transaction context provides following methods to calls:
 
-```go 
+```go
 type DataTxContext interface {
 	// Put new value to key
 	Put(dbName string, key string, value []byte, acl *types.AccessControl) error
@@ -63,15 +70,9 @@ type DataTxContext interface {
 }
 ```
 
-## (1) Prerequisite
+## 1) Creation of new states in database
 
-For all examples shown here to work, we need to have two databases named `db1` and `db2` in the orion-server. If you have not created these to databases,
-refer to [creates databases using SDK](./dbtx#creation-of-databases) to create `db1` and `db2`. Then, we need to have two users named `alice` and `bob`. 
-If you have not created these users already, refer to [create users using SDK](./usertx##2-addition-of-users)
-
-## (2) Creation of new states in database
-
-### (2.1) Create a state with key `key1`
+### 1.1) Source Code
 
 Let's store a new state `key1` with the value `{"name":"abc","age":31,"graduated":true}`.
 
@@ -113,62 +114,77 @@ func main() {
 
 	acl := &types.AccessControl{
 		ReadUsers: map[string]bool{
-			"alice": true,
 			"bob":   true,
 		},
 		ReadWriteUsers: map[string]bool{
 			"alice": true,
 		},
+		SignPolicyForWrite: types.AccessControl_ANY,
 	}
 	err = tx.Put("db2", "key1", jVal, acl)
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-   // if err is not nil, print and return
+    // if err is not nil, print and return
 
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
 
+### 1.2) Source Code Commentary
+For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found [here](../../pre-requisite/gosdk).
 
-### (2.2) Checking the existence of `key1`
+The `session.DataTx()` starts a new data transaction and returns the data transaction context. We can then perform all
+data manipulation activities using this transaction context.
 
-Let's query the node to see whether `key1` exists. The query can be submitted by either `alice` or `bob` as both have
-the read permission to this key. No one else can read `key1` including the admin user of the node. In this example,
-we use `bob` to query the key.
+Let's create a key `key1` with the value `{"name":"abc","age":31,"graduated":true}`. In the above code, we use the struct with
+JSON tags and then marshal the struct to create this JSON value.
 
+Once the value is created, we define the access control for this key `key1`. The structure of
+ACL is shown below:
 ```go
-package main
-
-import (
-	"fmt"
-)
-
-func main() {
-	db, err := createConnection()
-    // if err is not nil, print and return
-
-	session, err := openSession(db, "bob")
-    // if err is not nil, print and return
-
-	tx, err := session.DataTx()
-    // if err is not nil, print and return
-
-	v, m, err := tx.Get("db2", "key1")
-    // if err is not nil, print and return
-
-	fmt.Println("access control:", m.AccessControl)
-	fmt.Println("version       :", m.Version)
-	fmt.Println("value         :", string(v))
-
-	err = tx.Abort()
-    // if err is not nil, print and return
+type AccessControl struct {
+	ReadUsers            map[string]bool
+	ReadWriteUsers       map[string]bool
+	SignPolicyForWrite   AccessControlWritePolicy
 }
+
+type AccessControlWritePolicy int32
+
+const (
+	AccessControl_ANY AccessControlWritePolicy = 0
+	AccessControl_ALL AccessControlWritePolicy = 1
+)
 ```
+The ACL holds
+ 1. `ReadUsers`: a list of users who can only read the key
+ 2. `ReadWriteUsers`: a list of users who can read and write the key.
+ 3. `SignPolicyForWrite`: denotes whether signature of all users in the `ReadWriteUsers` is needed to perform writes to the key.
 
-## (3) Update of an existing state
+The following are various ACL configurations and associated effects:
+ 1. If acl is `nil` for a key, any users of Orion can access that key.
+ 2. If acl has only `ReadUsers` for a key, then the key would become read-only forever by users present in the `ReadUsers` list.
+ 3. If acl has `ReadWriteUsers` for a key, users in this list can read and write that key. As `SignPolicyForWrite` is not set, it would use the default policy which is `AccessControl_ANY`. This means, any user in the `ReadWriteUsers` can write to the key.
+ 4. If acl has only `SignPolicyForWrite` but `ReadUsers` and `ReadWriteUsers` are empty for a key, then no user can read or write to that key forever.
+ 5. If acl has `ReadWriteUsers` and `AccessControl_ALL` for the `SignPolicyForWrite`, then the key can be read by any users in the `ReadWriteUsers` but only when all users sign the transaction, the key can be updated or deleted.
+ 6. If acl has `ReadUsers` and `SignPolicyForWrite` for a key, then the key would become read-only forever by users present in the `ReadUsers` list.
 
-### (3.1) Update the key `key1`
+In our code, we have provided the read access on `key1` to `alice` and `bob` but only `alice` can write to the key. As there is a
+single user in the `ReadWriteUsers`, we have set the `SignPolicyForWrite` to `AccessControl_ANY`. Even if we set
+`SignPolicyForWrite` to `AccessControl_ALL`, it works as only `alice` has the write permission on `key1`.
+
+We then use `tx.Put()` to store the key `key1` with the value `jVal` and an access control list `acl` in the database `db2`.
+
+Finally, the transaction is committed by calling `dbtx.Commit(true)`. The argument true denotes that the synchronous submission. As a result, the `Commit()`
+would return the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
+
+The structure of txReceipt can be seen [here]. The user can store this txReceipt as it is a committment used to verify the proof generated by the server.
+
+Refer to [Query Data](../../queries/gosdk/simple-data-query) in queries to check whether `key1` has been created.
+
+## 2) Update of an existing state
+
+### 2.1) Soure Code
 
 Let's update the value of `key1`. In order to do that, we need to execute the following three steps:
 
@@ -224,58 +240,33 @@ func main() {
 }
 ```
 
-### (3.2) Checking the existence of the updated key `key1`
+### 2.1) Soure Code Commentary
+For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()`
+can be found [here](../../pre-requisite/gosdk).
 
-Let's query the node to see whether `key1` has been updated. In this example, we use `alice` to query the key.
+The `session.DataTx()` starts a new data transaction and returns the data transaction context. We can then perform all
+data manipulation activities using this transaction context.
 
-```go
-package main
+As we need to update the value of `key1`, first, we need to fetch `key1` from Orion server by calling `tx.Get("db2", "key1")`.
+The fetched value is `[]byte` and it holds the json marshalled value. We need to unmarshal it to the `person` object. From
+the `person` object, it is easy to change the `Age` to `32`.
 
-import (
-	"encoding/json"
-	"fmt"
-)
+Once the fetched value is updated locally, we need to marshal it again by calling `json.Marshal()` and store the updated
+marshalled value by calling `tx.Put("db2", "key1", jVal, m.AccessControl)`. Note that we are passing the same access control
+as we are not making any changes to it.
 
-type person struct {
-	Name      string `json:"name"`
-	Age       int64  `json:"age"`
-	Graduated bool   `json:"graduated"`
-}
+Finally, the transaction is committed by calling `dbtx.Commit(true)`. The argument true denotes that the synchronous submission. As a result, the `Commit()`
+would return the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
 
-func main() {
-	db, err := createConnection()
-    // if err is not nil, print and return
+The structure of txReceipt can be seen [here]. The user can store this txReceipt as it is a committment used to verify the proof generated by the server.
 
-	session, err := openSession(db, "alice")
-    // if err is not nil, print and return
+Refer to [Query Data](../../queries/gosdk/simple-data-query) in queries to check whether `key1` has been updated.
 
-	tx, err := session.DataTx()
-    // if err is not nil, print and return
+## 3) Deletion of an existing state
 
-	v, _, err := tx.Get("db2", "key1")
-    // if err is not nil, print and return
+### 3.1) Source Code
 
-	p := &person{}
-	err = json.Unmarshal(v, p)
-    // if err is not nil, print and return
-
-	if p.Age != 32 {
-		fmt.Println("update was not successful")
-		return
-	}
-
-	fmt.Println("age:", p.Age)
-
-	err = tx.Abort()
-    // if err is not nil, print and return
-}
-```
-
-## (4) Deletion of an existing state
-
-### (4.1) Delete the key `key1`
-
-Let's delete the key `key1`. 
+Let's delete the key `key1`.
 
 ```go
 package main
@@ -305,45 +296,26 @@ func main() {
 }
 ```
 
-### (4.2) Checking the non-existence of the deleted key `key1`
+### 3.2) Source Code Commentary
+For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()`
+can be found [here](../../pre-requisite/gosdk).
 
-```go
-package main
+The `session.DataTx()` starts a new data transaction and returns the data transaction context. We can then perform all
+data manipulation activities using this transaction context.
 
-import (
-	"fmt"
-)
+To delete the key `key1`, we need to call `tx.Delete("db2", "key1")`. Note that this is a blind delete. If you want to avoid the
+blind delete, we need to first fetch `key1` by calling `tx.Get("db2", "key1")` but ignoring the returned value and version. Next,
+we need to call `tx.Delete("db2", "key1")` to delete the key `key1`.
 
-func main() {
-	db, err := createConnection()
-    // if err is not nil, print and return
+Finally, the transaction is committed by calling `tx.Commit(true)`. The argument true denotes that the synchronous submission. As a result, the `Commit()`
+would return the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
 
-	session, err := openSession(db, "alice")
-    // if err is not nil, print and return
+The structure of txReceipt can be seen [here]. The user can store this txReceipt as it is a committment used to verify the proof generated by the server.
 
-	tx, err := session.DataTx()
-    // if err is not nil, print and return
+## 4) Creating, Updating, Deleting states within a single transaction
 
-	v, m, err := tx.Get("db2", "key1")
-    // if err is not nil, print and return
-
-	if v != nil || m != nil {
-		fmt.Println("delete was not successful")
-		return
-	}
-
-	err = tx.Abort()
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-}
-```
-
-## (5) Creating, Updating, Deleting states within a single transaction
-
-Let's create `key1` and `key2` so that in the next transaction we can do all three operations.
-
-### (5.1) Create `key1` and `key2`
+<details>
+<summary> Let's create `key1` and `key2` so that in the next transaction we can do all three operations</summary>
 
 ```go
 package main
@@ -412,7 +384,10 @@ func main() {
 }
 ```
 
-### (5.2) Create `key3`, update `key2`, and delete `key1`
+</details>
+
+
+### 4.1) Source Code
 
 Now, we have required data in the server, we can execute creation, updation, and deletion within a single transaction.
 
@@ -507,100 +482,39 @@ func deleteKey1(tx bcdb.DataTxContext) error {
 }
 ```
 
-### (5.3) Check the non-existence of `key1` and existence of updated `key2` and newly created `key3`
+### 4.2) Source Code Commentary
+For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()`
+can be found [here](../../pre-requisite/gosdk).
 
-```go
-package main
+The `session.DataTx()` starts a new data transaction and returns the data transaction context. We can then perform all
+data manipulation activities using this transaction context.
 
-import (
-	"encoding/json"
-	"errors"
-	"fmt"
+It can be clearly seen from the source that we use the same transaction context to create a new key `key3`,
+update an existing key `key2`, and delete an existing key `key1`.
 
-	"github.com/hyperledger-labs/orion-sdk-go/pkg/bcdb"
-)
+The value for `key3` is created by marshaling the `person` object. Then, `tx.Put("db2", "key3", jVal, acl)` stores
+`key3` with the value `{"name":"ghi","age":24,"graduated":true}`. Only `alice` has read and write permission on
+the `key3` as defined in the `ReadWriteUsers` of access control list.
 
-type person struct {
-	Name      string `json:"name"`
-	Age       int64  `json:"age"`
-	Graduated bool   `json:"graduated"`
-}
+For updating `key2`, first, we fetch `key2` by calling `tx.Get("db2", "key2")`. Next, the fetched value is unmarshalled
+into a person object such that fields such as `age` and `graduated` can be updated. Then, the updated value is
+stored by calling `tx.Put("db2", "key2", jVal, m.AccessControl)`.
 
-func main() {
-	db, err := createConnection()
-    // if err is not nil, print and return
+Finally, the transaction is committed by calling `tx.Commit(true)`. The argument true denotes that the synchronous submission. As a result, the `Commit()`
+would return the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
 
-	session, err := openSession(db, "alice")
-    // if err is not nil, print and return
+The structure of txReceipt can be seen [here]. The user can store this txReceipt as it is a committment used to verify the proof generated by the server.
 
-	tx, err := session.DataTx()
-    // if err is not nil, print and return
+Refer to [Query Data](../../queries/gosdk/simple-data-query) in queries to check whether `key3` has been created,
+`key2` has been updated, and `key1` has been deleted.
 
-	err = checkNonExistenceOfKey1(tx)
-    // if err is not nil, print and return
-
-	err = checkUpdateKey2(tx)
-    // if err is not nil, print and return
-
-	err = checkExistenceOfKey3(tx)
-    // if err is not nil, print and return
-
-	err = tx.Abort()
-    // if err is not nil, print and return
-
-func checkNonExistenceOfKey1(tx bcdb.DataTxContext) error {
-	v, m, err := tx.Get("db2", "key1")
-	if err != nil {
-		return err
-	}
-
-	if v != nil || m != nil {
-		return errors.New("key1 was not deleted")
-	}
-
-	return nil
-}
-
-func checkUpdateKey2(tx bcdb.DataTxContext) error {
-	v, _, err := tx.Get("db2", "key2")
-	if err != nil {
-		return err
-	}
-
-	p := &person{}
-	err = json.Unmarshal(v, p)
-	if err != nil {
-		return err
-	}
-
-	if p.Age != 24 || p.Graduated == false {
-		return errors.New("key2 was not updated")
-	}
-
-	return nil
-}
-
-func checkExistenceOfKey3(tx bcdb.DataTxContext) error {
-	v, m, err := tx.Get("db2", "key3")
-	if err != nil {
-		return err
-	}
-
-	if v == nil || m == nil {
-		return errors.New("key2 was not created")
-	}
-
-	return nil
-}
-```
-
-## (6) Operations on Multiple Databases in a Single Transaction
+## 5) Operations on Multiple Databases in a Single Transaction
 
 A data transaction can access or modify more than one user database in a transaction. In the below example,
 we perform operations on two databases `db1` and `db2` within a single transaction.
 
-### (6.1) Update `alice`'s privileges
-
+<details>
+<summary> Update `alice` Privileges </summary>
 As both `alice` and `bob` have only read permission on the database `db1`, first, we update the privilege of `alice`
 to have read-write permission on `db1` as shown below:
 
@@ -636,19 +550,13 @@ func main() {
 
 	txID, receipt, err := tx.Commit(true)
 	// if err is not nil, print and return
-	
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
+</details>
 
-In order to construct the above transaction payload, first, we need to fetch the `alice` user to capture the certificate and current
-privileges. For brevity, the fetch operation is not shown here. Next, we need to construct the above payload. In the `user_reads` field,
-we have the set the version which would be used during multi-version concurrency control. The `user_writes` field holds the updated
-privileges where the read-only permission on `db1` denoted by `"db1":0` has been changed to `"db1":1`.
-
-Now that `alice` has read-write permission on both `db1` and `db2`, we can perform the multi-database operation.
-
-### (6.2) Create `key4` in `db1` and `key4` in `db2`
+### 5.1) Source Code
 
 Let's create
   1. the key `key4` with value `{"name":"abc","age":31,"graduated":true}` in `db1`
@@ -708,7 +616,6 @@ func createKey4InDB1(tx bcdb.DataTxContext) error {
 
 	acl := &types.AccessControl{
 		ReadUsers: map[string]bool{
-			"alice": true,
 			"bob":   true,
 		},
 		ReadWriteUsers: map[string]bool{
@@ -735,43 +642,22 @@ func createKey4InDB2(tx bcdb.DataTxContext) error {
 }
 ```
 
-### (6.3) Check the existence of `key4` in `db1` and `key4` in `db2`
+### 5.2) Source Code Commentary
+For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()`
+can be found [here](../../pre-requisite/gosdk).
 
-Let's fetch `key4` from `db1` and `key4` from `db2` to ensure that these keys have been created successfully.
+The `session.DataTx()` starts a new data transaction and returns the data transaction context. We can then perform all
+data manipulation activities using this transaction context.
 
-```go
-package main
+In database `db1`, we create a key `key4` with the value `{"name":"abc","age":31,"graduated":true}` using the person object and
+json marshal. Then, the value is stored by calling `tx.Put("db1", "key4", jVal, acl)`. Note that the first parameter is `db1`.
+As per the ACL, `bob` has only read permission while `alice` has both read and write permissions.
 
-import (
-	"fmt"
-)
+In database `db2`, we create a key `key4` with the value `{"name":"def","age":20,"graduated":false}` using the person object and
+json marshal. Then, the value is stored by calling `tx.Put("db2", "key4", jVal, nil)`. Note that the first parameter is `db1`.
+Further, there is no ACL on `key4`. As a result, both `alice` and `bob` can read or write to `key4`. In fact, any new user of
+Orion can read or write to `key4` when the ACL is empty.
 
-func main() {
-	db, err := createConnection()
-    // if err is not nil, print and return
-
-	session, err := openSession(db, "alice")
-    // if err is not nil, print and return
-
-	tx, err := session.DataTx()
-    // if err is not nil, print and return
-
-	v, m, err := tx.Get("db1", "key4")
-    // if err is not nil, print and return
-
-	if v == nil || m == nil {
-		fmt.Println("key1 was not stored into db1")
-	}
-
-	v, m, err = tx.Get("db2", "key4")
-    // if err is not nil, print and return
-
-	if v == nil || m == nil {
-		fmt.Println("key1 was not stored into db2")
-	}
-
-	err = tx.Abort()
-    // if err is not nil, print and return
-}
-```
-## (7) Multi-Signatures Transaction
+:::info Additional Examples
+In addition to this example, you can download and use the data transaction example from the go-sdk examples folder: [orion-sdk-go/examples/api/simple_tx/simple_tx.go](https://github.com/hyperledger-labs/orion-sdk-go/blob/main/examples/api/simple_tx/simple_tx.go)
+:::
