@@ -17,7 +17,7 @@ is the ID of the submitting user who is registered in the blockchain database no
 `admin` user is the one who submits request to the server. Hence, we need to use the admin's private
 key to sign the `{"user_id":"admin"}` as shown below.
 
-```sh
+```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin"}'
 ```
 The above command would produce a digital signature and prints it as base64 encoded string as shown below
@@ -27,7 +27,7 @@ MEUCIQCMEdLgfFEOF+vgXLwbeOdUUWnGB5HH2ULkoz15jlk5DgIgbWXuoyqD4szob78hZYiau9LPdJLL
 
 Once the signature is computed, we can issue a `GET` request using the following `cURL` command
 by setting the above signature string in the `Signature` header.
-```sh
+```shell
 curl \
    -H "Content-Type: application/json" \
    -H "UserID: admin" \
@@ -38,7 +38,7 @@ A sample output of above command is shown below. The actual content might change
 For now, all users in the cluster can query the cluster configuration to identity the set of nodes, IP address of each node
 along with the listening port number, certificate of the node, etc...
 
-```json
+```webmanifest
 {
   "response": {
     "header": {
@@ -77,7 +77,9 @@ along with the listening port number, certificate of the node, etc...
         "raft_config": {
           "tick_interval": "100ms",
           "election_ticks": 50,
-          "heartbeat_ticks": 5
+          "heartbeat_ticks": 5,
+          "max_inflight_blocks": 50,
+          "snapshot_interval_size": 1000000000000
         }
       }
     },
@@ -87,6 +89,6 @@ along with the listening port number, certificate of the node, etc...
       }
     }
   },
-  "signature": "MEQCIFE0hfiVoVnP/9m+hwgeApmO5OJncl6GEJk3f95pd5ROAiBB/tBhi0NT+ccE3lrXclwEct1X/vtO84IIwuSD/rBeSA=="
+  "signature": "MEUCIGaeLwhfXBb/s1k8sIzqCPy+OqkiNJS9EgeSZGlHqoHaAiEAwzyj0h4QHfwmuwBbjY21+huvbE3ltp8apGr6uP921kQ="
 }
 ```

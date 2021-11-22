@@ -15,24 +15,24 @@ In our `config.yml`, we have an admin entry with ID `admin`. Hence, we do a self
 In our example, the submitting user `admin` wants to fetch its own information and hence, the following data needs to be signer
 `{"user_id":"admin","target_user_id":"admin"}` as follows:
 
-```sh
+```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","target_user_id":"admin"}'
 ```
 The above command would produce a digital signature and prints it as base64 encoded string as shown below:
-```sh
+```shell
 MEQCIB6NmOvgUvYwRLBAFz/OovrGRfhnwbxMwFb4+Dniano6AiBbObFcC6Cv/wcBLXzDf3pG0zybHTSA5ksMGCusfAridw==
 ```
 Once the signature is computed, we can issue a `GET` request using the following `cURL` command
 by setting the above signature string in the `Signature` header.
-```sh
+```shell
 curl \
    -H "Content-Type: application/json" \
    -H "UserID: admin" \
    -H "Signature: MEQCIB6NmOvgUvYwRLBAFz/OovrGRfhnwbxMwFb4+Dniano6AiBbObFcC6Cv/wcBLXzDf3pG0zybHTSA5ksMGCusfAridw==" \
    -X GET http://127.0.0.1:6001/user/admin | jq .
 ```
-A sample output of the above command is shown below. 
-```json
+A sample output of the above command is shown below.
+```webmanifest
 {
   "response": {
     "header": {
