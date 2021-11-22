@@ -14,7 +14,7 @@ Result of this query used both to validate `TxReceipt` and ledger connectivity. 
 In this example we will query ledger for block 5 header.
 
 **Sign json serialized query**
-```sh
+```shell
 bin/signer -data '{"user_id":"alice","block_number":5}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
 
@@ -24,7 +24,7 @@ MEQCIEpt+TSeA6keDsecrim2EajdVtoeo1cgq9NN/WXEJ5HWAiB5ijMeZZ5y16CCzjXfIpqqnLCANGsl
 ```
 
 **Submit query**
-```sh
+```shell
 curl \
      -H "Content-Type: application/json" \
      -H "UserID: alice" \
