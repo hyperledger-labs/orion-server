@@ -52,6 +52,7 @@ binary:
 	go build -o $(BIN)/bdb cmd/bdb/main.go
 	go build -o $(BIN)/signer cmd/signer/signer.go
 	go build -o $(BIN)/encoder cmd/base64_encoder/encoder.go
+	go build -o $(BIN)/decoder cmd/base64_decoder/decoder.go
 
 .PHONY: test
 test-script: 
