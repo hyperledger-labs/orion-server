@@ -17,8 +17,10 @@ Using a data transaction, we can do the following:
 
 > As a pre-requisite, we need to first [create a connection](./../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and [open a database session](./../../pre-requisite/gosdk#opening-a-database-session).
 
-Once a [database session](./../../pre-requisite/gosdk#opening-a-database-session) is created, we can call `session.DataTx()` to start the data
-transaction context. On this transaction context, we have the support for following method calls:
+> In addition to this example, you can download and use the data transaction example from the go-sdk examples folder: [orion-sdk-go/examples/api/simple_tx/simple_tx.go](https://github.com/hyperledger-labs/orion-sdk-go/blob/main/examples/api/simple_tx/simple_tx.go) 
+
+Once a [database session](./../../pre-requisite/gosdk#opening-a-database-session) is created, a call to `session.DataTx()` will create new data transaction context and thus will start a new data
+transaction. The data transaction context provides following methods to calls:
 
 ```go 
 type DataTxContext interface {
@@ -67,7 +69,7 @@ For all examples shown here to work, we need to have two databases named `db1` a
 refer to [creates databases using SDK](./dbtx#creation-of-databases) to create `db1` and `db2`. Then, we need to have two users named `alice` and `bob`. 
 If you have not created these users already, refer to [create users using SDK](./usertx##2-addition-of-users)
 
-## (2) Creation of new states
+## (2) Creation of new states in database
 
 ### (2.1) Create a state with key `key1`
 
@@ -122,16 +124,14 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+   // if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
 
 
-### (2.2) Checking the existance of `key1`
+### (2.2) Checking the existence of `key1`
 
 Let's query the node to see whether `key1` exists. The query can be submitted by either `alice` or `bob` as both have
 the read permission to this key. No one else can read `key1` including the admin user of the node. In this example,
@@ -166,7 +166,7 @@ func main() {
 }
 ```
 
-## (3) Updation of an existing state
+## (3) Update of an existing state
 
 ### (3.1) Update the key `key1`
 
@@ -218,15 +218,13 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+    // if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
 
-### (3.2) Checking the existance of the updated key `key1`
+### (3.2) Checking the existence of the updated key `key1`
 
 Let's query the node to see whether `key1` has been updated. In this example, we use `alice` to query the key.
 
@@ -301,15 +299,13 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+    // if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
 
-### (4.2) Checking the non-existance of the deleted key `key1`
+### (4.2) Checking the non-existence of the deleted key `key1`
 
 ```go
 package main
@@ -343,7 +339,7 @@ func main() {
 }
 ```
 
-## (5) Creation, Updation, Deletion of states within a single transaction
+## (5) Creating, Updating, Deleting states within a single transaction
 
 Let's create `key1` and `key2` so that in the next transaction we can do all three operations.
 
@@ -395,6 +391,7 @@ func main() {
 		},
 	}
 	err = tx.Put("db2", "key1", jVal, acl)
+    // if err is not nil, print and return
 
 	p2 := &person{
 		Name:      "def",
@@ -409,10 +406,8 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+    // if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
@@ -459,10 +454,8 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+    // if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 
@@ -642,10 +635,8 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+	// if err is not nil, print and return
+	
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 ```
@@ -698,10 +689,8 @@ func main() {
     // if err is not nil, print and return
 
 	txID, receipt, err := tx.Commit(true)
-	if err != nil {
-		fmt.Println("transaction did not get committed", err.Error())
-		return
-	}
+    // if err is not nil, print and return
+
 	fmt.Println("transaction with txID " + txID + " got committed in the block " + strconv.Itoa(int(receipt.GetHeader().GetBaseHeader().GetNumber())))
 }
 
@@ -759,45 +748,30 @@ import (
 
 func main() {
 	db, err := createConnection()
-	if err != nil {
-		fmt.Errorf(err.Error())
-		return
-	}
+    // if err is not nil, print and return
 
 	session, err := openSession(db, "alice")
-	if err != nil {
-		fmt.Errorf(err.Error())
-		return
-	}
+    // if err is not nil, print and return
 
 	tx, err := session.DataTx()
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+    // if err is not nil, print and return
 
 	v, m, err := tx.Get("db1", "key4")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+    // if err is not nil, print and return
+
 	if v == nil || m == nil {
 		fmt.Println("key1 was not stored into db1")
 	}
 
 	v, m, err = tx.Get("db2", "key4")
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
+    // if err is not nil, print and return
+
 	if v == nil || m == nil {
 		fmt.Println("key1 was not stored into db2")
 	}
 
 	err = tx.Abort()
-	if err != nil {
-		fmt.Println(err.Error())
-	}
+    // if err is not nil, print and return
 }
 ```
 ## (7) Multi-Signatures Transaction

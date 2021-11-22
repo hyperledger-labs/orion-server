@@ -59,7 +59,7 @@ func createConnection() (bcdb.BCDB, error) {
 }
 ```
 
-### Source Code Commentry
+### Source Code Commentary
 The `bcdb.Create()` method in the `bcdb` package at the SDK prepares a connection context to the Orion cluster
 and loads the certificate of certificate authorities.
 
@@ -111,8 +111,8 @@ type BCDB interface {
 
 ### Source Code
 
-Now, that we can created a connection and received the `BCDB` implementation, we can open a database session by calling the `Session()` method.
-The following function opens a database session for a given connection.
+Now, once we created the Orion connection and received the `BCDB` object instance, we can open a database session by calling the `Session()` method. The `Session` object authenticates the database user against the database server. 
+The following function opens a database session for an already existing database connection.
 ```go
 func openSession(db bcdb.BCDB, userID string) (bcdb.DBSession, error) {
 	sessionConf := &config.SessionConfig{
@@ -134,14 +134,14 @@ func openSession(db bcdb.BCDB, userID string) (bcdb.DBSession, error) {
 }
 ```
 
-### Source Code Commentry
+### Source Code Commentary
 
 The signature of `Session()` method is shown below:
 ```go
 Session(config *config.SessionConfig) (DBSession, error)
 ```
 
-The `Session()` takes `config.SessionConfig` as a parameter which holds the user credentials, transaction timeout, and query timeout.
+The `Session()` takes `config.SessionConfig` as a parameter which holds the user configuration (user's ID and credentials) and various configuration parameters, such as transaction timeout and query timeout.
 The structure of the `config.SessionConfig` is shown below:
 
 ```go
@@ -172,7 +172,7 @@ type UserConfig struct {
 
 As the `admin` user is submitting the transactions, we have set the `UserConfig` to hold the userID of `admin`, certificate, and private key  of
 the `admin` user. The transaction timeout is set to 20 seconds. This means that the SDK would wait for 20 seconds to receive the
-transaction's status and receipt synchronously. Once timeout happens, the SDK needs to pool for the transaction status asychronously.
+transaction's status and receipt synchronously. Once timeout happens, the SDK needs to pool for the transaction status asynchronously.
 
 The `Session()` would return the `DBSession` implementation that allows the user to execute various database transactions and queries.
 The `DBSession` implementation supports the following methods:
