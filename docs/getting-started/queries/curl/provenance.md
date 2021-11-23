@@ -3,14 +3,14 @@ id: provenance
 title: Provenance Queries on Historical Data
 ---
 # Provenance queries
-The provenance API gives the user access to the following BCDB data:
+The provenance API gives the user access to the following Orion data:
 - The history of values for a given key, in different views and directions,
 - Information about which users accessed or modified a specific piece of data,
 - Information, including history, about the data items accessed by a given user,
 - A history of user transactions.
 
 Usually, provenance queries are used to investigate changes of some values over the time. For example, by sending `GET /provenance/data/history/{dbname}/{key}` we can follow changes of `key` over time.
-As mentioned above, BCDB supports multiple types of provenance queries and here is a base list of them:
+As mentioned above, Orion supports multiple types of provenance queries and here is a base list of them:
 
 Query to get changes of values for a given key over time, supports multiple options, like directions, etc. Examples of this query, including input and output format, can be found [here], [here] and [here].
 ```http request
@@ -40,9 +40,9 @@ GET /provenance/data/tx/{userId}
 
 ## Prepare data
 
-To make this example more realistic and to see a meaningful outputs from these queries' execution, multiple transactions should be submitted to BDCD, and the ledger should contain multiple blocks. Next, we will submit multiple data transactions to BCDB.
+To make this example more realistic and to see a meaningful outputs from these queries' execution, multiple transactions should be submitted to BDCD, and the ledger should contain multiple blocks. Next, we will submit multiple data transactions to Orion.
 
-> As a prerequisite, we need users `alice` and `bob` and database `db2` to exist in BCDB, and at least one data transaction submitted. 
+> As a prerequisite, we need users `alice` and `bob` and database `db2` to exist in Orion, and at least one data transaction submitted. 
 > First, we need to create `db2` database, as described [here].
 > Second, we need to create `alice` and `bob`. See [here] for user creation.
 > In addition, some data should exist in `db2`, refer [here] for example of running data transaction.
