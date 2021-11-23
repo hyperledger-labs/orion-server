@@ -51,7 +51,6 @@ jobs:
       - name: Tag and Push docker image
         if: github.event_name != 'pull_request'
         run: |
-          docker tag ${{ env.IMAGE_NAME }}:latest ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:latest
-          docker tag ${{ env.IMAGE_NAME }}:latest ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:${{ steps.tag_name.outputs.TAG_NAME }}
+          docker tag ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:latest ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:${{ steps.tag_name.outputs.TAG_NAME }}
           docker push ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:latest
           docker push ${{ env.DOCKER_USER }}/${{ env.IMAGE_NAME }}:${{ steps.tag_name.outputs.TAG_NAME }}
