@@ -102,14 +102,14 @@ func (b *BlockProcessor) Start() {
 				panic(err)
 			}
 
-			//TODO Detect config changes that affect the replication component and return an appropriate non-nil object
-			// to instruct it to reconfigure itself. See issues:
-			// https://github.ibm.com/blockchaindb/server/issues/396
-			// https://github.ibm.com/blockchaindb/server/issues/413
+			// Detect config changes that affect the replication component and return an appropriate non-nil object
+			// to instruct it to reconfigure itself. Only valid config transactions are passed on.
 			var reConfig interface{}
 			switch block.Payload.(type) {
 			case *types.Block_ConfigTxEnvelope:
-				reConfig = block.GetConfigTxEnvelope().GetPayload().GetNewConfig()
+				if validInfo := block.GetHeader().GetValidationInfo(); (len(validInfo) != 0) && (validInfo[0].Flag == types.Flag_VALID) {
+					reConfig = block.GetConfigTxEnvelope().GetPayload().GetNewConfig()
+				}
 			}
 			// The replication layer go-routine is blocked until after commit, and is released by calling Reply().
 			// The post-commit listeners are called after the replication layer go-routine is released. This is an

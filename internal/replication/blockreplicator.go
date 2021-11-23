@@ -718,6 +718,7 @@ func (br *BlockReplicator) commitBlock(block *types.Block) error {
 		block.GetHeader().GetBaseHeader().GetNumber(),
 		block.GetConsensusMetadata())
 
+	// we can only get a valid config transaction
 	reConfig, err := br.oneQueueBarrier.EnqueueWait(block)
 	if err != nil {
 		return err
@@ -732,7 +733,7 @@ func (br *BlockReplicator) commitBlock(block *types.Block) error {
 	clusterConfig := reConfig.(*types.ClusterConfig)
 	if err := br.updateClusterConfig(clusterConfig); err != nil {
 		// TODO support dynamic re-config
-		br.lg.Panicf("Failed to update to ClusterConfig during raft normal entry: error: %s", err)
+		br.lg.Panicf("Failed to update to ClusterConfig during commitBlock: error: %s", err)
 	}
 
 	return nil
@@ -759,11 +760,22 @@ func (br *BlockReplicator) getLastCommittedBlockNumber() uint64 {
 func (br *BlockReplicator) updateClusterConfig(clusterConfig *types.ClusterConfig) error {
 	br.lg.Infof("New cluster config committed, going to apply to block replicator: %+v", clusterConfig)
 
-	nodes, consensus, _, _ := ClassifyClusterReConfig(br.clusterConfig, clusterConfig)
-	if nodes || consensus {
-		return errors.New("dynamic re-config of ClusterConfig Nodes & Consensus not supported yet")
-		//TODO dynamic re-config, update transport config, etc
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	// We must not receive any errors here, because that would render the config-tx invalid, and invalid config txs
+	// are not transferred to the BlockReplicator.
+	addedPeers, removedPeers, changedPeers, err := detectPeerConfigChanges(br.clusterConfig.ConsensusConfig, clusterConfig.ConsensusConfig)
+	if err != nil {
+		return errors.Wrap(err, "failed to detect peer config changes")
 	}
+
+	err = br.transport.UpdatePeers(addedPeers, removedPeers, changedPeers, clusterConfig)
+	if err != nil {
+		return errors.Wrap(err, "failed to update peers on transport")
+	}
+
+	br.clusterConfig = clusterConfig
 
 	return nil
 }
