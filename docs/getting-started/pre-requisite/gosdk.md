@@ -11,18 +11,52 @@ title: Creating a Connection and Opening a Session with SDK
 
 When we use the SDK to perform queries and transactions, the following two steps must be executed first:
 
- 1. Creating a connection to the Orion cluster
- 2. Opening a database session with the Orion cluster
+ 1. Clone the SDK
+ 2. Creating a connection to the Orion cluster
+ 3. Opening a database session with the Orion cluster
 
-Let's look at these two steps.
+Let's look at these three steps.
 
-> We have an example of creating a connection and opening a session at [orion-sdk-go/examples/api/connection-and-session].
+:::info
+ We have an example of creating a connection and opening a session at [orion-sdk-go/examples/api/](https://github.com/hyperledger-labs/orion-sdk-go/tree/main/examples/api).
+:::
 
-## Creating a Connection to the Orion Cluster
+## 1) Cloning the SDK Repository 
 
-### Source Code
+To write queries and transactions using the SDK, first, execute the following steps:
+
+  1. Create the required directory using the command `mkdir -p github.com/hyperledger-labs`
+  2. Change the current working directory to the above created directory by issing the command `cd github.com/hyperledger-labs`
+  3. Clone the go SDK repository with `git clone https://github.com/hyperledger-labs/orion-sdk-go`
+
+Then, we can use APIs provided by the SDK.
+
+## 2) Copying the Crypto Materials
+
+We need root CA certificates and user certificates to submit queries and transactions using the SDK.
+
+ - While creating a connection, we need to provide _RootCAs_ configuration.
+ - While opening a session, we need to provide the _user's certificate_ and _private key_.
+
+For all examples shown in this documentation, we use the crypto materials availabe at the `deployment/crypto` folder in
+the `orion-server` repository.
+
+Hence, copy the [`github.com/hyperledger-labs/orion-server/deployment/crypto`](https://github.com/hyperledger-labs/orion-server/tree/main/deployment/crypto)
+to the location where you write/use example code provided in this documentation.
+
+## 3) Creating a Connection to the Orion Cluster
+
+### 3.1) Source Code
 The following function creates a connection to our [single node Orion cluster](./../launching-one-node/binary) deployed using the sample configuration.
-```go
+```go title="create-connection.go"
+package main
+
+import (
+	"github.com/hyperledger-labs/orion-sdk-go/pkg/bcdb"
+	"github.com/hyperledger-labs/orion-sdk-go/pkg/config"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+)
+
 func createConnection() (bcdb.BCDB, error) {
 	logger, err := logger.New(
 		&logger.Config{
@@ -59,9 +93,9 @@ func createConnection() (bcdb.BCDB, error) {
 }
 ```
 
-### Source Code Commentary
+### 3.2) Source Code Commentary
 The `bcdb.Create()` method in the `bcdb` package at the SDK prepares a connection context to the Orion cluster
-and loads the certificate of certificate authorities.
+and loads the certificate of root certificate authorities.
 
 The signature of the `Create()` function is shown below:
 ```go
@@ -107,13 +141,22 @@ type BCDB interface {
 }
 ```
 
-## Opening a Database Session
+## 4) Opening a Database Session
 
-### Source Code
+### 4.1) Source Code
 
 Now, once we created the Orion connection and received the `BCDB` object instance, we can open a database session by calling the `Session()` method. The `Session` object authenticates the database user against the database server. 
 The following function opens a database session for an already existing database connection.
-```go
+```go title="open-session.go"
+package main
+
+import (
+	"time"
+
+	"github.com/hyperledger-labs/orion-sdk-go/pkg/bcdb"
+	"github.com/hyperledger-labs/orion-sdk-go/pkg/config"
+)
+
 func openSession(db bcdb.BCDB, userID string) (bcdb.DBSession, error) {
 	sessionConf := &config.SessionConfig{
 		UserConfig: &config.UserConfig{
@@ -134,7 +177,7 @@ func openSession(db bcdb.BCDB, userID string) (bcdb.DBSession, error) {
 }
 ```
 
-### Source Code Commentary
+### 4.2) Source Code Commentary
 
 The signature of `Session()` method is shown below:
 ```go

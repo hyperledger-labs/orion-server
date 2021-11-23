@@ -9,30 +9,28 @@ title: Orion Executable
  SPDX-License-Identifier: CC-BY-4.0
  -->
 
-Let's build an executable binary file and start a single node.
-
-### Prerequisites
+## 1) Prerequisites
 
 To build an executable binary file, the following are the prerequisites which should be installed on the platform on which
-the Orion will be deployed.
+Orion will be deployed.
 
   - **[Go Programming Language](https://golang.org/)**: The database uses the Go Programming Language for many of its components. Hence, Go version 1.16.x is required.
   - **[Make](https://man7.org/linux/man-pages/man1/make.1.html)**: To build a binary file and execute unit-test, `make` utility is required.
   - **[Git](https://github.com/git-guides/install-git)**: To clone the code repository.
 
-### Build
+## 2) Build
 
 To build the executable binary, the following steps need to be executed
 
-  1. To clone the repository, first, create required directories using the command `mkdir -p github.com/hyperledger-labs`
-  2. Change the current working directory to the above created folder by issing the command `cd github.com/hyperledger-labs`
-  3. Clone this repository with `git clone https://github.com/hyperledger-labs/orion-server`
+  1. Create the required directory using the command `mkdir -p github.com/hyperledger-labs`
+  2. Change the current working directory to the above created directory by issing the command `cd github.com/hyperledger-labs`
+  3. Clone the server repository with `git clone https://github.com/hyperledger-labs/orion-server`
   4. Change the current working directory to the repository root directory by issuing `cd orion-server`
-  5. To build the binary executable file, issue the command `make binary` which will create a `bin` folder in the current directory. The `bin` would holds two executable
-  files named `bdb` and `signer`.
+  5. To build the binary executable file, issue the command `make binary` which will create a `bin` folder in the current directory. The `bin` would holds four executable
+  files named `bdb`, `signer`, `encoder`, and `decoder`.
   6. Run the `bdb` executable by issuing the following command:
 
-```
+```shell
 ./bin/bdb
 ```
 
@@ -51,21 +49,20 @@ Flags:
 Use "bdb [command] --help" for more information about a command.
 ```
 
-For additional health check, we can run `make test` to ensure all tests pass.
+For additional health checks, we can run `make test` to ensure all tests pass.
 
-### Start
+## 3) Start
 
 To start a node, we need a certificate authority and crypto materials for the node and admin users. To simplify this task, we have provided sample
-crypto materials and configuration files in `deployment/sample/`. In order to understand the configuration files and procedure to create crypto
-materials, refer to [TODO].
+crypto materials and configuration files in `deployment/crypto/`.
 
 Let's start a node with the sample configuration:
-`
-./bin/bdb start --configpath deployment/sample/config-sample.yml
-`
+```shell
+./bin/bdb start --configpath ./deployment/config-local/config.yml
+```
 
 The output of the above command would be something similar to the following
-```
+```text
 2021/06/16 18:06:34 Starting a blockchain database
 2021-06-16T18:06:35.151+0530	INFO	bdb-node-1	blockprocessor/processor.go:263	Registering listener [transactionProcessor]
 2021-06-16T18:06:35.151+0530	INFO	bdb-node-1	txreorderer/txreorderer.go:59	starting the transactions reorderer

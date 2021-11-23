@@ -9,51 +9,79 @@ title: Orion Docker
  SPDX-License-Identifier: CC-BY-4.0
  -->
 
-### Prerequisites
+## 1) Prerequisites
 
 To build a docker image, the following are the prerequisites which should be installed.
 
-  - **Docker**: To generate cryptographic materials and build BCDB image.
-  - **Git**: To clone the code repository.
+  - **[Git](https://github.com/git-guides/install-git)**: To clone the code repository.
+  - **[Docker](https://www.docker.com)**: To build the docker image and start the Orion in a docker container.
 
-### Build
+## 2) Orion Docker Image
 
-To build the docker image, the following steps need to be executed:
+Orion node can be launched by either
+   1. Pulling the published docker image in the docker hub (or)
+   2. Building the image from scratch
 
-  1. To clone the repository, first, create required directories using the command `mkdir -p github.com/hyperledger-labs`
-  2. Change the current working directory to the above created folder by issing the command `cd github.com/hyperledger-labs`
-  3. Clone this repository with `git clone https://github.com/hyperledger-labs/orion-server`
+Next, we explain the both options.
+
+### 2.1) Pull Orion Docker Image from Docker Hub
+
+Orion docker image is available in docker hub repository. To pull the image, execute the following command:
+```
+docker pull orionbcdb/orion-server
+```
+
+### 2.2) Build Your Own Orion Docker Image
+
+If you would like to build your own image rather than pulling it from the docker hub, execute the following steps:
+
+  1. Create the required directory using the command `mkdir -p github.com/hyperledger-labs`
+  2. Change the current working directory to the above created directory by issing the command `cd github.com/hyperledger-labs`
+  3. Clone the server repository with `git clone https://github.com/hyperledger-labs/orion-server`
   4. Change the current working directory to the repository root directory by issuing `cd orion-server`
-  5. Optional. Generate all cryptographic materials. For more info see [crypto-materials](crypto-materials).
-  6. To build the docker image, issue the command `make docker` which will create a docker image named `orion-server`
-  7. Optional. Versions of docker image stored once in while in docker hub docker repository as `orionbcdb/orion-server`
+  5. To build the docker image, issue the command `make docker` which will create a docker image named `orionbcdb/orion-server`
 
-### Start Orion in a Docker Container
-If you only plan to try Orion, you can use the pre-existing configuration and crypto materials stored in folder `deployment`.
+## 3) Start Orion in a Docker Container
 
-To do that, you just have to run the following:
+To start a server node, we need a certificate authority and crypto materials for the server node and admin users. To simplify this task,
+we have provided sample crypto materials in `deployment/crypto/`.
+
+Let's start a node with the sample crypto materials:
+
+```docker
+docker run -it --rm -v $(pwd)/deployment/crypto/:/etc/orion-server/crypto -p 6001:6001 \
+    -p 7050:7050 orionbcdb/orion-server
 ```
-docker run -it --rm -v $(pwd)/deployment/crypto/:/etc/orion-server/crypto -p 6001:6001 -p 7050:7050 orion-server
-``` 
-This command will store all the database data inside the running container, so that container termination will remove all data.
 
-If you plan more that just trying Orion, first you have to create __new__ and __unique__ cryptographic materials and optional, update Orion server configuration.   
+Port `6001` is Orion REST API port and should be used to access Orion using its REST API or [Go SDK](https://github.com/hyperledger-labs/orion-sdk-go/)
 
-To create a minimal set of cryptographic materials, execute the `cryptoGen.sh` script as shown below.
+Port `7050` is used between nodes in a cluster for performing replication.
+
+:::info
+To change the port `6001` and `7050`, we need to change the configuration file and map the host directory holding this configuration to `/etc/orion-server/config`
+as explained next in [volumes](#31-volumes-for-persistant-storage-configuration-and-crypto-materials).
+:::
+
+When we start a docker container with the above parameters, all data associated with the orion-server will stay within the container itself.
+When the container is stopped and removed, all data will be lost. For all examples used in this documentation, the container started with the
+above command is sufficient.
+
+For a persistant storage, we need to use docker volumes as shown next.
+
+### 3.1) Volumes for Persistant Storage, Configuration, and Crypto Materials
+
+Orion docker image has three mappable volumes:
+  1. `/var/orion-server/ledger`
+      - It holds all blockchain data maintained by the Orion node. For a persistant storage of blockchain data, we need to map a host directory to this volume while starting the container.
+  2.  `/etc/orion-server/config`
+      - It contains server configuration `yml` files. Mapping is optional, needed only when we want a custom configuration. For example, the default port on which the Orion node listens is `6001`. To change this, we need to update the configuration file. Sample configuration files are stored in `deployment/config-docker` folder.
+  3. `/etc/orion-server/crypto`
+      - It holds all required crypto materials. This volume must be mapped to a host folder. Sample crypto materials are stored in `deployment/crypto` folder. Never use pre-existing crypto materials in production environment.
+
+To start the orion container with all three volumes, execute the following command:
 ```
-./scripts/cryptoGen.sh deployment
+docker run -it --rm -v $(pwd)/deployment/crypto/:/etc/orion-server/crypto \
+                    -v $(pwd)/ledger:/etc/orion-server/ledger \
+                    -v $(pwd)/deployment/config-docker:/etc/orion-server/config \
+                    -p 6001:6001 -p 7050:7050 orionbcdb/orion-server
 ```
-It will create a new set of crypto materials, including Certificate Authority certificate & key pair, _server_ certificate & key pair and certificate & key pairs for _admin_ and _user_ database users.
-
-#### Existing volumes
-As mentioned before, by default, the ledger & database data and the server configuration are stored inside the docker container, but it can be overwritten by mapping host folders to container volumes.
-
-Newly created docker image has three mappable volumes:
-* `/etc/orion-server/config` - contains server configuration `yml` files. Mapping is optional, needed only if you want to use your own configuration. Sample configuration files are stored in `deployment/config-docker` folder.
-* `/var/orion-server/ledger` - blockchain ledger storage folder. Mapping is optional, but without mapping termination of the docker container will erase all ledger data.
-* `/etc/orion-server/crypto` - crypto materials folder. Should be mapped to host folder. Pre-existing crypto materials are stored in `deployment/crypto` folder. Never use pre-existing crypto materials in production environment.  
-
-To invoke the orion server docker container with all mappings, you can run:
-```
-docker run -it --rm -v $(pwd)/deployment/crypto/:/etc/orion-server/crypto -v $(pwd)/ledger:/etc/orion-server/ledger -v $(pwd)deployment/config-docker:/etc/orion-server/config -p 6001:6001 -p 7050:7050 orion-server
-``` 
