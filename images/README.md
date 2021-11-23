@@ -8,7 +8,7 @@
 
 # Supported tags and respective `Dockerfile` links
 
-- [`v0.2.0-fix-docker`, `latest`](https://github.com/hyperledger-labs/orion-server/blob/a29148fb3c9503140ede965c6af11c0fda8ff4ba/images/Dockerfile)
+- [`v0.2.0`, `latest`](https://github.com/hyperledger-labs/orion-server/blob/a29148fb3c9503140ede965c6af11c0fda8ff4ba/images/Dockerfile)
 
 
 # What is Hyperledger Orion?
