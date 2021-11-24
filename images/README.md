@@ -19,7 +19,7 @@
 
 ## Start an Orion instance
 ```console
-docker run -it --rm -v crypto-materials-location:/etc/orion-server/crypto -p 6001:6001 -p 7050:7050 orion-server
+docker run -it --rm -v crypto-materials-location:/etc/orion-server/crypto -p 6001:6001 -p 7050:7050 orionbcdb/orion-server
 ```
 
 Port `6001` is Orion REST API port and should be used to access Orion using its REST API or [Go SDK](https://github.com/hyperledger-labs/orion-sdk-go/) 
@@ -41,6 +41,17 @@ The image has three mappable volumes:
 * `/etc/orion-server/crypto` - crypto materials folder. Should be mapped to host folder. Pre-existing crypto materials are stored in `deployment/crypto` folder in [Orion github](https://github.com/hyperledger-labs/orion-server/). Never use pre-existing crypto materials in production environment.
 
 To invoke the orion server docker container with all mappings, you can run:
+```console
+docker run -it --rm -v crypto-materials-location:/etc/orion-server/crypto \
+                    -v ledger-data-location:/etc/orion-server/ledger \
+                    -v orion-config-location:/etc/orion-server/config \
+                    -p 6001:6001 -p 7050:7050 orionbcdb/orion-server
 ```
-docker run -it --rm -v $(pwd)/deployment/crypto/:/etc/orion-server/crypto -v $(pwd)/ledger:/etc/orion-server/ledger -v $(pwd)deployment/config-docker:/etc/orion-server/config -p 6001:6001 -p 7050:7050 orion-server
+
+for example, running it for `orion-server` folder from [github](https://github.com/hyperledger-labs/orion-server), using configuration and crypro materials stored in `deployment` folder, will look like this:
+```console
+docker run -it --rm -v $(pwd)/deployment/crypto/:/etc/orion-server/crypto \
+                    -v $(pwd)/ledger:/etc/orion-server/ledger \
+                    -v $(pwd)/deployment/config-docker:/etc/orion-server/config \
+                    -p 6001:6001 -p 7050:7050 orionbcdb/orion-server
 ``` 
