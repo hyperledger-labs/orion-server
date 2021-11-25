@@ -1,6 +1,6 @@
 ---
 id: user
-title: Query an User Information
+title: Query User Information
 ---
 ## Querying the User Information
 

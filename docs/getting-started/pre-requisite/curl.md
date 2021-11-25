@@ -33,7 +33,7 @@ utilities can be found in `./bin`
 ### 3.1) Usage of signer
 
 ```sh
-⟩ ./bin/signer
+./bin/signer
 ```
 would print the following
 ```

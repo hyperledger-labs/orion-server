@@ -12,7 +12,7 @@ title: Using Orion
 The easiest way to understand how Orion works is to run it at a small scale. Do the following in order to get familiar with Hyperledger Orion.
 
  1. Launch a single orion node - [Click Here](launching-one-node/overview)
- 2. Setup pre-requisite to execute transactions and queries using SDK based on golang
+ 2. Setup pre-requisite to execute transactions and queries using SDK based on golang - [Click Here](pre-requisite/gosdk)
  3. Run the example program written using SDK for
     1. Database Administration Transaction - [Click Here](transactions/gosdk/dbtx)
     2. User Administration Transaction - [Click Here](transactions/gosdk/usertx)

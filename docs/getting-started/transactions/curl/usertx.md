@@ -13,16 +13,16 @@ Next, we will see an example for
 
 Note that all user administration transactions must be submitted by the admin.
 
-## (1) Prerequisite
-
+:::caution
 It is recommended to start a fresh orion server for executing these examples. Otherwise, you need to carefully change the block number specified as
 part of version in the read-set of the transaction payload. You will get more clarity as you read this doc. Once a fresh orion server is started
 after removing the `ledger` directory, create two databases named `db1` and `db2`. Refer [here](./dbtx.md#create-databases-named-db1-and-db2)
 for an example `cURL` command for creating databases named `db1` and `db2`.
+:::
 
-## (2) Addition of Users
+## 1) Addition of Users
 
-### (2.1) Adding users `alice` and `bob`
+### 1.1) Adding users `alice` and `bob`
 
 When the cluster is started for the first time, it will contain only the admin user specified in the `config.yml`. This admin user can add any other user to the cluster.
 In the below example, the admin user is adding two users named `alice` and `bob` with certain privileges. The crypto materials associated with `alice` and `bob` can
@@ -121,7 +121,7 @@ On a successful commit of the above transaction, the submitter of the transactio
 }
 ```
 
-### (2.2) Check the existance of alice
+### 1.2) Check the existance of alice
 Once the transaction get committed, we can query the user information as follows:
 
 Let's fetch the user `alice`.
@@ -167,7 +167,7 @@ curl \
 }
 ```
 
-### (2.3) Check the existance of bob
+### 1.3) Check the existance of bob
 
 Let's fetch the user `bob`.
 ```shell
@@ -215,9 +215,9 @@ curl \
 }
 ```
 
-## (3) Updation of a User
+## 2) Updation of a User
 
-### (3.1) Remove all privileges of `alice`
+### 2.1) Remove all privileges of `alice`
 Let's remove all privileges given to `alice`. In order to do that, we can execute the following steps:
 
 1. Fetch the current committed information of the `alice`.
@@ -287,7 +287,7 @@ The signature is computed using the following command
 MEQCIGy62qM0ZGdCd5FsCvgKJ0wVQi/uL5Gy0IXhevsNxUaeAiA2pOfu5vVuQ9MJnYakFyw8HcgHR6AA3NqyxF8p3E6exw==
 ```
 
-### (3.2) Check the privilege of `alice`
+### 2.2) Check the privilege of `alice`
 Once the transaction get committed, we can query the user information as follows to check whether all privileges given to the `alice` have been removed:
 
 ```shell
@@ -319,9 +319,9 @@ curl \
 ```
 As we can see, the privilege section is no longer present and the version has been increased too.
 
-## (4) Deletion of a User
+## 3) Deletion of a User
 
-### (4.1) Delete the user `alice`
+### 3.1) Delete the user `alice`
 Let's delete `alice` from the cluster. In order to do that, we can execute the following steps:
 
 1. Fetch the current committed information of the `alice` to get the committed version.
@@ -413,7 +413,7 @@ Once the transaction is validated and committed, the submitter of the transactio
 }
 ```
 
-### (4.2) Check the non-existence of the user `alice`
+### 3.2) Check the non-existence of the user `alice`
 If we query the user, the response would not contain any details associated with the user.
 ```shell
 curl \
@@ -433,12 +433,3 @@ curl \
   "signature": "MEUCIDV6UgjPLtM5c+WqQ+Ue5xcKe/w85nAdwwRl7qPqJByVAiEA4RTqXa8Xf8S+O8YPRpFgIHzOCH5jOHkL2jMmLG7Zdpw="
 }
 ```
-
-## (5) Addition/Updation/Deletion of a User
-
-Within a single transaction, we can do multiple operations such as adding multiple new users, updating and deleting multiple
-existing users.
-
-## (6) Invalid User Administration Transaction
-
-TODO (subsequent PR)
