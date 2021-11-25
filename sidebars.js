@@ -19,7 +19,7 @@ module.exports = {
                         "getting-started/launching-one-node/overview",
                         "getting-started/launching-one-node/binary",
                         "getting-started/launching-one-node/docker",
-                        // "getting-started/launching-one-node/crypto-materials",
+                        "getting-started/launching-one-node/crypto-materials",
                     ],
                 },
                 // {
