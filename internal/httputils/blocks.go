@@ -70,3 +70,12 @@ func BlockPayloadToTxIDs(blockPayload interface{}) ([]string, error) {
 
 	return txIDs, nil
 }
+
+func IsConfigBlock(block *types.Block) bool {
+	switch block.GetPayload().(type) {
+	case *types.Block_ConfigTxEnvelope:
+		return true
+	default:
+		return false
+	}
+}

@@ -36,6 +36,7 @@ func raftEntryString(e raftpb.Entry) string {
 // cause a permanent loss of quorum in the cluster, something that is very difficult to recover from.
 // - Members can be added or removed (membership change) one member at a time
 // - Members' endpoints cannot be changed together with a membership change
+// - Members' endpoints can be updated one at a time
 // - An existing member cannot change its Raft ID (it must be removed from the cluster and added again as a new member)
 // - The Raft ID of a new member must be unique - therefore it must be larger than MaxRaftId
 //
@@ -55,7 +56,7 @@ func VerifyConsensusReConfig(currentConfig, updatedConfig *types.ConsensusConfig
 		return errors.Errorf("cannot update peer endpoints while making membership changes: %d added, %d removed, %d updated", len(addedPeers), len(removedPeers), len(changedPeers))
 	}
 
-	if len(addedPeers)+len(removedPeers) == 1 {
+	if len(addedPeers) == 1 {
 		// TODO support dynamic membership changes, see:
 		return errors.New("dynamic membership changes to the cluster are not supported yet")
 	}

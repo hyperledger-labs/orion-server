@@ -207,3 +207,51 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 		require.Nil(t, txIDs)
 	})
 }
+
+func TestIsConfigBlock(t *testing.T) {
+	type testCase struct {
+		name     string
+		block    *types.Block
+		expected bool
+	}
+
+	testCases := []*testCase{
+		{
+			name:     "nil block",
+			block:    nil,
+			expected: false,
+		},
+		{
+			name:     "empty block",
+			block:    &types.Block{},
+			expected: false,
+		},
+		{
+			name:     "data block",
+			block:    &types.Block{Payload: &types.Block_DataTxEnvelopes{}},
+			expected: false,
+		},
+		{
+			name:     "user admin block",
+			block:    &types.Block{Payload: &types.Block_UserAdministrationTxEnvelope{}},
+			expected: false,
+		},
+		{
+			name:     "db admin block",
+			block:    &types.Block{Payload: &types.Block_DbAdministrationTxEnvelope{}},
+			expected: false,
+		},
+		{
+			name:     "config block",
+			block:    &types.Block{Payload: &types.Block_ConfigTxEnvelope{}},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			isConfig := httputils.IsConfigBlock(tc.block)
+			require.Equal(t, tc.expected, isConfig)
+		})
+	}
+}

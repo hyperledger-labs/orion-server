@@ -190,6 +190,7 @@ func (n *nodeEnv) ServeCommit() {
 type clusterEnv struct {
 	nodes   []*nodeEnv
 	testDir string
+	lg      *logger.SugarLogger
 }
 
 // create a clusterEnv
@@ -209,6 +210,7 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 	if raftConf == nil {
 		clusterConfig.ConsensusConfig.RaftConfig = raftConfigNoSnapshots
 	}
+	clusterConfig.ConsensusConfig.RaftConfig.MaxRaftId = uint64(nNodes)
 
 	for n := uint32(1); n <= uint32(nNodes); n++ {
 		nodeID := fmt.Sprintf("node%d", n)
@@ -228,10 +230,13 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 		clusterConfig.ConsensusConfig.Members = append(clusterConfig.ConsensusConfig.Members, peerConfig)
 	}
 
-	cEnv := &clusterEnv{testDir: testDir}
+	cEnv := &clusterEnv{
+		testDir: testDir,
+		lg:      lg,
+	}
 
 	for n := uint32(1); n <= uint32(nNodes); n++ {
-		nEnv, err := newNodeEnv(n, testDir, lg, clusterConfig)
+		nEnv, err := newNodeEnv(n, testDir, lg, proto.Clone(clusterConfig).(*types.ClusterConfig))
 		if err != nil {
 			os.RemoveAll(testDir)
 			return nil
@@ -322,6 +327,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 
 	return env, nil
 }
+
 
 // find the index [0,N) of the leader node, -1 if no leader.
 func (c *clusterEnv) FindLeaderIndex() int {

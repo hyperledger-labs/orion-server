@@ -126,3 +126,127 @@ func TestBlockReplicator_ReConfig_Endpoint(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+// Scenario: remove a peer from the cluster
+// - start 5 nodes, wait for leader, submit a few blocks and verify reception by all
+// - submit a config tx to remove a node that is NOT the leader
+// - wait for a new leader, from remaining nodes
+// - ensure removed node had shut-down replication and is detached from the cluster
+func TestBlockReplicator_ReConfig_RemovePeer(t *testing.T) {
+	env := createClusterEnv(t, 5, nil, "info")
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 5, len(env.nodes))
+
+	numBlocks := uint64(10)
+	leaderIdx := testReConfigPeerRemoveBefore(t, env, numBlocks)
+
+	// a config tx that updates the membership by removing a peer that is NOT the leader
+	removePeerIdx := (leaderIdx + 1) % 5
+	remainingPeers := []int{0, 1, 2, 3, 4}
+	remainingPeers = append(remainingPeers[:removePeerIdx], remainingPeers[removePeerIdx+1:]...)
+
+	testReConfigPeerRemovePropose(t, env, leaderIdx, removePeerIdx, numBlocks)
+
+	testReConfigPeerRemoveAfter(t, env, removePeerIdx, remainingPeers)
+}
+
+// Scenario: remove a leader from the cluster
+// - start 5 nodes, wait for leader, submit a few blocks and verify reception by all
+// - submit a config tx to remove a node that IS the leader
+// - wait for a new leader, from remaining nodes
+// - ensure removed node had shut-down replication and is detached from the cluster
+func TestBlockReplicator_ReConfig_RemovePeerLeader(t *testing.T) {
+	env := createClusterEnv(t, 5, nil, "info")
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 5, len(env.nodes))
+
+	numBlocks := uint64(10)
+	leaderIdx := testReConfigPeerRemoveBefore(t, env, numBlocks)
+
+	// a config tx that updates the membership by removing a peer that IS the leader
+	removePeerIdx := leaderIdx
+	remainingPeers := []int{0, 1, 2, 3, 4}
+	remainingPeers = append(remainingPeers[:removePeerIdx], remainingPeers[removePeerIdx+1:]...)
+
+	testReConfigPeerRemovePropose(t, env, leaderIdx, removePeerIdx, numBlocks)
+
+	testReConfigPeerRemoveAfter(t, env, removePeerIdx, remainingPeers)
+}
+
+func testReConfigPeerRemoveBefore(t *testing.T, env *clusterEnv, numBlocks uint64) int {
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                1,
+				LastCommittedBlockNum: 1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{},
+	}
+
+	leaderIdx := env.AgreedLeaderIndex()
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	assert.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+	return leaderIdx
+}
+
+// a config tx that updates the membership by removing a peer
+func testReConfigPeerRemovePropose(t *testing.T, env *clusterEnv, leaderIdx, removePeerIdx int, numBlocks uint64) {
+	t.Logf("Leader RaftID: %d, Removing RaftID: %d", leaderIdx+1, removePeerIdx+1)
+
+	updatedClusterConfig := proto.Clone(env.nodes[0].conf.ClusterConfig).(*types.ClusterConfig)
+	updatedClusterConfig.Nodes = append(updatedClusterConfig.Nodes[:removePeerIdx], updatedClusterConfig.Nodes[removePeerIdx+1:]...)
+	updatedClusterConfig.ConsensusConfig.Members = append(updatedClusterConfig.ConsensusConfig.Members[:removePeerIdx], updatedClusterConfig.ConsensusConfig.Members[removePeerIdx+1:]...)
+
+	proposeBlock := &types.Block{
+		Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: 2}},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					NewConfig: updatedClusterConfig,
+				},
+			},
+		},
+	}
+
+	err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+	assert.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 2) }, 30*time.Second, 100*time.Millisecond)
+}
+
+func testReConfigPeerRemoveAfter(t *testing.T, env *clusterEnv, removePeerIdx int, remainingPeers []int) {
+	// wait for some node to become a leader
+	isLeaderCond2 := func() bool {
+		return env.AgreedLeaderIndex(remainingPeers...) >= 0
+	}
+	assert.Eventually(t, isLeaderCond2, 30*time.Second, 100*time.Millisecond)
+
+	// make sure the removed node had detached from the cluster
+	removedHasNoLeader := func() bool {
+		err := env.nodes[removePeerIdx].blockReplicator.IsLeader()
+		return err.Error() == "not a leader, leader is RaftID: 0, with HostPort: "
+	}
+	assert.Eventually(t, removedHasNoLeader, 10*time.Second, 100*time.Millisecond)
+
+	t.Log("Closing")
+	for _, node := range env.nodes {
+		err := node.Close()
+		require.NoError(t, err)
+	}
+}
