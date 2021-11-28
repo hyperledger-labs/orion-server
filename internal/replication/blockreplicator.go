@@ -295,7 +295,7 @@ Event_Loop:
 			br.transport.SendConsensus(rd.Messages)
 
 			if ok := br.deliverEntries(rd.CommittedEntries); !ok {
-				br.lg.Warningf("Failed to deliver committed entries, breaking out of event loop")
+				br.lg.Warningf("Stopping to deliver committed entries, breaking out of event loop")
 				break Event_Loop
 			}
 
@@ -321,7 +321,9 @@ Event_Loop:
 
 	// Notify the propose-loop go-routine in case it is waiting for blocks to commit or a leadership change.
 	br.mutex.Lock()
-	br.numInFlightBlocks = 0
+	br.lastKnownLeader = 0      // stop proposing
+	br.lastKnownLeaderHost = "" // stop proposing
+	br.numInFlightBlocks = 0    // stop waiting for blocks to commit
 	br.condTooManyInFlightBlocks.Broadcast()
 	br.mutex.Unlock()
 
@@ -508,7 +510,8 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 			}
 
 		case raftpb.EntryConfChange:
-			// TODO support reconfig
+			// For re-config, we use the V2 API, with `raftpb.EntryConfChangeV2` messages. These message happen only
+			// when the raft node bootstraps, i.e. when `raft.StartNode` is called.
 			var cc raftpb.ConfChange
 			if err := cc.Unmarshal(committedEntries[i].Data); err != nil {
 				br.lg.Warnf("Failed to unmarshal ConfChange data: %s", err)
@@ -526,11 +529,48 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				br.lg.Panic("Programming error, encountered unsupported raft config change")
 			}
 
-			// TODO configure transport
+		case raftpb.EntryConfChangeV2:
+			var ccV2 raftpb.ConfChangeV2
+			if err := ccV2.Unmarshal(committedEntries[i].Data); err != nil {
+				br.lg.Warnf("Failed to unmarshal ConfChangeV2 data: %s", err)
+				continue
+			}
 
-			// TODO detect removal of leader
+			if ccV2.Context != nil {
+				var block = &types.Block{}
+				if err := proto.Unmarshal(ccV2.Context, block); err != nil {
+					br.lg.Panicf("Error unmarshaling entry [#%d], entry: %+v, error: %s", i, committedEntries[i], err)
+				}
 
-			// TODO detect removal of self
+				block.ConsensusMetadata = &types.ConsensusMetadata{
+					RaftTerm:  committedEntries[i].Term,
+					RaftIndex: committedEntries[i].Index,
+				}
+
+				err := br.commitBlock(block) // transport is reconfigured within after the block commits.
+				if err != nil {
+					br.lg.Errorf("commit block error: %s, stopping block replicator", err.Error())
+					return false
+				}
+			}
+
+			br.confState = *br.raftNode.ApplyConfChange(ccV2)
+			br.lg.Infof("Applied config changes: %+v, current nodes in cluster: %+v", ccV2.Changes, br.confState.Voters)
+
+			// TODO detect removal of leader?
+
+			// detect removal of self
+			removalOfSelf := true
+			for _, id := range br.confState.Voters {
+				if id == br.raftID {
+					removalOfSelf = false
+					break
+				}
+			}
+			if removalOfSelf {
+				br.lg.Warning("This node was removed from the cluster, replication is shutting down")
+				return false
+			}
 		}
 
 		// after commit, update appliedIndex
@@ -571,22 +611,34 @@ Propose_Loop:
 	for {
 		select {
 		case blockToPropose := <-br.proposeCh:
-			ctx, blockBytes, doPropose := br.prepareProposal(blockToPropose)
-			if !doPropose {
-				continue Propose_Loop
+			var addedPeers, removedPeers []*types.PeerConfig
+			var isMembershipConfig bool
+
+			if httputils.IsConfigBlock(blockToPropose) {
+				// TODO verify the config-tx by itself and vs. current config
+				newClusterConfig := blockToPropose.Payload.(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope.GetPayload().GetNewConfig()
+				_, consensus, _, _ := ClassifyClusterReConfig(br.clusterConfig, newClusterConfig)
+				if consensus {
+					var errDetect error
+					addedPeers, removedPeers, _, errDetect = detectPeerConfigChanges(br.clusterConfig.ConsensusConfig, newClusterConfig.ConsensusConfig)
+					if errDetect != nil {
+						br.releasePendingTXs(blockToPropose, "Declined to propose block", errDetect)
+						continue Propose_Loop
+					}
+					isMembershipConfig = len(addedPeers)+len(removedPeers) > 0
+				}
 			}
 
-			// Propose to raft: the call to raft.Node.Propose() may block when a leader loses its leadership and has no quorum.
-			// It is cancelled when the node loses leadership, by the event-loop go-routine.
-			err := br.raftNode.Propose(ctx, blockBytes)
-			if err != nil {
-				br.lg.Warnf("Failed to propose block: Num: %d; error: %s", blockToPropose.GetHeader().GetBaseHeader().GetNumber(), err)
-				if txIDs, errIDs := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); errIDs == nil {
-					br.pendingTxs.ReleaseWithError(txIDs, errors.WithMessage(err, "failed to propose to Raft")) // will reject the TXs within
-				} else {
-					br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), errIDs)
+			if !isMembershipConfig {
+				// Data-Tx, User-admin-Tx, DB-admin-Tx, as well as Config-Tx that do not membership changes
+				if ok := br.proposeRegular(blockToPropose); !ok {
+					continue Propose_Loop
 				}
-				continue Propose_Loop
+			} else {
+				//  Config-Tx: with consensus membership change
+				if ok := br.proposeMembershipConfigChange(blockToPropose, addedPeers, removedPeers); !ok {
+					continue Propose_Loop
+				}
 			}
 
 			br.updateLastProposal(blockToPropose)
@@ -600,6 +652,74 @@ Propose_Loop:
 	br.lg.Info("Exiting the block replicator propose loop")
 }
 
+// proposeRegular proposes the block to Raft as a regular message.
+func (br *BlockReplicator) proposeRegular(blockToPropose *types.Block) bool {
+	ctx, blockBytes, doPropose := br.prepareProposal(blockToPropose)
+	if !doPropose {
+		return false
+	}
+
+	// Propose to raft: the call to raft.Node.Propose() may block when a leader loses its leadership and has no quorum.
+	// It is cancelled when the node loses leadership, by the event-loop go-routine.
+	err := br.raftNode.Propose(ctx, blockBytes)
+	if err != nil {
+		br.releasePendingTXs(blockToPropose, "Failed to propose block", err)
+		return false
+	}
+
+	return true
+}
+
+// proposeMembershipConfigChange propose membership config changes, that is, adding or removing a peer.
+// This is proposed in a 'raftpb.ConfChangeV2' message using the 'ProposeConfChange' API. This call consents on the
+// Raft membership change as well as on the config block, which is given as the 'ConfChangeV2.Context'.
+// The return value signals whether the proposal completed correctly.
+func (br *BlockReplicator) proposeMembershipConfigChange(blockToPropose *types.Block, addedPeers, removedPeers []*types.PeerConfig) bool {
+	//  consensus membership config change
+	ctx, blockBytes, doPropose := br.prepareProposal(blockToPropose)
+	if !doPropose {
+		return false
+	}
+
+	ccV2 := &raftpb.ConfChangeV2{
+		Transition: raftpb.ConfChangeTransitionAuto,
+		Context:    blockBytes,
+	}
+	for _, peer := range addedPeers {
+		ccV2.Changes = append(ccV2.Changes, raftpb.ConfChangeSingle{
+			Type:   raftpb.ConfChangeAddNode,
+			NodeID: peer.RaftId,
+		})
+	}
+	for _, peer := range removedPeers {
+		ccV2.Changes = append(ccV2.Changes, raftpb.ConfChangeSingle{
+			Type:   raftpb.ConfChangeRemoveNode,
+			NodeID: peer.RaftId,
+		})
+	}
+
+	br.lg.Infof("Going to propose membership config changes: %v", ccV2.Changes)
+	// ProposeConfChange to raft: the call to raft.Node.ProposeConfChange() may block when a leader loses
+	// its leadership and has no quorum.
+	// It is cancelled when the node loses leadership, by the event-loop go-routine.
+	err := br.raftNode.ProposeConfChange(ctx, ccV2)
+	if err != nil {
+		br.releasePendingTXs(blockToPropose, "Failed to propose block", err)
+		return false
+	}
+
+	return true
+}
+
+func (br *BlockReplicator) releasePendingTXs(blockToPropose *types.Block, reasonMsg string, reasonErr error) {
+	br.lg.Infof("%s: %+v; because: %s", reasonMsg, blockToPropose.GetHeader(), reasonErr)
+	if txIDs, err := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); err == nil {
+		br.pendingTxs.ReleaseWithError(txIDs, err)
+	} else {
+		br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), err)
+	}
+}
+
 // prepareProposal Prepares the Raft proposal context and bytes, and determine whether to propose (only the leader can
 // propose). This also numbers the block and sets the base header hash.
 func (br *BlockReplicator) prepareProposal(blockToPropose *types.Block) (ctx context.Context, blockBytes []byte, doPropose bool) {
@@ -608,12 +728,7 @@ func (br *BlockReplicator) prepareProposal(blockToPropose *types.Block) (ctx con
 	if errLeader := br.isLeader(); errLeader != nil {
 		br.mutex.Unlock() //do not call the pendingTxs component with a mutex locked
 
-		br.lg.Infof("Declined to propose block: %+v; because: %s", blockToPropose.GetHeader(), errLeader)
-		if txIDs, err := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); err == nil {
-			br.pendingTxs.ReleaseWithError(txIDs, errLeader)
-		} else {
-			br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), err)
-		}
+		br.releasePendingTXs(blockToPropose, "Declined to propose block", errLeader)
 
 		return nil, nil, false //skip proposing
 	}
@@ -635,6 +750,7 @@ func (br *BlockReplicator) prepareProposal(blockToPropose *types.Block) (ctx con
 }
 
 // updateLastProposal updates the last block proposed in order to keep track of block numbering.
+// TODO also keep track of proposed config, and prevent additional config proposals when one is already in flight.
 func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -714,7 +830,7 @@ func (br *BlockReplicator) GetLeaderID() uint64 {
 }
 
 func (br *BlockReplicator) commitBlock(block *types.Block) error {
-	br.lg.Infof("enqueue for commit block [%d], ConsensusMetadata: %+v ",
+	br.lg.Infof("Enqueue for commit block [%d], ConsensusMetadata: %+v ",
 		block.GetHeader().GetBaseHeader().GetNumber(),
 		block.GetConsensusMetadata())
 
@@ -732,7 +848,6 @@ func (br *BlockReplicator) commitBlock(block *types.Block) error {
 
 	clusterConfig := reConfig.(*types.ClusterConfig)
 	if err := br.updateClusterConfig(clusterConfig); err != nil {
-		// TODO support dynamic re-config
 		br.lg.Panicf("Failed to update to ClusterConfig during commitBlock: error: %s", err)
 	}
 
@@ -811,6 +926,8 @@ func (br *BlockReplicator) nodeHostPortFromRaftID(raftID uint64) string {
 
 func (br *BlockReplicator) Process(ctx context.Context, m raftpb.Message) error {
 	br.lg.Debugf("Incoming raft message: %+v", m)
+	//TODO look into the cluster config and check Members and reject messages from removed members
+
 	err := br.raftNode.Step(ctx, m)
 	if err != nil {
 		br.lg.Errorf("Error during raft node Step: %s", err)

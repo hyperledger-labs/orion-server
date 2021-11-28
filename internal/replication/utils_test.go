@@ -89,12 +89,11 @@ func TestVerifyConsensusReConfig(t *testing.T) {
 		// TODO require.NoError(t, err)
 	})
 
-	t.Run("valid (todo): remove a peer", func(t *testing.T) {
+	t.Run("valid: remove a peer", func(t *testing.T) {
 		updateConfig := proto.Clone(clusterConfig.ConsensusConfig).(*types.ConsensusConfig)
 		updateConfig.Members = updateConfig.Members[0:2]
 		err := VerifyConsensusReConfig(clusterConfig.ConsensusConfig, updateConfig, lg)
-		require.EqualError(t, err, "dynamic membership changes to the cluster are not supported yet")
-		// TODO require.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("valid: change endpoints", func(t *testing.T) {
