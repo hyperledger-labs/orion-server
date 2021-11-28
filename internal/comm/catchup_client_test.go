@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	"github.com/hyperledger-labs/orion-server/internal/comm/mocks"
@@ -80,7 +81,7 @@ func TestCatchUpClient_GetHeight(t *testing.T) {
 
 	localConfigs, sharedConfig := newTestSetup(t, 2)
 
-	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
 	require.NoError(t, err)
 	defer tr1.Close()
 
@@ -105,29 +106,65 @@ func TestCatchUpClient_GetBlocks(t *testing.T) {
 
 	localConfigs, sharedConfig := newTestSetup(t, 2)
 
-	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
-	require.NoError(t, err)
-	defer tr1.Close()
+	t.Run("first server up, second server down, then up", func(t *testing.T) {
+		tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
+		require.NoError(t, err)
+		defer tr1.Close()
 
-	cc := comm.NewCatchUpClient(lg, nil)
-	require.NotNil(t, cc)
-	err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
-	require.NoError(t, err)
+		cc := comm.NewCatchUpClient(lg, nil)
+		require.NotNil(t, cc)
+		err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
+		require.NoError(t, err)
 
-	blocks, err := cc.GetBlocks(context.Background(), 1, 2, 4)
-	require.NoError(t, err)
-	require.Equal(t, 3, len(blocks))
+		blocks, err := cc.GetBlocks(context.Background(), 1, 2, 4)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(blocks))
 
-	blocks, err = cc.GetBlocks(context.Background(), 2, 2, 4)
-	require.EqualError(t, err, "Get \"http://127.0.0.1:33001/bcdb-peer/blocks?end=4&start=2\": dial tcp 127.0.0.1:33001: connect: connection refused")
+		blocks, err = cc.GetBlocks(context.Background(), 2, 2, 4)
+		require.EqualError(t, err, "Get \"http://127.0.0.1:33001/bcdb-peer/blocks?end=4&start=2\": dial tcp 127.0.0.1:33001: connect: connection refused")
 
-	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 5)
-	require.NoError(t, err)
-	defer tr2.Close()
+		tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 5)
+		require.NoError(t, err)
+		defer tr2.Close()
 
-	blocks, err = cc.GetBlocks(context.Background(), 2, 2, 4)
-	require.NoError(t, err)
-	require.Equal(t, 3, len(blocks))
+		blocks, err = cc.GetBlocks(context.Background(), 2, 2, 4)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(blocks))
+	})
+
+	t.Run("wrong servers, then update to correct servers", func(t *testing.T) {
+		tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
+		require.NoError(t, err)
+		defer tr1.Close()
+
+		tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 5)
+		require.NoError(t, err)
+		defer tr2.Close()
+
+		cc := comm.NewCatchUpClient(lg, nil)
+		require.NotNil(t, cc)
+		wrongConfig := proto.Clone(sharedConfig.ConsensusConfig).(*types.ConsensusConfig)
+		for i := 0; i < len(wrongConfig.Members); i++ {
+			wrongConfig.Members[i].PeerPort = wrongConfig.Members[i].PeerPort + 100
+		}
+		err = cc.UpdateMembers(wrongConfig.Members)
+		require.NoError(t, err)
+
+		_, err = cc.GetBlocks(context.Background(), 1, 2, 4)
+		require.EqualError(t, err, "Get \"http://127.0.0.1:33100/bcdb-peer/blocks?end=4&start=2\": dial tcp 127.0.0.1:33100: connect: connection refused")
+		_, err = cc.GetBlocks(context.Background(), 2, 2, 4)
+		require.EqualError(t, err, "Get \"http://127.0.0.1:33101/bcdb-peer/blocks?end=4&start=2\": dial tcp 127.0.0.1:33101: connect: connection refused")
+
+		err = cc.UpdateMembers(sharedConfig.ConsensusConfig.Members)
+		require.NoError(t, err)
+
+		blocks, err := cc.GetBlocks(context.Background(), 1, 1, 5)
+		require.NoError(t, err)
+		require.Equal(t, 5, len(blocks))
+		blocks, err = cc.GetBlocks(context.Background(), 2, 2, 4)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(blocks))
+	})
 }
 
 func TestCatchUpClient_PullBlocks(t *testing.T) {
@@ -141,11 +178,11 @@ func TestCatchUpClient_PullBlocks(t *testing.T) {
 
 	localConfigs, sharedConfig := newTestSetup(t, 3)
 
-	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
 	require.NoError(t, err)
 	defer tr1.Close()
 
-	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 10)
+	tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 10)
 	require.NoError(t, err)
 	defer tr2.Close()
 
@@ -187,15 +224,15 @@ func TestCatchUpClient_PullBlocksLoop(t *testing.T) {
 
 	localConfigs, sharedConfig := newTestSetup(t, 4)
 
-	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
 	require.NoError(t, err)
 	defer tr1.Close()
 
-	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 100)
+	tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 100)
 	require.NoError(t, err)
 	defer tr2.Close()
 
-	tr3, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 150)
+	tr3, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 150)
 	require.NoError(t, err)
 	defer tr3.Close()
 
@@ -291,7 +328,7 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 
 	localConfigs, sharedConfig := newTestSetup(t, 3)
 
-	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
 	require.NoError(t, err)
 	defer tr1.Close()
 
@@ -323,12 +360,12 @@ func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
 	go pullBlocksLoop()
 
 	wgRetry1.Wait()
-	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 100)
+	tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 100)
 	require.NoError(t, err)
 	defer tr2.Close()
 
 	wgRetry2.Wait()
-	tr3, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 150)
+	tr3, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 150)
 	require.NoError(t, err)
 	defer tr3.Close()
 
@@ -359,7 +396,7 @@ func TestCatchUpClient_PullBlocksCancel(t *testing.T) {
 
 	localConfigs, sharedConfig := newTestSetup(t, 3)
 
-	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 50)
 	require.NoError(t, err)
 	defer tr1.Close()
 
@@ -398,11 +435,11 @@ func TestCatchUpClient_PullBlocksWithTLS(t *testing.T) {
 		conf.Replication.TLS.Enabled = true
 	}
 
-	tr1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 5)
 	require.NoError(t, err)
 	defer tr1.Close()
 
-	tr2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 10)
+	tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 10)
 	require.NoError(t, err)
 	defer tr2.Close()
 
@@ -440,7 +477,7 @@ func TestCatchUpClient_PullBlocksWithTLS(t *testing.T) {
 	require.Equal(t, 4, len(blocks))
 }
 
-func startTransportWithLedger(t *testing.T, lg *logger.SugarLogger, localConfigs []*config.LocalConfiguration, sharedConfig *types.ClusterConfig, index, height uint64) (*comm.HTTPTransport, error) {
+func startTransportWithLedger(t *testing.T, lg *logger.SugarLogger, localConfigs []*config.LocalConfiguration, sharedConfig *types.ClusterConfig, index, height uint64) (*comm.HTTPTransport, *mocks.ConsensusListener, error) {
 	ledger := &memLedger{}
 	for n := uint64(1); n <= height; n++ {
 		ledger.Append(&types.Block{Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: n}}})
@@ -455,10 +492,10 @@ func startTransportWithLedger(t *testing.T, lg *logger.SugarLogger, localConfigs
 	require.NotNil(t, tr)
 	err = tr.SetConsensusListener(cl)
 	require.NoError(t, err)
-	err = tr.UpdateClusterConfig(sharedConfig)
+	err = tr.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	err = tr.Start()
 	require.NoError(t, err)
-	return tr, err
+	return tr, cl, err
 }

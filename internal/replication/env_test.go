@@ -133,7 +133,7 @@ func (n *nodeEnv) Restart() error {
 		return err
 	}
 
-	err = n.conf.Transport.UpdateClusterConfig(n.conf.ClusterConfig)
+	err = n.conf.Transport.SetClusterConfig(n.conf.ClusterConfig)
 	if err != nil {
 		return err
 	}
@@ -306,7 +306,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 		return nil, err
 	}
 
-	err = conf.Transport.UpdateClusterConfig(conf.ClusterConfig)
+	err = conf.Transport.SetClusterConfig(conf.ClusterConfig)
 	if err != nil {
 		return nil, err
 	}
