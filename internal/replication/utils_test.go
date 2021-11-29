@@ -85,8 +85,7 @@ func TestVerifyConsensusReConfig(t *testing.T) {
 			PeerPort: 7094,
 		})
 		err := VerifyConsensusReConfig(clusterConfig.ConsensusConfig, updateConfig, lg)
-		require.EqualError(t, err, "dynamic membership changes to the cluster are not supported yet")
-		// TODO require.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("valid: remove a peer", func(t *testing.T) {

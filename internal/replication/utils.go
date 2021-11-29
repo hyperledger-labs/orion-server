@@ -56,11 +56,6 @@ func VerifyConsensusReConfig(currentConfig, updatedConfig *types.ConsensusConfig
 		return errors.Errorf("cannot update peer endpoints while making membership changes: %d added, %d removed, %d updated", len(addedPeers), len(removedPeers), len(changedPeers))
 	}
 
-	if len(addedPeers) == 1 {
-		// TODO support dynamic membership changes, see:
-		return errors.New("dynamic membership changes to the cluster are not supported yet")
-	}
-
 	if !proto.Equal(currentConfig.RaftConfig, updatedConfig.RaftConfig) {
 		lg.Warning("ConsensusConfig RaftConfig changed, the new RaftConfig will be applied after server restart!")
 	}

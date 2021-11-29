@@ -186,13 +186,13 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 
 	lg.Debugf("haveWAL: %v, Storage: %v, Raft config: %+v", haveWAL, storage, raftConfig)
 
-	joinExistingCluster := false // TODO support node join to an existing cluster
+	joinExistingCluster := false // TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
 
 	if haveWAL {
 		br.raftNode = raft.RestartNode(raftConfig)
 	} else {
 		if joinExistingCluster {
-			// TODO support node join to an existing cluster
+			// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
 			br.lg.Panicf("not supported yet: joinExistingCluster")
 		} else {
 			startPeers := raftPeers(br.clusterConfig)

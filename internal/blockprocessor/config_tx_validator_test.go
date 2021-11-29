@@ -371,7 +371,7 @@ func TestValidateConfigTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: unsupported yet: consensus peer membership change",
+			name: "valid: consensus peer membership change",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserId: "adminUser",
 				ReadOldConfigVersion: &types.Version{
@@ -428,8 +428,7 @@ func TestValidateConfigTx(t *testing.T) {
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
-				Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "error in ConsensusConfig: dynamic membership changes to the cluster are not supported yet",
+				Flag: types.Flag_VALID,
 			},
 		},
 		{
