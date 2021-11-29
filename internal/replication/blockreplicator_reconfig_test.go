@@ -6,6 +6,8 @@ package replication_test
 import (
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,6 +15,8 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // Scenario: reconfigure a node endpoint
@@ -244,6 +248,110 @@ func testReConfigPeerRemoveAfter(t *testing.T, env *clusterEnv, removePeerIdx in
 	}
 	assert.Eventually(t, removedHasNoLeader, 10*time.Second, 100*time.Millisecond)
 
+	t.Log("Closing")
+	for _, node := range env.nodes {
+		err := node.Close()
+		require.NoError(t, err)
+	}
+}
+
+func TestBlockReplicator_ReConfig_AddPeer(t *testing.T) {
+
+	var countMutex sync.Mutex
+	var addedCount int
+
+	nodeAddedHook := func(entry zapcore.Entry) error {
+		if strings.Contains(entry.Message, "Applied config changes: [{Type:ConfChangeAddNode NodeID:4") {
+			countMutex.Lock()
+			defer countMutex.Unlock()
+
+			addedCount++
+		}
+		return nil
+	}
+
+	isCountOver := func(num int) bool {
+		countMutex.Lock()
+		defer countMutex.Unlock()
+
+		return addedCount >= num
+	}
+
+	env := createClusterEnv(t, 3, nil, "info", zap.Hooks(nodeAddedHook))
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                1,
+				LastCommittedBlockNum: 1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{},
+	}
+
+	leaderIdx := env.AgreedLeaderIndex()
+	numBlocks := uint64(10)
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	assert.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	// a config tx that updates the membership by adding a 4th peer
+	updatedClusterConfig := proto.Clone(env.nodes[0].conf.ClusterConfig).(*types.ClusterConfig)
+	nodeConfig := &types.NodeConfig{
+		Id:          "node4",
+		Address:     "127.0.0.1",
+		Port:        nodePortBase + 4,
+		Certificate: []byte("bogus-cert"),
+	}
+	peerConfig := &types.PeerConfig{
+		NodeId:   "node4",
+		RaftId:   uint64(4),
+		PeerHost: "127.0.0.1",
+		PeerPort: peerPortBase + 4,
+	}
+	updatedClusterConfig.Nodes = append(updatedClusterConfig.Nodes, nodeConfig)
+	updatedClusterConfig.ConsensusConfig.Members = append(updatedClusterConfig.ConsensusConfig.Members, peerConfig)
+
+	proposeBlock := &types.Block{
+		Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: 2}},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					NewConfig: updatedClusterConfig,
+				},
+			},
+		},
+	}
+	err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 2) }, 30*time.Second, 100*time.Millisecond)
+
+	// wait for some node to become a leader
+	isLeaderCond2 := func() bool {
+		return env.AgreedLeaderIndex(0, 1, 2) >= 0
+	}
+	assert.Eventually(t, isLeaderCond2, 30*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool { return isCountOver(3) }, 30*time.Second, 100*time.Millisecond)
+
+	//TODO bootstrap a 4th node, see: https://github.com/hyperledger-labs/orion-server/issues/260
 	t.Log("Closing")
 	for _, node := range env.nodes {
 		err := node.Close()
