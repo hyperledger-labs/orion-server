@@ -105,6 +105,7 @@ module.exports = {
                     type: "category",
                     label: "Executing Proof Generation and Verification",
                     items: [
+                        "getting-started/proofs-and-verification/proofs",
                         {
                             type: "category",
                             label: "Using Go SDK",
