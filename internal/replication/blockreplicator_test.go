@@ -98,7 +98,7 @@ func TestBlockReplicator_Restart(t *testing.T) {
 	require.NoError(t, err)
 	err = env.conf.Transport.SetConsensusListener(env.blockReplicator)
 	require.NoError(t, err)
-	err = env.conf.Transport.UpdateClusterConfig(env.conf.ClusterConfig)
+	err = env.conf.Transport.SetClusterConfig(env.conf.ClusterConfig)
 	require.NoError(t, err)
 
 	//restart
@@ -341,7 +341,7 @@ func TestBlockReplicator_Submit(t *testing.T) {
 		require.NoError(t, err)
 		err = env.conf.Transport.SetConsensusListener(env.blockReplicator)
 		require.NoError(t, err)
-		err = env.conf.Transport.UpdateClusterConfig(env.conf.ClusterConfig)
+		err = env.conf.Transport.SetClusterConfig(env.conf.ClusterConfig)
 		require.NoError(t, err)
 
 		//restart

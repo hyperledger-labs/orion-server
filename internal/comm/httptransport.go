@@ -34,6 +34,20 @@ type ConsensusListener interface {
 	rafthttp.Raft
 }
 
+// HTTPTransport provides HTTP-based transport to send and receive message from remote peers that run the Raft cluster.
+// It also provides an HTTP-based "catch-up" service to pull batches of blocks from remote peers in order to do
+// catch-up (i.e. state transfer).
+//
+// The HTTPTransport is operated in the following way:
+// - Create a *HTTPTransport with NewHTTPTransport;
+// - Set an initial cluster configuration with SetClusterConfig;
+// - Register a listener to receive incoming messages with SetConsensusListener; and finally,
+// - Start the component with Start. An HTTP server start serving requests, messages can now be sent and received.
+// - Configuration changes to the cluster's peers - adding a peer, removing a peer, or changing a peer's endpoints -
+//   are applied using UpdatePeers.
+// - To stop the component call Close,
+//
+// The component is thread safe.
 type HTTPTransport struct {
 	localConf *config.LocalConfiguration
 
@@ -51,7 +65,7 @@ type HTTPTransport struct {
 	catchupHandler  *catchupHandler
 	httpServer      *http.Server
 
-	stopCh chan struct{} // signals HTTPTransport to shutdown
+	stopCh chan struct{} // signals HTTPTransport to shut-down
 	doneCh chan struct{} // signals HTTPTransport shutdown complete
 
 	logger *logger.SugarLogger
@@ -63,6 +77,7 @@ type Config struct {
 	LedgerReader LedgerReader
 }
 
+// NewHTTPTransport creates a new instance of HTTPTransport.
 func NewHTTPTransport(config *Config) (*HTTPTransport, error) {
 	if config.LocalConf.Replication.TLS.Enabled && config.LocalConf.Replication.TLS.ClientAuthRequired {
 		return nil, errors.New("TLS Client authentication not supported yet")
@@ -164,6 +179,12 @@ func NewHTTPTransport(config *Config) (*HTTPTransport, error) {
 	return tr, nil
 }
 
+// SetConsensusListener sets the consensus listener which is an interface that is implemented by the replication
+// component that is running the Raft state machine. This is how the transport layer delivers incoming messages from
+// remote peers up to the Raft state machine. This interface is also used to deliver local networking events up to the
+// Raft state machine.
+//
+// This must be called before the call to Start().
 func (p *HTTPTransport) SetConsensusListener(l ConsensusListener) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -176,13 +197,17 @@ func (p *HTTPTransport) SetConsensusListener(l ConsensusListener) error {
 	return nil
 }
 
-//TODO implement dynamic re-config, currently it can only be updated once.
-func (p *HTTPTransport) UpdateClusterConfig(clusterConfig *types.ClusterConfig) error {
+// SetClusterConfig sets the initial types.ClusterConfig into the HTTPTransport for the first time.
+// In this invocation the  HTTPTransport detects what is its local RaftID by collating its local ID (string) with
+// the member set in the ClusterConfig.
+//
+// This must be called before the call to Start().
+func (p *HTTPTransport) SetClusterConfig(clusterConfig *types.ClusterConfig) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	if p.clusterConfig != nil {
-		return errors.New("dynamic re-config of http transport is not supported yet")
+		return errors.New("cluster config already exists")
 	}
 
 	raftID, err := MemberRaftID(p.localConf.Server.Identity.ID, clusterConfig)
@@ -196,6 +221,8 @@ func (p *HTTPTransport) UpdateClusterConfig(clusterConfig *types.ClusterConfig) 
 	return nil
 }
 
+// Start binds to the listening port and start serving requests.
+// SetClusterConfig and SetConsensusListener must be called before start.
 func (p *HTTPTransport) Start() error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -261,6 +288,59 @@ func (p *HTTPTransport) Start() error {
 	}
 
 	go p.servePeers(netListener)
+
+	return nil
+}
+
+// UpdatePeers adds, removes and updates changed peers in the raft http transport; it also refreshes the member list
+// of the catchup client.
+func (p *HTTPTransport) UpdatePeers(added, removed, changed []*types.PeerConfig, updatedClusterConfig *types.ClusterConfig) error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	for _, addedPeer := range added {
+		if addedPeer.RaftId != p.raftID {
+			schema := "http"
+			if p.localConf.Replication.TLS.Enabled {
+				schema = "https"
+			}
+			p.transport.AddPeer(
+				etcd_types.ID(addedPeer.RaftId),
+				[]string{fmt.Sprintf("%s://%s:%d", schema, addedPeer.PeerHost, addedPeer.PeerPort)})
+		}
+	}
+
+	for _, removedPeer := range removed {
+		if removedPeer.RaftId != p.raftID {
+			p.transport.RemovePeer(etcd_types.ID(removedPeer.RaftId))
+		}
+	}
+
+	for _, changedPeer := range changed {
+		if changedPeer.RaftId != p.raftID {
+			schema := "http"
+			if p.localConf.Replication.TLS.Enabled {
+				schema = "https"
+			}
+			p.transport.UpdatePeer(
+				etcd_types.ID(changedPeer.RaftId),
+				[]string{fmt.Sprintf("%s://%s:%d", schema, changedPeer.PeerHost, changedPeer.PeerPort)})
+		}
+	}
+
+	if len(added)+len(removed)+len(changed) > 0 {
+		var membersList []*types.PeerConfig
+		for _, peer := range updatedClusterConfig.ConsensusConfig.Members {
+			if peer.RaftId != p.raftID {
+				membersList = append(membersList, peer)
+			}
+		}
+		if err := p.catchUpClient.UpdateMembers(membersList); err != nil {
+			return err
+		}
+	}
+
+	p.clusterConfig = updatedClusterConfig
 
 	return nil
 }

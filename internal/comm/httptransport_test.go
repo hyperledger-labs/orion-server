@@ -4,6 +4,7 @@
 package comm_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	"github.com/hyperledger-labs/orion-server/internal/comm/mocks"
@@ -25,6 +27,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
+// Scenario: normal construction.
 func TestNewHTTPTransport(t *testing.T) {
 	lg, err := logger.New(&logger.Config{
 		Level:         "info",
@@ -48,12 +51,14 @@ func TestNewHTTPTransport(t *testing.T) {
 	err = tr1.SetConsensusListener(&mocks.ConsensusListener{})
 	require.EqualError(t, err, "ConsensusListener already set")
 
-	err = tr1.UpdateClusterConfig(sharedConfig)
+	err = tr1.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
-	err = tr1.UpdateClusterConfig(sharedConfig)
-	require.EqualError(t, err, "dynamic re-config of http transport is not supported yet")
+	err = tr1.SetClusterConfig(sharedConfig)
+	require.EqualError(t, err, "cluster config already exists")
 }
 
+// Scenario: send consensus messages from one peer to the next.
+// TLS not enabled.
 func TestHTTPTransport_SendConsensus(t *testing.T) {
 	lg, err := logger.New(&logger.Config{
 		Level:         "info",
@@ -73,7 +78,7 @@ func TestHTTPTransport_SendConsensus(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr1.SetConsensusListener(cl1)
 	require.NoError(t, err)
-	err = tr1.UpdateClusterConfig(sharedConfig)
+	err = tr1.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	cl2 := &mocks.ConsensusListener{}
@@ -84,7 +89,7 @@ func TestHTTPTransport_SendConsensus(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr2.SetConsensusListener(cl2)
 	require.NoError(t, err)
-	err = tr2.UpdateClusterConfig(sharedConfig)
+	err = tr2.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	err = tr1.Start()
@@ -113,7 +118,8 @@ func TestHTTPTransport_SendConsensus(t *testing.T) {
 	)
 }
 
-// Scenario: both sides enable TLS.
+// Scenario: send consensus messages from one peer to the next.
+// Both sides enable TLS.
 // Messages arrive.
 func TestHTTPTransport_SendConsensus_TLS(t *testing.T) {
 	lg, err := logger.New(&logger.Config{
@@ -138,7 +144,7 @@ func TestHTTPTransport_SendConsensus_TLS(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr1.SetConsensusListener(cl1)
 	require.NoError(t, err)
-	err = tr1.UpdateClusterConfig(sharedConfig)
+	err = tr1.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	cl2 := &mocks.ConsensusListener{}
@@ -150,7 +156,7 @@ func TestHTTPTransport_SendConsensus_TLS(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr2.SetConsensusListener(cl2)
 	require.NoError(t, err)
-	err = tr2.UpdateClusterConfig(sharedConfig)
+	err = tr2.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	err = tr1.Start()
@@ -179,7 +185,8 @@ func TestHTTPTransport_SendConsensus_TLS(t *testing.T) {
 	)
 }
 
-// Scenario: one side enables TLS, the other not.
+// Scenario: send consensus messages from one peer to the next.
+// One side enables TLS, the other not.
 // Messages do not arrive, nodes are reported unreachable.
 // log messages indicate that
 // - the TLS enabled side expects TLS handshakes and does not get it
@@ -202,7 +209,7 @@ func TestHTTPTransport_SendConsensus_HalfTLS(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr1.SetConsensusListener(cl1)
 	require.NoError(t, err)
-	err = tr1.UpdateClusterConfig(sharedConfig)
+	err = tr1.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	cl2 := &mocks.ConsensusListener{}
@@ -214,7 +221,7 @@ func TestHTTPTransport_SendConsensus_HalfTLS(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr2.SetConsensusListener(cl2)
 	require.NoError(t, err)
-	err = tr2.UpdateClusterConfig(sharedConfig)
+	err = tr2.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	err = tr1.Start()
@@ -273,7 +280,8 @@ func TestHTTPTransport_SendConsensus_HalfTLS(t *testing.T) {
 	require.True(t, failedHttp > 0)
 }
 
-// Scenario: both sides enable TLS, but trust different CAs.
+// Scenario: send consensus messages from one peer to the next.
+// Both sides enable TLS, but trust different CAs.
 // Messages do not arrive, nodes are reported unreachable.
 // log messages indicate that
 // - the TLS handshake fails because the certificate cannot be verified against the CA.
@@ -302,7 +310,7 @@ func TestHTTPTransport_SendConsensus_TLS_CAMismatch(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr1.SetConsensusListener(cl1)
 	require.NoError(t, err)
-	err = tr1.UpdateClusterConfig(sharedConfig1)
+	err = tr1.SetClusterConfig(sharedConfig1)
 	require.NoError(t, err)
 
 	cl2 := &mocks.ConsensusListener{}
@@ -314,7 +322,7 @@ func TestHTTPTransport_SendConsensus_TLS_CAMismatch(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr2.SetConsensusListener(cl2)
 	require.NoError(t, err)
-	err = tr2.UpdateClusterConfig(sharedConfig2)
+	err = tr2.SetClusterConfig(sharedConfig2)
 	require.NoError(t, err)
 
 	err = tr1.Start()
@@ -389,6 +397,319 @@ func TestNewHTTPTransport_TLS_FilePathFailure(t *testing.T) {
 		Logger:    lg,
 	})
 	require.EqualError(t, err, "failed to read local config Replication.TLS.ServerCertificatePath: open /bogus-path: no such file or directory")
+}
+
+// Scenario: update the endpoints of a peer.
+// - generate a test configuration for 3 servers.
+// - server 3 starts on a new port, not reflected yet in shared config. servers 1,2 will not be able to reach it.
+// - servers are updated with the shared config, now messages get through.
+func TestHTTPTransport_UpdatePeers(t *testing.T) {
+	lg, err := logger.New(
+		&logger.Config{
+			Level:         "info",
+			OutputPath:    []string{"stdout"},
+			ErrOutputPath: []string{"stderr"},
+			Encoding:      "console",
+		},
+	)
+	require.NoError(t, err)
+
+	localConfigs, sharedConfig := newTestSetup(t, 3)
+
+	tr1, cl1, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 0)
+	require.NoError(t, err)
+	defer tr1.Close()
+
+	tr2, cl2, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 0)
+	require.NoError(t, err)
+	defer tr2.Close()
+
+	// server 3 starts on a new port, not reflected yet in shared config.
+	// servers 1,2 will not be able to reach it.
+	localConfigs[2].Replication.Network.Port++
+	tr3, cl3, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 5)
+	require.NoError(t, err)
+	defer tr3.Close()
+
+	// messages are not received
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl1.ReportUnreachableCallCount() == 1
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl2.ReportUnreachableCallCount() == 2
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+
+	// PullBlocks will not succeed
+	timeout1, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_, err = tr1.PullBlocks(timeout1, 1, 5, 0)
+	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
+	timeout2, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_, err = tr2.PullBlocks(timeout2, 1, 5, 0)
+	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
+
+	// emulate a config tx update to change the endpoint of server 3
+	updatedConfig := proto.Clone(sharedConfig).(*types.ClusterConfig)
+	updatedConfig.ConsensusConfig.Members[2].PeerPort = localConfigs[2].Replication.Network.Port
+
+	err = tr1.UpdatePeers(nil, nil, updatedConfig.ConsensusConfig.Members[2:], updatedConfig)
+	require.NoError(t, err)
+	err = tr2.UpdatePeers(nil, nil, updatedConfig.ConsensusConfig.Members[2:], updatedConfig)
+	require.NoError(t, err)
+	err = tr3.UpdatePeers(nil, nil, updatedConfig.ConsensusConfig.Members[2:], updatedConfig)
+	require.NoError(t, err)
+
+	// messages are received
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl3.ProcessCallCount() == 2
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl3.ProcessCallCount() == 5
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+
+	// PullBlocks will succeed
+	timeout1, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	blocks, err := tr1.PullBlocks(timeout1, 1, 5, 0)
+	require.NoError(t, err)
+	require.Len(t, blocks, 5)
+	timeout2, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	blocks, err = tr2.PullBlocks(timeout2, 1, 5, 0)
+	require.NoError(t, err)
+	require.Len(t, blocks, 5)
+}
+
+// Scenario: add peers.
+// - generate a test configuration for 2 servers and start them.
+// - start a 3rd server; check connectivity to it;
+// - emulate a config tx update to add it; check connectivity to it.
+func TestHTTPTransport_AddPeers(t *testing.T) {
+	loggerCore, observedLogs := observer.New(zapcore.DebugLevel)
+	observedLogger := zap.New(loggerCore).Sugar()
+	lg := &logger.SugarLogger{SugaredLogger: observedLogger}
+
+	localConfigs, sharedConfig := newTestSetup(t, 2)
+
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 0)
+	require.NoError(t, err)
+	defer tr1.Close()
+
+	tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 0)
+	require.NoError(t, err)
+	defer tr2.Close()
+
+	localConfigsUpdated, sharedConfigUpdated := newTestSetup(t, 3)
+	// server 3 is not reflected yet in shared config of servers 1,2; they will not be able to reach it.
+	tr3, cl3, err := startTransportWithLedger(t, lg, localConfigsUpdated, sharedConfigUpdated, 2, 5)
+	require.NoError(t, err)
+	defer tr3.Close()
+
+	// messages to unknown peers are ignored, but messages show up in the logs
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	ignoredLogEntryCount := 0
+	countIgnoredLogEntries := func(num int) bool {
+		for _, entry := range observedLogs.TakeAll() {
+			if strings.Contains(entry.Message, "ignored message send request; unknown remote peer target") {
+				ctxMap := entry.ContextMap()
+				id, ok := ctxMap["unknown-target-peer-id"]
+				require.True(t, ok)
+
+				fmt.Printf("%s | %s | %v \n", entry.Time, entry.Message, entry.ContextMap())
+				switch id {
+				case "3":
+					ignoredLogEntryCount++
+				default:
+					t.Failed()
+				}
+			}
+		}
+		return ignoredLogEntryCount == num
+	}
+	require.Eventually(t, func() bool { return countIgnoredLogEntries(3) }, 10*time.Second, 10*time.Millisecond)
+
+	// PullBlocks will not succeed
+	timeout1, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_, err = tr1.PullBlocks(timeout1, 1, 5, 0)
+	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
+	timeout2, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_, err = tr2.PullBlocks(timeout2, 1, 5, 0)
+	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
+
+	// emulate a config tx update to change the endpoint of server 3
+	err = tr1.UpdatePeers(sharedConfigUpdated.ConsensusConfig.Members[2:], nil, nil, sharedConfigUpdated)
+	require.NoError(t, err)
+	err = tr2.UpdatePeers(sharedConfigUpdated.ConsensusConfig.Members[2:], nil, nil, sharedConfigUpdated)
+	require.NoError(t, err)
+
+	// messages are received
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl3.ProcessCallCount() == 2
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl3.ProcessCallCount() == 5
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+
+	// PullBlocks will succeed
+	timeout1, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	blocks, err := tr1.PullBlocks(timeout1, 1, 5, 0)
+	require.NoError(t, err)
+	require.Len(t, blocks, 5)
+	timeout2, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	blocks, err = tr2.PullBlocks(timeout2, 1, 5, 0)
+	require.NoError(t, err)
+	require.Len(t, blocks, 5)
+}
+
+// Scenario: remove peers.
+// - generate a test configuration for 3 servers and start them.
+// - check connectivity to the 3rd server.
+// - emulate a config tx to remove the 3rd server; check connectivity to it.
+func TestHTTPTransport_RemovePeers(t *testing.T) {
+	loggerCore, observedLogs := observer.New(zapcore.DebugLevel)
+	observedLogger := zap.New(loggerCore).Sugar()
+	lg := &logger.SugarLogger{SugaredLogger: observedLogger}
+
+	localConfigs, sharedConfig := newTestSetup(t, 3)
+
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 0)
+	require.NoError(t, err)
+	defer tr1.Close()
+
+	tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 0)
+	require.NoError(t, err)
+	defer tr2.Close()
+
+	// server 3 is reflected in shared config of servers 1,2.
+	tr3, cl3, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 5)
+	require.NoError(t, err)
+	defer tr3.Close()
+
+	// messages are received
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl3.ProcessCallCount() == 2
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	require.Eventually(t,
+		func() bool {
+			return cl3.ProcessCallCount() == 5
+		},
+		10*time.Second, 10*time.Millisecond,
+	)
+
+	// PullBlocks will succeed
+	timeout1, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	blocks, err := tr1.PullBlocks(timeout1, 1, 5, 0)
+	require.NoError(t, err)
+	require.Len(t, blocks, 5)
+	timeout2, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	blocks, err = tr2.PullBlocks(timeout2, 1, 5, 0)
+	require.NoError(t, err)
+	require.Len(t, blocks, 5)
+
+	// emulate a config tx to remove 3rd server
+	sharedConfigUpdated := proto.Clone(sharedConfig).(*types.ClusterConfig)
+	sharedConfigUpdated.ConsensusConfig.Members = sharedConfigUpdated.ConsensusConfig.Members[0:2]
+	err = tr1.UpdatePeers(nil, sharedConfig.ConsensusConfig.Members[2:], nil, sharedConfigUpdated)
+	require.NoError(t, err)
+	err = tr2.UpdatePeers(nil, sharedConfig.ConsensusConfig.Members[2:], nil, sharedConfigUpdated)
+	require.NoError(t, err)
+
+	// messages to unknown peers are ignored, but show up in the logs
+	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
+	require.NoError(t, err)
+	ignoredLogEntryCount := 0
+	countIgnoredLogEntries := func(num int) bool {
+		for _, entry := range observedLogs.TakeAll() {
+			if strings.Contains(entry.Message, "ignored message send request; unknown remote peer target") {
+				ctxMap := entry.ContextMap()
+				id, ok := ctxMap["unknown-target-peer-id"]
+				require.True(t, ok)
+
+				fmt.Printf("%s | %s | %v \n", entry.Time, entry.Message, entry.ContextMap())
+				switch id {
+				case "3":
+					ignoredLogEntryCount++
+				default:
+					t.Failed()
+				}
+			}
+		}
+		return ignoredLogEntryCount == num
+	}
+	require.Eventually(t, func() bool { return countIgnoredLogEntries(3) }, 10*time.Second, 10*time.Millisecond)
+
+	// PullBlocks will not succeed
+	timeout1, _ = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_, err = tr1.PullBlocks(timeout1, 1, 5, 0)
+	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
+	timeout2, _ = context.WithTimeout(context.Background(), 500*time.Millisecond)
+	_, err = tr2.PullBlocks(timeout2, 1, 5, 0)
+	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
+
+	require.Equal(t, 5, cl3.ProcessCallCount())
 }
 
 func newTestSetup(t *testing.T, numServers int) ([]*config.LocalConfiguration, *types.ClusterConfig) {

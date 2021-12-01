@@ -136,7 +136,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		return nil, err
 	}
 	conf.logger.Debugf("cluster config: %+v", clusterConfig)
-	if err = p.peerTransport.UpdateClusterConfig(clusterConfig); err != nil {
+	if err = p.peerTransport.SetClusterConfig(clusterConfig); err != nil {
 		return nil, err
 	}
 

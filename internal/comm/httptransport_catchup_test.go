@@ -45,7 +45,7 @@ func TestHTTPTransport_CatchupService(t *testing.T) {
 	require.NotNil(t, tr1)
 	err = tr1.SetConsensusListener(cl1)
 	require.NoError(t, err)
-	err = tr1.UpdateClusterConfig(sharedConfig)
+	err = tr1.SetClusterConfig(sharedConfig)
 	require.NoError(t, err)
 
 	err = tr1.Start()
