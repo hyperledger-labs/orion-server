@@ -6,6 +6,8 @@ package replication
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -51,7 +53,7 @@ type BlockReplicator struct {
 	proposeCh       chan *types.Block
 	raftID          uint64
 	raftStorage     *RaftStorage
-	raftNode        raft.Node
+	raftConfig      *raft.Config
 	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver with the block-processor commit
 	transport       *comm.HTTPTransport
 	ledgerReader    BlockLedgerReader
@@ -62,10 +64,12 @@ type BlockReplicator struct {
 	doneProposeCh chan struct{}
 	doneEventCh   chan struct{}
 
-	// shared state between the propose-loop go-routine and event-loop go-routine
+	// shared state between the propose-loop go-routine and event-loop go-routine; as well as transport go-routines.
 	mutex                           sync.Mutex
 	clusterConfig                   *types.ClusterConfig
 	joinExistingCluster             bool
+	finishedJoin                    bool
+	raftNode                        raft.Node
 	lastKnownLeader                 uint64
 	lastKnownLeaderHost             string // cache the leader's Node host:port for client request redirection
 	cancelProposeContext            func() // cancels the propose-context if leadership is lost
@@ -175,7 +179,7 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 	}
 
 	//DO NOT use Applied option in config, we guard against replay of written blocks with `appliedIndex` instead.
-	raftConfig := &raft.Config{
+	br.raftConfig = &raft.Config{
 		ID:              raftID,
 		ElectionTick:    int(br.clusterConfig.ConsensusConfig.RaftConfig.ElectionTicks),
 		HeartbeatTick:   int(br.clusterConfig.ConsensusConfig.RaftConfig.HeartbeatTicks),
@@ -190,20 +194,23 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 		DisableProposalForwarding: true, // This prevents blocks from being accidentally proposed by followers
 	}
 
-	lg.Debugf("haveWAL: %v, Storage: %v, Raft config: %+v", haveWAL, storage, raftConfig)
+	lg.Debugf("height: %d, haveWAL: %v, Storage: %v, Raft config: %+v", height, haveWAL, storage, br.raftConfig)
 
-	// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
 	br.joinExistingCluster = (conf.JoinBlock != nil) && (height < br.joinBlockNumber)
 
 	if haveWAL {
-		br.raftNode = raft.RestartNode(raftConfig)
+		lg.Info("Restarting Raft")
+		br.raftNode = raft.RestartNode(br.raftConfig)
 	} else {
 		if br.joinExistingCluster {
-			// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
-			return nil, errors.New("not supported yet: BlockReplicator joinExistingCluster")
+			// Note: when on-boarding, the raftNode is constructed late, after on-boarding is complete.
+			lg.Infof("Starting Raft to join an existing cluster, current peers: %v, ConsensusMetadata: %+v",
+				conf.JoinBlock.GetConfigTxEnvelope().GetPayload().GetNewConfig().GetConsensusConfig().GetMembers(),
+				conf.JoinBlock.GetConsensusMetadata())
 		} else {
 			startPeers := raftPeers(br.clusterConfig)
-			br.raftNode = raft.StartNode(raftConfig, startPeers)
+			lg.Infof("Starting Raft on a new cluster, start peers: %v", startPeers)
+			br.raftNode = raft.StartNode(br.raftConfig, startPeers)
 		}
 	}
 
@@ -235,8 +242,22 @@ func (br *BlockReplicator) Submit(block *types.Block) error {
 	}
 }
 
-// Start an internal go-routine to serve the main replication loop.
+// Start internal go-routines to serve the main replication loops.
+//
+// If the `joinExistingCluster` flag is true, the on-boarding process starts first, in its own go-routine.
+// When on-boarding is complete, replication will start.
 func (br *BlockReplicator) Start() {
+	if br.joinExistingCluster {
+		go br.startOnBoarding()
+		return
+	}
+
+	br.startConsenting()
+}
+
+// startConsenting starts the to go-routines that service raft: the event-loop and the propose-loop.
+// Note that these two routines always start after the raftNode is already constructed.
+func (br *BlockReplicator) startConsenting() {
 	readyRaftCh := make(chan struct{})
 	go br.runRaftEventLoop(readyRaftCh)
 	<-readyRaftCh
@@ -244,6 +265,61 @@ func (br *BlockReplicator) Start() {
 	readyProposeCh := make(chan struct{})
 	go br.runProposeLoop(readyProposeCh)
 	<-readyProposeCh
+}
+
+// startOnBoarding pulls the missing blocks from the current ledger height up to (and including) the join block.
+// It then constructs the raftpb.ConfState and raftpb.Snapshot from the cluster configuration of the join block and
+// stores it. This way, raft storage starts with the right state to join the cluster. In addition, if the node is
+// restarted, the snapshot indicates that the node needs to restart normally, rather than perform on-boarding again.
+func (br *BlockReplicator) startOnBoarding() {
+	br.lg.Info("Starting the on-boarding process")
+
+	err := br.onBoard(br.joinBlock)
+	if err != nil {
+		switch err.(type) {
+		case *ierrors.ClosedError:
+			br.lg.Warn("Closing, stopping on-boarding")
+			return // do not cause panic when the server shuts down
+		default:
+			br.lg.Panicf("Failed to on-board to join-block number: %d, block: %+v", br.joinBlockNumber, br.joinBlock)
+		}
+	}
+
+	br.lg.Infof("On-boarding completed successfully, starting replication")
+
+	// make a snapshot from the join block
+	snapData, err := proto.Marshal(br.joinBlock)
+	if err != nil {
+		br.lg.Panicf("Failed to marshal join block: %s", err)
+	}
+	br.confState = raftpb.ConfState{}
+	for _, peer := range br.clusterConfig.GetConsensusConfig().GetMembers() {
+		br.confState.Voters = append(br.confState.Voters, peer.RaftId)
+	}
+	sort.Slice(br.confState.Voters, func(i, j int) bool { return br.confState.Voters[i] < br.confState.Voters[j] })
+	br.lg.Infof("Starting Raft on an existing cluster, current peers: %v", br.confState.Voters)
+
+	snapshot := raftpb.Snapshot{
+		Data: snapData,
+		Metadata: raftpb.SnapshotMetadata{
+			ConfState: br.confState,
+			Index:     br.joinBlock.GetConsensusMetadata().GetRaftIndex(),
+			Term:      br.joinBlock.GetConsensusMetadata().GetRaftTerm(),
+		},
+	}
+
+	err = br.raftStorage.Store(nil, raftpb.HardState{}, snapshot)
+	if err != nil {
+		br.lg.Panicf("Failed to store join block as snapshot in raft storage: %s", err)
+	}
+
+	// mark join as finished, this will allow incoming messages to flow into the raftNode
+	br.mutex.Lock()
+	br.raftNode = raft.RestartNode(br.raftConfig)
+	br.finishedJoin = true
+	br.mutex.Unlock()
+
+	br.startConsenting()
 }
 
 func (br *BlockReplicator) runRaftEventLoop(readyCh chan<- struct{}) {
@@ -261,7 +337,6 @@ func (br *BlockReplicator) runRaftEventLoop(readyCh chan<- struct{}) {
 		}
 	}
 
-	// TODO use 'clock.Clock' so that tests can inject a fake clock
 	tickInterval, err := time.ParseDuration(br.clusterConfig.ConsensusConfig.RaftConfig.TickInterval)
 	if err != nil {
 		br.lg.Panicf("Error parsing raft tick interval duration: %s", err)
@@ -408,8 +483,62 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 	br.confState = snap.Metadata.ConfState
 	br.appliedIndex = snap.Metadata.Index
 
-	// Pull the missing blocks, starting with one past the last block we have, and ending with the block number from the snapshot.
-	for nextBlockNumber := initBlockNumber + 1; nextBlockNumber <= snapBlock.Header.BaseHeader.Number; {
+	err := br.catchUpToBlock(initBlockNumber, snapBlock.Header.BaseHeader.Number, true)
+	if err != nil {
+		switch err.(type) {
+		case *ierrors.ClosedError:
+			br.lg.Warn("Closing, stopping catch-up to snapshot")
+			return nil // do not cause panic when the server shuts down
+		default:
+			return err
+		}
+	}
+
+	lastBlockNumber := br.getLastCommittedBlockNumber()
+	br.lg.Infof("Finished syncing with cluster up to and including block [%d]", lastBlockNumber)
+
+	return nil
+}
+
+func (br *BlockReplicator) onBoard(joinBlock *types.Block) error {
+	initBlockNumber := br.getLastCommittedBlockNumber()
+	joinBlockNumber := joinBlock.GetHeader().GetBaseHeader().GetNumber()
+	joinBlockMeta := joinBlock.GetConsensusMetadata()
+	br.lg.Debugf("Join-block number: %d, last committed block number: %d,", joinBlockNumber, initBlockNumber)
+	br.lg.Debugf("Join-block consensus metadata: %+v", joinBlockMeta)
+
+	if initBlockNumber >= joinBlockNumber {
+		br.lg.Errorf("Join-block is number [%d], local block number is [%d], no on-boarding needed", joinBlockNumber, initBlockNumber)
+		return nil
+	}
+
+	br.lg.Infof("Starting on-boarding state transfer; From block: %d, To block: %d", initBlockNumber, joinBlockNumber)
+	// we do not update the cluster-config with incoming config blocks because the join-block is the most updated
+	// config, and it is already applied to `replication` and `comm`.
+	err := br.catchUpToBlock(initBlockNumber, joinBlockNumber, false)
+	if err != nil {
+		return err
+	}
+
+	lastBlockNumber := br.getLastCommittedBlockNumber()
+	br.lg.Infof("Finished syncing with cluster up to and including block [%d]", lastBlockNumber)
+
+	if lastBlockNumber > 1 {
+		metadata := br.lastCommittedBlock.GetConsensusMetadata()
+		br.appliedIndex = metadata.GetRaftIndex()
+		br.lg.Debugf("last block [%d], consensus metadata: %+v", lastBlockNumber, metadata)
+	}
+
+	return nil
+}
+
+// Pull the missing blocks, starting with one past the last block we have, and ending with the target block number
+// (inclusive); that is, get (initBlockNumber, targetBlockNumber].
+//
+// When catching-up to a snapshot, we update `replication` and `comm` with each config block we bring.
+// When pulling blocks during on-boarding, we do not, because the latest cluster-config comes from the join-block.
+func (br *BlockReplicator) catchUpToBlock(initBlockNumber, targetBlockNumber uint64, updateConfig bool) error {
+	for nextBlockNumber := initBlockNumber + 1; nextBlockNumber <= targetBlockNumber; {
 		var blocks []*types.Block
 		var err error
 		blocksReadyCh := make(chan struct{})
@@ -419,7 +548,7 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 		//Note that `PullBlocks` will not necessarily return all the blocks we requested, hence the enclosing loop.
 		go func() {
 			defer close(blocksReadyCh)
-			blocks, err = br.transport.PullBlocks(ctx, nextBlockNumber, snapBlock.Header.BaseHeader.Number, br.GetLeaderID())
+			blocks, err = br.transport.PullBlocks(ctx, nextBlockNumber, targetBlockNumber, br.GetLeaderID())
 		}()
 
 		select {
@@ -432,11 +561,10 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 				lastBlockNumber := br.getLastCommittedBlockNumber()
 				switch err.(type) {
 				case *ierrors.ClosedError:
-
-					br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d], snapshot: %+v", lastBlockNumber, snap)
-					return nil
+					br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d]", lastBlockNumber)
+					return err
 				default:
-					return errors.Wrapf(err, "failed to pull blocks from cluster; last block number [%d], snapshot: %+v", lastBlockNumber, snap)
+					return errors.Wrapf(err, "failed to pull blocks from cluster; last block number [%d]", lastBlockNumber)
 				}
 			}
 
@@ -447,12 +575,12 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 					blockToCommit.GetHeader().GetBaseHeader().GetNumber(),
 					blockToCommit.GetConsensusMetadata())
 
-				if err := br.commitBlock(blockToCommit); err != nil {
+				if err := br.commitBlock(blockToCommit, updateConfig); err != nil {
 					lastBlockNumber := br.getLastCommittedBlockNumber()
 					switch err.(type) {
 					case *ierrors.ClosedError:
-						br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d], snapshot: %+v", lastBlockNumber, snap)
-						return nil
+						br.lg.Warnf("closing, stopping to pull blocks from cluster; last block number [%d]", lastBlockNumber)
+						return err
 					default:
 						return err
 					}
@@ -462,12 +590,7 @@ func (br *BlockReplicator) catchUp(snap raftpb.Snapshot) error {
 			}
 		}
 	}
-
-	lastBlockNumber := br.getLastCommittedBlockNumber()
-	br.lg.Infof("Finished syncing with cluster up to and including block [%d]", lastBlockNumber)
-
 	return nil
-
 }
 
 func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool {
@@ -510,7 +633,7 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				RaftIndex: committedEntries[i].Index,
 			}
 
-			err := br.commitBlock(block)
+			err := br.commitBlock(block, true)
 			if err != nil {
 				br.lg.Errorf("commit block error: %s, stopping block replicator", err.Error())
 				return false
@@ -543,6 +666,14 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				continue
 			}
 
+			// we need to avoid re-committing a block that was created during membership config changes., but apply
+			// the 'ConfChangeV2' to the raft state machine. This may happen when the node joins an existing cluster.
+			// as on-boarding brings all the ledger from a remote peer, and then we start raft.
+			if committedEntries[i].Index <= br.appliedIndex {
+				br.lg.Debugf("Received config block with raft index (%d) <= applied index (%d), skip", committedEntries[i].Index, br.appliedIndex)
+				break
+			}
+
 			if ccV2.Context != nil {
 				var block = &types.Block{}
 				if err := proto.Unmarshal(ccV2.Context, block); err != nil {
@@ -554,7 +685,7 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 					RaftIndex: committedEntries[i].Index,
 				}
 
-				err := br.commitBlock(block) // transport is reconfigured within after the block commits.
+				err := br.commitBlock(block, true) // transport is reconfigured within after the block commits.
 				if err != nil {
 					br.lg.Errorf("commit block error: %s, stopping block replicator", err.Error())
 					return false
@@ -563,6 +694,7 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 
 			br.confState = *br.raftNode.ApplyConfChange(ccV2)
 			br.lg.Infof("Applied config changes: %+v, current nodes in cluster: %+v", ccV2.Changes, br.confState.Voters)
+			br.lg.Infof("Raft ConfState: %+v", br.confState)
 
 			// TODO detect removal of leader?
 
@@ -589,11 +721,28 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 	// Take a snapshot if in-memory storage size exceeds the limit
 	if br.accDataSize >= br.sizeLimit {
 		var snapBlock = &types.Block{}
-		if err := proto.Unmarshal(committedEntries[position].Data, snapBlock); err != nil {
-			br.lg.Panicf("Error unmarshaling entry [#%d], entry: %+v, error: %s", position, committedEntries[position], err)
+		var snapData []byte
+		switch committedEntries[position].Type {
+		case raftpb.EntryNormal:
+			if err := proto.Unmarshal(committedEntries[position].Data, snapBlock); err != nil {
+				br.lg.Panicf("Error unmarshaling Normal entry [#%d], entry: %+v, error: %s", position, committedEntries[position], err)
+			}
+			snapData = committedEntries[position].Data
+
+		case raftpb.EntryConfChangeV2:
+			var ccV2 raftpb.ConfChangeV2
+			if err := ccV2.Unmarshal(committedEntries[position].Data); err != nil {
+				br.lg.Panicf("Error unmarshaling ConfChangeV2 entry [#%d], entry: %+v, error: %s", position, committedEntries[position], err)
+			}
+			if ccV2.Context != nil {
+				if err := proto.Unmarshal(ccV2.Context, snapBlock); err != nil {
+					br.lg.Panicf("Error unmarshaling entry [#%d], entry: %+v, error: %s", position, committedEntries[position], err)
+				}
+				snapData = ccV2.Context
+			}
 		}
 
-		if err := br.raftStorage.TakeSnapshot(br.appliedIndex, br.confState, committedEntries[position].Data); err != nil {
+		if err := br.raftStorage.TakeSnapshot(br.appliedIndex, br.confState, snapData); err != nil {
 			br.lg.Fatalf("Failed to create snapshot at index %d: %s", br.appliedIndex, err)
 		}
 
@@ -846,11 +995,15 @@ func (br *BlockReplicator) GetClusterStatus() (leaderID uint64, activePeers map[
 	return
 }
 
-
-func (br *BlockReplicator) commitBlock(block *types.Block) error {
+// Commit the block to the ledger and DB.
+//
+// If the block is a config block, update the cluster config if `updateConfig` is true.
+// When catching-up to a snapshot, we update `replication` and `comm` with each config block we bring.
+// When pulling blocks during on-boarding, we do not, because the latest cluster-config comes from the join-block.
+func (br *BlockReplicator) commitBlock(block *types.Block, updateConfig bool) error {
+	blockNumber := block.GetHeader().GetBaseHeader().GetNumber()
 	br.lg.Infof("Enqueue for commit block [%d], ConsensusMetadata: %+v ",
-		block.GetHeader().GetBaseHeader().GetNumber(),
-		block.GetConsensusMetadata())
+		blockNumber, block.GetConsensusMetadata())
 
 	// we can only get a valid config transaction
 	reConfig, err := br.oneQueueBarrier.EnqueueWait(block)
@@ -865,6 +1018,11 @@ func (br *BlockReplicator) commitBlock(block *types.Block) error {
 	}
 
 	clusterConfig := reConfig.(*types.ClusterConfig)
+	if !updateConfig {
+		br.lg.Infof("Skipping re-config update: block number [%d], ClusterConfig: %+v", blockNumber, clusterConfig)
+		return nil
+	}
+
 	if err := br.updateClusterConfig(clusterConfig); err != nil {
 		br.lg.Panicf("Failed to update to ClusterConfig during commitBlock: error: %s", err)
 	}
@@ -942,9 +1100,27 @@ func (br *BlockReplicator) nodeHostPortFromRaftID(raftID uint64) string {
 	return ""
 }
 
+// when the node is on-boarding, the raftNode is not yet constructed and is nil.
+func (br *BlockReplicator) isOnBoarding() bool {
+	return br.joinExistingCluster && !br.finishedJoin
+}
+
+// Process incoming raft messages
 func (br *BlockReplicator) Process(ctx context.Context, m raftpb.Message) error {
-	br.lg.Debugf("Incoming raft message: %+v", m)
-	//TODO look into the cluster config and check Members and reject messages from removed members
+	br.lg.Debugf("Process incoming raft message: %+v", m)
+
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if br.isOnBoarding() {
+		br.lg.Debugf("Rejected raft message from peer, not ready, on-boarding in progress: %v", m)
+		return &RaftHTTPError{Code: http.StatusServiceUnavailable, Message: "rejected raft message, not ready, on-boarding in progress"}
+	}
+
+	if br.isIDRemoved(m.From) {
+		br.lg.Warningf("Rejected raft message from removed peer: %v", m)
+		return &RaftHTTPError{Code: http.StatusForbidden, Message: "rejected raft message from removed peer"}
+	}
 
 	err := br.raftNode.Step(ctx, m)
 	if err != nil {
@@ -953,24 +1129,50 @@ func (br *BlockReplicator) Process(ctx context.Context, m raftpb.Message) error 
 	return err
 }
 
-func (br *BlockReplicator) IsIDRemoved(id uint64) bool {
-	br.lg.Debugf("> IsIDRemoved: %d", id)
-	// see: rafthttp.RAFT
+func (br *BlockReplicator) isIDRemoved(id uint64) bool {
+	// look into the cluster config and check whether this RaftID was removed.
+	for _, member := range br.clusterConfig.GetConsensusConfig().GetMembers() {
+		if member.RaftId == id {
+			br.lg.Debugf("isIDRemoved: %d, false", id)
+			return false
+		}
+	}
 
-	//TODO look into the cluster config and check whether this RaftID was removed.
-	// removed RaftIDs may never return.
-	// see issue: https://github.com/ibm-blockchain/bcdb-server/issues/40
-	return false
+	br.lg.Debugf("isIDRemoved: %d, true", id)
+	return true
 }
+
+func (br *BlockReplicator) IsIDRemoved(id uint64) bool {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	return br.isIDRemoved(id)
+}
+
 func (br *BlockReplicator) ReportUnreachable(id uint64) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if br.isOnBoarding() {
+		br.lg.Debugf("ReportUnreachable: %d, ignored, on-boarding", id)
+		return
+	}
+
 	br.lg.Debugf("ReportUnreachable: %d", id)
 	br.raftNode.ReportUnreachable(id)
 }
 
 func (br *BlockReplicator) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
-	br.lg.Debugf("> ReportSnapshot: %d, %+v", id, status)
-	// see: rafthttp.RAFT
-	//TODO see issue: https://github.com/ibm-blockchain/bcdb-server/issues/41
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if br.isOnBoarding() {
+		br.lg.Debugf("ReportSnapshot: %d, ignored, on-boarding", id)
+		return
+	}
+
+	br.lg.Debugf("ReportSnapshot: %d, %v", id, status)
+	br.raftNode.ReportSnapshot(id, status)
 }
 
 // called inside a br.mutex.Lock()

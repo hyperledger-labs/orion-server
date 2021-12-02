@@ -185,18 +185,20 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		return nil, err
 	}
 
-	p.blockReplicator, err = replication.NewBlockReplicator(
-		&replication.Config{
-			LocalConf:            localConfig,
-			ClusterConfig:        clusterConfig,
-			JoinBlock:            conf.config.JoinBlock,
-			LedgerReader:         conf.blockStore,
-			Transport:            p.peerTransport,
-			BlockOneQueueBarrier: p.blockOneQueueBarrier,
-			PendingTxs:           p.pendingTxs,
-			Logger:               conf.logger,
-		},
-	)
+	repConfig := &replication.Config{
+		LocalConf:            localConfig,
+		ClusterConfig:        clusterConfig,
+		LedgerReader:         conf.blockStore,
+		Transport:            p.peerTransport,
+		BlockOneQueueBarrier: p.blockOneQueueBarrier,
+		PendingTxs:           p.pendingTxs,
+		Logger:               conf.logger,
+	}
+	if joinStart {
+		repConfig.JoinBlock = conf.config.JoinBlock
+	}
+
+	p.blockReplicator, err = replication.NewBlockReplicator(repConfig)
 	if err != nil {
 		return nil, err
 	}

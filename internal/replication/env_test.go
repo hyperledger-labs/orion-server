@@ -9,10 +9,12 @@ import (
 	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
+	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/replication/mocks"
@@ -189,9 +191,10 @@ func (n *nodeEnv) ServeCommit() {
 
 // A cluster environment around a set of BlockReplicator objects.
 type clusterEnv struct {
-	nodes   []*nodeEnv
-	testDir string
-	lg      *logger.SugarLogger
+	nodes                 []*nodeEnv
+	clusterConfigSequence []*types.ClusterConfig
+	testDir               string
+	lg                    *logger.SugarLogger
 }
 
 // create a clusterEnv
@@ -236,6 +239,7 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 		lg:      lg,
 	}
 
+	cEnv.clusterConfigSequence = append(cEnv.clusterConfigSequence, clusterConfig)
 	for n := uint32(1); n <= uint32(nNodes); n++ {
 		nEnv, err := newNodeEnv(n, testDir, lg, proto.Clone(clusterConfig).(*types.ClusterConfig))
 		if err != nil {
@@ -249,6 +253,7 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 	return cEnv
 }
 
+// create a BlockReplicator environment with a genesis block
 func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig *types.ClusterConfig) (*nodeEnv, error) {
 	nodeID := fmt.Sprintf("node%d", n)
 	localTestDir := path.Join(testDir, nodeID)
@@ -275,14 +280,23 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 	qBarrier := queue.NewOneQueueBarrier(lg)
 	pendingTxs := &mocks.PendingTxsReleaser{}
 	ledger := &memLedger{}
-	proposedBlock := &types.Block{
+	genesisBlock := &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
 				Number: 1,
 			},
 		},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					NewConfig: clusterConfig,
+				},
+				Signature: []byte("sig"),
+			},
+		},
+		ConsensusMetadata: nil,
 	}
-	if err := ledger.Append(proposedBlock); err != nil { //genesis block
+	if err := ledger.Append(genesisBlock); err != nil { //genesis block
 		return nil, err
 	}
 
@@ -327,6 +341,156 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 	}
 
 	return env, nil
+}
+
+// create a BlockReplicator environment with a join block
+func newNodeEnvJoin(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig *types.ClusterConfig, joinBlock *types.Block) (*nodeEnv, error) {
+	nodeID := fmt.Sprintf("node%d", n)
+	localTestDir := path.Join(testDir, nodeID)
+
+	localConf := &config.LocalConfiguration{
+		Server: config.ServerConf{
+			Identity: config.IdentityConf{
+				ID: nodeID,
+			},
+		},
+		Replication: config.ReplicationConf{
+			WALDir:  path.Join(testDir, nodeID, "wal"),
+			SnapDir: path.Join(testDir, nodeID, "snap"),
+			Network: config.NetworkConf{
+				Address: "127.0.0.1",
+				Port:    peerPortBase + n,
+			},
+			TLS: config.TLSConf{
+				Enabled: false,
+			},
+		},
+	}
+
+	qBarrier := queue.NewOneQueueBarrier(lg)
+	pendingTxs := &mocks.PendingTxsReleaser{}
+	ledger := &memLedger{}
+
+	peerTransport, _ := comm.NewHTTPTransport(&comm.Config{
+		LedgerReader: ledger,
+		LocalConf:    localConf,
+		Logger:       lg,
+	})
+
+	conf := &replication.Config{
+		LocalConf:            localConf,
+		ClusterConfig:        clusterConfig,
+		JoinBlock:            joinBlock,
+		LedgerReader:         ledger,
+		Transport:            peerTransport,
+		BlockOneQueueBarrier: qBarrier,
+		PendingTxs:           pendingTxs,
+		Logger:               lg,
+	}
+
+	blockReplicator, err := replication.NewBlockReplicator(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	err = conf.Transport.SetConsensusListener(blockReplicator)
+	if err != nil {
+		return nil, err
+	}
+
+	err = conf.Transport.SetClusterConfig(conf.ClusterConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	env := &nodeEnv{
+		testDir:         localTestDir,
+		conf:            conf,
+		blockReplicator: blockReplicator,
+		ledger:          ledger,
+		pendingTxs:      pendingTxs,
+		stopServeCh:     make(chan struct{}),
+	}
+
+	return env, nil
+}
+
+func (c *clusterEnv) NextNodeConfig() (nextRaftID uint32, config *types.ClusterConfig, configBlock *types.Block) {
+	nextRaftID = uint32(len(c.nodes)) + 1
+	num := len(c.clusterConfigSequence)
+	updatedClusterConfig := proto.Clone(c.clusterConfigSequence[num-1]).(*types.ClusterConfig)
+	nodeConfig := &types.NodeConfig{
+		Id:          fmt.Sprintf("node%d", nextRaftID),
+		Address:     "127.0.0.1",
+		Port:        nodePortBase + nextRaftID,
+		Certificate: []byte("bogus-cert"),
+	}
+	peerConfig := &types.PeerConfig{
+		NodeId:   fmt.Sprintf("node%d", nextRaftID),
+		RaftId:   uint64(nextRaftID),
+		PeerHost: "127.0.0.1",
+		PeerPort: peerPortBase + nextRaftID,
+	}
+	updatedClusterConfig.Nodes = append(updatedClusterConfig.Nodes, nodeConfig)
+	updatedClusterConfig.ConsensusConfig.Members = append(updatedClusterConfig.ConsensusConfig.Members, peerConfig)
+	c.clusterConfigSequence = append(c.clusterConfigSequence, updatedClusterConfig)
+
+	configBlock = &types.Block{
+		Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: 1}},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					UserId:    "admin",
+					TxId:      fmt.Sprintf("config-add-%d", nextRaftID),
+					NewConfig: updatedClusterConfig,
+				},
+			},
+		},
+	}
+
+	return nextRaftID, updatedClusterConfig, configBlock
+}
+
+func (c *clusterEnv) AddNode(t *testing.T, n uint32, clusterConfig *types.ClusterConfig, joinBlock *types.Block) {
+	node, err := newNodeEnvJoin(n, c.testDir, c.lg, clusterConfig, joinBlock)
+	require.NoError(t, err)
+	c.nodes = append(c.nodes, node)
+	c.clusterConfigSequence = append(c.clusterConfigSequence, clusterConfig)
+}
+
+func (c *clusterEnv) UpdateConfig() {
+	num := len(c.clusterConfigSequence)
+	for _, node := range c.nodes {
+		node.conf.ClusterConfig = c.clusterConfigSequence[num-1]
+	}
+}
+
+func (c *clusterEnv) LastConfig() *types.ClusterConfig {
+	num := len(c.clusterConfigSequence) - 1
+	return proto.Clone(c.clusterConfigSequence[num-1]).(*types.ClusterConfig)
+}
+
+func (c *clusterEnv) RemoveFirstNodeConfig() (config *types.ClusterConfig, configBlock *types.Block) {
+	config = c.LastConfig()
+	removedID := config.ConsensusConfig.Members[0].RaftId
+	config.Nodes = config.Nodes[1:]
+	config.ConsensusConfig.Members = config.ConsensusConfig.Members[1:]
+	c.clusterConfigSequence = append(c.clusterConfigSequence, config)
+
+	configBlock = &types.Block{
+		Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: 1}},
+		Payload: &types.Block_ConfigTxEnvelope{
+			ConfigTxEnvelope: &types.ConfigTxEnvelope{
+				Payload: &types.ConfigTx{
+					UserId:    "admin",
+					TxId:      fmt.Sprintf("config-add-%d", removedID),
+					NewConfig: config,
+				},
+			},
+		},
+	}
+
+	return config, configBlock
 }
 
 // find the index [0,N) of the leader node, -1 if no leader.
@@ -540,4 +704,46 @@ func TestNodeEnv_LifeCycle(t *testing.T) {
 			_ = node.Close()
 		})
 	})
+}
+
+func testDataBlock(approxDataSize int) (*types.Block, uint64) {
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                 1,
+				PreviousBaseHeaderHash: make([]byte, 16),
+				LastCommittedBlockHash: make([]byte, 16),
+				LastCommittedBlockNum:  1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{DataTxEnvelopes: &types.DataTxEnvelopes{
+			Envelopes: []*types.DataTxEnvelope{
+				{
+					Payload: &types.DataTx{
+						MustSignUserIds: []string{"alice"},
+						TxId:            "txid",
+						DbOperations: []*types.DBOperation{{
+							DbName:     "my-db",
+							DataWrites: []*types.DataWrite{{Key: "bogus", Value: make([]byte, approxDataSize)}},
+						}},
+					},
+					Signatures: map[string][]byte{"alice": []byte("alice-sig")},
+				},
+			}}},
+	}
+	dataBlockLength := uint64(len(httputils.MarshalOrPanic(block)))
+	return block, dataBlockLength
+}
+
+func testSubmitDataBlocks(t *testing.T, env *clusterEnv, numBlocks uint64, approxDataSize int, indices ...int) {
+	block, _ := testDataBlock(approxDataSize)
+	leaderIdx := env.AgreedLeaderIndex()
+	heightBefore, err := env.nodes[leaderIdx].ledger.Height()
+	require.NoError(t, err, "Error: %s", err)
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(heightBefore+numBlocks, indices...) }, 30*time.Second, 100*time.Millisecond)
 }
