@@ -125,13 +125,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 		logger:          lg,
 	}
 	txProcessor, err := newTransactionProcessor(txProcConf)
-	if conf.JoinBlock == nil {
-		require.NoError(t, err)
-	} else {
-		// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
-		require.EqualError(t, err, "not supported yet: BlockReplicator joinExistingCluster")
-		return nil
-	}
+	require.NoError(t, err)
 
 	cleanup := func() {
 		if err := txProcessor.Close(); err != nil {
@@ -159,11 +153,13 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 		}
 	}
 
-	require.Eventually(t, func() bool { return txProcessor.IsLeader() == nil }, 30*time.Second, 100*time.Millisecond)
-	require.Eventually(t, func() bool {
-		leader, active := txProcessor.ClusterStatus()
-		return len(leader) > 0 && len(active) > 0
-	}, 30*time.Second, 100*time.Millisecond)
+	if conf.JoinBlock == nil {
+		require.Eventually(t, func() bool { return txProcessor.IsLeader() == nil }, 30*time.Second, 100*time.Millisecond)
+		require.Eventually(t, func() bool {
+			leader, active := txProcessor.ClusterStatus()
+			return len(leader) > 0 && len(active) > 0
+		}, 30*time.Second, 100*time.Millisecond)
+	}
 
 	return &txProcessorTestEnv{
 		dbPath:         dbPath,
@@ -566,7 +562,7 @@ func TestTransactionProcessor(t *testing.T) {
 		require.NotEqual(t, "", cryptoDir)
 		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
-		require.Nil(t, env)
+		require.NotNil(t, env)
 	})
 
 	t.Run("get cluster status", func(t *testing.T) {

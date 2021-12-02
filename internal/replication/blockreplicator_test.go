@@ -381,7 +381,6 @@ func TestBlockReplicator_Submit(t *testing.T) {
 // Scenario: check that a config block is allowed to commit, if
 // - it carries admin updates, or
 // - it carries CA updates.
-// TODO changing consensus/node config is not yet supported.
 func TestBlockReplicator_ReConfig(t *testing.T) {
 	t.Run("update admins", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
