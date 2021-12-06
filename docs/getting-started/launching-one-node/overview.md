@@ -10,8 +10,8 @@ title: Overview
  -->
 
 A single Orion node can be started using one of the following two methods:
-  1. `orion` binary executable - [Click Here](binary)
-  2. docker container - [Click Here](docker)
+1. `Orion` binary executable - [Click Here](binary)
+2. Docker container - [Click Here](docker)
 
-For a simple setup, we can use the default configuration and crypto materials supplied in the `deployment/` directory of Hyperledger Orion repository.
+For a simple setup, we can use the default configuration and crypto materials supplied in the `deployment/` directory of the Hyperledger Orion repository.
 <!-- For a complex setup with more users and nodes, refer to [creating crypto materials](crypto-materials). -->
