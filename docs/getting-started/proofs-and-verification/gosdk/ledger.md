@@ -2,10 +2,8 @@
 id: ledger
 title: Ledger and Proof queries
 ---
-# Ledger and Proof queries
 
-The Ledger API gives the user access to the data stored in Orion ledger and used to prove data integrity, provides tamper resistance and non-repudiation property.
-For more information about data structures exposed by ledger, see [block skip chain](../../../architecture-and-design/block-skip-chain), [Transactions merkle tree](../../../architecture-and-design/tx-merkle-tree) and [state trie](../../../architecture-and-design/state-merkle-patricia-tree)
+### Ledger API
 
 ```go
 type Ledger interface {
