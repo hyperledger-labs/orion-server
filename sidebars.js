@@ -130,7 +130,7 @@ module.exports = {
         },
         {
             type: "category",
-            label: "Design Principes",
+            label: "Design Principles",
             items: [
                 "design-principles/programming-model",
                 "design-principles/simpler-deployment",
@@ -160,6 +160,7 @@ module.exports = {
                 "architecture-and-design/acl-read",
                 "architecture-and-design/acl-write",
                 "architecture-and-design/multi-sign-datatx",
+                "architecture-and-design/provenance-data",
                 "architecture-and-design/state-merkle-patricia-tree",
                 "architecture-and-design/tx-merkle-tree",
                 "architecture-and-design/block-skip-chain",

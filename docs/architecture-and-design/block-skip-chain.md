@@ -17,9 +17,10 @@ If <img src="https://render.githubusercontent.com/render/math?math=BlockIndex \m
 ![Block Skip List](BlockSkipList.png)  
 Worth mentioning, that block with index <img src="https://render.githubusercontent.com/render/math?math=2^{i}" /> will contain _i_ hashes in its header.
 
-Validation algorithm just finds the shortest path from last block in ledger to block _i_ and from block _i_ to the genesis block. The result is list of `BlockHeader` containing each block in the path.
+### Ledger connectivity proof example
+The validation algorithm finds the shortest path from the last block in the ledger to block _i_ and from block _i_ to the genesis block. The result is a list of `BlockHeader` containing each block in the path.
 - Let's mark blocks in the picture as 0,1,...,7,8
-- To generate proof block 3
+- To generate a proof for block 3
     - First we build path from last block to 3
         - Adding header of last block, 8
         - 8 has 4 hashes, one of them to block 4, so adding 4's header
@@ -32,32 +33,4 @@ Validation algorithm just finds the shortest path from last block in ledger to b
 - Validation of proof done by checking hash references in all blocks in path
 
 ### Proof generation and validation algorithm
-Proof generation:
-- Zero step – user provided with receipt (block header) from another user who claim that some block is part of ledger
-- First step – user requests header of last block in ledger, without discovering what block he wants to validate
-    - User can store genesis block apriori or request it as well
-- Second step – user requests the shortest path in skip list from block he validates to genesis block
-- The third step – user requests the shortest path from last block (first step) to block he validates
-- The forth step – user validates all apriori known headers - genesis, block, last - in both paths and concatenate both paths, result is block proof
-
-Proof validation:
-- For each block header in proof, starting from Genesis
-    - Calculate block hash, by calculating block header hash
-    - If calculated hash is in next block header hashes list, continue
-    - If not, fail
-
-Optimization - because result of each call to Commit() is transaction receipt contains block header, user can use this header, only make sure that it has higher block number
-
-Please note that algorithm above allows to build proofs from multiple blocks.
-For example, proof for blocks 3 and 5 will include (8, 6, 5, 4, 3, 2, 0). It is useful while validating specific value history.
-
-Algorithm above, used as first step of transaction/state proof.
-- To prove that block(s) is/are part of ledger
-
-Here ledger response for path between two blocks:
-```protobuf
-message GetLedgerPathResponse {
-  ResponseHeader header = 1;
-  repeated BlockHeader block_headers = 2;
-}
-```
+For detailed ledger connectivity proof generation and verification see [here](../getting-started/proofs-and-verification/proofs#ledger-connectivity-proof)

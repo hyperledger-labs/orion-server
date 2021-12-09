@@ -20,7 +20,7 @@ Here example of proof generation and verification, based on example tree ![tree]
 - This is exact structure we used to prove specific transaction existence in block.
 - We store only Merkle tree root hash as part of block header and recalculate tree on demand.
 
-### BCDB Merkle tree API
+### Orion Merkle tree API
 
 Server side - Merkle tree implementation:
 
@@ -64,3 +64,4 @@ type TxProof struct {
 
 func (p *TxProof) Verify(receipt *types.TxReceipt, tx proto.Message) (bool, error)
 ```
+
