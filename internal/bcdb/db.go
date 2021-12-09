@@ -51,6 +51,11 @@ type DB interface {
 	// GetConfig returns database configuration
 	GetConfig() (*types.GetConfigResponseEnvelope, error)
 
+	// GetConfigBlock returns a config block.
+	// Only admin users can get a config block.
+	// If blockNumber==0, the last config block is returned.
+	GetConfigBlock(querierUserID string, blockNumber uint64) (*types.GetConfigBlockResponseEnvelope, error)
+
 	// GetNodeConfig returns single node subsection of database configuration
 	GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error)
 
@@ -359,6 +364,26 @@ func (d *db) GetConfig() (*types.GetConfigResponseEnvelope, error) {
 
 	return &types.GetConfigResponseEnvelope{
 		Response:  configResponse,
+		Signature: sign,
+	}, nil
+}
+
+// GetConfigBlock retrieves a numbered config block. If blockNumber==0 the latest valid block is returned. If the
+// blockNumber does not identify a config-block, and error is returned.
+func (d *db) GetConfigBlock(querierUserID string, blockNumber uint64) (*types.GetConfigBlockResponseEnvelope, error) {
+	configBlockResponse, err := d.worldstateQueryProcessor.getConfigBlock(querierUserID, blockNumber)
+	if err != nil {
+		return nil, err
+	}
+
+	configBlockResponse.Header = d.responseHeader()
+	sign, err := d.signature(configBlockResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetConfigBlockResponseEnvelope{
+		Response:  configBlockResponse,
 		Signature: sign,
 	}, nil
 }

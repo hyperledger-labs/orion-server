@@ -55,6 +55,11 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			UserId: querierUserID,
 			NodeId: params["nodeId"],
 		}
+	case constants.GetLastConfigBlock:
+		payload = &types.GetConfigBlockQuery{
+			UserId:               querierUserID,
+			BlockNumber:          0, // 0 means get last, as first block is 1
+		}
 	case constants.GetBlockHeader:
 		blockNum, err := httputils.GetBlockNum(params)
 		if err != nil {

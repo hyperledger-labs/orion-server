@@ -58,6 +58,16 @@ message GetNodeConfigQuery {
   string node_id = 2;
 }
 
+message GeConfigBlockQueryEnvelope {
+  GetConfigBlockQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetConfigBlockQuery {
+  string user_id = 1;
+  uint64 block_number = 2;
+}
+
 //========= Part II Provenance API queries
 
 message GetBlockQuery {

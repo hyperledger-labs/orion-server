@@ -1,12 +1,16 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package bcdb
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/errors"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/queryexecutor"
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
@@ -143,6 +147,41 @@ func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeC
 	}
 
 	return c, nil
+}
+
+func (q *worldstateQueryProcessor) getConfigBlock(querierUserID string, blockNumber uint64) (*types.GetConfigBlockResponse, error) {
+	isAdmin, err := q.identityQuerier.HasAdministrationPrivilege(querierUserID)
+	if err != nil {
+		return nil, err
+	}
+	if !isAdmin {
+		return nil, &errors.PermissionErr{
+			ErrMsg: "the user [" + querierUserID + "] has no permission to read a config block",
+		}
+	}
+
+	if blockNumber == 0 {
+		_, metadata, err := q.db.GetConfig()
+		if err != nil {
+			return nil, err
+		}
+		blockNumber = metadata.GetVersion().GetBlockNum()
+	}
+	block, err := q.blockStore.Get(blockNumber)
+	if err != nil {
+		return nil, err
+	}
+	if isConfig := block.GetConfigTxEnvelope(); isConfig == nil {
+		return nil, &ierrors.NotFoundErr{Message: fmt.Sprintf("block [%d] is not a config block", blockNumber)}
+	}
+
+	blockBytes, err := proto.Marshal(block)
+	if err != nil {
+		return nil, err
+	}
+	return &types.GetConfigBlockResponse{
+		Block: blockBytes,
+	}, nil
 }
 
 func (q *worldstateQueryProcessor) executeJSONQuery(ctx context.Context, dbName, querierUserID string, query []byte) (*types.DataQueryResponse, error) {
