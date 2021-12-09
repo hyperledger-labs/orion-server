@@ -71,6 +71,18 @@ message GetNodeConfigResponse {
   NodeConfig node_config = 2;
 }
 
+// GetConfigBlock
+message GetConfigBlockResponseEnvelope {
+  GetConfigBlockResponse response = 1;
+  bytes signature = 2;
+}
+
+message GetConfigBlockResponse {
+  ResponseHeader header = 1;
+  // block bytes, marshaled with proto.Marshal
+  bytes block = 2;
+}
+
 //========= Part II Provenance API responses
 
 // GetBlock

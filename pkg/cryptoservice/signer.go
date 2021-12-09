@@ -13,6 +13,7 @@ import (
 func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	switch v := query.(type) {
 	case *types.GetConfigQuery:
+	case *types.GetConfigBlockQuery:
 	case *types.GetDataQuery:
 	case *types.GetDBStatusQuery:
 	case *types.GetUserQuery:

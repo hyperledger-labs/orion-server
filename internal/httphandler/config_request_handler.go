@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/gorilla/mux"
 )
 
 // configRequestHandler handles query and transaction associated
@@ -39,6 +40,7 @@ func NewConfigRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handle
 	}
 
 	handler.router.HandleFunc(constants.GetConfig, handler.configQuery).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetLastConfigBlock, handler.configBlockQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetNodeConfig, handler.nodeQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostConfigTx, handler.configTransaction).Methods(http.MethodPost)
 
@@ -65,6 +67,40 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 		return
 	}
 	httputils.SendHTTPResponse(response, http.StatusOK, config)
+}
+
+func (c *configRequestHandler) configBlockQuery(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetLastConfigBlock, c.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetConfigBlockQuery)
+
+	configBlockResponseEnvelope, err := c.db.GetConfigBlock(query.GetUserId(), query.GetBlockNumber())
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *ierrors.PermissionErr:
+			status = http.StatusForbidden
+		case *ierrors.NotFoundErr:
+			status = http.StatusNotFound
+		case *ierrors.BadRequestError:
+			status = http.StatusBadRequest
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		httputils.SendHTTPResponse(
+			response,
+			status,
+			&types.HttpResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	httputils.SendHTTPResponse(response, http.StatusOK, configBlockResponseEnvelope)
 }
 
 func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *http.Request) {

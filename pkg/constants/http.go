@@ -45,11 +45,12 @@ const (
 	GetDBStatus = "/db/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
 	PostDBTx    = "/db/tx"
 
-	ConfigEndpoint = "/config/"
-	PostConfigTx   = "/config/tx"
-	GetConfig      = "/config/tx"
-	GetNodesConfig = "/config/node"
-	GetNodeConfig  = "/config/node/{nodeId}"
+	ConfigEndpoint     = "/config/"
+	PostConfigTx       = "/config/tx"
+	GetConfig          = "/config/tx"
+	GetNodesConfig     = "/config/node"
+	GetNodeConfig      = "/config/node/{nodeId}"
+	GetLastConfigBlock = "/config/block/last"
 
 	LedgerEndpoint     = "/ledger/"
 	GetBlockHeader     = "/ledger/block/{blockId:[0-9]+}"
