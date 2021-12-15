@@ -71,35 +71,8 @@ func newValidator(conf *Config) *validator {
 func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
 	if block.Header.BaseHeader.Number == 1 {
 		// for the genesis block, which is created by the node itself, we cannot
-		// do a regular validation but we still needs to validate the entries
-		configTx := block.GetConfigTxEnvelope().Payload
-
-		r, caCertCollection := validateCAConfig(configTx.NewConfig.CertAuthConfig)
-		if r.Flag != types.Flag_VALID {
-			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
-		}
-
-		if r := validateNodeConfig(configTx.NewConfig.Nodes, caCertCollection); r.Flag != types.Flag_VALID {
-			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
-		}
-
-		if r := validateAdminConfig(configTx.NewConfig.Admins, caCertCollection); r.Flag != types.Flag_VALID {
-			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
-		}
-
-		if r := validateConsensusConfig(configTx.NewConfig.ConsensusConfig); r.Flag != types.Flag_VALID {
-			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
-		}
-
-		if r := validateMembersNodesMatch(configTx.NewConfig.ConsensusConfig.Members, configTx.NewConfig.Nodes); r.Flag != types.Flag_VALID {
-			return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", r.ReasonIfInvalid)
-		}
-
-		return []*types.ValidationInfo{
-			{
-				Flag: types.Flag_VALID,
-			},
-		}, nil
+		// do a regular validation, but we still need to validate the entries.
+		return v.configTxValidator.validateGenesis(block.GetConfigTxEnvelope())
 	}
 
 	switch block.Payload.(type) {

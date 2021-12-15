@@ -73,7 +73,7 @@ func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 	return v.validateConfigTransitionRules(clusterConfig, tx.NewConfig)
 }
 
-func (v *configTxValidator) validateGenesis(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
+func (v *configTxValidator) validateGenesis(txEnv *types.ConfigTxEnvelope) ([]*types.ValidationInfo, error) {
 	configTx := txEnv.Payload
 
 	vi := validateConfig(configTx.NewConfig)
@@ -81,7 +81,7 @@ func (v *configTxValidator) validateGenesis(txEnv *types.ConfigTxEnvelope) (*typ
 		return nil, errors.Errorf("genesis block cannot be invalid: reason for invalidation [%s]", vi.ReasonIfInvalid)
 	}
 
-	return &types.ValidationInfo{Flag: types.Flag_VALID}, nil
+	return []*types.ValidationInfo{{Flag: types.Flag_VALID}}, nil
 }
 
 func validateConfig(config *types.ClusterConfig) *types.ValidationInfo {
