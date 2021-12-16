@@ -1,6 +1,7 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-package blockprocessor
+
+package txvalidation
 
 import (
 	"io/ioutil"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
@@ -15,14 +17,13 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
 type validatorTestEnv struct {
 	db        *leveldb.LevelDB
 	path      string
-	validator *validator
+	validator *Validator
 	cleanup   func()
 }
 
@@ -65,7 +66,7 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 	return &validatorTestEnv{
 		db:   db,
 		path: path,
-		validator: newValidator(
+		validator: NewValidator(
 			&Config{
 				DB:     db,
 				Logger: logger,
@@ -279,7 +280,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 				env := newValidatorTestEnv(t)
 				defer env.cleanup()
 
-				results, err := env.validator.validateBlock(tt.genesisBlock)
+				results, err := env.validator.ValidateBlock(tt.genesisBlock)
 				require.Contains(t, err.Error(), tt.expectedError)
 				require.Nil(t, results)
 			})
@@ -346,7 +347,7 @@ func TestValidateGenesisBlock(t *testing.T) {
 		env := newValidatorTestEnv(t)
 		defer env.cleanup()
 
-		results, err := env.validator.validateBlock(genesisBlock)
+		results, err := env.validator.ValidateBlock(genesisBlock)
 		require.NoError(t, err)
 		require.Equal(t, expectedResults, results)
 	})
@@ -646,7 +647,7 @@ func TestValidateDataBlock(t *testing.T) {
 
 			tt.setup(env.db)
 
-			results, err := env.validator.validateBlock(tt.block)
+			results, err := env.validator.ValidateBlock(tt.block)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResults, results)
 		})
@@ -789,7 +790,7 @@ func TestValidateUserBlock(t *testing.T) {
 			setupClusterConfigCA(t, env, caCert)
 			tt.setup(env.db)
 
-			results, err := env.validator.validateBlock(tt.block)
+			results, err := env.validator.ValidateBlock(tt.block)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResults, results)
 		})
@@ -909,7 +910,7 @@ func TestValidateDBBlock(t *testing.T) {
 
 			setup(env.db)
 
-			results, err := env.validator.validateBlock(tt.block)
+			results, err := env.validator.ValidateBlock(tt.block)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResults, results)
 		})
@@ -1134,7 +1135,7 @@ func TestValidateConfigBlock(t *testing.T) {
 
 			setup(env.db)
 
-			results, err := env.validator.validateBlock(tt.block)
+			results, err := env.validator.ValidateBlock(tt.block)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResults, results, "%+v", results)
 		})

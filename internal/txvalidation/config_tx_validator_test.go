@@ -1,6 +1,7 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-package blockprocessor
+
+package txvalidation
 
 import (
 	"strings"
@@ -590,7 +591,7 @@ func TestValidateConfigTx(t *testing.T) {
 
 			setup(env.db)
 
-			result, err := env.validator.configTxValidator.validate(tt.txEnv)
+			result, err := env.validator.configTxValidator.Validate(tt.txEnv)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedResult, result)
 		})

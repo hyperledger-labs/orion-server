@@ -659,10 +659,10 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 		{
 			name: "add and delete users",
 			setup: func(env *committerTestEnv) {
-				user1 := constructUserForTest(t, "user1", nil, nil, sampleVersion, nil)
-				user2 := constructUserForTest(t, "user2", nil, nil, sampleVersion, nil)
-				user3 := constructUserForTest(t, "user3", nil, nil, sampleVersion, nil)
-				user4 := constructUserForTest(t, "user4", nil, nil, sampleVersion, nil)
+				user1 := constructUserForTest(t, "user1", sampleVersion)
+				user2 := constructUserForTest(t, "user2", sampleVersion)
+				user3 := constructUserForTest(t, "user3", sampleVersion)
+				user4 := constructUserForTest(t, "user4", sampleVersion)
 				users := map[string]*worldstate.DBUpdates{
 					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
@@ -753,7 +753,7 @@ func TestStateDBCommitterForUserBlock(t *testing.T) {
 				users := map[string]*worldstate.DBUpdates{
 					worldstate.UsersDBName: {
 						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, nil),
+							constructUserForTest(t, "user1", sampleVersion),
 						},
 					},
 				}
@@ -1871,7 +1871,7 @@ func TestProvenanceStoreCommitterForUserBlockWithValidTxs(t *testing.T) {
 		BlockNum: 1,
 		TxNum:    0,
 	}
-	user1 := constructUserForTest(t, "user1", []byte("rawcert-user1"), nil, sampleVersion, nil)
+	user1 := constructUserForTest(t, "user1", sampleVersion)
 	rawUser1New := &types.User{
 		Id:          "user1",
 		Certificate: []byte("rawcert-user1-new"),
@@ -3000,4 +3000,22 @@ func constructPeerEntryForTest(id uint64) *types.PeerConfig {
 		PeerHost: "192.168.0.6",
 		PeerPort: uint32(20000 + id),
 	}
+}
+
+func constructUserForTest(t *testing.T, userID string, version *types.Version) *worldstate.KVWithMetadata {
+	user := &types.User{
+		Id: userID,
+	}
+	userSerialized, err := proto.Marshal(user)
+	require.NoError(t, err)
+
+	userEntry := &worldstate.KVWithMetadata{
+		Key:   string(identity.UserNamespace) + userID,
+		Value: userSerialized,
+		Metadata: &types.Metadata{
+			Version: version,
+		},
+	}
+
+	return userEntry
 }

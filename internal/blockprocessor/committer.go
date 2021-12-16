@@ -602,16 +602,3 @@ func constructProvenanceEntriesForConfigTx(
 		nodesPData,
 	}, nil
 }
-
-func getVersion(
-	dbName, key string,
-	dirtyWriteKeyVersion map[string]*types.Version,
-	db worldstate.DB,
-) (*types.Version, error) {
-	version, ok := dirtyWriteKeyVersion[constructCompositeKey(dbName, key)]
-	if ok {
-		return version, nil
-	}
-
-	return db.GetVersion(dbName, key)
-}
