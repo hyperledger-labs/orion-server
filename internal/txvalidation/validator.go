@@ -1,20 +1,23 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-package blockprocessor
+
+package txvalidation
 
 import (
+	"sync"
+
 	"github.com/hyperledger-labs/orion-server/internal/identity"
+	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
-	"sync"
 )
 
-// validator validates the each transaction read set present in a
+// Validator validates the each transaction read set present in a
 // block against the committed version to ensure the requested
 // isolation level
-type validator struct {
+type Validator struct {
 	configTxValidator    *configTxValidator
 	dbAdminTxValidator   *dbAdminTxValidator
 	userAdminTxValidator *userAdminTxValidator
@@ -23,15 +26,20 @@ type validator struct {
 	logger               *logger.SugarLogger
 }
 
-// newValidator creates a new validator
-func newValidator(conf *Config) *validator {
+type Config struct {
+	DB     worldstate.DB
+	Logger *logger.SugarLogger
+}
+
+// NewValidator creates a new Validator
+func NewValidator(conf *Config) *Validator {
 	idQuerier := identity.NewQuerier(conf.DB)
 	txSigValidator := &txSigValidator{
 		sigVerifier: cryptoservice.NewVerifier(idQuerier, conf.Logger),
 		logger:      conf.Logger,
 	}
 
-	return &validator{
+	return &Validator{
 		configTxValidator: &configTxValidator{
 			db:              conf.DB,
 			identityQuerier: idQuerier,
@@ -66,9 +74,9 @@ func newValidator(conf *Config) *validator {
 	}
 }
 
-// validateBlock validates each transaction present in the block to ensure
+// ValidateBlock validates each transaction present in the block to ensure
 // the request isolation level
-func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
+func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, error) {
 	if block.Header.BaseHeader.Number == 1 {
 		// for the genesis block, which is created by the node itself, we cannot
 		// do a regular validation, but we still need to validate the entries.
@@ -145,7 +153,7 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 
 	case *types.Block_ConfigTxEnvelope:
 		configTxEnv := block.GetConfigTxEnvelope()
-		valRes, err := v.configTxValidator.validate(configTxEnv)
+		valRes, err := v.configTxValidator.Validate(configTxEnv)
 		if err != nil {
 			return nil, errors.WithMessage(err, "error while validating config transaction")
 		}
@@ -163,7 +171,7 @@ func (v *validator) validateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	}
 }
 
-func (v *validator) parallelSigValidation(dataTxEnvs []*types.DataTxEnvelope) ([]*types.ValidationInfo, [][]string, error) {
+func (v *Validator) parallelSigValidation(dataTxEnvs []*types.DataTxEnvelope) ([]*types.ValidationInfo, [][]string, error) {
 	valInfoPerTx := make([]*types.ValidationInfo, len(dataTxEnvs))
 	usersWithValidSigPerTX := make([][]string, len(dataTxEnvs))
 	errorPerTx := make([]error, len(dataTxEnvs))

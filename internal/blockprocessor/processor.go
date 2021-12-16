@@ -1,5 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package blockprocessor
 
 import (
@@ -10,6 +11,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/mtree"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -17,11 +19,11 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// BlockProcessor holds block validator and committer
+// BlockProcessor holds block Validator and committer
 type BlockProcessor struct {
 	blockOneQueueBarrier *queue.OneQueueBarrier
 	blockStore           *blockstore.Store
-	validator            *validator
+	validator            *txvalidation.Validator
 	committer            *committer
 	listeners            *blockCommitListeners
 	started              chan struct{}
@@ -38,6 +40,7 @@ type Config struct {
 	DB                   worldstate.DB
 	ProvenanceStore      *provenance.Store
 	StateTrieStore       mptrie.Store
+	TxValidator          *txvalidation.Validator
 	Logger               *logger.SugarLogger
 }
 
@@ -46,7 +49,7 @@ func New(conf *Config) *BlockProcessor {
 	return &BlockProcessor{
 		blockOneQueueBarrier: conf.BlockOneQueueBarrier,
 		blockStore:           conf.BlockStore,
-		validator:            newValidator(conf),
+		validator:            conf.TxValidator,
 		committer:            newCommitter(conf),
 		listeners:            newBlockCommitListeners(conf.Logger),
 		started:              make(chan struct{}),
@@ -66,7 +69,7 @@ func (b *BlockProcessor) Bootstrap(configBlock *types.Block) error {
 	return b.validateAndCommit(configBlock)
 }
 
-// Start starts the validator and committer
+// Start starts the Validator and committer
 func (b *BlockProcessor) Start() {
 	b.logger.Debug("starting the block processor")
 	defer close(b.stopped)
@@ -131,7 +134,7 @@ func (b *BlockProcessor) Start() {
 
 func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 	b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
-	validationInfo, err := b.validator.validateBlock(block)
+	validationInfo, err := b.validator.ValidateBlock(block)
 	if err != nil {
 		if block.GetHeader().GetBaseHeader().GetNumber() > 1 {
 			panic(err)

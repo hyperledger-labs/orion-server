@@ -1,7 +1,7 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package blockprocessor
+package txvalidation
 
 import (
 	"fmt"
@@ -27,7 +27,7 @@ type configTxValidator struct {
 	logger          *logger.SugarLogger
 }
 
-func (v *configTxValidator) validate(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
+func (v *configTxValidator) Validate(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
 	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload)
 	if err != nil || valInfo.Flag != types.Flag_VALID {
 		return valInfo, err

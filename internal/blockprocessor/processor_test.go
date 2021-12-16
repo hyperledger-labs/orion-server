@@ -13,8 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hyperledger-labs/orion-server/pkg/state"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockprocessor/mocks"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
@@ -24,11 +22,13 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/mtree"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -119,6 +119,13 @@ func newTestEnv(t *testing.T) *testEnv {
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
+	txValidator := txvalidation.NewValidator(
+		&txvalidation.Config{
+			DB:     db,
+			Logger: logger,
+		},
+	)
+
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "node1", "admin1"})
 	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
 	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
@@ -131,6 +138,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		StateTrieStore:       mptrieStore,
 		ProvenanceStore:      provenanceStore,
 		DB:                   db,
+		TxValidator:          txValidator,
 		Logger:               logger,
 	})
 
@@ -238,8 +246,9 @@ func setup(t *testing.T, env *testEnv) {
 	require.NotNil(t, reply)
 	require.Equal(t, env.genesisConfig, reply)
 
+	identityQuerier := identity.NewQuerier(env.db)
 	assertConfigHasCommitted := func() bool {
-		exist, err := env.blockProcessor.validator.configTxValidator.identityQuerier.DoesUserExist("admin1")
+		exist, err := identityQuerier.DoesUserExist("admin1")
 		if err != nil || !exist {
 			return false
 		}
@@ -280,7 +289,7 @@ func setup(t *testing.T, env *testEnv) {
 	require.NoError(t, env.db.Commit(createUser, 1))
 
 	assertUserCreation := func() bool {
-		exist, err := env.blockProcessor.validator.configTxValidator.identityQuerier.DoesUserExist("testUser")
+		exist, err := identityQuerier.DoesUserExist("testUser")
 		if err != nil || !exist {
 			return false
 		}

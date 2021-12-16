@@ -1,14 +1,15 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
-package blockprocessor
+
+package txvalidation
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 

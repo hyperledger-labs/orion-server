@@ -20,6 +20,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/txreorderer"
+	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -80,6 +81,15 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 
 	var err error
 
+	//TODO provide the txValidator to pre-order components that need it, e.g. block-replicator
+	// see: https://github.com/hyperledger-labs/orion-server/issues/280
+	txValidator := txvalidation.NewValidator(
+		&txvalidation.Config{
+			DB:     conf.db,
+			Logger: conf.logger,
+		},
+	)
+
 	p.blockProcessor = blockprocessor.New(
 		&blockprocessor.Config{
 			BlockOneQueueBarrier: p.blockOneQueueBarrier,
@@ -87,6 +97,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			ProvenanceStore:      conf.provenanceStore,
 			StateTrieStore:       conf.stateTrieStore,
 			DB:                   conf.db,
+			TxValidator:          txValidator,
 			Logger:               conf.logger,
 		},
 	)
