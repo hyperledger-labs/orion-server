@@ -134,7 +134,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 	}
 
 	cleanup := func() {
-		if err := txProcessor.close(); err != nil {
+		if err := txProcessor.Close(); err != nil {
 			t.Errorf("error while closing the transaction processor")
 		}
 
@@ -160,6 +160,10 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 	}
 
 	require.Eventually(t, func() bool { return txProcessor.IsLeader() == nil }, 30*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool {
+		leader, active := txProcessor.ClusterStatus()
+		return len(leader) > 0 && len(active) > 0
+	}, 30*time.Second, 100*time.Millisecond)
 
 	return &txProcessorTestEnv{
 		dbPath:         dbPath,
@@ -242,7 +246,7 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		})
 
-		resp, err := env.txProcessor.submitTransaction(tx, 0)
+		resp, err := env.txProcessor.SubmitTransaction(tx, 0)
 		require.NoError(t, err)
 		require.Nil(t, resp.GetReceipt())
 
@@ -354,7 +358,7 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		})
 
-		resp, err := env.txProcessor.submitTransaction(tx, 5*time.Second)
+		resp, err := env.txProcessor.SubmitTransaction(tx, 5*time.Second)
 		require.NoError(t, err)
 		require.True(t, env.txProcessor.pendingTxs.Empty())
 
@@ -454,7 +458,7 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		})
 
-		resp, err := env.txProcessor.submitTransaction(dataTx, 0)
+		resp, err := env.txProcessor.SubmitTransaction(dataTx, 0)
 		require.NoError(t, err)
 		require.Nil(t, resp.GetReceipt())
 		noPendingTxs := func() bool {
@@ -466,7 +470,7 @@ func TestTransactionProcessor(t *testing.T) {
 			UserId: "testUser",
 			TxId:   "tx1",
 		})
-		resp, err = env.txProcessor.submitTransaction(userTx, 0)
+		resp, err = env.txProcessor.SubmitTransaction(userTx, 0)
 		require.EqualError(t, err, "the transaction has a duplicate txID [tx1]")
 		require.Nil(t, resp)
 	})
@@ -493,15 +497,15 @@ func TestTransactionProcessor(t *testing.T) {
 			TxId:   "tx2",
 		})
 
-		resp, err := env.txProcessor.submitTransaction(dbTx, 0)
+		resp, err := env.txProcessor.SubmitTransaction(dbTx, 0)
 		require.NoError(t, err)
 		require.Nil(t, resp.GetReceipt())
 
-		resp, err = env.txProcessor.submitTransaction(configTx, 0)
+		resp, err = env.txProcessor.SubmitTransaction(configTx, 0)
 		require.EqualError(t, err, "the transaction has a duplicate txID [tx1]")
 		require.Nil(t, resp)
 
-		resp, err = env.txProcessor.submitTransaction(userTx, 0)
+		resp, err = env.txProcessor.SubmitTransaction(userTx, 0)
 		require.NoError(t, err)
 		require.Nil(t, resp.GetReceipt())
 
@@ -520,7 +524,7 @@ func TestTransactionProcessor(t *testing.T) {
 
 		setupTxProcessor(t, env, worldstate.DefaultDBName)
 
-		resp, err := env.txProcessor.submitTransaction([]byte("hello"), 0)
+		resp, err := env.txProcessor.SubmitTransaction([]byte("hello"), 0)
 		require.EqualError(t, err, "unexpected transaction type")
 		require.Nil(t, resp)
 	})
@@ -551,19 +555,37 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		})
 
-		resp, err := env.txProcessor.submitTransaction(tx, 5*time.Second)
+		resp, err := env.txProcessor.SubmitTransaction(tx, 5*time.Second)
 		require.EqualError(t, err, "bad TxId: un-safe for a URL segment: \"txid/is/not/a/url-segment\"")
 		require.IsType(t, &internalerror.BadRequestError{}, err)
 		require.Nil(t, resp)
 	})
 
 	t.Run("create with a join block", func(t *testing.T) {
-		// TODO support node join to an existing cluster: https://github.com/hyperledger-labs/orion-server/issues/260
 		cryptoDir, conf := testJoinConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
 		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		require.Nil(t, env)
+	})
+
+	t.Run("get cluster status", func(t *testing.T) {
+		cryptoDir, conf := testConfiguration(t)
+		require.NotEqual(t, "", cryptoDir)
+		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
+		env := newTxProcessorTestEnv(t, cryptoDir, conf)
+		defer env.cleanup()
+
+		setupTxProcessor(t, env, worldstate.DefaultDBName)
+
+		require.Eventually(t, func() bool {
+			return env.txProcessor.IsLeader() == nil
+		}, 30*time.Second, 100*time.Millisecond)
+
+		require.Eventually(t, func() bool {
+			leader, active := env.txProcessor.ClusterStatus()
+			return (leader == "bdb-node-1") && (active[0] == leader)
+		}, 30*time.Second, 100*time.Millisecond)
 	})
 }
 

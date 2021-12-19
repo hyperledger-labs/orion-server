@@ -68,6 +68,17 @@ message GetConfigBlockQuery {
   uint64 block_number = 2;
 }
 
+message GetClusterStatusQueryEnvelope {
+  GetClusterStatusQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetClusterStatusQuery {
+  string user_id = 1;
+  bool noCertificates = 2;
+}
+
+
 //========= Part II Provenance API queries
 
 message GetBlockQuery {

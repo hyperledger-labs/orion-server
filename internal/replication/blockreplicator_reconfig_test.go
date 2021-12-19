@@ -144,19 +144,7 @@ func TestBlockReplicator_ReConfig_Endpoint(t *testing.T) {
 	// after re-config node3 catches up, and knows who the leader is
 	require.Eventually(t, func() bool { return isCountEqual(1) }, 30*time.Second, 100*time.Millisecond)
 	require.Eventually(t, func() bool { return env.AssertEqualHeight(2*numBlocks + 2) }, 30*time.Second, 100*time.Millisecond)
-
-	for i := 0; i < 3; i++ {
-		var activePeers map[string]*types.PeerConfig
-		require.Eventually(t,
-			func() bool {
-				activePeers = env.nodes[i].conf.Transport.ActivePeers(10*time.Millisecond, true)
-				return len(activePeers) == 3
-			},
-			10*time.Second, 1000*time.Millisecond)
-		require.Equal(t, "node3", activePeers["node3"].NodeId)
-		require.Equal(t, "node2", activePeers["node2"].NodeId)
-		require.Equal(t, "node1", activePeers["node1"].NodeId)
-	}
+	require.Eventually(t, func() bool { return env.SymmetricConnectivity() }, 10*time.Second, 1000*time.Millisecond)
 
 	t.Log("Closing")
 	for _, node := range env.nodes {

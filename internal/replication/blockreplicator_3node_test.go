@@ -38,6 +38,7 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 
 	// wait for an agreed leader
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader() }, 30*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool { return env.SymmetricConnectivity() }, 30*time.Second, 100*time.Millisecond)
 	leaderIndex1 := env.FindLeaderIndex()
 	followerIndex1 := (leaderIndex1 + 1) % 3
 	followerIndex2 := (leaderIndex1 + 1) % 3
@@ -114,10 +115,12 @@ func TestBlockReplicator_3Node_StartStepClose(t *testing.T) {
 	err = env.nodes[1].Start()
 	require.NoError(t, err)
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader(0, 1) }, 30*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool { return env.SymmetricConnectivity(0, 1) }, 30*time.Second, 100*time.Millisecond)
 
 	err = env.nodes[2].Start()
 	require.NoError(t, err)
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader() }, 30*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool { return env.SymmetricConnectivity() }, 30*time.Second, 100*time.Millisecond)
 
 	//close all
 	for _, node := range env.nodes {
@@ -325,6 +328,7 @@ func TestBlockReplicator_3Node_SubmitRecover(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Stopped leader node, index: %d", leaderIdx)
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader(followerIdx1, followerIdx2) }, 30*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool { return env.SymmetricConnectivity(followerIdx1, followerIdx2) }, 30*time.Second, 100*time.Millisecond)
 	newLeaderIdx := env.FindLeaderIndex()
 	for i := 2 * numBlocks; i < 3*numBlocks; i++ {
 		b := proto.Clone(block).(*types.Block)
@@ -419,6 +423,7 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Stopped leader node, index: %d", leaderIdx)
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader(followerIdx1, followerIdx2) }, 30*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool { return env.SymmetricConnectivity(followerIdx1, followerIdx2) }, 30*time.Second, 100*time.Millisecond)
 	newLeaderIdx := env.FindLeaderIndex()
 	for i := 2 * numBlocks; i < 3*numBlocks; i++ {
 		b := proto.Clone(block).(*types.Block)

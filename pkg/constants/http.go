@@ -1,5 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package constants
 
 import (
@@ -48,9 +49,10 @@ const (
 	ConfigEndpoint     = "/config/"
 	PostConfigTx       = "/config/tx"
 	GetConfig          = "/config/tx"
-	GetNodesConfig     = "/config/node"
+	GetNodeConfigPath  = "/config/node"
 	GetNodeConfig      = "/config/node/{nodeId}"
 	GetLastConfigBlock = "/config/block/last"
+	GetClusterStatus   = "/config/cluster"
 
 	LedgerEndpoint     = "/ledger/"
 	GetBlockHeader     = "/ledger/block/{blockId:[0-9]+}"
@@ -131,7 +133,7 @@ func URLDataProof(blockNum uint64, dbname, key string, deleted bool) string {
 }
 
 func URLForNodeConfigPath(nodeID string) string {
-	return path.Join(GetNodesConfig, nodeID)
+	return path.Join(GetNodeConfigPath, nodeID)
 }
 
 // URLForGetHistoricalData returns url for GET request to

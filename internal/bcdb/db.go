@@ -56,6 +56,12 @@ type DB interface {
 	// If blockNumber==0, the last config block is returned.
 	GetConfigBlock(querierUserID string, blockNumber uint64) (*types.GetConfigBlockResponseEnvelope, error)
 
+	// GetClusterStatus returns the cluster status:
+	// - the nodes, as defined in the ClusterConfig, without certificates if `noCert`=true;
+	// - the ID of the leader, if it exists;
+	// - the IDs of all active nodes, including the leader.
+	GetClusterStatus(noCerts bool) (*types.GetClusterStatusResponseEnvelope, error)
+
 	// GetNodeConfig returns single node subsection of database configuration
 	GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope, error)
 
@@ -158,12 +164,20 @@ type DB interface {
 	Close() error
 }
 
+//go:generate mockery --dir . --name TxProcessor --case underscore --output mocks/
+type TxProcessor interface {
+	Close() error
+	ClusterStatus() (leader string, active []string)
+	IsLeader() *ierrors.NotLeaderError
+	SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error)
+}
+
 type db struct {
 	nodeID                   string
 	worldstateQueryProcessor *worldstateQueryProcessor
 	ledgerQueryProcessor     *ledgerQueryProcessor
 	provenanceQueryProcessor *provenanceQueryProcessor
-	txProcessor              *transactionProcessor
+	txProcessor              TxProcessor
 	db                       worldstate.DB
 	blockStore               *blockstore.Store
 	provenanceStore          *provenance.Store
@@ -388,6 +402,56 @@ func (d *db) GetConfigBlock(querierUserID string, blockNumber uint64) (*types.Ge
 	}, nil
 }
 
+// GetClusterStatus returns the cluster status
+func (d *db) GetClusterStatus(noCerts bool) (*types.GetClusterStatusResponseEnvelope, error) {
+	configResponse, err := d.worldstateQueryProcessor.getConfig()
+	if err != nil {
+		return nil, err
+	}
+	nodes := configResponse.GetConfig().GetNodes()
+	clusterStatusResponse := &types.GetClusterStatusResponse{
+		Nodes:   nodes,
+		Version: configResponse.GetMetadata().GetVersion(),
+	}
+
+	leader, active := d.txProcessor.ClusterStatus()
+
+	// The configResponse is from the world-state-db, whereas the (leader, active) pair is from the block-replicator.
+	// Since they may be out of sync (if the request hits right in the middle of a config change), we make sure the
+	// response is self-consistent.
+	for _, activeID := range active {
+		for _, node := range nodes {
+			if activeID == node.Id {
+				clusterStatusResponse.Active = append(clusterStatusResponse.Active, activeID)
+				break
+			}
+		}
+	}
+	for _, node := range nodes {
+		if leader == node.Id {
+			clusterStatusResponse.Leader = leader
+			break
+		}
+	}
+
+	if noCerts {
+		for i := 0; i < len(clusterStatusResponse.Nodes); i++ {
+			clusterStatusResponse.Nodes[i].Certificate = nil
+		}
+	}
+
+	clusterStatusResponse.Header = d.responseHeader()
+	sign, err := d.signature(clusterStatusResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetClusterStatusResponseEnvelope{
+		Response:  clusterStatusResponse,
+		Signature: sign,
+	}, nil
+}
+
 // GetDBStatus returns database status
 func (d *db) GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error) {
 	dbStatusResponse, err := d.worldstateQueryProcessor.getDBStatus(dbName)
@@ -412,7 +476,7 @@ func (d *db) GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, err
 // treated as a sync submission. When a timeout occurs with the sync submission, a
 // timeout error will be returned
 func (d *db) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponseEnvelope, error) {
-	receipt, err := d.txProcessor.submitTransaction(tx, timeout)
+	receipt, err := d.txProcessor.SubmitTransaction(tx, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -818,7 +882,7 @@ func (d *db) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByR
 
 // Close closes and release resources used by db
 func (d *db) Close() error {
-	if err := d.txProcessor.close(); err != nil {
+	if err := d.txProcessor.Close(); err != nil {
 		return errors.WithMessage(err, "error while closing the transaction processor")
 	}
 

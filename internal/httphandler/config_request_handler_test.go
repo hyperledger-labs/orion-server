@@ -893,3 +893,331 @@ func TestConfigRequestHandler_GetLastConfigBlock(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigRequestHandler_GetClusterStatus(t *testing.T) {
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() *http.Request
+		dbMockFactory      func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetClusterStatusResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "successfully retrieve cluster status",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus, nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetClusterStatusQuery{UserId: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetClusterStatus", false).Return(response, nil)
+				return db
+			},
+			expectedResponse: &types.GetClusterStatusResponseEnvelope{
+				Response: &types.GetClusterStatusResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeId1",
+					},
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "testNodeId1",
+							Address:     "10.10.10.11",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+						{
+							Id:          "testNodeId2",
+							Address:     "10.10.10.12",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+						{
+							Id:          "testNodeId3",
+							Address:     "10.10.10.13",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+					},
+					Version: &types.Version{BlockNum: 1, TxNum: 0},
+					Leader:  "testNodeId1",
+					Active:  []string{"testNodeId1", "testNodeId2", "testNodeId3"},
+				},
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        "",
+		},
+		{
+			name: "successfully retrieve cluster status, query noCert=true",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus+"?nocert=true", nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetClusterStatusQuery{
+					UserId:         submittingUserName,
+					NoCertificates: true,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetClusterStatus", true).Return(response, nil)
+				return db
+			},
+			expectedResponse: &types.GetClusterStatusResponseEnvelope{
+				Response: &types.GetClusterStatusResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeId1",
+					},
+					Nodes: []*types.NodeConfig{
+						{
+							Id:      "testNodeId1",
+							Address: "10.10.10.11",
+							Port:    23001,
+						},
+						{
+							Id:      "testNodeId2",
+							Address: "10.10.10.12",
+							Port:    23001,
+						},
+						{
+							Id:      "testNodeId3",
+							Address: "10.10.10.13",
+							Port:    23001,
+						},
+					},
+					Version: &types.Version{BlockNum: 1, TxNum: 0},
+					Leader:  "testNodeId1",
+					Active:  []string{"testNodeId1", "testNodeId2", "testNodeId3"},
+				},
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        "",
+		},
+		{
+			name: "successfully retrieve cluster status, query noCert=false",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus+"?nocert=false", nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetClusterStatusQuery{
+					UserId:         submittingUserName,
+					NoCertificates: false,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetClusterStatus", false).Return(response, nil)
+				return db
+			},
+			expectedResponse: &types.GetClusterStatusResponseEnvelope{
+				Response: &types.GetClusterStatusResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeId1",
+					},
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "testNodeId1",
+							Address:     "10.10.10.11",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+						{
+							Id:          "testNodeId2",
+							Address:     "10.10.10.12",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+						{
+							Id:          "testNodeId3",
+							Address:     "10.10.10.13",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+					},
+					Version: &types.Version{BlockNum: 1, TxNum: 0},
+					Leader:  "testNodeId1",
+					Active:  []string{"testNodeId1", "testNodeId2", "testNodeId3"},
+				},
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        "",
+		},
+		{
+			name: "bad query is ignored",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus+"?noKidding=true", nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetClusterStatusQuery{UserId: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetClusterStatus", false).Return(response, nil)
+				return db
+			},
+			expectedResponse: &types.GetClusterStatusResponseEnvelope{
+				Response: &types.GetClusterStatusResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeId1",
+					},
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "testNodeId1",
+							Address:     "10.10.10.11",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+						{
+							Id:          "testNodeId2",
+							Address:     "10.10.10.12",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+						{
+							Id:          "testNodeId3",
+							Address:     "10.10.10.13",
+							Port:        23001,
+							Certificate: []byte("bogus-cert"),
+						},
+					},
+					Version: &types.Version{BlockNum: 1, TxNum: 0},
+					Leader:  "testNodeId1",
+					Active:  []string{"testNodeId1", "testNodeId2", "testNodeId3"},
+				},
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        "",
+		},
+		{
+			name: "missing user header",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus, nil)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				return &mocks.DB{}
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
+		},
+		{
+			name: "missing signature header",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus, nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				return &mocks.DB{}
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
+		},
+		{
+			name: "fail to verify signature of submitting user",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus, nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetConfigQuery{UserId: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "submitting user doesn't exists",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus, nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserId: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "failing to get cluster status from DB",
+			requestFactory: func() *http.Request {
+				req := httptest.NewRequest(http.MethodGet, constants.GetClusterStatus, nil)
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetConfigQuery{UserId: submittingUserName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req
+			},
+			dbMockFactory: func(response *types.GetClusterStatusResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetClusterStatus", false).Return(nil, errors.New("failed to get cluster status"))
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /config/cluster' because failed to get cluster status",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(fmt.Sprintf("GetConfig %s", tt.name), func(t *testing.T) {
+			req := tt.requestFactory()
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+
+			rr := httptest.NewRecorder()
+			handler := NewConfigRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &types.HttpResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.GetClusterStatusResponseEnvelope{}
+				err := json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+				// TODO verify signature on responses
+			}
+		})
+	}
+}

@@ -836,6 +836,17 @@ func (br *BlockReplicator) GetLeaderID() uint64 {
 	return br.lastKnownLeader
 }
 
+func (br *BlockReplicator) GetClusterStatus() (leaderID uint64, activePeers map[string]*types.PeerConfig) {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	activePeers = br.transport.ActivePeers(500*time.Millisecond, true)
+	leaderID = br.lastKnownLeader
+
+	return
+}
+
+
 func (br *BlockReplicator) commitBlock(block *types.Block) error {
 	br.lg.Infof("Enqueue for commit block [%d], ConsensusMetadata: %+v ",
 		block.GetHeader().GetBaseHeader().GetNumber(),

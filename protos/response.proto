@@ -83,6 +83,24 @@ message GetConfigBlockResponse {
   bytes block = 2;
 }
 
+// GetClusterStatus
+message GetClusterStatusResponseEnvelope {
+  GetClusterStatusResponse response = 1;
+  bytes signature = 2;
+}
+
+message GetClusterStatusResponse {
+  ResponseHeader header = 1;
+  // The configuration of the nodes, the part from ClusterConfig accessible to every client.
+  repeated NodeConfig nodes = 2;
+  // The version of the ClusterConfig from which the nodes are taken of.
+  Version version = 3;
+  // The leader ID, if it exists.
+  string Leader = 4;
+  // The IDs of active nodes, including the leader.
+  repeated string Active = 5;
+}
+
 //========= Part II Provenance API responses
 
 // GetBlock

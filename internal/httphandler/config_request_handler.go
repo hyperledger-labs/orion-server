@@ -43,6 +43,10 @@ func NewConfigRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handle
 	handler.router.HandleFunc(constants.GetLastConfigBlock, handler.configBlockQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.GetNodeConfig, handler.nodeQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostConfigTx, handler.configTransaction).Methods(http.MethodPost)
+	// HTTP GET "/config/cluster?nocert=true" returns nodes without certificates
+	handler.router.HandleFunc(constants.GetClusterStatus, handler.clusterStatusQuery).Methods(http.MethodGet).Queries("nocert", "{noCertificates:true|false}")
+	// HTTP GET "/config/cluster" returns nodes with certificates
+	handler.router.HandleFunc(constants.GetClusterStatus, handler.clusterStatusQuery).Methods(http.MethodGet)
 
 	return handler
 }
@@ -101,6 +105,27 @@ func (c *configRequestHandler) configBlockQuery(response http.ResponseWriter, re
 	}
 
 	httputils.SendHTTPResponse(response, http.StatusOK, configBlockResponseEnvelope)
+}
+
+func (c *configRequestHandler) clusterStatusQuery(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetClusterStatus, c.sigVerifier)
+	if respondedErr {
+		return
+	}
+
+	query := payload.(*types.GetClusterStatusQuery)
+	clusterStatus, err := c.db.GetClusterStatus(query.NoCertificates)
+
+	if err != nil {
+		httputils.SendHTTPResponse(
+			response,
+			http.StatusInternalServerError,
+			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
+		)
+		return
+	}
+
+	httputils.SendHTTPResponse(response, http.StatusOK, clusterStatus)
 }
 
 func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *http.Request) {
