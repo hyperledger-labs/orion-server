@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -91,6 +92,40 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 	defer resp.Body.Close()
 
 	res := &types.GetUserResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetLastBlockStatus(e *types.GetBlockQueryEnvelope) (*types.GetBlockResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.GetLastBlockHeader,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+constants.GetLastBlockHeader)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetBlockResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetClusterStatus(e *types.GetClusterStatusQueryEnvelope) (*types.GetClusterStatusResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.GetClusterStatus,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+constants.GetClusterStatus)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetClusterStatusResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
@@ -182,7 +217,7 @@ func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*ht
 
 // SubmitTransaction to the server.
 // If the returned error is nil, the response body must be closed after consuming it.
-func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*http.Response, error) {
+func (c *Client) SubmitTransaction(urlPath string, tx interface{}, serverTimeout time.Duration) (*http.Response, error) {
 	u := c.BaseURL.ResolveReference(
 		&url.URL{
 			Path: urlPath,
@@ -201,6 +236,9 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}) (*http.Respon
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
+	if serverTimeout > 0 {
+		req.Header.Set(constants.TimeoutHeader, serverTimeout.String())
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
