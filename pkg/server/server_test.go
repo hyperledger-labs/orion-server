@@ -329,13 +329,12 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 		},
 	}
 
-	httpResp, err := env.client.SubmitTransaction(constants.PostDataTx,
-		&types.DataTxEnvelope{
-			Payload: dataTx,
-			Signatures: map[string][]byte{
-				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
-			},
-		})
+	httpResp, err := env.client.SubmitTransaction(constants.PostDataTx, &types.DataTxEnvelope{
+		Payload: dataTx,
+		Signatures: map[string][]byte{
+			"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
+		},
+	}, 0)
 	require.NoError(t, err)
 	err = httpResp.Body.Close()
 	require.NoError(t, err)
@@ -418,11 +417,10 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 			},
 		},
 	}
-	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
-		&types.UserAdministrationTxEnvelope{
-			Payload:   userTx,
-			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
-		})
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+	}, 0)
 	require.NoError(t, err)
 	err = httpResp.Body.Close()
 	require.NoError(t, err)
@@ -470,11 +468,10 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 		CreateDbs: []string{"testDB"},
 	}
 	// Create new database
-	httpResp, err := env.client.SubmitTransaction(constants.PostDBTx,
-		&types.DBAdministrationTxEnvelope{
-			Payload:   dbTx,
-			Signature: testutils.SignatureFromTx(t, env.adminSigner, dbTx),
-		})
+	httpResp, err := env.client.SubmitTransaction(constants.PostDBTx, &types.DBAdministrationTxEnvelope{
+		Payload:   dbTx,
+		Signature: testutils.SignatureFromTx(t, env.adminSigner, dbTx),
+	}, 0)
 	require.NoError(t, err)
 	httpResp.Body.Close()
 	require.NoError(t, err)
@@ -520,13 +517,12 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	}
 
 	// Post transaction into new database
-	httpResp, err = env.client.SubmitTransaction(constants.PostDataTx,
-		&types.DataTxEnvelope{
-			Payload: dataTx,
-			Signatures: map[string][]byte{
-				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
-			},
-		})
+	httpResp, err = env.client.SubmitTransaction(constants.PostDataTx, &types.DataTxEnvelope{
+		Payload: dataTx,
+		Signatures: map[string][]byte{
+			"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
+		},
+	}, 0)
 	require.NoError(t, err)
 	httpResp.Body.Close()
 	require.NoError(t, err)
@@ -648,11 +644,10 @@ func TestServerWithRestart(t *testing.T) {
 			},
 		},
 	}
-	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
-		&types.UserAdministrationTxEnvelope{
-			Payload:   userTx,
-			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
-		})
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+	}, 0)
 	require.NoError(t, err)
 	httpResp.Body.Close()
 	require.NoError(t, err)

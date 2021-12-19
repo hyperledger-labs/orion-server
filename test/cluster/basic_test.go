@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -100,4 +101,192 @@ func TestBasicCluster(t *testing.T) {
 		require.Equal(t, uint64(2), dataResp.Metadata.Version.BlockNum)
 		require.Equal(t, uint64(0), dataResp.Metadata.Version.TxNum)
 	}
+}
+
+// Scenario:
+// - start 3 servers in a cluster.
+// - wait for one to be the leader.
+// - stop one follower.
+// - submit a tx to the two remaining servers.
+// - start the stopped server.
+// - wait for one to be the new leader.
+// - make sure the stopped server is in sync with the transaction made while it was stopped.
+func TestNodeRecoveryFollower(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(3)
+	setupConfig := &setup.Config{
+		NumberOfServers:     3,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
+			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0, 1, 2)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	keys := []string{"alice", "charlie", "dan"}
+	for _, key := range keys {
+		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, key, []byte(key+"-data"))
+		require.NoError(t, err)
+		if err != nil {
+			t.Logf("txID: %s, error: %s", txID, err)
+		} else {
+			t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		}
+	}
+
+	var dataEnv *types.GetDataResponseEnvelope
+	for _, key := range keys {
+		require.Eventually(t, func() bool {
+			dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, key)
+			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+		}, 30*time.Second, 100*time.Millisecond)
+
+		dataResp := dataEnv.GetResponse().GetValue()
+		require.Equal(t, dataResp, []byte(key+"-data"))
+		t.Logf("data: %+v", string(dataResp))
+	}
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, 4, 0, 1, 2)
+	}, 30*time.Second, 100*time.Millisecond)
+
+	followerServer := c.Servers[(leaderIndex+1)%3]
+	require.NoError(t, c.ShutdownServer(followerServer))
+
+	//find the new leader
+	newLeader := -1
+	require.Eventually(t, func() bool {
+		newLeader = c.AgreedLeader(t, leaderIndex, (leaderIndex+2)%3)
+		return newLeader >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	txID, rcpt, err := c.Servers[newLeader].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
+	require.NoError(t, err)
+	if err != nil {
+		t.Logf("txID: %s, error: %s", txID, err)
+	} else {
+		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	}
+
+	require.NoError(t, c.StartServer(followerServer))
+
+	require.Eventually(t, func() bool {
+		dataEnv, err = followerServer.QueryData(t, worldstate.DefaultDBName, "bob")
+		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+	}, 30*time.Second, 100*time.Millisecond)
+
+	dataResp := dataEnv.GetResponse().GetValue()
+	require.Equal(t, dataResp, []byte("bob-data"))
+	t.Logf("data: %+v", string(dataResp))
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, 5, 0, 1, 2)
+	}, 30*time.Second, 100*time.Millisecond)
+}
+
+// Scenario:
+// - start 3 servers in a cluster.
+// - wait for one to be the leader.
+// - stop the leader.
+// - wait for new server to be the leader.
+// - submit a tx to the two remaining servers.
+// - start the stopped server.
+// - make sure the stopped server is in sync with the transaction made while it was stopped.
+func TestNodeRecoveryLeader(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(3)
+	setupConfig := &setup.Config{
+		NumberOfServers:     3,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
+			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0, 1, 2)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	keys := []string{"alice", "charlie", "dan"}
+	for _, key := range keys {
+		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, key, []byte(key+"-data"))
+		require.NoError(t, err)
+		if err != nil {
+			t.Logf("txID: %s, error: %s", txID, err)
+		} else {
+			t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		}
+	}
+
+	var dataEnv *types.GetDataResponseEnvelope
+	for _, key := range keys {
+		require.Eventually(t, func() bool {
+			dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, key)
+			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+		}, 30*time.Second, 100*time.Millisecond)
+		dataResp := dataEnv.GetResponse().GetValue()
+		require.Equal(t, dataResp, []byte(key+"-data"))
+		t.Logf("data: %+v", string(dataResp))
+	}
+
+	require.NoError(t, c.ShutdownServer(c.Servers[leaderIndex]))
+
+	//find the new leader
+	newLeader := -1
+	require.Eventually(t, func() bool {
+		newLeader = c.AgreedLeader(t, (leaderIndex+1)%3, (leaderIndex+2)%3)
+		return newLeader >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	txID, rcpt, err := c.Servers[newLeader].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
+	require.NoError(t, err)
+	if err != nil {
+		t.Logf("txID: %s, error: %s", txID, err)
+	} else {
+		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	}
+
+	require.NoError(t, c.StartServer(c.Servers[leaderIndex]))
+
+	require.Eventually(t, func() bool {
+		dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, "bob")
+		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+	}, 30*time.Second, 100*time.Millisecond)
+
+	dataResp := dataEnv.GetResponse().GetValue()
+	require.Equal(t, dataResp, []byte("bob-data"))
+	t.Logf("data: %+v", string(dataResp))
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, 5, 0, 1, 2)
+	}, 30*time.Second, 100*time.Millisecond)
 }
