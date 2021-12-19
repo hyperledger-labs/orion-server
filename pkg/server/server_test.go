@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net/http"
 	"os"
 	"path"
 	"runtime"
@@ -329,14 +330,18 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 		},
 	}
 
-	httpResp, err := env.client.SubmitTransaction(constants.PostDataTx,
+	httpResp, err := env.client.SubmitTransaction(
+		constants.PostDataTx,
 		&types.DataTxEnvelope{
 			Payload: dataTx,
 			Signatures: map[string][]byte{
 				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
 			},
-		})
+		},
+		0, // async, if times out
+	)
 	require.NoError(t, err)
+	require.True(t, httpResp.StatusCode == http.StatusAccepted || httpResp.StatusCode == http.StatusOK)
 	err = httpResp.Body.Close()
 	require.NoError(t, err)
 
@@ -418,12 +423,16 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 			},
 		},
 	}
-	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
+	httpResp, err := env.client.SubmitTransaction(
+		constants.PostUserTx,
 		&types.UserAdministrationTxEnvelope{
 			Payload:   userTx,
 			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
-		})
+		},
+		0, // async, if times out
+	)
 	require.NoError(t, err)
+	require.True(t, httpResp.StatusCode == http.StatusAccepted || httpResp.StatusCode == http.StatusOK)
 	err = httpResp.Body.Close()
 	require.NoError(t, err)
 
@@ -470,12 +479,16 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 		CreateDbs: []string{"testDB"},
 	}
 	// Create new database
-	httpResp, err := env.client.SubmitTransaction(constants.PostDBTx,
+	httpResp, err := env.client.SubmitTransaction(
+		constants.PostDBTx,
 		&types.DBAdministrationTxEnvelope{
 			Payload:   dbTx,
 			Signature: testutils.SignatureFromTx(t, env.adminSigner, dbTx),
-		})
+		},
+		0, // async, if times out
+	)
 	require.NoError(t, err)
+	require.True(t, httpResp.StatusCode == http.StatusAccepted || httpResp.StatusCode == http.StatusOK)
 	httpResp.Body.Close()
 	require.NoError(t, err)
 
@@ -520,14 +533,18 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	}
 
 	// Post transaction into new database
-	httpResp, err = env.client.SubmitTransaction(constants.PostDataTx,
+	httpResp, err = env.client.SubmitTransaction(
+		constants.PostDataTx,
 		&types.DataTxEnvelope{
 			Payload: dataTx,
 			Signatures: map[string][]byte{
 				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
 			},
-		})
+		},
+		30*time.Second, // sync
+	)
 	require.NoError(t, err)
+	require.True(t, httpResp.StatusCode == http.StatusOK)
 	httpResp.Body.Close()
 	require.NoError(t, err)
 
@@ -648,12 +665,16 @@ func TestServerWithRestart(t *testing.T) {
 			},
 		},
 	}
-	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
+	httpResp, err := env.client.SubmitTransaction(
+		constants.PostUserTx,
 		&types.UserAdministrationTxEnvelope{
 			Payload:   userTx,
 			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
-		})
+		},
+		0, // async, if times out
+	)
 	require.NoError(t, err)
+	require.True(t, httpResp.StatusCode == http.StatusAccepted || httpResp.StatusCode == http.StatusOK)
 	httpResp.Body.Close()
 	require.NoError(t, err)
 

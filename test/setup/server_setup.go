@@ -103,6 +103,44 @@ func (s *Server) AdminSigner() crypto.Signer {
 	return s.adminSigner
 }
 
+func (s *Server) QueryBlockStatus(t *testing.T) (*types.GetBlockResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetBlockQuery{
+		UserId: s.AdminID(),
+	}
+	response, err := client.GetLastBlockStatus(
+		&types.GetBlockQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) QueryClusterStatus(t *testing.T) (*types.GetClusterStatusResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetClusterStatusQuery{
+		UserId: s.AdminID(),
+	}
+	response, err := client.GetClusterStatus(
+		&types.GetClusterStatusQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
 func (s *Server) QueryConfig(t *testing.T) (*types.GetConfigResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
@@ -167,13 +205,12 @@ func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string
 	}
 
 	// Post transaction into new database
-	response, err := client.SubmitTransaction(constants.PostDataTx,
-		&types.DataTxEnvelope{
-			Payload: dataTx,
-			Signatures: map[string][]byte{
-				"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx),
-			},
-		})
+	response, err := client.SubmitTransaction(constants.PostDataTx, &types.DataTxEnvelope{
+		Payload: dataTx,
+		Signatures: map[string][]byte{
+			"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx),
+		},
+	}, 30*time.Second)
 
 	if err != nil {
 		return txID, nil, err
