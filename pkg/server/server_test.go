@@ -558,6 +558,11 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 	}, time.Minute, 100*time.Millisecond)
 }
 
+func TestServerWithConfigRequest(t *testing.T) {
+	t.Skip("TODO")
+	// TODO cover config transactions and requests, see: https://github.com/hyperledger-labs/orion-server/issues/306
+}
+
 func TestServerWithFailureScenarios(t *testing.T) {
 	testCases := []struct {
 		testName         string

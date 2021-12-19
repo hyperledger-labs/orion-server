@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"reflect"
 	"sync"
 	"testing"
 
@@ -328,7 +329,6 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 	return env, nil
 }
 
-
 // find the index [0,N) of the leader node, -1 if no leader.
 func (c *clusterEnv) FindLeaderIndex() int {
 	for idx, e := range c.nodes {
@@ -363,6 +363,42 @@ func (c *clusterEnv) AgreedLeaderIndex(indices ...int) int {
 	}
 
 	return leaderIdx
+}
+
+func (c *clusterEnv) SymmetricConnectivity(indices ...int) bool {
+	if len(indices) == 0 {
+		for i := 0; i < len(c.nodes); i++ {
+			indices = append(indices, i)
+		}
+	}
+
+	var leader uint64
+	var activePeers map[string]*types.PeerConfig
+	for k, idx := range indices {
+		if k == 0 {
+			leader, activePeers = c.nodes[idx].blockReplicator.GetClusterStatus()
+
+			if len(activePeers) != len(indices) {
+				return false
+			}
+
+			for _, idx := range indices {
+				id := c.nodes[idx].conf.LocalConf.Server.Identity.ID
+				if activePeer, ok := activePeers[id]; !ok || activePeer.NodeId != id {
+					return false
+				}
+			}
+
+			continue
+		}
+
+		l, ap := c.nodes[idx].blockReplicator.GetClusterStatus()
+		if l != leader || !reflect.DeepEqual(ap, activePeers) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // find if all indices agree on a leader

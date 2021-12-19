@@ -123,7 +123,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			}
 			ledgerHeight = 1 // genesis block generated
 		} else if conf.config.JoinBlock != nil {
-			p.logger.Info("Bootstrapping the ledger and database from the cluster using a join block, number: %d",
+			p.logger.Infof("Bootstrapping the ledger and database from the cluster using a join block, number: %d",
 				conf.config.JoinBlock.GetHeader().GetBaseHeader().GetNumber())
 		} else {
 			return nil, errors.New("missing bootstrap, no SharedConfig or JoinBlock")
@@ -231,11 +231,11 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	return p, nil
 }
 
-// submitTransaction enqueue the transaction to the transaction queue
+// SubmitTransaction enqueue the transaction to the transaction queue
 // If the timeout is set to 0, the submission would be treated as async while
 // a non-zero timeout would be treated as a sync submission. When a timeout
 // occurs with the sync submission, a timeout error will be returned
-func (t *transactionProcessor) submitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error) {
+func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error) {
 	var txID string
 	switch tx.(type) {
 	case *types.DataTxEnvelope:
@@ -345,7 +345,7 @@ func (t *transactionProcessor) isTxIDDuplicate(txID string) (bool, error) {
 	return isTxIDAlreadyCommitted, nil
 }
 
-func (t *transactionProcessor) close() error {
+func (t *transactionProcessor) Close() error {
 	t.Lock()
 	defer t.Unlock()
 
@@ -363,6 +363,23 @@ func (t *transactionProcessor) IsLeader() *internalerror.NotLeaderError {
 	defer t.Unlock()
 
 	return t.blockReplicator.IsLeader()
+}
+
+// ClusterStatus returns the leader NodeID, and the active nodes NodeIDs.
+// Note: leader is always in active.
+func (t *transactionProcessor) ClusterStatus() (leader string, active []string) {
+	t.Lock()
+	defer t.Unlock()
+
+	leaderID, activePeers := t.blockReplicator.GetClusterStatus()
+	for _, peer := range activePeers {
+		active = append(active, peer.NodeId)
+		if peer.RaftId == leaderID {
+			leader = peer.NodeId
+		}
+	}
+
+	return
 }
 
 func PrepareBootstrapConfigTx(conf *config.Configurations) (*types.ConfigTxEnvelope, error) {

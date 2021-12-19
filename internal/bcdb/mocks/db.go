@@ -147,6 +147,29 @@ func (_m *DB) GetCertificate(userID string) (*x509.Certificate, error) {
 	return r0, r1
 }
 
+// GetClusterStatus provides a mock function with given fields: noCerts
+func (_m *DB) GetClusterStatus(noCerts bool) (*types.GetClusterStatusResponseEnvelope, error) {
+	ret := _m.Called(noCerts)
+
+	var r0 *types.GetClusterStatusResponseEnvelope
+	if rf, ok := ret.Get(0).(func(bool) *types.GetClusterStatusResponseEnvelope); ok {
+		r0 = rf(noCerts)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetClusterStatusResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(bool) error); ok {
+		r1 = rf(noCerts)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetConfig provides a mock function with given fields:
 func (_m *DB) GetConfig() (*types.GetConfigResponseEnvelope, error) {
 	ret := _m.Called()

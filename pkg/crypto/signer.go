@@ -19,6 +19,8 @@ type SignerOptions struct {
 	KeyFilePath string
 }
 
+//go:generate mockery --dir . --name Signer --case underscore --output mocks/
+
 // Signer is cryptographic primitive used only to sign messages. Each entity usually access single Signer
 type Signer interface {
 	Sign(msgBytes []byte) ([]byte, error)

@@ -10,14 +10,17 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/orion-server/internal/bcdb/mocks"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie/store"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
+	crypto_mocks "github.com/hyperledger-labs/orion-server/pkg/crypto/mocks"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,10 +30,11 @@ type configQueryTestEnv struct {
 	ledgerQP *ledgerQueryProcessor
 	cleanup  func(t *testing.T)
 	blocks   []*types.BlockHeader
+	logger   *logger.SugarLogger
 }
 
 func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
-	nodeID := "test-node-id1"
+	nodeID := "node1"
 
 	path, err := ioutil.TempDir("/tmp", "queryProcessor")
 	require.NoError(t, err)
@@ -133,10 +137,11 @@ func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
 		stateQP:  newWorldstateQueryProcessor(stateProcConfig),
 		ledgerQP: newLedgerQueryProcessor(ledgerProcConfig),
 		cleanup:  cleanup,
+		logger:   logger,
 	}
 }
 
-func setupConfigBlockQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum int) {
+func setupConfigQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum int) {
 	instCert, adminCert := generateCrypto(t)
 
 	// The genesis block & config
@@ -337,7 +342,7 @@ func setupConfigBlockQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum 
 func TestGetConfigBlock(t *testing.T) {
 	env := newConfigQueryTestEnv(t)
 	require.NotNil(t, env)
-	setupConfigBlockQueryTest(t, env, 10)
+	setupConfigQueryTest(t, env, 10)
 
 	t.Run("getConfigBlock returns genesis config block", func(t *testing.T) {
 		blockResp, err := env.stateQP.getConfigBlock("admin1", 1)
@@ -381,5 +386,130 @@ func TestGetConfigBlock(t *testing.T) {
 		blockResp, err := env.stateQP.getConfigBlock("alice", 0)
 		require.EqualError(t, err, "the user [alice] does not exist")
 		require.Nil(t, blockResp)
+	})
+}
+
+func TestGetClusterStatus(t *testing.T) {
+	env := newConfigQueryTestEnv(t)
+	require.NotNil(t, env)
+	setupConfigQueryTest(t, env, 10)
+
+	bcdb := &db{
+		nodeID:                   "node1",
+		worldstateQueryProcessor: env.stateQP,
+		ledgerQueryProcessor:     env.ledgerQP,
+		db:                       env.db,
+		logger:                   env.logger,
+	}
+
+	t.Run("valid", func(t *testing.T) {
+		txProcMock := &mocks.TxProcessor{}
+		signerMock := &crypto_mocks.Signer{}
+		bcdb.txProcessor = txProcMock
+		bcdb.signer = signerMock
+
+		txProcMock.On("ClusterStatus").Return("node1", []string{"node1", "node2"})
+		signerMock.On("Sign", mock.Anything).Return([]byte("bogus-sig"), nil)
+
+		status, err := bcdb.GetClusterStatus(false)
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		require.NotNil(t, status.Response)
+
+		require.Len(t, status.Response.Nodes, 2)
+		require.Equal(t, "node1", status.Response.Nodes[0].Id)
+		require.NotNil(t, status.Response.Nodes[0].Certificate)
+		require.Equal(t, "node2", status.Response.Nodes[1].Id)
+		require.NotNil(t, status.Response.Nodes[1].Certificate)
+
+		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.Equal(t, "node1", status.Response.Leader)
+		require.Equal(t, []string{"node1", "node2"}, status.Response.Active)
+	})
+
+	t.Run("valid: no leader", func(t *testing.T) {
+		txProcMock := &mocks.TxProcessor{}
+		signerMock := &crypto_mocks.Signer{}
+		bcdb.txProcessor = txProcMock
+		bcdb.signer = signerMock
+
+		txProcMock.On("ClusterStatus").Return("", []string{"node1"})
+		signerMock.On("Sign", mock.Anything).Return([]byte("bogus-sig"), nil)
+		status, err := bcdb.GetClusterStatus(false)
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		require.NotNil(t, status.Response)
+
+		require.Len(t, status.Response.Nodes, 2)
+		require.Equal(t, "node1", status.Response.Nodes[0].Id)
+		require.NotNil(t, status.Response.Nodes[0].Certificate)
+		require.Equal(t, "node2", status.Response.Nodes[1].Id)
+		require.NotNil(t, status.Response.Nodes[1].Certificate)
+
+		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.Equal(t, "", status.Response.Leader)
+		require.Equal(t, []string{"node1"}, status.Response.Active)
+	})
+
+	t.Run("valid: no certificates", func(t *testing.T) {
+		txProcMock := &mocks.TxProcessor{}
+		signerMock := &crypto_mocks.Signer{}
+		bcdb.txProcessor = txProcMock
+		bcdb.signer = signerMock
+
+		txProcMock.On("ClusterStatus").Return("node1", []string{"node1", "node2"})
+		signerMock.On("Sign", mock.Anything).Return([]byte("bogus-sig"), nil)
+		status, err := bcdb.GetClusterStatus(true)
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		require.NotNil(t, status.Response)
+
+		require.Len(t, status.Response.Nodes, 2)
+		require.Equal(t, "node1", status.Response.Nodes[0].Id)
+		require.Nil(t, status.Response.Nodes[0].Certificate)
+		require.Equal(t, "node2", status.Response.Nodes[1].Id)
+		require.Nil(t, status.Response.Nodes[1].Certificate)
+
+		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.Equal(t, "node1", status.Response.Leader)
+		require.Equal(t, []string{"node1", "node2"}, status.Response.Active)
+	})
+
+	t.Run("valid: config vs. status made consistent", func(t *testing.T) {
+		txProcMock := &mocks.TxProcessor{}
+		signerMock := &crypto_mocks.Signer{}
+		bcdb.txProcessor = txProcMock
+		bcdb.signer = signerMock
+
+		txProcMock.On("ClusterStatus").Return("bogus-node", []string{"node1", "node2", "bogus-node"})
+		signerMock.On("Sign", mock.Anything).Return([]byte("bogus-sig"), nil)
+
+		status, err := bcdb.GetClusterStatus(false)
+		require.NoError(t, err)
+		require.NotNil(t, status)
+		require.NotNil(t, status.Response)
+
+		require.Len(t, status.Response.Nodes, 2)
+		require.Equal(t, "node1", status.Response.Nodes[0].Id)
+		require.NotNil(t, "node1", status.Response.Nodes[0].Certificate)
+		require.Equal(t, "node2", status.Response.Nodes[1].Id)
+		require.NotNil(t, "node2", status.Response.Nodes[1].Certificate)
+
+		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.Equal(t, "", status.Response.Leader)
+		require.Equal(t, []string{"node1", "node2"}, status.Response.Active)
+	})
+
+	t.Run("wrong: cannot sign", func(t *testing.T) {
+		txProcMock := &mocks.TxProcessor{}
+		signerMock := &crypto_mocks.Signer{}
+		bcdb.txProcessor = txProcMock
+		bcdb.signer = signerMock
+
+		txProcMock.On("ClusterStatus").Return("node1", []string{"node1", "node2"})
+		signerMock.On("Sign", mock.Anything).Return(nil, fmt.Errorf("oops"))
+		status, err := bcdb.GetClusterStatus(false)
+		require.EqualError(t, err, "oops")
+		require.Nil(t, status)
 	})
 }

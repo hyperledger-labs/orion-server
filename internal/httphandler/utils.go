@@ -60,6 +60,20 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			UserId:               querierUserID,
 			BlockNumber:          0, // 0 means get last, as first block is 1
 		}
+	case constants.GetClusterStatus:
+		noCertificates := false
+		if value, ok := params["noCertificates"]; ok {
+			noCertificates, err = strconv.ParseBool(value)
+			if err != nil {
+				httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+				return nil, true
+			}
+		}
+
+		payload = &types.GetClusterStatusQuery{
+			UserId:         querierUserID,
+			NoCertificates: noCertificates,
+		}
 	case constants.GetBlockHeader:
 		blockNum, err := httputils.GetBlockNum(params)
 		if err != nil {
