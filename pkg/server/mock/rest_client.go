@@ -95,6 +95,23 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 	return res, err
 }
 
+func (c *Client) GetClusterStatus(e *types.GetClusterStatusQueryEnvelope) (*types.GetClusterStatusResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetClusterStatus(),
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+constants.URLForGetClusterStatus())
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetClusterStatusResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetConfig(),
