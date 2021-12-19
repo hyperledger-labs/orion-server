@@ -103,6 +103,25 @@ func (s *Server) AdminSigner() crypto.Signer {
 	return s.adminSigner
 }
 
+func (s *Server) QueryClusterStatus(t *testing.T) (*types.GetClusterStatusResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetClusterStatusQuery{
+		UserId: s.AdminID(),
+	}
+	response, err := client.GetClusterStatus(
+		&types.GetClusterStatusQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
 func (s *Server) QueryConfig(t *testing.T) (*types.GetConfigResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {

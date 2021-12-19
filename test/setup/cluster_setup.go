@@ -279,6 +279,15 @@ func (c *Cluster) StartServer(s *Server) error {
 	return s.start(c.cmdTimeout)
 }
 
+func (c *Cluster) GetServerByID(serverID string) (*Server, int) {
+	for i, srv := range c.Servers {
+		if srv.serverID == serverID {
+			return srv, i
+		}
+	}
+	return nil, -1
+}
+
 func (c *Cluster) createCryptoMaterials() error {
 	for _, s := range c.Servers {
 		if err := s.createCryptoMaterials(c.rootCAPemCert, c.caPrivKey); err != nil {
