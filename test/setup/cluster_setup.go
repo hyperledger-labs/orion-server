@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/config"
@@ -277,6 +278,67 @@ func (c *Cluster) StartServer(s *Server) error {
 	s.createCmdToStartServers(c.bdbBinaryPath)
 
 	return s.start(c.cmdTimeout)
+}
+
+func (c *Cluster) GetServerByID(serverID string) (*Server, int) {
+	if serverID == "" {
+		return nil, -1
+	}
+	for i, srv := range c.Servers {
+		if srv.serverID == serverID {
+			return srv, i
+		}
+	}
+	return nil, -1
+}
+
+func (c *Cluster) AgreedLeader(t *testing.T, activeServers ...int) int {
+	var leaders []int
+	var leader int
+
+	for _, srvVal := range activeServers {
+		clusterStatusResEnv, err := c.Servers[srvVal].QueryClusterStatus(t)
+		if err == nil && clusterStatusResEnv != nil {
+			_, leader = c.GetServerByID(clusterStatusResEnv.GetResponse().GetLeader())
+			if leader == -1 {
+				return -1
+			}
+			leaders = append(leaders, leader)
+		} else {
+			return -1
+		}
+	}
+
+	if len(activeServers) != len(leaders) {
+		return -1
+	}
+
+	for _, l := range leaders {
+		if l != leader {
+			return -1
+		}
+	}
+
+	return leader
+}
+
+func (c *Cluster) AgreedHeight(t *testing.T, expectedBlockHeight uint64, activeServers ...int) bool {
+	for _, srvVal := range activeServers {
+		blockResEnv, err := c.Servers[srvVal].QueryBlockStatus(t)
+		if err != nil {
+			t.Logf("error: %s", err.Error())
+			return false
+		}
+		if blockResEnv == nil {
+			t.Errorf("error: GetBlockResponseEnvelope is nil") // should never happen when no error
+			return false
+		}
+		if blockResEnv.GetResponse().GetBlockHeader().GetBaseHeader().GetNumber() != expectedBlockHeight {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (c *Cluster) createCryptoMaterials() error {
