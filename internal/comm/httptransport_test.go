@@ -5,11 +5,14 @@ package comm_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +24,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
+	"github.com/xiang90/probing"
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -401,9 +405,13 @@ func TestNewHTTPTransport_TLS_FilePathFailure(t *testing.T) {
 
 // Scenario: update the endpoints of a peer.
 // - generate a test configuration for 3 servers.
-// - server 3 starts on a new port, not reflected yet in shared config. servers 1,2 will not be able to reach it.
+// - server 3 starts on a new port, not reflected yet in shared config.
+// - servers 1,2 will not be able to reach it, but server 3 will be able to reach them.
 // - servers are updated with the shared config, now messages get through.
 func TestHTTPTransport_UpdatePeers(t *testing.T) {
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+
 	lg, err := logger.New(
 		&logger.Config{
 			Level:         "info",
@@ -411,6 +419,14 @@ func TestHTTPTransport_UpdatePeers(t *testing.T) {
 			ErrOutputPath: []string{"stderr"},
 			Encoding:      "console",
 		},
+		zap.Hooks(func(entry zapcore.Entry) error {
+			//http transport starting to serve peers on: 127.0.0.1:33000 | 33001 | 33003
+			if strings.Contains(entry.Message, "http transport starting to serve peers on: 127.0.0.1:3300") {
+				t.Logf("Server started: %s | %s", entry.Caller, entry.Message)
+				wg.Done()
+			}
+			return nil
+		}),
 	)
 	require.NoError(t, err)
 
@@ -425,39 +441,52 @@ func TestHTTPTransport_UpdatePeers(t *testing.T) {
 	defer tr2.Close()
 
 	// server 3 starts on a new port, not reflected yet in shared config.
-	// servers 1,2 will not be able to reach it.
+	// servers 1,2 will not be able to reach it. However, server 3 can reach servers 1,2.
 	localConfigs[2].Replication.Network.Port++
 	tr3, cl3, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 5)
 	require.NoError(t, err)
 	defer tr3.Close()
 
-	// messages are not received
-	err = tr1.SendConsensus([]raftpb.Message{{To: 3}})
-	require.NoError(t, err)
-	require.Eventually(t,
-		func() bool {
-			return cl1.ReportUnreachableCallCount() == 1
-		},
-		10*time.Second, 10*time.Millisecond,
-	)
-	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
-	require.NoError(t, err)
-	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
-	require.NoError(t, err)
-	require.Eventually(t,
-		func() bool {
-			return cl2.ReportUnreachableCallCount() == 2
-		},
-		10*time.Second, 10*time.Millisecond,
-	)
+	wg.Wait()
 
-	// PullBlocks will not succeed
+	// ActivePeers reports are asymmetric
+	// tr1, tr2 only report each other
+	var activePeers map[string]*types.PeerConfig
+	for _, tr := range []*comm.HTTPTransport{tr1, tr2} {
+		require.Eventually(t, func() bool {
+			activePeers = tr.ActivePeers(10*time.Millisecond, true)
+			return len(activePeers) == 2
+		}, 10*time.Second, 100*time.Millisecond)
+		for _, peerId := range []string{"node1", "node2"} {
+			require.Equal(t, peerId, activePeers[peerId].NodeId)
+		}
+	}
+	// tr3 reports everyone
+	require.Eventually(t, func() bool {
+		activePeers = tr3.ActivePeers(10*time.Millisecond, true)
+		return len(activePeers) == 3
+	}, 10*time.Second, 100*time.Millisecond)
+	for _, peerId := range []string{"node1", "node2", "node3"} {
+		require.Equal(t, peerId, activePeers[peerId].NodeId)
+	}
+
+	// PullBlocks to server 3 will not succeed
 	timeout1, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	_, err = tr1.PullBlocks(timeout1, 1, 5, 0)
 	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
 	timeout2, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	_, err = tr2.PullBlocks(timeout2, 1, 5, 0)
 	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
+
+	// However, server 3 can reach servers 1,2
+	err = tr3.SendConsensus([]raftpb.Message{{To: 1}})
+	require.NoError(t, err)
+	err = tr3.SendConsensus([]raftpb.Message{{To: 2}})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return cl1.ProcessCallCount() == 1 }, 10*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return cl2.ProcessCallCount() == 1 }, 10*time.Second, 10*time.Millisecond)
+
+	t.Log("=== re-config endpoint ===")
 
 	// emulate a config tx update to change the endpoint of server 3
 	updatedConfig := proto.Clone(sharedConfig).(*types.ClusterConfig)
@@ -481,6 +510,7 @@ func TestHTTPTransport_UpdatePeers(t *testing.T) {
 		},
 		10*time.Second, 10*time.Millisecond,
 	)
+
 	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
 	require.NoError(t, err)
 	err = tr2.SendConsensus([]raftpb.Message{{To: 3}})
@@ -503,6 +533,17 @@ func TestHTTPTransport_UpdatePeers(t *testing.T) {
 	blocks, err = tr2.PullBlocks(timeout2, 1, 5, 0)
 	require.NoError(t, err)
 	require.Len(t, blocks, 5)
+
+	// ActivePeers reports are now symmetric
+	for _, tr := range []*comm.HTTPTransport{tr1, tr2, tr3} {
+		require.Eventually(t, func() bool {
+			activePeers = tr.ActivePeers(10*time.Millisecond, true)
+			return len(activePeers) == 3
+		}, 10*time.Second, 100*time.Millisecond)
+		for _, peerId := range []string{"node1", "node2", "node3"} {
+			require.Equal(t, peerId, activePeers[peerId].NodeId)
+		}
+	}
 }
 
 // Scenario: add peers.
@@ -710,6 +751,119 @@ func TestHTTPTransport_RemovePeers(t *testing.T) {
 	require.EqualError(t, err, "PullBlocks canceled: context deadline exceeded")
 
 	require.Equal(t, 5, cl3.ProcessCallCount())
+}
+
+// Scenario: test the probing endpoint is responding
+func TestHTTPTransport_Probing(t *testing.T) {
+	lg, err := logger.New(&logger.Config{
+		Level:         "info",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	})
+	require.NoError(t, err)
+
+	localConfigs, sharedConfig := newTestSetup(t, 2)
+
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 0)
+	require.NoError(t, err)
+	defer tr1.Close()
+
+	time.Sleep(time.Second)
+
+	resp, err := http.Get("http://127.0.0.1:33000/raft/probing")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	health := &probing.Health{}
+	err = json.Unmarshal(body, health)
+	require.NoError(t, err)
+	require.True(t, health.OK)
+	t.Logf("Health: %+v", health)
+	resp.Body.Close()
+
+	resp, err = http.Get("http://127.0.0.1:33001/raft/probing")
+	require.EqualError(t, err, "Get \"http://127.0.0.1:33001/raft/probing\": dial tcp 127.0.0.1:33001: connect: connection refused")
+	require.Nil(t, resp)
+}
+
+// Scenario: check ActivePeers report in a well configured cluster
+// - increase number of nodes from 1 to 5
+// - decrease number of nodes to 3
+func TestHTTPTransport_ActivePeers(t *testing.T) {
+	lg, err := logger.New(&logger.Config{
+		Level:         "info",
+		OutputPath:    []string{"stdout"},
+		ErrOutputPath: []string{"stderr"},
+		Encoding:      "console",
+	})
+	require.NoError(t, err)
+
+	numActiveCond := func(tr *comm.HTTPTransport, num int, self bool) bool {
+		peers := tr.ActivePeers(10*time.Millisecond, self)
+		return len(peers) == num
+	}
+
+	localConfigs, sharedConfig := newTestSetup(t, 5)
+
+	tr1, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 0, 0)
+	require.NoError(t, err)
+	defer tr1.Close()
+
+	require.Eventually(t, func() bool { return numActiveCond(tr1, 1, true) }, 30*time.Second, 1000*time.Millisecond)
+	require.Eventually(t, func() bool { return numActiveCond(tr1, 0, false) }, 30*time.Second, 1000*time.Millisecond)
+
+	tr2, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 1, 0)
+	require.NoError(t, err)
+	defer tr2.Close()
+
+	require.Eventually(t, func() bool { return numActiveCond(tr2, 2, true) }, 10*time.Second, 1000*time.Millisecond)
+	require.Eventually(t, func() bool { return numActiveCond(tr2, 1, false) }, 10*time.Second, 1000*time.Millisecond)
+
+	tr3, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 2, 0)
+	require.NoError(t, err)
+	defer tr3.Close()
+
+	require.Eventually(t, func() bool { return numActiveCond(tr3, 3, true) }, 10*time.Second, 1000*time.Millisecond)
+	require.Eventually(t, func() bool { return numActiveCond(tr3, 2, false) }, 10*time.Second, 1000*time.Millisecond)
+
+	for _, tr := range []*comm.HTTPTransport{tr1, tr2, tr3} {
+		activePeers := tr.ActivePeers(10*time.Millisecond, true)
+		for _, peerId := range []string{"node1", "node2", "node3"} {
+			require.Equal(t, peerId, activePeers[peerId].NodeId)
+		}
+	}
+
+	tr4, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 3, 0)
+	require.NoError(t, err)
+
+	tr5, _, err := startTransportWithLedger(t, lg, localConfigs, sharedConfig, 4, 0)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool { return numActiveCond(tr4, 4, false) }, 10*time.Second, 1000*time.Millisecond)
+	require.Eventually(t, func() bool { return numActiveCond(tr5, 4, false) }, 10*time.Second, 1000*time.Millisecond)
+
+	for _, tr := range []*comm.HTTPTransport{tr1, tr2, tr3, tr4, tr5} {
+		activePeers := tr.ActivePeers(10*time.Millisecond, true)
+		for _, peerId := range []string{"node1", "node2", "node3", "node4", "node5"} {
+			require.Equal(t, peerId, activePeers[peerId].NodeId)
+		}
+	}
+
+	tr4.Close()
+	tr5.Close()
+
+	require.Eventually(t, func() bool { return numActiveCond(tr1, 2, false) }, 10*time.Second, 1000*time.Millisecond)
+	require.Eventually(t, func() bool { return numActiveCond(tr2, 2, false) }, 10*time.Second, 1000*time.Millisecond)
+	require.Eventually(t, func() bool { return numActiveCond(tr3, 2, false) }, 10*time.Second, 1000*time.Millisecond)
+
+	for _, tr := range []*comm.HTTPTransport{tr1, tr2, tr3} {
+		activePeers := tr.ActivePeers(10*time.Millisecond, true)
+		for _, peerId := range []string{"node1", "node2", "node3"} {
+			require.Equal(t, peerId, activePeers[peerId].NodeId)
+		}
+	}
 }
 
 func newTestSetup(t *testing.T, numServers int) ([]*config.LocalConfiguration, *types.ClusterConfig) {

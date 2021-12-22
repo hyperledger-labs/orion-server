@@ -276,7 +276,9 @@ func (p *HTTPTransport) Start() error {
 
 	raftHandler := p.transport.Handler()
 	mux := http.NewServeMux()
-	mux.Handle(rafthttp.RaftPrefix, raftHandler)
+	mux.HandleFunc("/", http.NotFound)
+	mux.Handle(rafthttp.RaftPrefix, raftHandler)     // match "/raft"
+	mux.Handle(rafthttp.RaftPrefix+"/", raftHandler) // match the stream, snapshot, and probing URLs
 	mux.Handle(BCDBPeerEndpoint, p.catchupHandler)
 
 	p.httpServer = &http.Server{
@@ -403,6 +405,31 @@ func (p *HTTPTransport) ClientTLSConfig() *tls.Config {
 // Raft ID, and can be 0. The call maybe canceled using the context `ctx`.
 func (p *HTTPTransport) PullBlocks(ctx context.Context, startBlock, endBlock, leaderID uint64) ([]*types.Block, error) {
 	return p.catchUpClient.PullBlocks(ctx, startBlock, endBlock, leaderID)
+}
+
+// ActivePeers returns the peers that are active for more than `minDuration`.
+// The returned peers  include the self node if includeSelf==true.
+func (p *HTTPTransport) ActivePeers(minDuration time.Duration, includeSelf bool) map[string]*types.PeerConfig {
+	var activePeers = make(map[string]*types.PeerConfig)
+	for _, m := range p.clusterConfig.GetConsensusConfig().GetMembers() {
+		if includeSelf && m.RaftId == p.raftID {
+			activePeers[m.NodeId] = m
+			continue
+		}
+
+		since := p.transport.ActiveSince(etcd_types.ID(m.RaftId))
+		if since.IsZero() {
+			continue
+		}
+
+		current := time.Now()
+		dur := current.Sub(since)
+		if dur >= minDuration {
+			activePeers[m.NodeId] = m
+		}
+	}
+
+	return activePeers
 }
 
 func MemberRaftID(memberID string, clusterConfig *types.ClusterConfig) (uint64, error) {
