@@ -4,25 +4,26 @@ title: State Merkle Patricia Tree
 ---
 ## Merkle-Patricia Trie
 
-Merkle-Patricia trie is combination of two tree data structures:
-* Merkle tree – tree that uses child hash instead pointer
-* Patricia trie – optimized dictionary tree
+The Merkle-Patricia trie is a combination of two tree data structures:
+* Merkle tree – a tree that uses child hashes instead of pointers
+* Patricia trie – an optimized dictionary tree
 
 ### Patricia trie
-Main difference between Patricia trie and regular dictionary tree is algorithm to compress long one-child branches into single node.
+The main difference between a Patricia trie and a regular dictionary tree is the algorithm used to compress long one-child branches into a single node.
 ![Trie ethereum style](worldstatetrie.png)
 
-Different implementations contain between 2 and 3 types of different nodes, but there are 2 important types:
-* Branch node – has more than 1 child – contains Children[ALPHABEIT_SIZE] list of children pointers.
-* Extension node – non leaf node represent sequence of nodes that has only one child, contains Key that represents all these nodes as one.
-* _Optional third type_ is Value node - leaf node, similar to Extension node, but instead pointer to next node, it contains value.
+Different implementations contain between two and three types of different nodes, but there are two important types:
+* Branch node – this node has more than one child and contains the list children[ALPHABET_SIZE] of children pointers.
+* Extension node – this non-leaf node represents a sequence of nodes that has only one child and contains a key that represents all these nodes as one.
+
+An _Optional third type_ of node is the Value node. This leaf node is similar to the Extension node, but instead of a pointer to the next node, it contains value.
     * Some implementations combine Extension and Value nodes into single node type.
 
 ![Trie Node Types](MPT-Node-Types.png)
 
 #### Trie example
 
-Following figure shows example trie with all possible types of inter-trie connections, and it contains following data:
+The following figure shows a sample trie with all possible types of inter-trie connections and contains the following data:
 * 5        -> A
 * A123     -> B
 * FAB23    -> C
@@ -37,20 +38,20 @@ Following figure shows example trie with all possible types of inter-trie connec
 
 ### Trie update algorithm
 
-* If node with updated key exist, just update Value and all Hash pointers up to the root.
+* If a node with an updated key exists, just update Value and all hash pointers up to the root.
 * If such a node doesn't exist, traverse trie for all key matching nodes.
-    * If last matching node is Value node:
-        * Convert it to an ExtensionNode followed by BranchNode and add new ValueNode with the remaining path without first character
-    * If last matching node is Branch node, find next node - pointed by _node.Children[nibble]_:
-        * When next node is an NIL, replace it with a new ValueNode with the remaining path.
-        * When next node is a ValueNode, add ExtensionNode with matching path, followed by BranchNode, and make new BranchNode point to original ValueNode with rest of its path and new ValueNode.
-        * When next node is an ExtensionNode, add another ExtensionNode with common path and create a new BranchNode points to the original ExtensionNode and new ValueNode.
-    * Update all Hashes up to root
+    * If the last matching node is Value node:
+        * Convert it to an ExtensionNode followed by BranchNode and add a new ValueNode with the remaining path, without the first character.
+    * If the last matching node is Branch node, find the next node, pointed to by _node.Children[nibble]_:
+        * When the next node is an NIL, replace it with a new ValueNode with the remaining path.
+        * When the next node is a ValueNode, add an ExtensionNode with matching path, followed by a BranchNode, and make the new BranchNode point to the original ValueNode with the rest of its path and a new ValueNode.
+        * When the next node is an ExtensionNode, add another ExtensionNode with common path and create a new BranchNode that points to the original ExtensionNode and a new ValueNode.
+    * Update all hashes up to the root.
 
 ### Trie update example
-This example illustrates how one update can affect multiple nodes in trie, not mention hashes in whole branch
+This example illustrates how one update can affect multiple nodes in trie, not mention hashes in the whole branch.
 
-We start from trie that contains only 3 Value nodes, with three values
+We start from a trie that contains only three Value nodes, with three values:
 * A123 -> B
 * DA1F -> D
 * 50FF1A -> G
@@ -58,48 +59,45 @@ We start from trie that contains only 3 Value nodes, with three values
 ![Original Trie](MPT-Update-1.png)
 
 
-After the insert of (DA1FE111 -> F) we see 3 new nodes - one Extension node, one Branch node
-that replaced Value node holding value (D), and one Value node that holds new value (F)
+After the insert of (DA1FE111 -> F), we see three new nodes - one Extension node, one Branch node that replaced the Value node holding value (D), and one Value node that holds the new value (F).
 
 ![Updated Trie](MPT-Update-2.png)
 
 ### Trie value delete
 
-We just mark node that contains deleted value with tombstone bit - `isDeleted` flag. Thus value delete is same as value update, while `isDeleted` changes instead of value. Because this flag affects node hash, it is tamper resistant.
+We just mark the node that contains the deleted value with the tombstone bit - `isDeleted` flag. Thus value delete is the same as the value update, while `isDeleted` changes instead of value. Because this flag affects the node hash, it is tamper resistant.
 
 ### Trie proofs
 
-First, lets define path from trie root to value. It is ordered list of nodes from root node to Value node or to Branch node that actually contains value.
+First, lets define the path from the trie root to the value. It's an ordered list of nodes from the root node to the Value node or the Branch node that actually contains value.
 
-Each node in path represented as list of byte arrays. Each byte array can be hash of child node(s) (branch node, extension node) or part of key (extension node, value node).
-In addition, in our implementation, no actual value is stored in node, but only hash of `<key, value>` pair too. `isDeleted` tombstone bit represented as separate byte array as well.
+Each node in the path is represented as a list of byte arrays. Each byte array can be a hash of child node(s) (branch node, extension node) or a part of a key (extension node, value node). In addition, in our implementation, no actual value is stored in the node, but only the hash of the `<key, value>` pair. The `isDeleted` tombstone bit is represented as a separate byte array as well.
 
 Proof generation:
 - Arguments are block number and key (in our case db+key).
-    - As optional argument, `isDeleted` can be passed too.
-- Server loads snapshot of MPTrie at time of block `N` ![Trie Block snapshot](PatriciaMerkleTrie.png)
-- Server looks for path that contains `key`.
-    - If path exist, it returned to user in form of list of lists of byte arrays.
+    - As an optional argument, `isDeleted` can be passed too.
+- The server loads a snapshot of MPTrie at the time of block `N` ![Trie Block snapshot](PatriciaMerkleTrie.png)
+- The server looks for a path that contains `key`.
+    - If a path exists, it's returned to the user in the form of a list of byte arrays.
 
 Proof validation:
 - Hash of `<key, value>` pair calculated and marked as `current hash`
 - Validation starts from leaf node.
-- For each node in path, check if any of any byte array in list that represent node equal to `current hash`.
-    - If no such byte array, validation fails, exit.
-    - Calculate node hash by concatenating all byte arrays in list and hashing result.
+- For each node in a path, check if any of the byte array in the list represents a node equal to `current hash`.
+    - If no such byte array exists, the validation fails, resulting in user exit.
+    - Calculate node hash by concatenating all byte arrays in the list and hashing result.
     - Make node hash new `current hash`.
-- For last node in path, check is it hash equals to trie root hash stored in block header.
+- For last node in path, check that its hash equals the trie root hash stored in block header.
 
 ### BCDB implementation details
 
-Server keeps dynamically update state trie. Its root stored as part of block header.
-Once block committed to block store, all block transaction applied to trie and all changes (deltas) to trie are stored in associated trie store.
+The server keeps dynamically updating the state trie. Its root is stored as part of the block header. Once the block is committed to the block store, all block transactions applied to trie and all changes (deltas) to trie are stored in the associated trie store.
 
-Server side implementation composed of 2 parts - one is MPTrie structure and another is trie Store.
+The server-side implementation is composed of two parts - one is the MPTrie structure and the other is the trie store.
 
 `MPTrie` implements all trie logic, like adding/updating/deleting values.
 
-Trie `Store` stores all Nodes in underlying storage. `nodePtr` and `valuePrt` are basically node hash and `<db, key, value>` tuple hash.
+Trie `Store` stores all nodes in underlying storage. `nodePtr` and `valuePrt` are basically node hash and `<db, key, value>` tuple hash.
 
 Both structures operate `TrieNode`. Each type of node exposes its `Hash` and `[][]byte` array of all inside hashes used to calculate node hash.
 ```go

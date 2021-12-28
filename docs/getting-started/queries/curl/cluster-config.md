@@ -3,24 +3,23 @@ id: cluster-config
 title: Query the Cluster Configuration
 ---
 
-The cluster configuration includes node, admin, and consensus configuration (used for replication).
-When the `bdb` server bootup for the first time, it reads nodes, admins, and consensus configuration
+The cluster configuration includes the node, admin, and consensus configuration (used for replication).
+When the `bdb` server boots up for the first time, it reads nodes, admins, and the consensus configuration
 present in the configuration file `config.yml` and creates a genesis block. The user can query
-the current cluster configuration by issing a `GET` request on `/config/tx` endpoint.
+the current cluster configuration by issuing a `GET` request on the `/config/tx` endpoint.
 
 The REST endpoint for querying the configuration is `/config/tx` and it does not require any
-inputs or additional paramters from the user. Hence, the user need to sign only their user id and
+inputs or additional parameters from the user. Hence, the user need only to sign with their user id and
 set the signature in the `Signature` header.
 
-Specifically, the user needs to sign the following JSON data `{"user_id":"<userID>"}` where `<userID`
-is the ID of the submitting user who is registered in the blockchain database node. In our example,
-`admin` user is the one who submits request to the server. Hence, we need to use the admin's private
+Specifically, the user needs to sign the following JSON data `{"user_id":"<userID>"}`, where `<userID>`
+is the ID of the submitting user who is registered in the blockchain database node. In our example, the `admin` user is the one who submits the request to the server. Hence, we need to use the admin's private
 key to sign the `{"user_id":"admin"}` as shown below.
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin"}'
 ```
-The above command would produce a digital signature and prints it as base64 encoded string as shown below
+The above command produces a digital signature and prints it as a base64-encoded string as shown below.
 ```
 MEUCIQCMEdLgfFEOF+vgXLwbeOdUUWnGB5HH2ULkoz15jlk5DgIgbWXuoyqD4szob78hZYiau9LPdJLLqP3bAu7iV98BcW0=
 ```
@@ -34,9 +33,8 @@ curl \
    -H "Signature: MEUCIQCMEdLgfFEOF+vgXLwbeOdUUWnGB5HH2ULkoz15jlk5DgIgbWXuoyqD4szob78hZYiau9LPdJLLqP3bAu7iV98BcW0=" \
    -X GET http://127.0.0.1:6001/config/tx | jq .
    ```
-A sample output of above command is shown below. The actual content might change depending on the configuration specified in `config.yml`.
-For now, all users in the cluster can query the cluster configuration to identity the set of nodes, IP address of each node
-along with the listening port number, certificate of the node, etc...
+A sample output of the above command is shown below. The actual content might change depending on the configuration specified in `config.yml`.
+For now, all users in the cluster can query the cluster configuration to identity the set of nodes, the IP address of each node, along with the listening port number, certificate of the node, etc...
 
 ```webmanifest
 {

@@ -5,15 +5,15 @@ title: Query a Block Header
 
 ## Preparing data
 
-> As a prerequisite, we use all data used in provenance example, please reference [here], including transactions from [Prepare data]section.
+> As a prerequisite, we use all data used in the provenance example (see [here]), including transactions from the [Prepare data] section.
+> 
 ## Block header query
-First query provided by Ledger API is block header query.
-Block header contains all cryptographic related data that used for all blockchain properties of BCDB. See [Block Header Data].
-Result of this query used both to validate `TxReceipt` and ledger connectivity. To access it, we use `/ledger/block/{blocknum}` GET query. 
+The first query provided by the ledger API is a block header query. The block header contains all cryptographic-related data used for all blockchain properties of the BCDB. For more information, see [Block Header Data].
+The result of this query is used both to validate `TxReceipt` and ledger connectivity. To access it, use `/ledger/block/{blocknum}` GET query. 
 
-In this example we will query ledger for block 5 header.
+In this example, we query the ledger for the block 5 header.
 
-**Sign json serialized query**
+**Sign JSON serialized query**
 ```shell
 bin/signer -data '{"user_id":"alice","block_number":5}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
@@ -61,4 +61,4 @@ curl \
   "signature": "MEUCIQDMER7sTBmOQNHRV6/GON4OjrsKhE6Di5ok181JpwLFvgIgIQA+DHIr6x+GJe8dnF0FLgzXJ+29H9sZHZE46fVg5HQ="
 }
 ```
-As you can see, BlockHeader contains 3 hashes in `skipchain_hashes` section (blocks 4, 3, 1), previous block hash `previous_base_header_hash` (block 4), roots of tx merkle tree `tx_merkel_tree_root_hash` and state merkle-patricia trie `state_merkel_tree_root_hash`.
+As you can see, the block header contains 3 hashes in the `skipchain_hashes` section (blocks 4, 3, 1), the previous block hash `previous_base_header_hash` (block 4), the roots of the tx Merkle tree `tx_merkel_tree_root_hash` and the state Merkle-Patricia trie `state_merkel_tree_root_hash`.

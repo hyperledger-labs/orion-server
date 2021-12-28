@@ -5,20 +5,20 @@ title: Transaction Merkle Tree
 
 ## Merkle tree
 
-From wiki: “Merkle tree is a tree in which every leaf node is labelled with the cryptographic hash of a data block, and every non-leaf node is labelled with the cryptographic hash of the labels of its child nodes.”
+From Wikipedia: “A Merkle tree is a tree in which every leaf node is labeled with the cryptographic hash of a data block, and every non-leaf node is labeled with the cryptographic hash of the labels of its child nodes.”
 ![Merkle tree](MerkleTree1.png)
-- In blockchain world, Merkle tree usually used to verify existence and validity of transactions in block.
-- Thanks to tree properties, to prove specific transaction existence in block, no need to expose rest of block transactions, just content of transaction itself and list of *log(N)* hashes.
-- Usually, only Merkle tree root hash exposedto end-user.
+- In the blockchain world, Merkle trees are usually used to verify the existence and validity of transactions in a block.
+- Thanks to the tree properties, to prove a specific transaction existence in a block, there's no need to expose the rest of the block transactions, just the content of the transaction itself and the list of *log(N)* hashes.
+- Usually, only the Merkle tree root hash is exposedto end-user.
 
 ### Merkle tree proof example
-Here example of proof generation and verification, based on example tree ![tree](BlockMerkleTree.png)
-- To prove that `Tx3` is part of block Merkle tree with root **B3..** , we need `Tx3`, its hash – **15..** and **78..** (hash of sibling transaction),  **A2..** (sibling in Merkle tree), **F5..** (sibling in Merkle tree).
-- So, final proof is {**15..**, **78..**, **A2..**, **F5..**, **B3..**}
+Here is an example of proof generation and verification, based on an example tree![tree](BlockMerkleTree.png)
+- To prove that `Tx3` is part of the block Merkle tree with root **B3..** , we need `Tx3`, its hash – **15..** and **78..** (hash of sibling transaction),  **A2..** (sibling in Merkle tree), and **F5..** (sibling in Merkle tree).
+- So, the final proof is {**15..**, **78..**, **A2..**, **F5..**, **B3..**}
 - Proof validation: _hash(hash(hash(**15..** || **78..**) || **A2..**) || **F5..**) == **B3..**_
 
-- This is exact structure we used to prove specific transaction existence in block.
-- We store only Merkle tree root hash as part of block header and recalculate tree on demand.
+- This is the exact structure we used to prove a specific transaction's existence in a block.
+- We store only the Merkle tree root hash as part of the block header and recalculate the tree on demand.
 
 ### Orion Merkle tree API
 

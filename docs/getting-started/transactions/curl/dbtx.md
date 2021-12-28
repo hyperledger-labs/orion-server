@@ -5,20 +5,20 @@ title: Database Administration Transaction
 
 # Database Administration Transaction
 
-To create or delete user databases, we need to issue a `POST /db/tx {txPayload}` where `txPayload`
+To create or delete user databases, we need to issue a `POST /db/tx {txPayload}`, where `txPayload`
 contains information about the database to be created and/or deleted.
 
 Let's cover the following topics:
 
-  1. [Creation of new databases without index](#1-creation-of-databases)
-  2. [Creation of a new database with index definition](#2-creation-of-a-database-with-index-definition)
-  3. [Deletion of existing databases](#3-deletion-of-databases)
-  4. [Creation and deletion of databases within a single transaction](#4-creation-and-deletion-of-databases-in-a-single-transaction)
+  1. [Create new databases without index](#1-create-databases)
+  2. [Create a new database with index definition](#2-create-a-database-with-index-definition)
+  3. [Delete existing databases](#3-delete-databases)
+  4. [Create and delete databases within a single transaction](#4-create-and-delete-databases-in-a-single-transaction)
   5. [Invalid database administration transactions](#5-invalid-database-administration-transaction)
 
 Note that all database administration transactions must be submitted by the admin.
 
-## 1) Creation of Databases
+## 1) Create Databases
 
 ### 1.1) Create databases named db1 and db2
 The following `cURL` command submits a database administration transaction to create two new databases
@@ -42,13 +42,9 @@ named `db1` and `db2`:
 }' | jq .
 ```
 
-The `payload` of the database administration transaction must contain a `"user_id"` who submits the transaction, `"tx_id"` to
-uniquely identify this transaction, and a list of dbs to be created in a `"create_dbs"` list as shown in the above cURL
-command.
+The `payload` of the database administration transaction must contain a `"user_id"` that submits the transaction, a `"tx_id"` to uniquely identify this transaction, and a list of dbs to be created in a `"create_dbs"` list as shown in the above cURL command.
 
-As all administrative transactions must be submitted only by the admin, the `"user_id"` is set to `"admin"`. As we are creating
-two dbs named `db1` and `db2`, the `"create_dbs"` is set to `["db1","db2"]`. Finally, the signature field contains the admin's
-signature on the payload and is computed using the `signer` utility as shown below:
+As all administrative transactions must be submitted only by the admin, the `"user_id"` is set to `"admin"`. As we are creating two dbs named `db1` and `db2`, the `"create_dbs"` is set to `["db1","db2"]`. Finally, the signature field contains the admin's signature on the payload and is computed using the `signer` utility as shown below:
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
@@ -56,12 +52,12 @@ signature on the payload and is computed using the `signer` utility as shown bel
 ```
 The output of the above command is set to the `signature` field in the data.
 
-Once the db creation transaction gets validated and committed, it would return a receipt to the transaction submitter.
-Note that only if the `TxTimeout` header is set, the submitting user would receive the transaction receipt. This is
-because if the `TxTimeout` is not set, the transaction would be submitted asynchronously and the database node
+Once the db creation transaction gets validated and committed, it returns a receipt to the transaction submitter.
+Note that only if the `TxTimeout` header is set, the submitting user receives the transaction receipt. This is
+because if the `TxTimeout` is not set, the transaction is submitted asynchronously and the database node
 returns as soon as it accepts the transaction into the queue. If the `TxTimeout` is set, the database node waits
-for the specified time. If the transaction is committed by the specified time, the receipt would be returned.
-The receipt for the above transaction would look something like the following:
+for the specified time. If the transaction is committed by the specified time, the receipt is returned.
+The receipt for the above transaction looks something like the following:
 
 ```webmanifest
 {
@@ -92,19 +88,18 @@ The receipt for the above transaction would look something like the following:
 }
 ```
 
-Once the above transaction gets validated and committed, we can check the existance of `db1` and `db2`.
+Once the above transaction gets validated and committed, we can check the existence of `db1` and `db2`.
 
-### 1.2) Check the existance of db1
+### 1.2) Check the existence of db1
 
-In queries, we have to set the `UserID` and `Signature` headers. Whereas in the
-transaction, we need to pass both the `UserID` and `Signature` as part of the `txPayload` itself.
+In queries, we have to set the `UserID` and `Signature` headers, as opposed to in the transaction, where we need to pass both the `UserID` and `Signature` as part of the `txPayload` itself.
 
-First, compute the digital signature on the request payload `'{"user_id":"admin","db_name":"db1"}'`
+First, compute the digital signature on the request payload. `'{"user_id":"admin","db_name":"db1"}'`
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
     -data='{"user_id":"admin","db_name":"db1"}'
 ```
-The above command outputs the digital signature which needs to be set in the `Signature` header
+The above command outputs the digital signature that needs to be set in the `Signature` header.
 ```
 MEYCIQCeZXLrqrMYodbbgR7UjHR2yq42H2wbNHbj6KEDwW8a1QIhAIv1udmHjwSssKnJjS5iY1LDfez1/RDv9ZEue4TDfcJZ
 ```
@@ -129,12 +124,12 @@ curl \
 }
 ```
 
-### 1.3) Check the existance of db2
+### 1.3) Check the existence of db2
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key
     -data='{"user_id":"admin","db_name":"db1"}'
 ```
-The above command outputs the digital signature which needs to be set in the `Signature` header
+The above command outputs the digital signature that needs to be set in the `Signature` header.
 ```shell
 MEYCIQCcd9pucHSiyrP/wTIfSxer1M1qhyuYZ954WyuNO6NNuAIhALXfLg9NdwIDY2xDoLO9GxY5k/5hPqOz6i7fxvurd/v3
 ```
@@ -159,10 +154,9 @@ curl \
 }
 ```
 
-## 2) Creation of a Database with Index Definition
+## 2) Create a Database with Index Definition
 
-The following `cURL` command submits a database administration transaction to create a databased named `db8`
-with index definition such that complex queries on fields in the JSON value can be executed.
+The following `cURL` command submits a database administration transaction to create a database named `db8` with an index definition such that complex queries on fields in the JSON value can be executed.
 
 ```shell
  curl \
@@ -190,26 +184,20 @@ with index definition such that complex queries on fields in the JSON value can 
 }' | jq .
 ```
 
-The signature field contains the admin's
-signature on the payload and is computed using the `signer` utility as shown below:
+The signature field contains the admin's signature on the payload. It's computed using the `signer` utility as shown below:
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
     -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-45d0-6723-1e31712add71","create_dbs":["db8"],"dbs_index":{"db8":{"attribute_and_type":{"attr1":2,"attr2":0,"attr3":1}}}}'
 ```
 
-The `payload` of the database administration transaction must contain a `"user_id"` who submits the transaction, `"tx_id"` to
-uniquely identify this transaction, a list of dbs to be created in a `"create_dbs"`, index definition for the database `db8`
-as shown in the above cURL command.
+The `payload` of the database administration transaction must contain a `"user_id"` that submits the transaction, a `"tx_id"` to uniquely identify this transaction, a list of dbs to be created in `"create_dbs"`, and an index definition for the database `db8` as shown in the above cURL command.
 
-Only indexed fields in a JSON document can be queried using JSON query. In the above transaction, the field named `attr1`,
-`attr2`, and `attr3` are asked to be indexed for JSON values stored in the database `db8`. This enables JSON queries using
-these indexed fields. For more clarity refer to query [examples]
+Only indexed fields in a JSON document can be queried using a JSON query. In the above transaction, the field named `attr1`, `attr2`, and `attr3` are asked to be indexed for JSON values stored in the database `db8`. This enables JSON queries using these indexed fields. For more details, refer to the query [examples].
 
-## 3) Deletion of Databases
+## 3) Delete Databases
 
-We can delete an existing database by issuing a database administration transaction. Note that the database to be deleted should exist in the node.
-Otherwise, the transaction would be marked invalid.
+We can delete an existing database by issuing a database administration transaction. Note that the database to be deleted should exist in the node. Otherwise, the transaction would be marked invalid.
 
 ### 3.1) Delete databases named db1 and db2
 
@@ -232,13 +220,9 @@ curl \
 }' | jq .
 ```
 
-The `payload` of the database administration transaction must contain a `"user_id"` who submits the transaction, `"tx_id"` to
-uniquely identify this transaction, and a list of dbs to be deleted in a `"delete_dbs"` list as shown in the above `cURL`
-command.
+The `payload` of the database administration transaction must contain a `"user_id"` that submits the transaction, a `"tx_id"` to uniquely identify this transaction, and a list of dbs to be deleted in a `"delete_dbs"` list as shown in the above `cURL` command.
 
-As all administrative transactions must be submitted only by the admin, the `"user_id"` is set to `"admin"`. As we are deleting
-two existing dbs named `db1` and `db2`, the `"delete_dbs"` is set to `["db1","db2"]`. Finally, the signature field contains the admin's
-signature on the payload and is computed using the following command:
+As all administrative transactions must be submitted only by the admin, the `"user_id"` is set to `"admin"`. As we are deleting two existing dbs named `db1` and `db2`, the `"delete_dbs"` is set to `["db1","db2"]`. Finally, the signature field contains the admin's signature on the payload and is computed using the following command:
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
@@ -246,16 +230,14 @@ signature on the payload and is computed using the following command:
 ```
 The output of the above command is set to the `signature` field in the data.
 
-Once the db deletion transaction gets validated and committed, it would return a receipt to the transaction submitter.
-Note that only if the `TxTimeout` header is set, the submitting user would receive the transaction receipt. This is
-because if the `TxTimeout` is not set, the transaction would be submitted asynchronously and the database node
+Once the db deletion transaction gets validated and committed, it returns a receipt to the transaction submitter. Note that only if the `TxTimeout` header is set, the submitting user receives the transaction receipt. This is because if `TxTimeout` is not set, the transaction is submitted asynchronously and the database node
 returns as soon as it accepts the transaction into the queue. If the `TxTimeout` is set, the database node waits
-for the specified time. If the transaction is committed by the specified time, the receipt would be returned.
-The receipt for the above transaction would look something like the following:
+for the specified time. If the transaction is committed by the specified time, the receipt is returned.
+The receipt for the above transaction looks something like the following:
 
-Once the above transaction gets validated and committed, we can check that the `db1` and `db2` do not exist anymore.
+Once the above transaction gets validated and committed, we can check that `db1` and `db2` do not exist anymore.
 
-### 3.2) Check the existance of db1
+### 3.2) Check the existence of db1
 ```shell
 curl \
     -H "Content-Type: application/json" \
@@ -275,7 +257,7 @@ curl \
 ```
 The default values are omitted and hence, the `exist = false` is not printed. 
 
-### 3.3) Check the existance of db2
+### 3.3) Check the existence of db2
 
 ```shell
 curl \
@@ -300,12 +282,10 @@ The default values are omitted and hence, the `exist = false` is not printed.
 
 
 
-## 4) Creation and Deletion of Databases in a Single Transaction
+## 4) Create and Delete Databases in a Single Transaction
 
-Within a single transaction, we can create and delete as many number of databases we want. Note that we can only delete databases
-if exist. Otherwise, the transaction would be invalidated. Hence, first create two databases using this [example](#creation-of-databases).
-If this example was already executed on the database instance, change the `tx_id` used in that example and regenerate the
-signature. Also, do not forgot to update the `tx_id` and `signature` set in the payload passed to `cURL`.
+Within a single transaction, we can create and delete as many number of databases as we want. Note that we can only delete databases if they exist. Otherwise, the transaction would be invalidated. Hence, first create two databases using this [example](#creation-of-databases).
+If this example was already executed on the database instance, change the `tx_id` used in that example and regenerate the signature. Also, do not forgot to update the `tx_id` and `signature` set in the payload passed to `cURL`.
 
 The following command submits a transaction that creates and deletes databases within a single transaction.
 This transactions will be valid only if `db3` & `db4` do not exist and `db1` & `db2` exist in the cluster.
@@ -330,7 +310,7 @@ This transactions will be valid only if `db3` & `db4` do not exist and `db1` & `
   "signature": "MEUCIAjEtDZ2Q6n6cteisp94ggFXk3JUOXCjhfUlftc80gf6AiEA6IPtezn06SaPWQLfGhbx8BrFL4BI4iEIu/TDGtcaCKI="
 }' | jq .
 ```
-The signature is computed using the following command
+The signature is computed using the following command:
 ```
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
     -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-12d5-3733-1f31712add88","create_dbs":["db3","db4"],"delete_dbs":["db1","db2"]}'
@@ -338,20 +318,20 @@ The signature is computed using the following command
 
 ## 5) Invalid Database Administration Transaction
 
-We cover the incorrect usage of administration transaction that can lead to invalidation of the submitted database administration transaction.
+We cover the incorrect usage of administration transactions that can lead to the invalidation of a submitted database administration transaction.
 
-### 5.1) Database to be created already exist
+### 5.1) Database to be created already exists
 
 Let's create a new database `db5`
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
     -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-45d0-9723-1f31712add73","create_dbs":["db5"]}'
 ```
-The above command outputs the digital signature on the transaction payload
+The above command outputs the digital signature on the transaction payload.
 ```
 MEUCIQCqYEdJOwf6JXAOCmAaub745uTEb2jyCFs10zZOhDIvUAIgN/ody6R9q3u5Q26Tabn3lPY1zz8NCUHCo6ymSu15jI4=
 ```
-Include the above signature and submit the transaction to create the database `db5`
+Include the above signature and submit the transaction to create the database `db5`.
 ```webmanifest
  curl \
    -H "Content-Type: application/json" \
@@ -369,7 +349,7 @@ Include the above signature and submit the transaction to create the database `d
 }' | jq .
 ```
 
-Let's try to create `db5` again
+Let's try to create `db5` again.
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
     -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-45d0-9723-1f31712add74","create_dbs":["db5"]}'
@@ -439,7 +419,7 @@ In the transaction receipt, we can see that the following:
 ```
 ### 5.2) Database to be deleted does not exist
 
-Let's try to delete `db6` which does not exist in the cluster
+Let's try to delete `db6` which does not exist in the cluster.
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \
     -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-45d0-9723-1f31712add75","delete_dbs":["db6"]}'
@@ -500,7 +480,7 @@ The following would be the transaction receipt that holds the reason for the inv
 
 ### 5.3) Database to be deleted is a system database
 
-Let's try to delete a system database `_config`
+Let's try to delete a system database `_config`.
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key \

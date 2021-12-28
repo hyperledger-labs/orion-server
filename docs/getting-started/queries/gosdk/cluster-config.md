@@ -4,11 +4,12 @@ title: Query the Cluster Configuration
 ---
 
 The cluster configuration includes the configuration of
-   1. node,
-   2. admin, and
-   3. consensus configuration (used for replication).
 
-When the bdb server bootup for the first time, it reads nodes, admins, and consensus configuration present in the configuration file `config.yml` and creates a genesis block.
+- node
+- admin 
+- consensus configuration (used for replication)
+
+When the bdb server boots up for the first time, it reads nodes, admins, and the consensus configuration present in the configuration file `config.yml` and creates a genesis block.
 
 > As a pre-requisite, we need to first [create a connection](../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and
 [open a database session](../../pre-requisite/gosdk#opening-a-database-session).
