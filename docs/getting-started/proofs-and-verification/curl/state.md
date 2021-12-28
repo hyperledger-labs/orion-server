@@ -5,12 +5,12 @@ title: Proof of Existence of a State/Data
 
 ### State proof query
 
-As mentioned in the Orion description [here](../../../introduction) and detailed [here](../../../architecture-and-design/provenance-data), Orion maintains a separate persisted graph data structure for historical data transitions, so a user can execute queries on those historical changes to understand the lineage of each data item. For more explanations about **Provenance Queries** and the different views they provide on historical data, see [Provenance queries](../../queries/curl/provenance).
+As mentioned in the Orion description [here](../../../introduction) and detailed [here](../../../architecture-and-design/provenance-data), Orion maintains a separate persisted graph data structure for historical data transitions, so a user can execute queries on those historical changes to understand the lineage of each data item. For more explanations about **provenance queries** and the different views they provide on historical data, see [Provenance queries](../../queries/curl/provenance).
 
-In addition to the provenance graph store, Orion uses an Ethereum style Merkle-Patricia Trie to provide cryptographically verifiable proofs of all state transitions.
-It provides only one single type of proof: that specific key was associated with specific value when a specific block was committed to ledger.
+In addition to the provenance graph store, Orion uses an Ethereum-style Merkle-Patricia Trie to provide cryptographically verifiable proofs of all state transitions.
+It provides only one single type of proof: that a specific key was associated with a specific value when a specific block was committed to the ledger.
 
-For each block, root of Merkle-Particia Trie stored inside block header - `state_merkel_tree_root_hash` and because tamper-prove nature on ledger, trie root is enough to prove existence of specific value at time block was committed. 
+For each block, a root of the Merkle-Particia Trie is stored inside the block header - `state_merkel_tree_root_hash`. And because of the tamper-proof nature of the ledger, the trie root is enough to prove the existence of a specific value at the time the block was committed. 
 
 
 **Sign json serialized query**
@@ -91,5 +91,5 @@ curl \
 }
 ```
 
-First element in path is ValueNode - for node types see [here]
+The first element in the path is a ValueNode. For node types, see [here].
 

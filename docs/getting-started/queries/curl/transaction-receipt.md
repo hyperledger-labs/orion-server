@@ -4,9 +4,9 @@ title: Query a Transaction Receipt
 ---
 
 ## Transaction receipt query
-Transaction commit can be done in synchronous or asynchronous way. In case of synchronous call, `TxReceipt` is part of result. In case of asynchronous call, no `TxReceipt` exist yet, and we have to access ledger to for it.
-This query used to get transaction receipt for specific tx from ledger, using `/ledger/tx/receipt/{TxId}` GET query. 
-We use `Tx000` as example.
+A transaction commit can be done in a synchronous or asynchronous fashion. In the case of a synchronous call, `TxReceipt` is part of result. In the case of an asynchronous call, no `TxReceipt` exists yet, so we have to access the ledger for it.
+To get a transaction receipt for a specific tx from the ledger, use the `/ledger/tx/receipt/{TxId}` GET query. 
+We use `Tx000` as an example. 
 
 **Sign json serialized query**
 ```sh
@@ -59,7 +59,7 @@ curl \
 }
 ```
 
-In protobuf object definition, TxReceipt contains block header and tx index inside block. Because `tx_index` is equal to zero, protobuf marshaling eliminates this field. If `tx_index` is not 0, it will be part of response json.  
-So, from response, we see that `Tx000` stored in block 5, tx_index 0.
+In the protobuf object definition, TxReceipt contains a block header and the tx index inside block. Because `tx_index` is equal to zero, protobuf marshaling eliminates this field. If `tx_index` is not 0, it will be part of the response JSON.  
+So, from that response, we see that `Tx000` is stored in block 5, tx_index 0.
 
 

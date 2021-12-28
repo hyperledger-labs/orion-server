@@ -17,13 +17,14 @@ type DataTxContext interface {
 }
 ```
 
-:::info pre-requisite
+:::info prerequisite
+
 For the example shown here to work, we need to have
 
- 1. Two databases named `db1` and `db2` in the orion-server. If you have not created these two databases,
+- Two databases named `db1` and `db2` in the Orion server. If you have not created these two databases,
 refer to [creates databases using SDK](../../transactions/gosdk/dbtx#1-creation-of-databases) to create `db1` and `db2`.
- 2. Two users named `alice` and `bob`. If you have not created these users already, refer to [create users using SDK](../../transactions/gosdk/usertx#1-addition-of-users).
- 3. The key `key2` in database `db2`. If you have not stored `key2` in `db2` already, refer to [create states](../../transactions/gosdk/datatx#1-creation-of-new-states-in-database)
+- Two users named `alice` and `bob`. If you have not created these users already, refer to [create users using SDK](../../transactions/gosdk/usertx#1-addition-of-users).
+- The key `key2` in database `db2`. If you have not stored `key2` in `db2` already, refer to [create states](../../transactions/gosdk/datatx#1-creation-of-new-states-in-database)
 
 Finally, [Create a connection](../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and
 [Open a database session](../../pre-requisite/gosdk#opening-a-database-session).
@@ -67,18 +68,18 @@ func main() {
 
 ## Source Code Commentary
 
-For simplicity, not all `errors` are handled in this code. Further, the implementation of `createConnection()` and `openSession()`
+For the sake of simplicity, not all `errors` are handled in this code. Furthermore, the implementation of `createConnection()` and `openSession()`
 can be found [here](../../pre-requisite/gosdk).
 
-The `session.DataTx()` starts a new data transaction and returns the data transaction context. Note that we use this context only for the
-query purpose and not perform any operations on the data.
+Calling `session.DataTx()` starts a new data transaction and returns the data transaction context. Note that we use this context only for query purposes and not for performing any operations on the data.
 
 To fetch the key `key1` in database `db2`, we call `tx.Get("db2", "key1")`. It returns
+
   1. value
-  2. Metadata
+  2. metadata
   3. error
 
-The value is `[]byte`. The Metadata holds the version and access control as shown below:
+The value is `[]byte`. The metadata holds the version and access control as shown below:
 
 ```go
 type Metadata struct {
@@ -94,6 +95,7 @@ type Version struct {
 	TxNum                uint64
 }
 ```
+
 The ACL holds
 
  1. `ReadUsers`: a list of users who can only read the key
@@ -115,4 +117,4 @@ const (
 )
 ```
 
-Finally, we have to abort the transaction by calling `tx.Abort()`.
+Finally, we can abort the transaction by calling `tx.Abort()`.

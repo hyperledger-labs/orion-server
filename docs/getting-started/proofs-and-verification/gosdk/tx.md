@@ -4,9 +4,9 @@ title: Proof of Existence of a Transaction
 ---
 
 ### Transaction proof example
-Below is a simple code snippet that shows how to use the ledger API in order to generate a transaction existence proof:
->Please pay attention, for presentation purpose, all results and error handling, except proofs were eliminated.
-Ledger connectivity proof is eliminated here as well, for details and example see [here](../proofs#ledger-connectivity-proof) and [here](ledger) 
+Below is a simple code snippet that shows how to use the ledger API to generate a transaction existence proof:
+>Please note: For presentation purposes, all results and error handling, except proofs, were eliminated.
+Ledger connectivity proof is eliminated here as well. For details and an example, see [here](../proofs#ledger-connectivity-proof) and [here](ledger). 
 
 ```go
     db, err := bcdb.Create(conConf)

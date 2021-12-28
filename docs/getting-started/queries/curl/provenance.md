@@ -4,26 +4,27 @@ title: Provenance Queries on Historical Data
 ---
 # Provenance queries
 The provenance API gives the user access to the following Orion data:
-- The history of values for a given key, in different views and directions,
-- Information about which users accessed or modified a specific piece of data,
-- Information, including history, about the data items accessed by a given user,
-- A history of user transactions.
 
-Usually, provenance queries are used to investigate changes of some values over the time. For example, by sending `GET /provenance/data/history/{dbname}/{key}` we can follow changes of `key` over time.
-As mentioned above, Orion supports multiple types of provenance queries and here is a base list of them:
+- The history of values for a given key, in different views and directions
+- Information about which users accessed or modified a specific piece of data
+- Information, including history, about the data items accessed by a given user
+- A history of user transactions
 
-Query to get changes of values for a given key over time, supports multiple options, like directions, etc. Examples of this query, including input and output format, can be found [here], [here] and [here].
+Usually, provenance queries are used to investigate changes of some values over the time. For example, by sending `GET /provenance/data/history/{dbname}/{key}`, we can follow changes of `key` over time.
+As mentioned above, Orion supports multiple types of provenance queries. Here is a base list of them:
+
+- A query to get changes of values for a given key over time -  supports multiple options, like directions, etc. Examples of this query, including input and output format, can be found [here], [here], and [here].
 ```http request
 GET /provenance/data/history/{dbname}/{key}
 ```
-Two queries that provide information about users who accessed or modified a specific piece of data. The example of data readers query is [here] and the example of data writers query [here].
+- Two queries that provide information about users who accessed or modified a specific piece of data. The example of the data readers query is [here] and the example of the data writers query is [here].
 ```http request
 GET /provenance/data/readers/{dbname}/{key}
 ```
 ```http request
 GET /provenance/data/writers/{dbname}/{key}
 ```
-Three queries for data items accessed by a given user. Examples are [here] and [here].
+- Three queries for data items accessed by a given user. Examples are [here] and [here].
 ```http request
 GET /provenance/data/read/{userId}
 ```
@@ -33,23 +34,24 @@ GET /provenance/data/written/{userId}
 ```http request
 GET /provenance/data/deleted/{userId}
 ```
-Query for all transactions submitted by given user. The example, the input and output format, etc, can be found [here].
+- A query for all transactions submitted by a given user. An example, with the input and output format, etc., can be found [here].
 ```http request
 GET /provenance/data/tx/{userId}
 ```
 
 ## Prepare data
 
-To make this example more realistic and to see a meaningful outputs from these queries' execution, multiple transactions should be submitted to BDCD, and the ledger should contain multiple blocks. Next, we will submit multiple data transactions to Orion.
+To make this example more realistic and to see meaningful outputs from these queries' execution, multiple transactions should be submitted to BDCD, and the ledger should contain multiple blocks. Next, we will submit multiple data transactions to Orion.
 
-> As a prerequisite, we need users `alice` and `bob` and database `db2` to exist in Orion, and at least one data transaction submitted. 
-> First, we need to create `db2` database, as described [here].
-> Second, we need to create `alice` and `bob`. See [here] for user creation.
-> In addition, some data should exist in `db2`, refer [here] for example of running data transaction.
+> As a prerequisite, we need users `alice` and `bob` and database `db2` to exist in Orion, and at least one data transaction to have been submitted. 
+> First, we need to create the `db2` database, as described [here].
+> Second, we need to create `alice` and `bob`. See [here] for more information about user creation.
+> In addition, some data should exist in `db2`. See [here] for an example of running a data transaction.
+> 
 ### First data tx, only writes
-First transaction contains writes to multiple keys: `key1`, `key2` and `key3`, and we send it using `/data/tx` POST request. 
+The first transaction contains writes to multiple keys: `key1`, `key2`, and `key3`, and we send it using the `/data/tx` POST request. 
 
-> Please note, that the explanation about data transaction structure and its result is out of the scope of this document, for more information [see].
+> Please note that the explanation about the data transaction structure and its result is out of the scope of this document. For more information, [see].
 **Sign marshalled transaction content**
 ```sh
 bin/signer -data '{"must_sign_user_ids":["alice"],"tx_id":"Tx000","db_operations":[{"db_name":"db2","data_writes":[{"key":"key1","value":"dGhpcyBpcyBhIGZpcnN0IHZhbHVl","acl":{"read_users":{"alice":true},"read_write_users":{"alice":true}}},{"key":"key2","value":"dGhpcyBpcyBhIHNlY29uZCB2YWx1ZQ==","acl":{"read_users":{"alice":true},"read_write_users":{"alice":true}}},{"key":"key3","value":"dGhpcyBpcyBhIHRoaXJkIHZhbHVl","acl":{"read_users":{"alice":true},"read_write_users":{"alice":true}}}]}]}' -privatekey=deployment/sample/crypto/alice/alice.key
@@ -155,7 +157,7 @@ curl \
 ```
 
 #### Second data tx, with both data reads and writes
-Second transaction contains reads for multiple keys: `key1` and `key2`, writes to multiple keys: `key1` and `key2` and delete for `key3`.
+The second transaction contains reads for multiple keys: `key1` and `key2`; writes to multiple keys: `key1` and `key2`; and a delete for `key3`.
 **Sign marshalled transaction content**
 ```sh
 bin/signer -data '{"must_sign_user_ids":["alice"],"tx_id":"Tx001","db_operations":[{"db_name":"db2","data_reads":[{"key":"key1","version":{"block_num":5}},{"key":"key2","version":{"block_num":5}}],"data_writes":[{"key":"key2","value":"dGhpcyBpcyBhIHNlY29uZCB2YWx1ZSB1cGRhdGVk","acl":{"read_users":{"alice":true},"read_write_users":{"alice":true}}},{"key":"key1","value":"dGhpcyBpcyBhIGZpcnN0IHZhbHVlIHVwZGF0ZWQ=","acl":{"read_users":{"alice":true},"read_write_users":{"alice":true}}}],"data_deletes":[{"key":"key3"}]}]}' -privatekey=deployment/sample/crypto/alice/alice.key
@@ -265,35 +267,36 @@ curl \
 }
 ```
 
-At the end of the preparation step, the ledger contains 6 blocks and last three blocks contain data transactions.
-Let's summarize here state of the database and the ledger.
+At the end of the preparation step, the ledger contains six blocks, with the last three blocks containing data transactions. Let's summarize here the state of the database and the ledger.
 
 **Block 4**
+
 - key: "key1", version: {block_num: 4, tx_num: 0}, value: "eXl5"
 
 **Block 5**
+
 - key: "key1", version: {block_num: 5, tx_num: 0}, value: "dGhpcyBpcyBhIGZpcnN0IHZhbHVl"
 - key: "key2", version: {block_num: 5, tx_num: 0}, value: "dGhpcyBpcyBhIHNlY29uZCB2YWx1ZQ=="
 - key: "key3", version: {block_num: 5, tx_num: 0}, value: "dGhpcyBpcyBhIHRoaXJkIHZhbHVl"
 
 **Block 6**
+
 - key: "key1", version: {block_num: 6, tx_num: 0}, value: "dGhpcyBpcyBhIGZpcnN0IHZhbHVlIHVwZGF0ZWQ="
 - key: "key2", version: {block_num: 6, tx_num: 0}, value: "dGhpcyBpcyBhIHNlY29uZCB2YWx1ZSB1cGRhdGVk"
 - key: "key3", version: {block_num: 6, tx_num: 0}, value: deleted
 
 
-
 ## History query
-As first provenance query example, we will query for the full history of the changes in value of `key1` in `bd2`. To do this, we use `/provenance/data/history/{dbname}/{key}` GET query, and user `alice` will submit it.
+As the first provenance query example, we will query for the full history of the changes in the value of `key1` in `bd2`. To do this, we use the `/provenance/data/history/{dbname}/{key}` GET query and the user `alice` will submit it.
 
-First step to submit user should sign query parameters, represented as json object. 
+As a first step to submitting a query, the user should sign the query parameters, represented as a JSON object. 
 
 **Sign query**
 ```sh
 bin/signer -data '{"user_id":"alice","db_name":"db2","key":"key1"}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
 
-Spaces, new lines and fields order in json are important to make it possible for server to validate users signature. The string we sign on is result of json serialization of protobuf history query object.
+Spaces, new lines, and field order in JSON are important to make it possible for the server to validate a user's signature. The string we sign on is the result of the JSON serialization of the protobuf history query object.
 ```protobuf
 message GetHistoricalDataQuery {
   string user_id = 1;
@@ -305,13 +308,13 @@ message GetHistoricalDataQuery {
   bool most_recent = 7;
 }
 ```
-Because in this type of query `version`, `direction`, `only_deletes` and `most_recent` fields are not set, a json serialization ignores them, instead creating fields that contains empty values. We will see it multiple times later, while `tx_num` field equals to zero of protobuf `Version` object. Usually, block contains more than one transaction and for all transactions, except first one, `tx_num` will appear in json. 
+Because the `version`, `direction`, `only_deletes`, and `most_recent` fields are not set in this type of query, a JSON serialization ignores them, and instead creates fields that contains empty values. We will see this multiple times later, while the `tx_num` field equals to zero of the protobuf `Version` object. Usually, a block contains more than one transaction, and for all transactions, except the first one, `tx_num` will appear in JSON. 
 
 **Signature**
 ```
 MEUCIHTGSy8lJFlfRxJXEGq2gTi9czP81jwQ7vF2KdRxiigRAiEAjjCn9WSQPx6H99+EGYHyDQTNAr4O+1uhvY5eYI0ZT20=
 ```
-User signature should be copied to query `Signature` header.
+The user signature should be copied to the query `Signature` header.
 
 **Submit query**
 ```sh
@@ -385,10 +388,10 @@ curl \
 }
 ```
 
-As we can see here, `key1` changed his value three times, in blocks 4, 5, 6.
+As we can see here, `key1` changed its value three times, in blocks 4, 5, and 6.
 
-> Please note that `version` json object in result contains only `block_num`, but no `tx_num`. It is because `tx_num` in our example is equals to zero and thus omitted as empty field during serializing a protobuf object to json.
-Now lets query `key3` history, using same GET query, but will replace `key1` with `key3` as parameter.
+> Please note that the `version` JSON object in the result contains only `block_num`, but no `tx_num`. This is because `tx_num` in our example equals to zero and is therefore omitted as an empty field during serializing a protobuf object to JSON.
+Now let's query the history of `key3`, using the same GET query, but replacing `key1` with `key3` as the parameter.
 
 **Sign query**
 ```sh
@@ -442,9 +445,9 @@ curl \
 
 Key `key3` changed only once, in block 5.
 
-> Please note: one more time `version` json object contains only `block_num` field, without `tx_num`.
+> Please note: once again, the `version` JSON object contains only `block_num` field, without `tx_num`.
 ### History query with _only_deletes_ option
-As you can see, the last query returned a value for `<db2, key3>`. Now we want to query if key was deleted at some time, and its last value before delete. We can run the same query, but with query parameter `only_deletes` turned `true`.
+As you can see, the last query returned a value for `<db2, key3>`. Now we want to query to see if the key was deleted at some time, and to see its last value before delete. We can run the same query, but with the query parameter `only_deletes` changed to `true`.
 
 **Sign json query data**
 ```sh
@@ -494,15 +497,15 @@ curl \
   "signature": "MEUCIEk90HGFa90Yr/dBDONE+GVD4GaowdQFRL25+S0ECY7tAiEA7+gJSZD8pt0v+KC318xxyLTmLrzcBPnhEMIb/xUmJtI="
 }
 ```
-As we can see here, the value returned by the query is the last value before the key was deleted. If we run same query for `key2`, we will get an empty list.
+As we can see here, the value returned by the query is the last value before the key was deleted. If we run the same query for `key2`, we'd get an empty list.
 
 ### History query for the specific version
-Let's check what was the value of `key1` at the time when tx with version `{"block_num": 6, "tx_num": 0}` was committed.
+Let's check what the value of `key1` was at the time when the tx with the version `{"block_num": 6, "tx_num": 0}` was committed.
 
-> As we mentioned multiple times before that, this version will be marshalled to `{"block_num":6}`, because `tx_num` field is equals to zero, so we can say it value at block 6. 
-To do that, we send `/provenance/data/history/{dbname}/{key}?blocknumber={blknum:[0-9]+}&transactionnumber={txnum:[0-9]+}` GET query. This query expected to return a value and metadata for the key at the time point associated with the version parameter.
+> As we mentioned several times already, this version will be marshalled to `{"block_num":6}`, because the `tx_num` field equals to zero, so we can use its value at block 6. 
+To do that, we send a `/provenance/data/history/{dbname}/{key}?blocknumber={blknum:[0-9]+}&transactionnumber={txnum:[0-9]+}` GET query. This query expected to return a value and metadata for the key at the time point associated with the version parameter.
 
-**Sign json query data**
+**Sign JSON query data**
 ```sh
 bin/signer -data '{"user_id":"alice","db_name":"db2","key":"key1","version":{"block_num":6}}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
@@ -521,7 +524,7 @@ curl \
      -X GET -G "http://127.0.0.1:6001/provenance/data/history/db2/key1" -d blocknumber=6 -d transactionnumber=0 | jq .
 ```
 
-> Please note, as mentioned earlier, transaction number eliminated from query used for sign, because it equals to 0, but still exists as part of GET url. In case if transaction index in block is not equal 0, `tx_num` will e part of serialized query to sign. 
+> Please note, as mentioned earlier, that the transaction number is eliminated from the query used for the sign, because it equals to 0, but still exists as part of GET url. If the transaction index in block is not equal to 0, `tx_num` will be part of the serialized query to sign. 
 **Output**
 ```json
 {
@@ -551,12 +554,12 @@ curl \
   "signature": "MEYCIQC6SFao6V8C3ETjp1AZ6FPZjUVhA8/DG+Vn9gLDTXjsGgIhAKaA3szWlfEZ4D2SDmBLs6KWxlH5t5byplqp6A8gAl4i"
 }
 ```
-Because `key1` was changed in block 6, the version in query result contains `block_num` 6, but, if for example, the value of `key1` last time was changed in block 4, returned version `block_num` will be 4.
+Because `key1` was changed in block 6, the version in the query result contains `block_num` as 6. But if, for example, the last time the value of `key1` was changed was in block 4, the returned version `block_num` will be 4.
 
 ### Transactions submitted by user
-To query for all the transactions submitted by a specific user, we use `/provenance/data/tx/{user}` GET query.
+To query for all the transactions submitted by a specific user, we use the `/provenance/data/tx/{user}` GET query.
 
-**Sign json marshaled query**
+**Sign JSON marshaled query**
 ```sh
 bin/signer -data '{"user_id":"alice","target_user_id":"alice"}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
@@ -592,19 +595,19 @@ curl \
 }
 ```
 
-Query result contains three transaction ids, and it means that user `alice` submitted 3 transactions - `"1b6d6414-9b58-45d0-9723-1f31712add81"`, `"Tx000"` and `"Tx001"`.
+The query result contains three transaction ids; that means that the user `alice` submitted three transactions - `"1b6d6414-9b58-45d0-9723-1f31712add81"`, `"Tx000"`, and `"Tx001"`.
 
-### User related queries
+### User-related queries
 
-An important type of query addresses user activity, and allows knowing, for a particular user, which keys she read, wrote or deleted. There are different types of queries for that:
+An important type of query addresses user activity, and allows discovering which keys a particular user read, wrote, or deleted. There are different types of queries for that:
 
 - [User reads]
 - [User writes]
-- User deletes follow the same pattern.
+- User deletes follows the same pattern.
 
 ### Query for users reads
 
-To query which keys were read by a specific user, including keys versions, we use `/provenance/data/read/{user}`GET query.
+To query which keys were read by a specific user, including the key versions, use the `/provenance/data/read/{user}`GET query.
 
 **Sign json marshalled query**
 ```sh
@@ -673,12 +676,12 @@ curl \
 }
 ```
 
-We can see that user `alice` read two keys, that happens, as we knew before that, during `Tx001`. Mathematically, the query returns the union of all read sets of all user transactions with addition of values.
+We can see that the user `alice` read two keys, as we already knew, during `Tx001`. Mathematically, the query returns the union of all read sets of all user transactions, in addition to their values.
 
 ### Query for users writes
-To query which keys were written by a specific user, including their new values, original versions, etc, we use `/provenance/data/written/{user}`GET query.
+To query which keys were written by a specific user, including their new values, original versions, etc., use the `/provenance/data/written/{user}`GET query.
 
-**Sign json marshalled query**
+**Sign JSON marshalled query**
 ```sh
 bin/signer -data '{"user_id":"alice","target_user_id":"alice"}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
@@ -814,17 +817,18 @@ curl \
 }
 ```
 
-As you can see, user `alice` wrote 3 times to key `key1`, in blocks 4, 5 and 6, two times to `key2`, in blocks 5 and 6 and one time to `key3`, in block 5. As we mentioned earlier, query result is union of the union of all write sets of all user transactions, with addition of version.
+As you can see, the user `alice` wrote three times to key `key1` in blocks 4, 5 and 6; two times to `key2` in blocks 5 and 6; and one time to `key3` in block 5. As we mentioned earlier, the query result is the union of all write sets of all user transactions, in addition to the version.
 
 ### Key access queries
 Another important view on data history is to know which users accessed a specific key over time. The following two  queries provide us with this information.
+
 - [Query for key readers]
 - [Query for key writers]
 
 ### Query for key readers
-To query for all the users that ever read a specific key, we use `/provenance/data/readers/{dbname}/{key}` GET query. The query results in list of all users who ever read the key and how many times user read the key.
+To query for all the users that ever read a specific key, use the `/provenance/data/readers/{dbname}/{key}` GET query. The query results in a list of all users who ever read the key and how many times users read the key.
 
-**Sign json marshalled query**
+**Sign JSON marshalled query**
 ```sh
 bin/signer -data '{"user_id":"alice","db_name":"db2","key":"key1"}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
@@ -858,12 +862,12 @@ curl \
 }
 ```
 
-User `alice`read the `key1` value one time.
+The user `alice` read the `key1` value one time.
 
 ### Query for key writers
-To query for all the users that ever wrote to a specific key, we use `/provenance/data/writers/{dbname}/{key}` GET query. This will return list of all users who ever wrote to the key and how many times the user wrote to the key.
+To query for all the users that ever wrote to a specific key, use the `/provenance/data/writers/{dbname}/{key}` GET query. This will return a list of all the users who ever wrote to the key and how many times the users wrote to the key.
 
-**Sign json marshalled query**
+**Sign JSON marshalled query**
 ```sh
 bin/signer -data '{"user_id":"alice","db_name":"db2","key":"key2"}' -privatekey=deployment/sample/crypto/alice/alice.key
 ```
@@ -897,4 +901,4 @@ curl \
 }
 ```
 
-User `alice`wrote twice to the `key2`.
+The user `alice` wrote twice to `key2`.

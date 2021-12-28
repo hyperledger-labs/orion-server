@@ -3,17 +3,14 @@ id: block-structure
 title: Block Structure
 ---
 ### Block header data
-A block is a collection of ordered transactions in blockchain database. The header object within a block holds the block number,
-root hash of the transaction merkle tree, root hash of the state merkle tree, and validation information. Except to transactions themselves, rest of the data is
-stored in block header.
+A block is a collection of ordered transactions in a blockchain database. The header object within a block holds the block number, the root hash of the transaction merkle tree, the root hash of the state merkle tree, and the validation information. Except for the transactions themselves, the rest of the data is stored in the block header.
 
-As mentioned above, block header contains all data required to prove existence of transaction or/and specific state at block time,
-in addition to ledger connectivity (block existence) proofs
+As mentioned above, the block header contains all the data required to prove the existence of a transaction and/or specific state at block time, in addition to the ledger connectivity (block existence) proofs.
 - Block number
-- List of hashes (pointers) in ledger skip chain, for full explanation see [here](block-skip-chain)
-- Two merkle tree roots
-    - Transactions merkle tree root - for more explanation about non-repudiation and immutability proofs see [here](tx-merkle-tree)
-    - DB state merkle-patricia trie root - ethereum style, for full trie explanation see [here](state-merkle-patricia-tree)
+- List of hashes (pointers) in the ledger skip chain; for a full explanation, see [here](block-skip-chain)
+- Two merkle tree roots:
+    - Transaction merkle tree root - for more explanation about non-repudiation and immutability proofs, see [here](tx-merkle-tree)
+    - DB state merkle-patricia trie root - ethereum style; for full trie explanation, see [here](state-merkle-patricia-tree)
 - Validation info for all block transactions.
 
 ```protobuf
