@@ -20,14 +20,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-type configTxValidator struct {
+type ConfigTxValidator struct {
 	db              worldstate.DB
 	identityQuerier *identity.Querier
 	sigValidator    *txSigValidator
 	logger          *logger.SugarLogger
 }
 
-func (v *configTxValidator) Validate(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
+func (v *ConfigTxValidator) Validate(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error) {
 	valInfo, err := v.sigValidator.validate(txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload)
 	if err != nil || valInfo.Flag != types.Flag_VALID {
 		return valInfo, err
@@ -73,7 +73,7 @@ func (v *configTxValidator) Validate(txEnv *types.ConfigTxEnvelope) (*types.Vali
 	return v.validateConfigTransitionRules(clusterConfig, tx.NewConfig)
 }
 
-func (v *configTxValidator) validateGenesis(txEnv *types.ConfigTxEnvelope) ([]*types.ValidationInfo, error) {
+func (v *ConfigTxValidator) validateGenesis(txEnv *types.ConfigTxEnvelope) ([]*types.ValidationInfo, error) {
 	configTx := txEnv.Payload
 
 	vi := validateConfig(configTx.NewConfig)
@@ -481,7 +481,7 @@ func validateMembersNodesMatch(members []*types.PeerConfig, nodes []*types.NodeC
 	}
 }
 
-func (v *configTxValidator) mvccValidation(readOldConfigVersion *types.Version, currentConfigMetadata *types.Metadata) (*types.ValidationInfo, error) {
+func (v *ConfigTxValidator) mvccValidation(readOldConfigVersion *types.Version, currentConfigMetadata *types.Metadata) (*types.ValidationInfo, error) {
 	if !proto.Equal(currentConfigMetadata.GetVersion(), readOldConfigVersion) {
 		return &types.ValidationInfo{
 			Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
@@ -519,7 +519,7 @@ func validateHostPort(host string, port uint32) error {
 }
 
 // validate whether the transition from currentConfig to updatedConfig is valid and safe.
-func (v *configTxValidator) validateConfigTransitionRules(currentConfig, updatedConfig *types.ClusterConfig) (*types.ValidationInfo, error) {
+func (v *ConfigTxValidator) validateConfigTransitionRules(currentConfig, updatedConfig *types.ClusterConfig) (*types.ValidationInfo, error) {
 	nodes, consensus, ca, admins := replication.ClassifyClusterReConfig(currentConfig, updatedConfig)
 
 	if nodes {

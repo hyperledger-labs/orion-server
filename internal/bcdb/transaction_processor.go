@@ -81,8 +81,8 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 
 	var err error
 
-	//TODO provide the txValidator to pre-order components that need it, e.g. block-replicator
-	// see: https://github.com/hyperledger-labs/orion-server/issues/280
+	// The txValidator is used by the block processor (commit-phase) as well as by some pre-order components that need
+	// it (or one of its sub-components), e.g. the config-validator is used by the block-replicator.
 	txValidator := txvalidation.NewValidator(
 		&txvalidation.Config{
 			DB:     conf.db,
@@ -192,6 +192,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		Transport:            p.peerTransport,
 		BlockOneQueueBarrier: p.blockOneQueueBarrier,
 		PendingTxs:           p.pendingTxs,
+		ConfigValidator:      txValidator.ConfigValidator(),
 		Logger:               conf.logger,
 	}
 	if joinStart {
