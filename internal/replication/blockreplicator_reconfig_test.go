@@ -14,6 +14,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -585,4 +586,82 @@ func testRollingRemoveNode(t *testing.T, env *clusterEnv, removeIdx int, indices
 	require.Eventually(t, func() bool { return env.AgreedLeaderIndex(indicesAfter...) >= 0 }, 30*time.Second, 100*time.Millisecond)
 	leaderIdx = env.AgreedLeaderIndex(indicesAfter...)
 	t.Logf("Removed node: %d, leader is: %d", removeIdx+1, leaderIdx)
+}
+
+// Scenario: A config transaction that does not pass preorder validation is rejected.
+// Two cases are tested:
+// - The mock failure is generated due to an internal error in validation
+// - The mock failure is generated due to an invalid config transaction
+func TestBlockReplicator_ReConfig_PreorderValidation(t *testing.T) {
+	approxDataSize := 32
+	numBlocks := uint64(10)
+
+	var countMutex sync.Mutex
+	var rejectCount int
+
+	rejectedConfigHook := func(entry zapcore.Entry) error {
+		if strings.Contains(entry.Message, "mock failure message") {
+			countMutex.Lock()
+			defer countMutex.Unlock()
+
+			rejectCount++
+		}
+		return nil
+	}
+
+	isCountEqualGreater := func(num int) bool {
+		countMutex.Lock()
+		defer countMutex.Unlock()
+
+		return rejectCount >= num
+	}
+	env := createClusterEnv(t, 3, nil, "info", zap.Hooks(rejectedConfigHook))
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader and submit some blocks
+	require.Eventually(t, func() bool { return env.AgreedLeaderIndex() >= 0 }, 30*time.Second, 100*time.Millisecond)
+	leaderIdx := env.AgreedLeaderIndex()
+	testSubmitDataBlocks(t, env, numBlocks, approxDataSize)
+
+	var releaseErrors []string
+	env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCalls(func(txIDs []string, err error) {
+		releaseErrors = append(releaseErrors, err.Error())
+	})
+
+	// A config tx that updates the membership by adding a peer:
+
+	// 1. will fail because of an emulated internal error in validation
+	env.nodes[leaderIdx].configValidator.ValidateReturns(nil, errors.New("mock failure message"))
+	_, _, proposeBlock := env.NextNodeConfig()
+	err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCallCount() == 1 }, 30*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return isCountEqualGreater(1) }, 30*time.Second, 100*time.Millisecond)
+
+	countMutex.Lock()
+	rejectCount = 0
+	countMutex.Unlock()
+
+	// 2. will fail because of an emulated invalid config tx
+	env.nodes[leaderIdx].configValidator.ValidateReturns(
+		&types.ValidationInfo{Flag: types.Flag_INVALID_INCORRECT_ENTRIES, ReasonIfInvalid: "mock failure message"}, nil)
+	_, _, proposeBlock = env.NextNodeConfig()
+	err = env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCallCount() == 2 }, 30*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return isCountEqualGreater(1) }, 30*time.Second, 100*time.Millisecond)
+	require.Equal(t, "mock failure message", releaseErrors[0])                            // release with internal error
+	require.Equal(t, "Invalid config tx, reason: mock failure message", releaseErrors[1]) // release with invalid config
+
+	t.Log("Closing")
+	for _, node := range env.nodes {
+		err := node.Close()
+		require.NoError(t, err)
+	}
 }

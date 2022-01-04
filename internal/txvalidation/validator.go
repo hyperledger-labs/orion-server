@@ -18,7 +18,7 @@ import (
 // block against the committed version to ensure the requested
 // isolation level
 type Validator struct {
-	configTxValidator    *configTxValidator
+	configTxValidator    *ConfigTxValidator
 	dbAdminTxValidator   *dbAdminTxValidator
 	userAdminTxValidator *userAdminTxValidator
 	dataTxValidator      *dataTxValidator
@@ -40,7 +40,7 @@ func NewValidator(conf *Config) *Validator {
 	}
 
 	return &Validator{
-		configTxValidator: &configTxValidator{
+		configTxValidator: &ConfigTxValidator{
 			db:              conf.DB,
 			identityQuerier: idQuerier,
 			sigValidator:    txSigValidator,
@@ -169,6 +169,11 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	default:
 		return nil, errors.Errorf("unexpected transaction envelope in the block")
 	}
+}
+
+// ConfigValidator provides a pointer to the internal validator that verifies config transactions.
+func (v *Validator) ConfigValidator() *ConfigTxValidator {
+	return v.configTxValidator
 }
 
 func (v *Validator) parallelSigValidation(dataTxEnvs []*types.DataTxEnvelope) ([]*types.ValidationInfo, [][]string, error) {

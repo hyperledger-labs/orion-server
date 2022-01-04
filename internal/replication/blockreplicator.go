@@ -45,19 +45,26 @@ type PendingTxsReleaser interface {
 	ReleaseWithError(txIDs []string, err error)
 }
 
+//go:generate counterfeiter -o mocks/config_tx_validator.go --fake-name ConfigTxValidator . ConfigTxValidator
+
+type ConfigTxValidator interface {
+	Validate(txEnv *types.ConfigTxEnvelope) (*types.ValidationInfo, error)
+}
+
 type BlockReplicator struct {
 	localConf       *config.LocalConfiguration
 	joinBlock       *types.Block
 	joinBlockNumber uint64
 
-	proposeCh       chan *types.Block
-	raftID          uint64
-	raftStorage     *RaftStorage
-	raftConfig      *raft.Config
-	oneQueueBarrier *queue.OneQueueBarrier // Synchronizes the block-replication deliver with the block-processor commit
-	transport       *comm.HTTPTransport
-	ledgerReader    BlockLedgerReader
-	pendingTxs      PendingTxsReleaser
+	proposeCh         chan *types.Block
+	raftID            uint64
+	raftStorage       *RaftStorage
+	raftConfig        *raft.Config
+	oneQueueBarrier   *queue.OneQueueBarrier // Synchronizes the block-replication deliver with the block-processor commit
+	transport         *comm.HTTPTransport
+	ledgerReader      BlockLedgerReader
+	pendingTxs        PendingTxsReleaser
+	configTxValidator ConfigTxValidator
 
 	stopCh        chan struct{}
 	stopOnce      sync.Once
@@ -99,6 +106,7 @@ type Config struct {
 	Transport            *comm.HTTPTransport
 	BlockOneQueueBarrier *queue.OneQueueBarrier
 	PendingTxs           PendingTxsReleaser
+	ConfigValidator      ConfigTxValidator
 	Logger               *logger.SugarLogger
 }
 
@@ -139,17 +147,18 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 		raftID:               raftID,
 		raftStorage:          storage,
 		oneQueueBarrier:      conf.BlockOneQueueBarrier,
+		transport:            conf.Transport,
+		ledgerReader:         conf.LedgerReader,
+		pendingTxs:           conf.PendingTxs,
+		configTxValidator:    conf.ConfigValidator,
 		stopCh:               make(chan struct{}),
 		doneProposeCh:        make(chan struct{}),
 		doneEventCh:          make(chan struct{}),
 		clusterConfig:        conf.ClusterConfig,
 		cancelProposeContext: func() {}, //NOOP
-		transport:            conf.Transport,
-		ledgerReader:         conf.LedgerReader,
-		pendingTxs:           conf.PendingTxs,
 		sizeLimit:            conf.ClusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize,
-		confState:            confState,
 		lastSnapBlockNum:     snapBlkNum,
+		confState:            confState,
 		lg:                   lg,
 	}
 	br.condTooManyInFlightBlocks = sync.NewCond(&br.mutex)
@@ -771,14 +780,32 @@ Propose_Loop:
 			var isMembershipConfig bool
 
 			if httputils.IsConfigBlock(blockToPropose) {
-				// TODO verify the config-tx by itself and vs. current config
-				newClusterConfig := blockToPropose.Payload.(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope.GetPayload().GetNewConfig()
+				configTxEnv := blockToPropose.GetConfigTxEnvelope()
+				// We validate a config TX preorder, to prevent a membership change to be applied to Raft, and then
+				// have the TX marked invalid during commit. Note that ConfigTxValidator.Validate reads the current
+				// config from the store. However,
+				//TODO together with the code to prevent in-flight config blocks before proposing a new one, the
+				// config from the store should match the config stored in the BlockReplicator.
+				// See: https://github.com/hyperledger-labs/orion-server/issues/281
+				valInfo, errVal := br.configTxValidator.Validate(configTxEnv)
+				if errVal != nil {
+					br.lg.Errorf("Failed to validate configTxEnv, internal error: %s", errVal)
+					br.releasePendingTXs(blockToPropose, "Declined to propose block, internal error in Validate", errVal)
+					continue Propose_Loop
+				}
+				if valInfo.Flag != types.Flag_VALID {
+					br.releasePendingTXs(blockToPropose, "Declined to propose block, invalid config tx",
+						&ierrors.BadRequestError{ErrMsg: fmt.Sprintf("Invalid config tx, reason: %s", valInfo.ReasonIfInvalid)})
+					continue Propose_Loop
+				}
+
+				newClusterConfig := configTxEnv.GetPayload().GetNewConfig()
 				_, consensus, _, _ := ClassifyClusterReConfig(br.clusterConfig, newClusterConfig)
 				if consensus {
 					var errDetect error
 					addedPeers, removedPeers, _, errDetect = detectPeerConfigChanges(br.clusterConfig.ConsensusConfig, newClusterConfig.ConsensusConfig)
 					if errDetect != nil {
-						br.releasePendingTXs(blockToPropose, "Declined to propose block", errDetect)
+						br.releasePendingTXs(blockToPropose, "Declined to propose block, internal error in detect peer config change", errDetect)
 						continue Propose_Loop
 					}
 					isMembershipConfig = len(addedPeers)+len(removedPeers) > 0
@@ -869,11 +896,13 @@ func (br *BlockReplicator) proposeMembershipConfigChange(blockToPropose *types.B
 
 func (br *BlockReplicator) releasePendingTXs(blockToPropose *types.Block, reasonMsg string, reasonErr error) {
 	br.lg.Infof("%s: %+v; because: %s", reasonMsg, blockToPropose.GetHeader(), reasonErr)
-	if txIDs, err := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload()); err == nil {
-		br.pendingTxs.ReleaseWithError(txIDs, err)
-	} else {
+	txIDs, err := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload())
+	if err != nil {
 		br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), err)
+		return
 	}
+
+	br.pendingTxs.ReleaseWithError(txIDs, reasonErr)
 }
 
 // prepareProposal Prepares the Raft proposal context and bytes, and determine whether to propose (only the leader can

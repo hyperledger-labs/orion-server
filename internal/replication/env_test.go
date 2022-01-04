@@ -66,6 +66,7 @@ type nodeEnv struct {
 	blockReplicator *replication.BlockReplicator
 	ledger          *memLedger
 	pendingTxs      *mocks.PendingTxsReleaser
+	configValidator *mocks.ConfigTxValidator
 	stopServeCh     chan struct{}
 }
 
@@ -279,6 +280,8 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 
 	qBarrier := queue.NewOneQueueBarrier(lg)
 	pendingTxs := &mocks.PendingTxsReleaser{}
+	configValidator := &mocks.ConfigTxValidator{}
+	configValidator.ValidateReturns(&types.ValidationInfo{Flag: types.Flag_VALID}, nil)
 	ledger := &memLedger{}
 	genesisBlock := &types.Block{
 		Header: &types.BlockHeader{
@@ -313,6 +316,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 		Transport:            peerTransport,
 		BlockOneQueueBarrier: qBarrier,
 		PendingTxs:           pendingTxs,
+		ConfigValidator:      configValidator,
 		Logger:               lg,
 	}
 
@@ -337,6 +341,7 @@ func newNodeEnv(n uint32, testDir string, lg *logger.SugarLogger, clusterConfig 
 		blockReplicator: blockReplicator,
 		ledger:          ledger,
 		pendingTxs:      pendingTxs,
+		configValidator: configValidator,
 		stopServeCh:     make(chan struct{}),
 	}
 
@@ -369,6 +374,8 @@ func newNodeEnvJoin(n uint32, testDir string, lg *logger.SugarLogger, clusterCon
 
 	qBarrier := queue.NewOneQueueBarrier(lg)
 	pendingTxs := &mocks.PendingTxsReleaser{}
+	configValidator := &mocks.ConfigTxValidator{}
+	configValidator.ValidateReturns(&types.ValidationInfo{Flag: types.Flag_VALID}, nil)
 	ledger := &memLedger{}
 
 	peerTransport, _ := comm.NewHTTPTransport(&comm.Config{
@@ -385,6 +392,7 @@ func newNodeEnvJoin(n uint32, testDir string, lg *logger.SugarLogger, clusterCon
 		Transport:            peerTransport,
 		BlockOneQueueBarrier: qBarrier,
 		PendingTxs:           pendingTxs,
+		ConfigValidator:      configValidator,
 		Logger:               lg,
 	}
 
@@ -409,6 +417,7 @@ func newNodeEnvJoin(n uint32, testDir string, lg *logger.SugarLogger, clusterCon
 		blockReplicator: blockReplicator,
 		ledger:          ledger,
 		pendingTxs:      pendingTxs,
+		configValidator: configValidator,
 		stopServeCh:     make(chan struct{}),
 	}
 
