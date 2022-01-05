@@ -84,6 +84,7 @@ type BlockReplicator struct {
 	lastProposedBlockHeaderBaseHash []byte
 	lastCommittedBlock              *types.Block
 	numInFlightBlocks               uint32 // number of in-flight blocks
+	inFlightConfigBlockNumber       uint64 // the block number of the in-flight config, if any; 0 if none
 	condTooManyInFlightBlocks       *sync.Cond
 
 	appliedIndex uint64
@@ -412,9 +413,10 @@ Event_Loop:
 
 	// Notify the propose-loop go-routine in case it is waiting for blocks to commit or a leadership change.
 	br.mutex.Lock()
-	br.lastKnownLeader = 0      // stop proposing
-	br.lastKnownLeaderHost = "" // stop proposing
-	br.numInFlightBlocks = 0    // stop waiting for blocks to commit
+	br.lastKnownLeader = 0           // stop proposing
+	br.lastKnownLeaderHost = ""      // stop proposing
+	br.numInFlightBlocks = 0         // stop waiting for blocks to commit
+	br.inFlightConfigBlockNumber = 0 // stop waiting for config block to commit
 	br.condTooManyInFlightBlocks.Broadcast()
 	br.mutex.Unlock()
 
@@ -455,6 +457,7 @@ func (br *BlockReplicator) processLeaderChanges(leader uint64) {
 					br.lastCommittedBlock.GetHeader(), err)
 			}
 			br.numInFlightBlocks = 0
+			br.inFlightConfigBlockNumber = 0
 			br.condTooManyInFlightBlocks.Broadcast()
 		}
 
@@ -783,10 +786,9 @@ Propose_Loop:
 				configTxEnv := blockToPropose.GetConfigTxEnvelope()
 				// We validate a config TX preorder, to prevent a membership change to be applied to Raft, and then
 				// have the TX marked invalid during commit. Note that ConfigTxValidator.Validate reads the current
-				// config from the store. However,
-				//TODO together with the code to prevent in-flight config blocks before proposing a new one, the
+				// config from the store.
+				// However, together with the code to prevent in-flight config blocks before proposing a new one, the
 				// config from the store should match the config stored in the BlockReplicator.
-				// See: https://github.com/hyperledger-labs/orion-server/issues/281
 				valInfo, errVal := br.configTxValidator.Validate(configTxEnv)
 				if errVal != nil {
 					br.lg.Errorf("Failed to validate configTxEnv, internal error: %s", errVal)
@@ -935,7 +937,9 @@ func (br *BlockReplicator) prepareProposal(blockToPropose *types.Block) (ctx con
 }
 
 // updateLastProposal updates the last block proposed in order to keep track of block numbering.
-// TODO also keep track of proposed config, and prevent additional config proposals when one is already in flight.
+// In addition, keep track of proposed config, and prevent additional proposals when one is already in flight.
+// We are preventing all proposals when a config is in flight. This is not strictly necessary, but is easier
+// to implement. The implications on steady state performance are negligible, as config transactions are rare. 
 func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -948,20 +952,43 @@ func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
 			br.lg.Panicf("Failed to compute last block base hash: %s", err)
 		}
 		br.numInFlightBlocks++
+		if httputils.IsConfigBlock(lastBlockProposed) {
+			if br.inFlightConfigBlockNumber > 0 {
+				br.lg.Panicf("A config block was proposed, but there is still a config block in-flight! proposed: %d, in-flight: %d",
+					lastBlockProposed.GetHeader().GetBaseHeader().GetNumber(), br.inFlightConfigBlockNumber)
+			}
 
-		if br.numInFlightBlocks > br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks {
-			br.lg.Debugf("Number of in-flight blocks exceeds max, %d > %d, waiting for blocks to commit", //Tested side effect
-				br.numInFlightBlocks, br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks)
+			br.inFlightConfigBlockNumber = lastBlockProposed.GetHeader().GetBaseHeader().GetNumber()
+		}
 
-			for br.numInFlightBlocks > br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks {
+		tooManyInFlightBlocksCond := func() bool {
+			return br.numInFlightBlocks > br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks
+		}
+		inFlightConfigCond := func() bool {
+			return br.inFlightConfigBlockNumber > 0
+		}
+
+		if tooManyInFlightBlocksCond() || inFlightConfigCond() {
+			if tooManyInFlightBlocksCond() {
+				br.lg.Debugf("Number of in-flight blocks exceeds max, %d > %d, waiting for blocks to commit", //Tested side effect
+					br.numInFlightBlocks, br.clusterConfig.ConsensusConfig.RaftConfig.MaxInflightBlocks)
+			}
+			if inFlightConfigCond() {
+				br.lg.Debugf("In-flight config block [%d], waiting for block to commit", //Tested side effect
+					br.inFlightConfigBlockNumber)
+			}
+
+			for tooManyInFlightBlocksCond() || inFlightConfigCond() {
 				// the go-routine will be notified by the event-loop go-routine when:
 				// - a block commits, or
+				// - the config block in-flight committed
 				// - when leadership is lost or assumed, or
 				// - when the event-loop go-routine exits. This is done in order to remain
 				//   reactive to server shutdown while waiting for blocks to commit.
 				br.condTooManyInFlightBlocks.Wait()
 			}
 			br.lg.Debugf("Number of in-flight blocks back to normal: %d", br.numInFlightBlocks)
+			br.lg.Debugf("No in-flight config block: %d", br.inFlightConfigBlockNumber)
 		}
 	}
 }
@@ -1064,8 +1091,25 @@ func (br *BlockReplicator) setLastCommittedBlock(block *types.Block) {
 	defer br.mutex.Unlock()
 
 	br.lastCommittedBlock = block
+
+	var doBroadcast bool
+
 	if br.numInFlightBlocks > 0 { // only reduce on the leader
 		br.numInFlightBlocks--
+		doBroadcast = true
+	}
+
+	if br.inFlightConfigBlockNumber > 0 && httputils.IsConfigBlock(block) { // only check on the leader
+		if br.inFlightConfigBlockNumber == block.GetHeader().GetBaseHeader().GetNumber() {
+			br.inFlightConfigBlockNumber = 0
+			doBroadcast = true
+		} else {
+			br.lg.Panicf("A config block committed, but it is not the one expected to be in-flight! committed: %d, expected: %d",
+				block.GetHeader().GetBaseHeader().GetNumber(), br.inFlightConfigBlockNumber)
+		}
+	}
+
+	if doBroadcast {
 		br.condTooManyInFlightBlocks.Broadcast()
 	}
 }

@@ -665,3 +665,96 @@ func TestBlockReplicator_ReConfig_PreorderValidation(t *testing.T) {
 		require.NoError(t, err)
 	}
 }
+
+// Scenario:
+// - Start 3 nodes together, wait for leader.
+// - Submit config blocks fast, until the leader encounters the limit on no in-flight config blocks a few times.
+func TestBlockReplicator_3Node_InFlightConfig(t *testing.T) {
+	var countMutex sync.Mutex
+	var inFlightLogMsgCount int
+
+	inFlightLogMsgHook := func(entry zapcore.Entry) error {
+		if strings.Contains(entry.Message, "In-flight config block [") &&
+			strings.Contains(entry.Message, "], waiting for block to commit") {
+			countMutex.Lock()
+			defer countMutex.Unlock()
+
+			inFlightLogMsgCount++
+		}
+		return nil
+	}
+
+	isCountOver := func(num int) bool {
+		countMutex.Lock()
+		defer countMutex.Unlock()
+
+		return inFlightLogMsgCount > num
+	}
+
+	raftConfig := proto.Clone(raftConfigNoSnapshots).(*types.RaftConfig)
+	raftConfig.SnapshotIntervalSize = 1000000
+	env := createClusterEnv(t, 3, raftConfig, "debug", zap.Hooks(inFlightLogMsgHook))
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+	leaderIdx := env.AgreedLeaderIndex()
+
+	// submits config TXs fast until we hit the in-flight log message several times
+	var numConfigBlocks uint64
+	for numConfigBlocks = 1; ; numConfigBlocks++ {
+		// a config tx that updates the SnapshotIntervalSize
+		clusterConfig := proto.Clone(env.nodes[0].conf.ClusterConfig).(*types.ClusterConfig)
+		clusterConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize = raftConfig.SnapshotIntervalSize + numConfigBlocks
+
+		proposeBlock := &types.Block{
+			Header: &types.BlockHeader{BaseHeader: &types.BlockHeaderBase{Number: 2}},
+			Payload: &types.Block_ConfigTxEnvelope{
+				ConfigTxEnvelope: &types.ConfigTxEnvelope{
+					Payload: &types.ConfigTx{
+						UserId:               "admin",
+						TxId:                 fmt.Sprintf("config-%d", numConfigBlocks),
+						ReadOldConfigVersion: &types.Version{BlockNum: numConfigBlocks, TxNum: 0},
+						NewConfig:            clusterConfig,
+					},
+				},
+			},
+		}
+
+		err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+		require.NoError(t, err)
+
+		if isCountOver(20) {
+			break
+		}
+	}
+
+	t.Logf("Num config blocks submitted: %d", numConfigBlocks)
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numConfigBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	// submit a few additional data blocks to test all is well
+	testSubmitDataBlocks(t, env, 10, 32)
+
+	t.Log("Closing")
+	for _, node := range env.nodes {
+		err := node.Close()
+		require.NoError(t, err)
+	}
+
+	for _, node := range env.nodes {
+		require.Equal(t, 0, node.pendingTxs.ReleaseWithErrorCallCount())
+	}
+
+	countMutex.Lock()
+	defer countMutex.Unlock()
+	t.Logf("Num config blocks: %d, Num. in-flight waits: %d", numConfigBlocks, inFlightLogMsgCount)
+}
