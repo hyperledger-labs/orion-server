@@ -25,6 +25,6 @@ func (e *RaftHTTPError) WriteTo(w http.ResponseWriter) {
 	}
 
 	_, _ = w.Write(b)
-	
+
 	return
 }

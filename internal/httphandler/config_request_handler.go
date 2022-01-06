@@ -10,7 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -63,14 +63,14 @@ func (c *configRequestHandler) configQuery(response http.ResponseWriter, request
 
 	config, err := c.db.GetConfig()
 	if err != nil {
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
 			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
 		)
 		return
 	}
-	httputils.SendHTTPResponse(response, http.StatusOK, config)
+	utils.SendHTTPResponse(response, http.StatusOK, config)
 }
 
 func (c *configRequestHandler) configBlockQuery(response http.ResponseWriter, request *http.Request) {
@@ -95,7 +95,7 @@ func (c *configRequestHandler) configBlockQuery(response http.ResponseWriter, re
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -104,7 +104,7 @@ func (c *configRequestHandler) configBlockQuery(response http.ResponseWriter, re
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, configBlockResponseEnvelope)
+	utils.SendHTTPResponse(response, http.StatusOK, configBlockResponseEnvelope)
 }
 
 func (c *configRequestHandler) clusterStatusQuery(response http.ResponseWriter, request *http.Request) {
@@ -117,7 +117,7 @@ func (c *configRequestHandler) clusterStatusQuery(response http.ResponseWriter, 
 	clusterStatus, err := c.db.GetClusterStatus(query.NoCertificates)
 
 	if err != nil {
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
 			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
@@ -125,7 +125,7 @@ func (c *configRequestHandler) clusterStatusQuery(response http.ResponseWriter, 
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, clusterStatus)
+	utils.SendHTTPResponse(response, http.StatusOK, clusterStatus)
 }
 
 func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *http.Request) {
@@ -138,7 +138,7 @@ func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *
 	config, err := c.db.GetNodeConfig(query.NodeId)
 
 	if err != nil {
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
 			&types.HttpResponseErr{ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error()},
@@ -146,13 +146,13 @@ func (c *configRequestHandler) nodeQuery(response http.ResponseWriter, request *
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, config)
+	utils.SendHTTPResponse(response, http.StatusOK, config)
 }
 
 func (c *configRequestHandler) configTransaction(response http.ResponseWriter, request *http.Request) {
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
@@ -161,30 +161,30 @@ func (c *configRequestHandler) configTransaction(response http.ResponseWriter, r
 
 	txEnv := &types.ConfigTxEnvelope{}
 	if err := d.Decode(txEnv); err != nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserId == "" {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(c.sigVerifier, txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload); err != nil {
-		httputils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 

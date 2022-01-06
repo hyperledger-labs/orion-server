@@ -4,7 +4,7 @@ import (
 	"io/ioutil"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 )
@@ -37,7 +37,7 @@ func readJoinBlock(joinBlockFile string) (*types.Block, error) {
 		return nil, errors.Errorf("join block number is 0, file: %s", joinBlockFile)
 	}
 
-	if !httputils.IsConfigBlock(block) {
+	if !utils.IsConfigBlock(block) {
 		return nil, errors.Errorf("join block is not a config block, file: %s", joinBlockFile)
 	}
 

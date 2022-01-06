@@ -14,10 +14,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/replication/mocks"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
@@ -740,7 +740,7 @@ func testDataBlock(approxDataSize int) (*types.Block, uint64) {
 				},
 			}}},
 	}
-	dataBlockLength := uint64(len(httputils.MarshalOrPanic(block)))
+	dataBlockLength := uint64(len(utils.MarshalOrPanic(block)))
 	return block, dataBlockLength
 }
 

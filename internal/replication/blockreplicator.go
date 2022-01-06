@@ -17,8 +17,8 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
@@ -782,7 +782,7 @@ Propose_Loop:
 			var addedPeers, removedPeers []*types.PeerConfig
 			var isMembershipConfig bool
 
-			if httputils.IsConfigBlock(blockToPropose) {
+			if utils.IsConfigBlock(blockToPropose) {
 				configTxEnv := blockToPropose.GetConfigTxEnvelope()
 				// We validate a config TX preorder, to prevent a membership change to be applied to Raft, and then
 				// have the TX marked invalid during commit. Note that ConfigTxValidator.Validate reads the current
@@ -898,7 +898,7 @@ func (br *BlockReplicator) proposeMembershipConfigChange(blockToPropose *types.B
 
 func (br *BlockReplicator) releasePendingTXs(blockToPropose *types.Block, reasonMsg string, reasonErr error) {
 	br.lg.Infof("%s: %+v; because: %s", reasonMsg, blockToPropose.GetHeader(), reasonErr)
-	txIDs, err := httputils.BlockPayloadToTxIDs(blockToPropose.GetPayload())
+	txIDs, err := utils.BlockPayloadToTxIDs(blockToPropose.GetPayload())
 	if err != nil {
 		br.lg.Errorf("Failed to extract TxIDs from block, dropping block: %v; error: %s", blockToPropose.GetHeader(), err)
 		return
@@ -939,7 +939,7 @@ func (br *BlockReplicator) prepareProposal(blockToPropose *types.Block) (ctx con
 // updateLastProposal updates the last block proposed in order to keep track of block numbering.
 // In addition, keep track of proposed config, and prevent additional proposals when one is already in flight.
 // We are preventing all proposals when a config is in flight. This is not strictly necessary, but is easier
-// to implement. The implications on steady state performance are negligible, as config transactions are rare. 
+// to implement. The implications on steady state performance are negligible, as config transactions are rare.
 func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -952,7 +952,7 @@ func (br *BlockReplicator) updateLastProposal(lastBlockProposed *types.Block) {
 			br.lg.Panicf("Failed to compute last block base hash: %s", err)
 		}
 		br.numInFlightBlocks++
-		if httputils.IsConfigBlock(lastBlockProposed) {
+		if utils.IsConfigBlock(lastBlockProposed) {
 			if br.inFlightConfigBlockNumber > 0 {
 				br.lg.Panicf("A config block was proposed, but there is still a config block in-flight! proposed: %d, in-flight: %d",
 					lastBlockProposed.GetHeader().GetBaseHeader().GetNumber(), br.inFlightConfigBlockNumber)
@@ -1099,7 +1099,7 @@ func (br *BlockReplicator) setLastCommittedBlock(block *types.Block) {
 		doBroadcast = true
 	}
 
-	if br.inFlightConfigBlockNumber > 0 && httputils.IsConfigBlock(block) { // only check on the leader
+	if br.inFlightConfigBlockNumber > 0 && utils.IsConfigBlock(block) { // only check on the leader
 		if br.inFlightConfigBlockNumber == block.GetHeader().GetBaseHeader().GetNumber() {
 			br.inFlightConfigBlockNumber = 0
 			doBroadcast = true

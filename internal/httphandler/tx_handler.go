@@ -9,7 +9,7 @@ import (
 
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	internalerror "github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
@@ -24,22 +24,22 @@ func (t *txHandler) handleTransaction(w http.ResponseWriter, request *http.Reque
 	if err != nil {
 		switch err.(type) {
 		case *internalerror.BadRequestError:
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		case *internalerror.DuplicateTxIDError:
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		case *internalerror.TimeoutErr:
-			httputils.SendHTTPResponse(w, http.StatusAccepted, &types.HttpResponseErr{ErrMsg: "Transaction processing timeout"})
+			utils.SendHTTPResponse(w, http.StatusAccepted, &types.HttpResponseErr{ErrMsg: "Transaction processing timeout"})
 		case *internalerror.NotLeaderError:
 			leaderErr := err.(*internalerror.NotLeaderError)
 			if leaderErr.GetLeaderID() == 0 {
-				httputils.SendHTTPResponse(w, http.StatusServiceUnavailable, &types.HttpResponseErr{ErrMsg: "Cluster leader unavailable"})
+				utils.SendHTTPResponse(w, http.StatusServiceUnavailable, &types.HttpResponseErr{ErrMsg: "Cluster leader unavailable"})
 			} else {
-				httputils.SendHTTPRedirectServer(w, request, leaderErr.GetLeaderHostPort())
+				utils.SendHTTPRedirectServer(w, request, leaderErr.GetLeaderHostPort())
 			}
 		default:
-			httputils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 		}
 		return
 	}
-	httputils.SendHTTPResponse(w, http.StatusOK, resp)
+	utils.SendHTTPResponse(w, http.StatusOK, resp)
 }

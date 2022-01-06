@@ -10,12 +10,11 @@ import (
 	"os"
 	"sync"
 
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
@@ -271,7 +270,7 @@ func (s *Store) storeBlockHeaders(block *types.Block) error {
 		return errors.Wrapf(err, "can't calculate block hash {%d, %v}", number, header)
 	}
 
-	txsID, err := httputils.BlockPayloadToTxIDs(block.GetPayload())
+	txsID, err := utils.BlockPayloadToTxIDs(block.GetPayload())
 	blockTxsID := &BlockTxIDs{TxIds: txsID}
 	if err != nil {
 		return errors.Wrapf(err, "can't access block tx ids {%d, %v}", number, block)

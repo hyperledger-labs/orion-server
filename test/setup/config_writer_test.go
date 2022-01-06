@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/hyperledger-labs/orion-server/config"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
@@ -69,7 +69,7 @@ func TestWriteLocalConfig(t *testing.T) {
 	recoveredConf := &config.LocalConfiguration{}
 	err = v.UnmarshalExact(recoveredConf)
 	require.NoError(t, err)
-	require.Equal(t, httputils.MarshalJsonOrPanic(localConfig), httputils.MarshalJsonOrPanic(recoveredConf))
+	require.Equal(t, utils.MarshalJsonOrPanic(localConfig), utils.MarshalJsonOrPanic(recoveredConf))
 }
 
 func TestWriteSharedConfig(t *testing.T) {
@@ -116,5 +116,5 @@ func TestWriteSharedConfig(t *testing.T) {
 	recoveredConf := &config.SharedConfiguration{}
 	err = v.UnmarshalExact(recoveredConf)
 	require.NoError(t, err)
-	require.Equal(t, httputils.MarshalJsonOrPanic(sharedConfig), httputils.MarshalJsonOrPanic(recoveredConf))
+	require.Equal(t, utils.MarshalJsonOrPanic(sharedConfig), utils.MarshalJsonOrPanic(recoveredConf))
 }

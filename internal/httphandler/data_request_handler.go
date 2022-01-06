@@ -10,14 +10,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	"github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/gorilla/mux"
 )
 
 // dataRequestHandler handles query and transaction associated
@@ -61,7 +61,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 	query := payload.(*types.GetDataQuery)
 
 	if !d.db.IsDBExists(query.DbName) {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "error db '" + query.DbName + "' doesn't exist",
 		})
 		return
@@ -78,7 +78,7 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -87,13 +87,13 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, request *http.Request) {
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
@@ -102,18 +102,18 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 
 	txEnv := &types.DataTxEnvelope{}
 	if err := requestData.Decode(txEnv); err != nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Payload.MustSignUserIds) == 0 {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
@@ -121,7 +121,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	var notSigned []string
 	for _, user := range txEnv.Payload.MustSignUserIds {
 		if user == "" {
-			httputils.SendHTTPResponse(response, http.StatusBadRequest,
+			utils.SendHTTPResponse(response, http.StatusBadRequest,
 				&types.HttpResponseErr{ErrMsg: "an empty UserID in MustSignUserIDs list present in the transaction envelope"})
 			return
 		}
@@ -132,14 +132,14 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	}
 	if len(notSigned) > 0 {
 		sort.Strings(notSigned)
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: "users [" + strings.Join(notSigned, ",") + "] in the must sign list have not signed the transaction"})
 		return
 	}
 
 	for _, userID := range txEnv.Payload.MustSignUserIds {
 		if err, code := VerifyRequestSignature(d.sigVerifier, userID, txEnv.Signatures[userID], txEnv.Payload); err != nil {
-			httputils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return
 		}
 	}
@@ -155,7 +155,7 @@ func (d *dataRequestHandler) dataJSONQuery(response http.ResponseWriter, request
 	query := payload.(*types.DataJSONQuery)
 
 	if !d.db.IsDBExists(query.DbName) {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "'" + query.DbName + "' does not exist",
 		})
 		return
@@ -168,7 +168,7 @@ func (d *dataRequestHandler) dataJSONQuery(response http.ResponseWriter, request
 	case <-parent.Done():
 		if parent.Err() == context.DeadlineExceeded {
 			d.logger.Debug("request has been timeout")
-			httputils.SendHTTPResponse(response, http.StatusRequestTimeout, nil)
+			utils.SendHTTPResponse(response, http.StatusRequestTimeout, nil)
 			return
 		}
 
@@ -184,7 +184,7 @@ func (d *dataRequestHandler) dataJSONQuery(response http.ResponseWriter, request
 				status = http.StatusInternalServerError
 			}
 
-			httputils.SendHTTPResponse(
+			utils.SendHTTPResponse(
 				response,
 				status,
 				&types.HttpResponseErr{
@@ -193,6 +193,6 @@ func (d *dataRequestHandler) dataJSONQuery(response http.ResponseWriter, request
 			return
 		}
 
-		httputils.SendHTTPResponse(response, http.StatusOK, data)
+		utils.SendHTTPResponse(response, http.StatusOK, data)
 	}
 }

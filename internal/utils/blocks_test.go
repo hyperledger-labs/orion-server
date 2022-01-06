@@ -1,13 +1,13 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package httputils_test
+package utils_test
 
 import (
 	"fmt"
 	"testing"
 
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +39,7 @@ func TestBlockPayloadToTxIDs_Config(t *testing.T) {
 	}
 
 	for i, p := range []interface{}{userAdmin, dbAdmin, config} {
-		txIDs, err := httputils.BlockPayloadToTxIDs(p)
+		txIDs, err := utils.BlockPayloadToTxIDs(p)
 		require.NoError(t, err)
 		require.Len(t, txIDs, 1)
 		require.Equal(t, fmt.Sprintf("txid:%d", i+1), txIDs[0])
@@ -61,7 +61,7 @@ func TestBlockPayloadToTxIDs_Data(t *testing.T) {
 		},
 	}}
 
-	txIDs, err := httputils.BlockPayloadToTxIDs(dataEnv)
+	txIDs, err := utils.BlockPayloadToTxIDs(dataEnv)
 	require.NoError(t, err)
 	require.Len(t, txIDs, 3)
 	for i, id := range txIDs {
@@ -73,7 +73,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 	t.Run("user admin", func(t *testing.T) {
 		userAdmin := &types.Block_UserAdministrationTxEnvelope{}
 
-		txIDs, err := httputils.BlockPayloadToTxIDs(userAdmin)
+		txIDs, err := utils.BlockPayloadToTxIDs(userAdmin)
 		require.EqualError(t, err, "empty payload in: &{UserAdministrationTxEnvelope:<nil>}")
 		require.Nil(t, txIDs)
 
@@ -81,7 +81,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{},
 		}
 
-		txIDs, err = httputils.BlockPayloadToTxIDs(userAdmin)
+		txIDs, err = utils.BlockPayloadToTxIDs(userAdmin)
 		require.EqualError(t, err, "empty payload in: &{UserAdministrationTxEnvelope:}")
 		require.Nil(t, txIDs)
 
@@ -91,7 +91,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			},
 		}
 
-		txIDs, err = httputils.BlockPayloadToTxIDs(userAdmin)
+		txIDs, err = utils.BlockPayloadToTxIDs(userAdmin)
 		require.EqualError(t, err, "missing TxId in: &{UserAdministrationTxEnvelope:payload:<> }")
 		require.Nil(t, txIDs)
 	})
@@ -99,7 +99,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 	t.Run("db admin", func(t *testing.T) {
 		dbAdmin := &types.Block_DbAdministrationTxEnvelope{}
 
-		txIDs, err := httputils.BlockPayloadToTxIDs(dbAdmin)
+		txIDs, err := utils.BlockPayloadToTxIDs(dbAdmin)
 		require.EqualError(t, err, "empty payload in: &{DbAdministrationTxEnvelope:<nil>}")
 		require.Nil(t, txIDs)
 
@@ -107,7 +107,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			DbAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{},
 		}
 
-		txIDs, err = httputils.BlockPayloadToTxIDs(dbAdmin)
+		txIDs, err = utils.BlockPayloadToTxIDs(dbAdmin)
 		require.EqualError(t, err, "empty payload in: &{DbAdministrationTxEnvelope:}")
 		require.Nil(t, txIDs)
 
@@ -117,7 +117,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			},
 		}
 
-		txIDs, err = httputils.BlockPayloadToTxIDs(dbAdmin)
+		txIDs, err = utils.BlockPayloadToTxIDs(dbAdmin)
 		require.EqualError(t, err, "missing TxId in: &{DbAdministrationTxEnvelope:payload:<> }")
 		require.Nil(t, txIDs)
 	})
@@ -125,7 +125,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 	t.Run("config", func(t *testing.T) {
 		config := &types.Block_ConfigTxEnvelope{}
 
-		txIDs, err := httputils.BlockPayloadToTxIDs(config)
+		txIDs, err := utils.BlockPayloadToTxIDs(config)
 		require.EqualError(t, err, "empty payload in: &{ConfigTxEnvelope:<nil>}")
 		require.Nil(t, txIDs)
 
@@ -133,7 +133,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			ConfigTxEnvelope: &types.ConfigTxEnvelope{},
 		}
 
-		txIDs, err = httputils.BlockPayloadToTxIDs(config)
+		txIDs, err = utils.BlockPayloadToTxIDs(config)
 		require.EqualError(t, err, "empty payload in: &{ConfigTxEnvelope:}")
 		require.Nil(t, txIDs)
 
@@ -143,7 +143,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			},
 		}
 
-		txIDs, err = httputils.BlockPayloadToTxIDs(config)
+		txIDs, err = utils.BlockPayloadToTxIDs(config)
 		require.EqualError(t, err, "missing TxId in: &{ConfigTxEnvelope:payload:<> }")
 		require.Nil(t, txIDs)
 	})
@@ -151,7 +151,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 	t.Run("data", func(t *testing.T) {
 		data := &types.Block_DataTxEnvelopes{}
 
-		txIDs, err := httputils.BlockPayloadToTxIDs(data)
+		txIDs, err := utils.BlockPayloadToTxIDs(data)
 		require.EqualError(t, err, "empty payload in: &{DataTxEnvelopes:<nil>}")
 		require.Nil(t, txIDs)
 
@@ -159,7 +159,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			DataTxEnvelopes: &types.DataTxEnvelopes{},
 		}
 
-		txIDs, err = httputils.BlockPayloadToTxIDs(data)
+		txIDs, err = utils.BlockPayloadToTxIDs(data)
 		require.EqualError(t, err, "empty payload in: &{DataTxEnvelopes:}")
 		require.Nil(t, txIDs)
 
@@ -168,7 +168,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 				Envelopes: []*types.DataTxEnvelope{},
 			},
 		}
-		txIDs, err = httputils.BlockPayloadToTxIDs(data)
+		txIDs, err = utils.BlockPayloadToTxIDs(data)
 		require.EqualError(t, err, "empty payload in: &{DataTxEnvelopes:}")
 		require.Nil(t, txIDs)
 
@@ -181,7 +181,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 				},
 			},
 		}
-		txIDs, err = httputils.BlockPayloadToTxIDs(data)
+		txIDs, err = utils.BlockPayloadToTxIDs(data)
 		require.EqualError(t, err, "empty payload in index [0]: &{DataTxEnvelopes:envelopes:<> }")
 		require.Nil(t, txIDs)
 
@@ -202,7 +202,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 				},
 			},
 		}
-		txIDs, err = httputils.BlockPayloadToTxIDs(data)
+		txIDs, err = utils.BlockPayloadToTxIDs(data)
 		require.EqualError(t, err, "missing TxId in index [1]: &{DataTxEnvelopes:envelopes:<payload:<must_sign_user_ids:\"alice\" tx_id:\"txid:1\" > > envelopes:<payload:<must_sign_user_ids:\"bob\" > > }")
 		require.Nil(t, txIDs)
 	})
@@ -250,7 +250,7 @@ func TestIsConfigBlock(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			isConfig := httputils.IsConfigBlock(tc.block)
+			isConfig := utils.IsConfigBlock(tc.block)
 			require.Equal(t, tc.expected, isConfig)
 		})
 	}

@@ -5,14 +5,14 @@ package httphandler
 import (
 	"net/http"
 
+	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/gorilla/mux"
 )
 
 // provenanceRequestHandler handles query and transaction associated
@@ -97,7 +97,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 	case query.Direction == "next":
 		response, err = p.db.GetNextValues(query.DbName, query.Key, query.Version)
 	default:
-		httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
+		utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "direction must be either [previous] or [next]",
 		})
 	}
@@ -107,7 +107,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +123,7 @@ func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +139,7 @@ func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *http.Request) {
@@ -155,7 +155,7 @@ func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *h
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r *http.Request) {
@@ -171,7 +171,7 @@ func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getDataDeletedByUser(w http.ResponseWriter, r *http.Request) {
@@ -187,7 +187,7 @@ func (p *provenanceRequestHandler) getDataDeletedByUser(w http.ResponseWriter, r
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r *http.Request) {
@@ -203,11 +203,11 @@ func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r 
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
 func processInternalError(w http.ResponseWriter, r *http.Request, err error) {
-	httputils.SendHTTPResponse(
+	utils.SendHTTPResponse(
 		w,
 		http.StatusInternalServerError,
 		&types.HttpResponseErr{
@@ -236,5 +236,5 @@ func (p *provenanceRequestHandler) getMostRecentUserOrNode(w http.ResponseWriter
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, response)
+	utils.SendHTTPResponse(w, http.StatusOK, response)
 }

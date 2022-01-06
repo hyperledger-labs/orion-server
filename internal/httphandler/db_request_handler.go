@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gorilla/mux"
 	backend "github.com/hyperledger-labs/orion-server/internal/bcdb"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/gorilla/mux"
 )
 
 // dbRequestHandler handles query and transaction associated
@@ -57,7 +57,7 @@ func (d *dbRequestHandler) dbStatus(response http.ResponseWriter, request *http.
 
 	dbStatus, err := d.db.GetDBStatus(query.DbName)
 	if err != nil {
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			http.StatusInternalServerError,
 			&types.HttpResponseErr{
@@ -67,13 +67,13 @@ func (d *dbRequestHandler) dbStatus(response http.ResponseWriter, request *http.
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, dbStatus)
+	utils.SendHTTPResponse(response, http.StatusOK, dbStatus)
 }
 
 func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *http.Request) {
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
@@ -82,30 +82,30 @@ func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *
 
 	txEnv := &types.DBAdministrationTxEnvelope{}
 	if err := dbRequestBody.Decode(txEnv); err != nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if txEnv.Payload == nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if txEnv.Payload.UserId == "" {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing UserID in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if len(txEnv.Signature) == 0 {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: fmt.Sprintf("missing Signature in transaction envelope payload (%T)", txEnv.Payload)})
 		return
 	}
 
 	if err, code := VerifyRequestSignature(d.sigVerifier, txEnv.Payload.UserId, txEnv.Signature, txEnv.Payload); err != nil {
-		httputils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, code, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 

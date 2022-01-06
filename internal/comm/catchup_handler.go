@@ -8,11 +8,11 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
-	"github.com/hyperledger-labs/orion-server/pkg/logger"
-	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 const (
@@ -62,25 +62,25 @@ func (h *catchupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *catchupHandler) blocksRequest(response http.ResponseWriter, request *http.Request) {
 	params := mux.Vars(request)
-	startBlockNum, endBlockNum, err := httputils.GetStartAndEndBlockNum(params)
+	startBlockNum, endBlockNum, err := utils.GetStartAndEndBlockNum(params)
 	if err != nil {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	height, err := h.ledgerReader.Height()
 	if err != nil {
-		httputils.SendHTTPResponse(response, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(response, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
 	if startBlockNum < 1 {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{fmt.Sprintf("requested startId [%d] must be greater than 0", startBlockNum)})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{fmt.Sprintf("requested startId [%d] must be greater than 0", startBlockNum)})
 		return
 	}
 
 	if startBlockNum > height {
-		httputils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{fmt.Sprintf("requested startId [%d] is out of range, height is [%d]", startBlockNum, height)})
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{fmt.Sprintf("requested startId [%d] is out of range, height is [%d]", startBlockNum, height)})
 		return
 	}
 
@@ -92,13 +92,13 @@ func (h *catchupHandler) blocksRequest(response http.ResponseWriter, request *ht
 		}
 		block, err := h.ledgerReader.Get(i)
 		if err != nil {
-			httputils.SendHTTPResponse(response, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(response, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return
 
 		}
 		blockBytes, err := proto.Marshal(block)
 		if err != nil {
-			httputils.SendHTTPResponse(response, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(response, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return
 
 		}
@@ -125,16 +125,16 @@ func sendHTTPMultiPartResponse(w http.ResponseWriter, blocks [][]byte, startBloc
 			fmt.Sprintf("block-%d", i),
 			fmt.Sprintf("num-%d", startBlockNum+uint64(i)))
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return
 		}
 		if _, err := fw.Write(blockBytes); err != nil {
-			httputils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+			utils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return
 		}
 	}
 	if err := mw.Close(); err != nil {
-		httputils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 }
@@ -147,9 +147,9 @@ func (h *catchupHandler) heightRequest(w http.ResponseWriter, r *http.Request) {
 	h.lg.Debugf("height request: %s", r.URL)
 	height, err := h.ledgerReader.Height()
 	if err != nil {
-		httputils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(w, http.StatusInternalServerError, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
 
-	httputils.SendHTTPResponse(w, http.StatusOK, HeightResponse{Height: height})
+	utils.SendHTTPResponse(w, http.StatusOK, HeightResponse{Height: height})
 }

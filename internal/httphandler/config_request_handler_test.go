@@ -17,7 +17,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb/mocks"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
@@ -753,7 +753,7 @@ func TestConfigRequestHandler_GetLastConfigBlock(t *testing.T) {
 					Header: &types.ResponseHeader{
 						NodeId: "testNodeId",
 					},
-					Block: httputils.MarshalOrPanic(
+					Block: utils.MarshalOrPanic(
 						&types.Block{
 							Header: &types.BlockHeader{
 								BaseHeader: &types.BlockHeaderBase{

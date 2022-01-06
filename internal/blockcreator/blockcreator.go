@@ -5,8 +5,8 @@ package blockcreator
 import (
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
@@ -141,7 +141,7 @@ func (b *BlockCreator) Start() {
 				// Releasing with an error will reject or redirect all sync TXs in the block via the pending-tx component.
 				// If there is another leader it will redirect, else reject. Async TXs will be removed.
 				// This will drain the pipeline and eventually there will be no more transactions coming in.
-				if txIDs, errID := httputils.BlockPayloadToTxIDs(block.Payload); errID == nil {
+				if txIDs, errID := utils.BlockPayloadToTxIDs(block.Payload); errID == nil {
 					b.pendingTxs.ReleaseWithError(txIDs, err)
 				} else {
 					b.logger.Errorf("failed to extract TXIDs from block: %s", errID)
