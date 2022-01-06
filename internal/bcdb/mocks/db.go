@@ -170,13 +170,13 @@ func (_m *DB) GetClusterStatus(noCerts bool) (*types.GetClusterStatusResponseEnv
 	return r0, r1
 }
 
-// GetConfig provides a mock function with given fields:
-func (_m *DB) GetConfig() (*types.GetConfigResponseEnvelope, error) {
-	ret := _m.Called()
+// GetConfig provides a mock function with given fields: querierUserID
+func (_m *DB) GetConfig(querierUserID string) (*types.GetConfigResponseEnvelope, error) {
+	ret := _m.Called(querierUserID)
 
 	var r0 *types.GetConfigResponseEnvelope
-	if rf, ok := ret.Get(0).(func() *types.GetConfigResponseEnvelope); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(string) *types.GetConfigResponseEnvelope); ok {
+		r0 = rf(querierUserID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetConfigResponseEnvelope)
@@ -184,8 +184,8 @@ func (_m *DB) GetConfig() (*types.GetConfigResponseEnvelope, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
+	if rf, ok := ret.Get(1).(func(string) error); ok {
+		r1 = rf(querierUserID)
 	} else {
 		r1 = ret.Error(1)
 	}

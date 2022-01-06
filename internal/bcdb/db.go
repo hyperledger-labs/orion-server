@@ -48,8 +48,10 @@ type DB interface {
 	// GetUser retrieves user' record
 	GetUser(querierUserID, targetUserID string) (*types.GetUserResponseEnvelope, error)
 
-	// GetConfig returns database configuration
-	GetConfig() (*types.GetConfigResponseEnvelope, error)
+	// GetConfig returns database configuration.
+	// Limited access to admins only. Regular users can use the `GetNodeConfig` or `GetClusterStatus` APIs to discover
+	// and fetch the details of nodes that are needed for external cluster access.
+	GetConfig(querierUserID string) (*types.GetConfigResponseEnvelope, error)
 
 	// GetConfigBlock returns a config block.
 	// Only admin users can get a config block.
@@ -363,9 +365,11 @@ func (d *db) GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope,
 	}, nil
 }
 
-// GetConfig returns database configuration
-func (d *db) GetConfig() (*types.GetConfigResponseEnvelope, error) {
-	configResponse, err := d.worldstateQueryProcessor.getConfig()
+// GetConfig returns database configuration.
+// Limited access to admins only. Regular users can use the `GetNodeConfig` or `GetClusterStatus` APIs to discover
+// and fetch the details of nodes that are needed for external cluster access.
+func (d *db) GetConfig(querierUserID string) (*types.GetConfigResponseEnvelope, error) {
+	configResponse, err := d.worldstateQueryProcessor.getConfig(querierUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -404,14 +408,14 @@ func (d *db) GetConfigBlock(querierUserID string, blockNumber uint64) (*types.Ge
 
 // GetClusterStatus returns the cluster status
 func (d *db) GetClusterStatus(noCerts bool) (*types.GetClusterStatusResponseEnvelope, error) {
-	configResponse, err := d.worldstateQueryProcessor.getConfig()
+	nodes, metadata, err := d.worldstateQueryProcessor.getNodeConfigAndMetadata()
 	if err != nil {
 		return nil, err
 	}
-	nodes := configResponse.GetConfig().GetNodes()
+
 	clusterStatusResponse := &types.GetClusterStatusResponse{
 		Nodes:   nodes,
-		Version: configResponse.GetMetadata().GetVersion(),
+		Version: metadata.GetVersion(),
 	}
 
 	leader, active := d.txProcessor.ClusterStatus()

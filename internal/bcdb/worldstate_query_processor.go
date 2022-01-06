@@ -120,9 +120,19 @@ func (q *worldstateQueryProcessor) getUser(querierUserID, targetUserID string) (
 	}, nil
 }
 
-func (q *worldstateQueryProcessor) getConfig() (*types.GetConfigResponse, error) {
-	// ACL may not be needed for the read as it would be useful to fetch IPs of
-	// all nodes even without cluster admin privilege. We can add it later if needed
+func (q *worldstateQueryProcessor) getConfig(querierUserID string) (*types.GetConfigResponse, error) {
+	// Limited access to admins only. Regular users can use the `GetNodeConfig` or `GetClusterStatus` APIs to discover
+	// and fetch the details of nodes that are needed for external cluster access.
+	isAdmin, err := q.identityQuerier.HasAdministrationPrivilege(querierUserID)
+	if err != nil {
+		return nil, err
+	}
+	if !isAdmin {
+		return nil, &errors.PermissionErr{
+			ErrMsg: "the user [" + querierUserID + "] has no permission to read a config object",
+		}
+	}
+
 	config, metadata, err := q.db.GetConfig()
 	if err != nil {
 		return nil, err
@@ -132,6 +142,15 @@ func (q *worldstateQueryProcessor) getConfig() (*types.GetConfigResponse, error)
 		Config:   config,
 		Metadata: metadata,
 	}, nil
+}
+
+func (q *worldstateQueryProcessor) getNodeConfigAndMetadata() ([]*types.NodeConfig, *types.Metadata, error) {
+	config, metadata, err := q.db.GetConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return config.Nodes, metadata, nil
 }
 
 func (q *worldstateQueryProcessor) getNodeConfig(nodeID string) (*types.GetNodeConfigResponse, error) {

@@ -908,35 +908,45 @@ func TestGetUser(t *testing.T) {
 }
 
 func TestGetConfig(t *testing.T) {
+	clusterConfig := &types.ClusterConfig{
+		Nodes: []*types.NodeConfig{
+			{
+				Id:          "node1",
+				Address:     "127.0.0.1",
+				Port:        1234,
+				Certificate: []byte("cert"),
+			},
+			{
+				Id:          "node2",
+				Address:     "127.0.0.1",
+				Port:        2345,
+				Certificate: []byte("cert"),
+			},
+		},
+		Admins: []*types.Admin{
+			{
+				Id:          "admin",
+				Certificate: []byte("admin-cert"),
+			},
+		},
+		CertAuthConfig: &types.CAConfig{
+			Roots: [][]byte{[]byte("cert")},
+		},
+	}
+
+	adminUpdates, err := identity.ConstructDBEntriesForClusterAdmins(
+		nil,
+		clusterConfig.Admins,
+		&types.Version{
+			BlockNum: 1,
+			TxNum:    5,
+		},
+	)
+	require.NoError(t, err)
+
 	t.Run("getConfig returns config", func(t *testing.T) {
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
-
-		clusterConfig := &types.ClusterConfig{
-			Nodes: []*types.NodeConfig{
-				{
-					Id:          "node1",
-					Address:     "127.0.0.1",
-					Port:        1234,
-					Certificate: []byte("cert"),
-				},
-				{
-					Id:          "node2",
-					Address:     "127.0.0.1",
-					Port:        2345,
-					Certificate: []byte("cert"),
-				},
-			},
-			Admins: []*types.Admin{
-				{
-					Id:          "admin",
-					Certificate: []byte("cert"),
-				},
-			},
-			CertAuthConfig: &types.CAConfig{
-				Roots: [][]byte{[]byte("cert")},
-			},
-		}
 
 		config, err := proto.Marshal(clusterConfig)
 		require.NoError(t, err)
@@ -958,6 +968,9 @@ func TestGetConfig(t *testing.T) {
 					},
 				},
 			},
+			worldstate.UsersDBName: {
+				Writes: adminUpdates.Writes,
+			},
 		}
 		dbUpdate, err := identity.ConstructDBEntriesForNodes(
 			nil,
@@ -967,11 +980,12 @@ func TestGetConfig(t *testing.T) {
 				TxNum:    5,
 			},
 		)
+		require.NoError(t, err)
 		dbUpdates[worldstate.ConfigDBName].Writes = append(dbUpdates[worldstate.ConfigDBName].Writes, dbUpdate.Writes...)
 		dbUpdates[worldstate.ConfigDBName].Deletes = append(dbUpdates[worldstate.ConfigDBName].Deletes, dbUpdate.Deletes...)
 		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
-		configEnvelope, err := env.q.getConfig()
+		configEnvelope, err := env.q.getConfig("admin")
 		require.NoError(t, err)
 
 		expectedConfig := &types.GetConfigResponse{
@@ -1002,44 +1016,104 @@ func TestGetConfig(t *testing.T) {
 					},
 				},
 			},
+			worldstate.UsersDBName: {
+				Writes: adminUpdates.Writes,
+			},
 		}
 		require.NoError(t, env.db.Commit(dbUpdates, 1))
 
-		configEnvelope, err := env.q.getConfig()
+		configEnvelope, err := env.q.getConfig("admin")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "error while unmarshaling committed cluster configuration")
+		require.Nil(t, configEnvelope)
+	})
+
+	t.Run("getConfig returns user does not exist err", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		}
+
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.ConfigDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      worldstate.ConfigKey,
+						Value:    []byte("config"),
+						Metadata: metadata,
+					},
+				},
+			},
+			worldstate.UsersDBName: {
+				Writes: adminUpdates.Writes,
+			},
+		}
+		require.NoError(t, env.db.Commit(dbUpdates, 1))
+
+		configEnvelope, err := env.q.getConfig("user")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "the user [user] does not exist")
+		require.Nil(t, configEnvelope)
+	})
+
+	t.Run("getConfig returns permission err", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		metadata := &types.Metadata{
+			Version: &types.Version{
+				BlockNum: 1,
+				TxNum:    5,
+			},
+		}
+
+		dbUpdates := map[string]*worldstate.DBUpdates{
+			worldstate.ConfigDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:      worldstate.ConfigKey,
+						Value:    []byte("config"),
+						Metadata: metadata,
+					},
+				},
+			},
+			worldstate.UsersDBName: {
+				Writes: adminUpdates.Writes,
+			},
+		}
+
+		user := &types.User{
+			Id:          "someone",
+			Certificate: []byte("someone-cert"),
+			Privilege: &types.Privilege{
+				Admin: false,
+			},
+		}
+		value, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		kvWriteUser := &worldstate.KVWithMetadata{
+			Key:      string(identity.UserNamespace) + user.Id,
+			Value:    value,
+			Metadata: metadata,
+		}
+		dbUpdates[worldstate.UsersDBName].Writes = append(dbUpdates[worldstate.UsersDBName].Writes, kvWriteUser)
+		require.NoError(t, env.db.Commit(dbUpdates, 1))
+
+		configEnvelope, err := env.q.getConfig("someone")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "the user [someone] has no permission to read a config object")
 		require.Nil(t, configEnvelope)
 	})
 
 	t.Run("getNodeConfig returns single node and multiple nodes config", func(t *testing.T) {
 		env := newWorldstateQueryProcessorTestEnv(t)
 		defer env.cleanup(t)
-
-		clusterConfig := &types.ClusterConfig{
-			Nodes: []*types.NodeConfig{
-				{
-					Id:          "node1",
-					Address:     "127.0.0.1",
-					Port:        1234,
-					Certificate: []byte("cert"),
-				},
-				{
-					Id:          "node2",
-					Address:     "127.0.0.1",
-					Port:        2345,
-					Certificate: []byte("cert"),
-				},
-			},
-			Admins: []*types.Admin{
-				{
-					Id:          "admin",
-					Certificate: []byte("cert"),
-				},
-			},
-			CertAuthConfig: &types.CAConfig{
-				Roots: [][]byte{[]byte("cert")},
-			},
-		}
 
 		config, err := proto.Marshal(clusterConfig)
 		require.NoError(t, err)
@@ -1060,6 +1134,9 @@ func TestGetConfig(t *testing.T) {
 						Metadata: metadata,
 					},
 				},
+			},
+			worldstate.UsersDBName: {
+				Writes: adminUpdates.Writes,
 			},
 		}
 		dbUpdate, err := identity.ConstructDBEntriesForNodes(

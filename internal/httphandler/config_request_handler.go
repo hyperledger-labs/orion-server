@@ -56,12 +56,13 @@ func (c *configRequestHandler) ServeHTTP(response http.ResponseWriter, request *
 }
 
 func (c *configRequestHandler) configQuery(response http.ResponseWriter, request *http.Request) {
-	_, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetConfig, c.sigVerifier)
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetConfig, c.sigVerifier)
 	if respondedErr {
 		return
 	}
+	query := payload.(*types.GetConfigQuery)
 
-	config, err := c.db.GetConfig()
+	config, err := c.db.GetConfig(query.GetUserId())
 	if err != nil {
 		utils.SendHTTPResponse(
 			response,

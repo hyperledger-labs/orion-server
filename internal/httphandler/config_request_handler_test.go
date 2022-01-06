@@ -63,7 +63,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetConfig").Return(response, nil)
+				db.On("GetConfig", "alice").Return(response, nil)
 				return db
 			},
 			expectedResponse: &types.GetConfigResponseEnvelope{
@@ -171,7 +171,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			dbMockFactory: func(response *types.GetConfigResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetConfig").Return(nil, errors.New("failed to get configuration"))
+				db.On("GetConfig", "alice").Return(nil, errors.New("failed to get configuration"))
 				return db
 			},
 			expectedResponse:   nil,
