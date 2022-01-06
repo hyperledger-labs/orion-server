@@ -17,7 +17,7 @@ import (
 // After the initial bootstrap, this part of the configuration can change only through configuration transactions.
 type SharedConfiguration struct {
 	// Nodes carry the identity, endpoint, and certificate of each database node that serves to clients.
-	Nodes     []NodeConf
+	Nodes     []*NodeConf
 	Consensus *ConsensusConf
 	CAConfig  CAConfiguration
 	Admin     AdminConf

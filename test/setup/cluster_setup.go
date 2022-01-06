@@ -397,7 +397,7 @@ func (c *Cluster) createBootstrapFile() error {
 	}
 
 	for _, s := range c.Servers {
-		sharedConfig.Nodes = append(sharedConfig.Nodes, config.NodeConf{
+		sharedConfig.Nodes = append(sharedConfig.Nodes, &config.NodeConf{
 			NodeID:          s.serverID,
 			Host:            s.address,
 			Port:            uint32(s.nodePort),

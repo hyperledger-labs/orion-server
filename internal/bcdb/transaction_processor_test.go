@@ -629,7 +629,7 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 			},
 		},
 		SharedConfig: &config.SharedConfiguration{
-			Nodes: []config.NodeConf{
+			Nodes: []*config.NodeConf{
 				{
 					NodeID:          "bdb-node-1",
 					Host:            "127.0.0.1",
