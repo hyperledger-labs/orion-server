@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -22,7 +22,7 @@ import (
 func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string, signVerifier *cryptoservice.SignatureVerifier) (interface{}, bool) {
 	querierUserID, signature, err := validateAndParseHeader(&r.Header)
 	if err != nil {
-		httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return nil, true
 	}
 
@@ -57,15 +57,15 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 	case constants.GetLastConfigBlock:
 		payload = &types.GetConfigBlockQuery{
-			UserId:               querierUserID,
-			BlockNumber:          0, // 0 means get last, as first block is 1
+			UserId:      querierUserID,
+			BlockNumber: 0, // 0 means get last, as first block is 1
 		}
 	case constants.GetClusterStatus:
 		noCertificates := false
 		if value, ok := params["noCertificates"]; ok {
 			noCertificates, err = strconv.ParseBool(value)
 			if err != nil {
-				httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+				utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 				return nil, true
 			}
 		}
@@ -75,9 +75,9 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			NoCertificates: noCertificates,
 		}
 	case constants.GetBlockHeader:
-		blockNum, err := httputils.GetBlockNum(params)
+		blockNum, err := utils.GetBlockNum(params)
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
@@ -85,7 +85,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		if _, ok := params["isAugmented"]; ok {
 			augmented, err = strconv.ParseBool(params["isAugmented"])
 			if err != nil {
-				httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+				utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 				return nil, true
 			}
 		}
@@ -100,9 +100,9 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			UserId: querierUserID,
 		}
 	case constants.GetPath:
-		startBlockNum, endBlockNum, err := httputils.GetStartAndEndBlockNum(params)
+		startBlockNum, endBlockNum, err := utils.GetStartAndEndBlockNum(params)
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
@@ -112,9 +112,9 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			EndBlockNumber:   endBlockNum,
 		}
 	case constants.GetTxProof:
-		blockNum, txIndex, err := httputils.GetBlockNumAndTxIndex(params)
+		blockNum, txIndex, err := utils.GetBlockNumAndTxIndex(params)
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
@@ -124,9 +124,9 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			TxIndex:     txIndex,
 		}
 	case constants.GetDataProof:
-		blockNum, err := httputils.GetBlockNum(params)
+		blockNum, err := utils.GetBlockNum(params)
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
@@ -134,7 +134,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		if _, ok := params["deleted"]; ok {
 			deleted, err = strconv.ParseBool(params["deleted"])
 			if err != nil {
-				httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+				utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 				return nil, true
 			}
 		}
@@ -152,15 +152,15 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			TxId:   params["txId"],
 		}
 	case constants.GetHistoricalData:
-		version, err := httputils.GetVersion(params)
+		version, err := utils.GetVersion(params)
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
 		v, isOnlyDeletesSet := params["onlydeletes"]
 		if isOnlyDeletesSet && v != "true" {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
 				ErrMsg: "the onlydeletes parameters must be set only to 'true'",
 			})
 			return nil, true
@@ -210,9 +210,9 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			TargetUserId: params["userId"],
 		}
 	case constants.GetMostRecentUserOrNode:
-		version, err := httputils.GetVersion(params)
+		version, err := utils.GetVersion(params)
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
@@ -231,19 +231,19 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		}
 	case constants.PostDataQuery:
 		if r.Body == nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: "query is empty"})
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: "query is empty"})
 			return nil, true
 		}
 
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 
 		q, err := strconv.Unquote(string(b))
 		if err != nil {
-			httputils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
 			return nil, true
 		}
 		payload = &types.DataJSONQuery{
@@ -255,7 +255,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 
 	err, status := VerifyRequestSignature(signVerifier, querierUserID, signature, payload)
 	if err != nil {
-		httputils.SendHTTPResponse(w, status, err)
+		utils.SendHTTPResponse(w, status, err)
 		return nil, true
 	}
 

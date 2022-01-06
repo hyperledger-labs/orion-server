@@ -23,8 +23,8 @@ func TestClusterSetup(t *testing.T) {
 		TestDirAbsolutePath: dir,
 		BDBBinaryPath:       "../../bin/bdb",
 		CmdTimeout:          10 * time.Second,
-		BaseNodePort: 64000,
-		BasePeerPort: 64100,
+		BaseNodePort:        64000,
+		BasePeerPort:        64100,
 	}
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)

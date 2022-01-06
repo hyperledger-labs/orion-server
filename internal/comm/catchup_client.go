@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
@@ -41,7 +41,7 @@ type catchUpClient struct {
 func NewCatchUpClient(lg *logger.SugarLogger, tlsConfig *tls.Config) *catchUpClient {
 	c := &catchUpClient{
 		httpClient: newHTTPClient(tlsConfig),
-		tlsConfig: tlsConfig,
+		tlsConfig:  tlsConfig,
 		logger:     lg,
 		members:    make(map[uint64]*url.URL),
 	}
@@ -169,7 +169,7 @@ func (c *catchUpClient) GetBlocks(ctx context.Context, targetID, start, end uint
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("Accept", httputils.MultiPartFormData)
+	req.Header.Add("Accept", utils.MultiPartFormData)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -247,12 +247,12 @@ func multipartResponseToBlocks(lg *logger.SugarLogger, resp *http.Response) ([]*
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse Content-Type header")
 	}
-	if mediaType != httputils.MultiPartFormData {
-		return nil, errors.Errorf("unexpected Content-Type: [%s], expected %s", mediaType, httputils.MultiPartFormData)
+	if mediaType != utils.MultiPartFormData {
+		return nil, errors.Errorf("unexpected Content-Type: [%s], expected %s", mediaType, utils.MultiPartFormData)
 	}
 	boundary, ok := params["boundary"]
 	if !ok {
-		return nil, errors.Errorf("%s boundary not found", httputils.MultiPartFormData)
+		return nil, errors.Errorf("%s boundary not found", utils.MultiPartFormData)
 	}
 
 	mr := multipart.NewReader(resp.Body, boundary)
@@ -275,7 +275,7 @@ func multipartResponseToBlocks(lg *logger.SugarLogger, resp *http.Response) ([]*
 
 	lg.Debugf("num blocks: %d, total-bytes: %d", len(blocks), totalBytes)
 	if len(blocks) == 0 {
-		return nil, errors.Errorf("empty %s, no blocks found", httputils.MultiPartFormData)
+		return nil, errors.Errorf("empty %s, no blocks found", utils.MultiPartFormData)
 	}
 
 	return blocks, nil

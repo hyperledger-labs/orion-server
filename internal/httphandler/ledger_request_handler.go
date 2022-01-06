@@ -8,7 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	"github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -96,7 +96,7 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -105,7 +105,7 @@ func (p *ledgerRequestHandler) blockQuery(response http.ResponseWriter, request 
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) lastBlockQuery(response http.ResponseWriter, request *http.Request) {
@@ -133,7 +133,7 @@ func (p *ledgerRequestHandler) lastBlockQuery(response http.ResponseWriter, requ
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -142,7 +142,7 @@ func (p *ledgerRequestHandler) lastBlockQuery(response http.ResponseWriter, requ
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *http.Request) {
@@ -165,7 +165,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -174,7 +174,7 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *http.Request) {
@@ -197,7 +197,7 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -206,7 +206,7 @@ func (p *ledgerRequestHandler) txProof(response http.ResponseWriter, request *ht
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *http.Request) {
@@ -228,7 +228,7 @@ func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -237,7 +237,7 @@ func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *http.Request) {
@@ -260,7 +260,7 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 			status = http.StatusInternalServerError
 		}
 
-		httputils.SendHTTPResponse(
+		utils.SendHTTPResponse(
 			response,
 			status,
 			&types.HttpResponseErr{
@@ -269,26 +269,26 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 		return
 	}
 
-	httputils.SendHTTPResponse(response, http.StatusOK, data)
+	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
 func (p *ledgerRequestHandler) invalidPathQuery(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "query error - bad or missing start/end block number",
 	}
-	httputils.SendHTTPResponse(response, http.StatusBadRequest, err)
+	utils.SendHTTPResponse(response, http.StatusBadRequest, err)
 }
 
 func (p *ledgerRequestHandler) invalidTxProof(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "tx proof query error - bad or missing query parameter",
 	}
-	httputils.SendHTTPResponse(response, http.StatusBadRequest, err)
+	utils.SendHTTPResponse(response, http.StatusBadRequest, err)
 }
 
 func (p *ledgerRequestHandler) invalidDataProof(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "data proof query error - bad or missing query parameter",
 	}
-	httputils.SendHTTPResponse(response, http.StatusBadRequest, err)
+	utils.SendHTTPResponse(response, http.StatusBadRequest, err)
 }

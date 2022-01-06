@@ -14,12 +14,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/comm"
 	"github.com/hyperledger-labs/orion-server/internal/comm/mocks"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -126,7 +126,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "0")
 		q.Add("end", "4")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", httputils.MultiPartFormData)
+		req.Header.Set("Accept", utils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -145,7 +145,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "10")
 		q.Add("end", "14")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", httputils.MultiPartFormData)
+		req.Header.Set("Accept", utils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -164,7 +164,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "4")
 		q.Add("end", "2")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", httputils.MultiPartFormData)
+		req.Header.Set("Accept", utils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -183,7 +183,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "2")
 		q.Add("end", "4")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", httputils.MultiPartFormData)
+		req.Header.Set("Accept", utils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -219,7 +219,7 @@ func TestCatchupHandler_ServeHTTP_Blocks(t *testing.T) {
 		q.Add("start", "2")
 		q.Add("end", "10")
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", httputils.MultiPartFormData)
+		req.Header.Set("Accept", utils.MultiPartFormData)
 		t.Logf("url: %s", req.URL.String())
 
 		h.ServeHTTP(resp, req)
@@ -272,10 +272,10 @@ func TestCatchupHandler_ServeHTTP_LargeResponse(t *testing.T) {
 		ledger1.Append(block)
 
 		if n == 1 {
-			b1Size = len(httputils.MarshalOrPanic(block))
+			b1Size = len(utils.MarshalOrPanic(block))
 		}
 		if n < 6 {
-			b5Size += len(httputils.MarshalOrPanic(block))
+			b5Size += len(utils.MarshalOrPanic(block))
 		}
 	}
 
@@ -289,7 +289,7 @@ func TestCatchupHandler_ServeHTTP_LargeResponse(t *testing.T) {
 		q.Add("start", "2")
 		q.Add("end", "9") // too many
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", httputils.MultiPartFormData)
+		req.Header.Set("Accept", utils.MultiPartFormData)
 
 		h.ServeHTTP(resp, req)
 		require.Equal(t, http.StatusOK, resp.Result().StatusCode)
@@ -330,7 +330,7 @@ func TestCatchupHandler_ServeHTTP_LargeResponse(t *testing.T) {
 		q.Add("start", "2")
 		q.Add("end", "8") // too many
 		req.URL.RawQuery = q.Encode()
-		req.Header.Set("Accept", httputils.MultiPartFormData)
+		req.Header.Set("Accept", utils.MultiPartFormData)
 
 		h.ServeHTTP(resp, req)
 		require.Equal(t, http.StatusOK, resp.Result().StatusCode)

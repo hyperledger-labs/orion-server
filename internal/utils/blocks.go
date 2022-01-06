@@ -1,11 +1,12 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package httputils
-
-//TODO rename package to utils, and utils.go to http.go
+package utils
 
 import (
+	"encoding/json"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 )
@@ -78,4 +79,22 @@ func IsConfigBlock(block *types.Block) bool {
 	default:
 		return false
 	}
+}
+
+func MarshalOrPanic(m proto.Message) []byte {
+	bytes, err := proto.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes
+}
+
+func MarshalJsonOrPanic(o interface{}) []byte {
+	bytes, err := json.Marshal(o)
+	if err != nil {
+		panic(err)
+	}
+
+	return bytes
 }

@@ -7,7 +7,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
@@ -43,7 +43,7 @@ func TestJoinBlock(t *testing.T) {
 
 	t.Run("bad block: no header", func(t *testing.T) {
 		joinBlockPath := path.Join(dir, "bad-cluster-join-1.block")
-		blockBytes := httputils.MarshalOrPanic(&types.Block{})
+		blockBytes := utils.MarshalOrPanic(&types.Block{})
 		ioutil.WriteFile(joinBlockPath, blockBytes, 0666)
 		joinBlock, err := readJoinBlock(joinBlockPath)
 		expectedErr := fmt.Sprintf("join block header is empty, file: %s", joinBlockPath)
@@ -53,7 +53,7 @@ func TestJoinBlock(t *testing.T) {
 
 	t.Run("bad block: no base header", func(t *testing.T) {
 		joinBlockPath := path.Join(dir, "bad-cluster-join-2.block")
-		blockBytes := httputils.MarshalOrPanic(&types.Block{
+		blockBytes := utils.MarshalOrPanic(&types.Block{
 			Header: &types.BlockHeader{},
 		})
 		ioutil.WriteFile(joinBlockPath, blockBytes, 0666)
@@ -65,7 +65,7 @@ func TestJoinBlock(t *testing.T) {
 
 	t.Run("bad block: no number", func(t *testing.T) {
 		joinBlockPath := path.Join(dir, "bad-cluster-join-3.block")
-		blockBytes := httputils.MarshalOrPanic(&types.Block{
+		blockBytes := utils.MarshalOrPanic(&types.Block{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{},
 			},
@@ -79,7 +79,7 @@ func TestJoinBlock(t *testing.T) {
 
 	t.Run("bad block: not a config block", func(t *testing.T) {
 		joinBlockPath := path.Join(dir, "bad-cluster-join-4.block")
-		blockBytes := httputils.MarshalOrPanic(&types.Block{
+		blockBytes := utils.MarshalOrPanic(&types.Block{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{Number: 10},
 			},
@@ -99,7 +99,7 @@ func TestJoinBlock(t *testing.T) {
 			},
 			Payload: &types.Block_ConfigTxEnvelope{},
 		}
-		blockBytes := httputils.MarshalOrPanic(block)
+		blockBytes := utils.MarshalOrPanic(block)
 		ioutil.WriteFile(joinBlockPath, blockBytes, 0666)
 		joinBlock, err := readJoinBlock(joinBlockPath)
 		expectedErr := fmt.Sprintf("join block config-tx envelope is empty or nil, file: %s", joinBlockPath)
@@ -107,7 +107,7 @@ func TestJoinBlock(t *testing.T) {
 		require.Nil(t, joinBlock)
 
 		block.Payload.(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope = &types.ConfigTxEnvelope{}
-		blockBytes = httputils.MarshalOrPanic(block)
+		blockBytes = utils.MarshalOrPanic(block)
 		ioutil.WriteFile(joinBlockPath, blockBytes, 0666)
 		joinBlock, err = readJoinBlock(joinBlockPath)
 		require.EqualError(t, err, expectedErr)
@@ -116,7 +116,7 @@ func TestJoinBlock(t *testing.T) {
 
 	t.Run("bad block: no new-config", func(t *testing.T) {
 		joinBlockPath := path.Join(dir, "bad-cluster-join-6.block")
-		blockBytes := httputils.MarshalOrPanic(&types.Block{
+		blockBytes := utils.MarshalOrPanic(&types.Block{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{Number: 10},
 			},
@@ -134,7 +134,7 @@ func TestJoinBlock(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		joinBlockPath := path.Join(dir, "cluster-join.block")
-		blockBytes := httputils.MarshalOrPanic(&types.Block{
+		blockBytes := utils.MarshalOrPanic(&types.Block{
 			Header: &types.BlockHeader{
 				BaseHeader: &types.BlockHeaderBase{Number: 10},
 			},

@@ -1,7 +1,7 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package httputils
+package utils
 
 import (
 	"encoding/json"
@@ -11,29 +11,10 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 const MultiPartFormData = "multipart/form-data"
-
-func MarshalOrPanic(m proto.Message) []byte {
-	bytes, err := proto.Marshal(m)
-	if err != nil {
-		panic(err)
-	}
-
-	return bytes
-}
-
-func MarshalJsonOrPanic(o interface{}) []byte {
-	bytes, err := json.Marshal(o)
-	if err != nil {
-		panic(err)
-	}
-
-	return bytes
-}
 
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
 func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {

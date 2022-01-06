@@ -13,7 +13,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/internal/httputils"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -369,7 +369,7 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 		Payload: &types.Block_DataTxEnvelopes{},
 	}
 	raftConfig := proto.Clone(raftConfigNoSnapshots).(*types.RaftConfig)
-	raftConfig.SnapshotIntervalSize = uint64(4*len(httputils.MarshalOrPanic(block)) + 1) // snapshot every ~5 blocks
+	raftConfig.SnapshotIntervalSize = uint64(4*len(utils.MarshalOrPanic(block)) + 1) // snapshot every ~5 blocks
 
 	env := createClusterEnv(t, 3, raftConfig, "info")
 	defer os.RemoveAll(env.testDir)

@@ -94,8 +94,8 @@ func TestBlockQuery(t *testing.T) {
 							},
 						},
 						TxIds: []string{
-								"tx1",
-								"tx2",
+							"tx1",
+							"tx2",
 						},
 					},
 				},
