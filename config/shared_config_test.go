@@ -9,7 +9,7 @@ import (
 )
 
 var expectedSharedConfig = &SharedConfiguration{
-	Nodes: []NodeConf{
+	Nodes: []*NodeConf{
 		{
 			NodeID:          "bcdb-node1",
 			Host:            "bcdb1.example.com",

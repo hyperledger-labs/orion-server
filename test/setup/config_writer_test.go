@@ -78,8 +78,8 @@ func TestWriteSharedConfig(t *testing.T) {
 	defer os.RemoveAll(testDir)
 
 	sharedConfig := &config.SharedConfiguration{
-		Nodes: []config.NodeConf{
-			config.NodeConf{NodeID: "bla", Host: "bla", Port: 777, CertificatePath: "bla"},
+		Nodes: []*config.NodeConf{
+			{NodeID: "bla", Host: "bla", Port: 777, CertificatePath: "bla"},
 		},
 		Consensus: &config.ConsensusConf{
 			Algorithm: "raft",

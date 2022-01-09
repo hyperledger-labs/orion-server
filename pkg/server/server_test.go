@@ -204,7 +204,7 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 			},
 		},
 		SharedConfig: &config.SharedConfiguration{
-			Nodes: []config.NodeConf{
+			Nodes: []*config.NodeConf{
 				{
 					NodeID:          nodeID,
 					Host:            "127.0.0.1",
