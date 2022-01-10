@@ -11,12 +11,11 @@ title: Orion Executable
 
 ## 1) Prerequisites
 
-To build an executable binary file, the following prerequisites should be installed on the platform on which
-Orion will be deployed.
+To build an executable binary file, the following prerequisites should be installed on the platform on which Orion will be deployed.
 
   - **[Go Programming Language](https://golang.org/)**: The database uses the Go Programming Language for many of its components. Go version 1.16.x or higher is required.
   - **[Make](https://man7.org/linux/man-pages/man1/make.1.html)**: To build a binary file and execute a unit-test, the `make` utility is required.
-  - **[Git](https://github.com/git-guides/install-git)**: Used to clone the code repository.
+  - **[Git](https://github.com/git-guides/install-git)**: Git is used to clone the code repository.
 
 ## 2) Build
 
@@ -54,7 +53,7 @@ For additional health checks, we can run `make test` to ensure all tests pass.
 ## 3) Start
 
 To start a node, we need a certificate authority and crypto materials for the node and admin users. To simplify this task, we have provided sample
-crypto materials and configuration files in the `deployment/sample/`. In order to understand the configuration files and procedure for creating crypto
+crypto materials and configuration files in the `deployment/sample/` folder. In order to understand the configuration files and procedure for creating crypto
 materials, refer to [crypto materials](crypto-materials).
 
 Let's start a node with the sample configuration:

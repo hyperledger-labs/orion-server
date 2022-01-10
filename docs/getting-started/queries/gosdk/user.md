@@ -3,7 +3,7 @@ id: user
 title: Query User Information
 ---
 
-To query a credential, associated with a user, we need to use a user administration transaction context.
+To query a credential associated with a user, we need to use a user administration transaction context.
 The `GetUser()` method in the `UsersTxContext` retrieves a given user from the user database.
 
 ```go
@@ -17,12 +17,12 @@ type UsersTxContext interface {
 }
 ```
 
-:::info pre-requisite
+:::info prerequisite
 For the example shown here to work, we need to have
 
- 1. Two databases named `db1` and `db2` in the orion-server. If you have not created these two databases,
+- Two databases named `db1` and `db2` in the Orion server. If you have not created these two databases,
 refer to [creates databases using SDK](../../transactions/gosdk/dbtx#1-creation-of-databases) to create `db1` and `db2`.
- 2. Two users named `alice` and `bob`. If you have not created these users already, refer to [create users using SDK](../../transactions/gosdk/usertx#1-addition-of-users).
+- Two users named `alice` and `bob`. If you have not created these users already, refer to [create users using SDK](../../transactions/gosdk/usertx#1-addition-of-users).
 
 Finally, [Create a connection](../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and
 [Open a database session](../../pre-requisite/gosdk#opening-a-database-session).
@@ -56,14 +56,14 @@ func main() {
 }
 ```
 
-## Source Code Commentry
-For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found
+## Source Code Commentary
+For the sake of simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found
 [here](../../pre-requisite/gosdk).
 
-The `session.UsersTx()` starts a new user administration transaction and returns the user administration transaction context. We can then query
+Calling `session.UsersTx()` starts a new user administration transaction and returns the user administration transaction context. We can then query
 credentials using this transaction context.
 
-The `GetUser("alice")` fetches the alice credentials from Orion server. The structure of the returned user is shown below:
+Calling `GetUser("alice")` fetches the alice credentials from the Orion server. The structure of the returned user is shown below:
 
 ```go
 type User struct {

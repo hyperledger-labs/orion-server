@@ -4,19 +4,19 @@ title: Check the Existence of a Database
 ---
 ## Checking the Database Existance
 
-To check whether a database exist/created, the user can issue a GET request on `/db/{dbname}` endpoint where `{dbname}` should be replaced with
-the `dbname` for which the user needs to perform this check.
+To check whether a database exists / has been created, the user can issue a GET request on the `/db/{dbname}` endpoint where `{dbname}` should be replaced with
+the `dbname` for which the user wants to perform this check.
 
-For this query, the submitting user needs to sign `{"user_id":"<userid","db_name":"<dbname>"}` where `userid` denotes the submitting user and the
-`<dbname>` denotes the name of the database for which the user performs the existance check.
+For this query, the submitting user needs to sign `{"user_id":"<userid","db_name":"<dbname>"}`, where `userid` denotes the submitting user and the
+`<dbname>` denotes the name of the database for which the user is performing the existence check.
 
-When the BDB server bootups, it creates a default database called `bdb` in the cluster. Hence, we can check its existance. For this case, the
+When the BDB server boot up, it creates a default database called `bdb` in the cluster. Hence, we can check its existence. For this case, the
 submitting user `admin` needs to sign `{"user_id":"admin","db_name":"bdb"}` as shown below:
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","db_name":"bdb"}'
 ```
-The above command would produce a digital signature and prints it as base64 encoded string as shown below:
+The above command produces a digital signature and prints it as a base64-encoded string as shown below:
 ```shell
 MEUCIBzH0qIz88jKdHsJvmQsNNuK3Cf0G+7LDWSiwv6yjba0AiEAgb/hBFZrr3w64M0Q6LmZjQ0i/sjYr27K1DJSlXHWfRU=
 ```

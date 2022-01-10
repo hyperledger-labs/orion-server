@@ -4,21 +4,20 @@ title: Query User Information
 ---
 ## Querying the User Information
 
-One user can query information about another user or self. If the access control is defined for the user entry, it would be enforced during the query.
-A user information can be retrieved by issuing a `GET` request on `/user/{userid}` endpoint where `{userid}` should be replaced with the ID of the user
-whom information needs to be fetched.
+Users can query information about other users or about themselves. If the access control is defined for the user entry, it would be enforced during the query.
+User information can be retrieved by issuing a `GET` request on the `/user/{userid}` endpoint, where `{userid}` should be replaced with the ID of the user
+whose information needs to be fetched.
 
-Here, the submitting user needs to sign the `{"user_id":"<submitting_user_id>","target_user_id":"<target_user_id"}` where `<submitting_user_id>` denotes the
-ID of the user who is submitting the query and `<target_user_id>` denotes the ID of the user whom information needs to be fetched.
+Here, the submitting user needs to sign the `{"user_id":"<submitting_user_id>","target_user_id":"<target_user_id"}`, where `<submitting_user_id>` denotes the
+ID of the user who is submitting the query and `<target_user_id>` denotes the ID of the user whose information needs to be fetched.
 
-In our `config.yml`, we have an admin entry with ID `admin`. Hence, we do a self query.
-In our example, the submitting user `admin` wants to fetch its own information and hence, the following data needs to be signer
-`{"user_id":"admin","target_user_id":"admin"}` as follows:
+In our `config.yml`, we have an admin entry with the ID `admin`. Hence, we do a self query.
+In our example, the submitting user `admin` wants to fetch its own information and hence, the following data needs to be signer `{"user_id":"admin","target_user_id":"admin"}` as follows:
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","target_user_id":"admin"}'
 ```
-The above command would produce a digital signature and prints it as base64 encoded string as shown below:
+The above command would produce a digital signature and prints it as a base64-encoded string as shown below:
 ```shell
 MEQCIB6NmOvgUvYwRLBAFz/OovrGRfhnwbxMwFb4+Dniano6AiBbObFcC6Cv/wcBLXzDf3pG0zybHTSA5ksMGCusfAridw==
 ```

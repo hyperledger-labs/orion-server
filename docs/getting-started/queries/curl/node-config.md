@@ -5,16 +5,16 @@ title: Query a Node's Configuration
 ### Querying a Particular Node's Configuration
 
 While `GET /config/tx` returns the complete configuration, we can use `GET /config/node/{nodeid}` to fetch the configuration of a particular node.
-Here, the submitting user needs to sign `{"user_id":"<userid>","node_id":"<nodeid>"}` where `<userid>` denotes the id of the submitting user and
-`<nodeid>` denotes the id of the blockchain database for which the user tries to fetch the configuration.
+Here, the submitting user needs to sign `{"user_id":"<userid>","node_id":"<nodeid>"}`, where `<userid>` denotes the id of the submitting user and
+`<nodeid>` denotes the id of the blockchain database for which the user is trying to fetch the configuration.
 
-In our example, the JSON data to be signed is `{"user_id":"admin","node_id":"bdb-node-1"}` because the `admin` is submitting a request to fetch
-the configuration of the node with id `bdb-node-1`
+In our example, the JSON data to be signed is `{"user_id":"admin","node_id":"bdb-node-1"}`, because the `admin` is submitting a request to fetch
+the configuration of the node with the id `bdb-node-1`.
 
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","node_id":"bdb-node-1"}'
 ```
-The above command would produce a digital signature and prints it as base64 encoded string as shown below
+The above command produces a digital signature and prints it as a base64-encoded string as shown below.
 ```
 MEQCIEAxqk1RnWBvCt9OV7zycK3U5itkEumSpEXivv/2R030AiA5mZMgvIDEgPP2J1TGRPsgyXZY6VrAcWTyFAzlLgKpPg==
 ```
@@ -28,8 +28,7 @@ curl \
    -H "Signature: MEQCIEAxqk1RnWBvCt9OV7zycK3U5itkEumSpEXivv/2R030AiA5mZMgvIDEgPP2J1TGRPsgyXZY6VrAcWTyFAzlLgKpPg==" \
    -X GET http://127.0.0.1:6001/config/node/bdb-node-1 | jq .
    ```
-A sample output of above command is shown below. The actual content might change depending on the configuration specified in `config.yml`
-for the node `bdb-node-1`. The output would only contain the configuration of the node `bdb-node-1`.
+A sample output of above command is shown below. The actual content might change depending on the configuration specified in `config.yml` for the node `bdb-node-1`. The output would only contain the configuration of the node `bdb-node-1`.
 
 ```webmanifest
 {

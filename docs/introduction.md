@@ -21,7 +21,7 @@ Orion is a **key-value/document database** with certain blockchain properties, i
 Orion **DOES NOT** have the following two blockchain properties:
 
   - **Smart-Contracts**: A set of functions that manage data on the blockchain ledger. Transactions are invocations of one or more smart contract's functions.
-  - **Decentralization of Trust**: A permissioned setup of known but untrusted organizations each operating their own independent database nodes but connected together to form a blockchain network. As one node cannot trust the execution results of another node, ordering transactions must be done with a BFT protocol and all transactions must be independently executed on all nodes.
+  - **Decentralization of Trust**: A permissioned setup of known but untrusted organizations, each operating their own independent database nodes but connected together to form a blockchain network. As one node cannot trust the execution results of another node, ordering transactions must be done with a BFT protocol and all transactions must be independently executed on all nodes.
 
 ## High-Level Architecture
 Figure 1 presents the high-level architecture of Orion.
@@ -34,9 +34,7 @@ Orion stores and manages the following five data elements:
   3. **Historical Key-Value Pairs**: Storage of all past/inactive key-value pairs using a graph data structure with additional metadata such as the user who modified the key-value pair, all previous and next values of the key, transactions that have read or written to
   the key-value pair, etc... This helps to provide a complete data lineage.
   4. **Authenticated Data Structure**: Storage of Merkle Patricia Tree where leaf node is nothing but a key-value pair. This helps in creating proofs for the existence or non-existence of a key-value pair and transaction.
-  5. **Hash chain of blocks**: Storage of cryptographically linked blocks, where each block holds a set of transactions submitted
-  by the user along with its commit status, summary of state changes in the form of Merkle Patricia's Root hash, etc... This helps in
+  5. **Hash Chain of Blocks**: Storage of cryptographically linked blocks, where each block holds a set of transactions submitted by the user along with its commit status, summary of state changes in the form of Merkle Patricia's Root hash, etc... This helps in
   creating a proof for the existence of a block or a transaction.
 
-The users of Orion can query these five data elements provided that they have the required privileges and
-also can perform transactions to modify active key-value pairs. When a user submits a transaction, user receives a transaction receipt from the Orion node after the commit of a block that includes the transaction. The user can then store the receipt locally to perform client-side verification of the proof of existence of a key-value pair, transaction, or a block.
+The users of Orion can query these five data elements provided that they have the required privileges and they can also perform transactions to modify active key-value pairs. When a user submits a transaction, the user receives a transaction receipt from the Orion node after the commit of a block that includes the transaction. The user can then store the receipt locally to perform client-side verification of the proof of existence of a key-value pair, transaction, or a block.

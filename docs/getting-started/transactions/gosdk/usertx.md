@@ -4,17 +4,18 @@ title: User Administration Transaction
 ---
 # User Administration Transaction
 
-We can create, update and delete users of the Orion cluster using the user administration transaction.
+We can create, update, and delete users of the Orion cluster using the user administration transaction.
 
-Next, we will see an example for
-  1. [Addition of Users](#2-addition-of-users)
-  2. [Updation of Users](#3-updation-of-users)
-  3. [Deletion of Users](#4-deletion-of-a-user)
+In this document, we present examples for
+
+  1. [Adding users](#2-adding-users)
+  2. [Updating users](#3-updating-users)
+  3. [Deleting users](#4-deleting-a-user)
 
 Note that all user administration transactions must be submitted by the admin.
 
-:::info pre-requisite
-For all examples shown here to work, we need to have two databases named `db1` and `db2` in the orion-server. If you have not created these to databases,
+:::info prerequisite
+For all examples shown here to work, we need to have two databases named `db1` and `db2` in the Orion server. If you have not created these two databases,
 refer to [creates databases using SDK](./dbtx#creation-of-databases) to create `db1` and `db2`.
 
 [Create a connection](../../pre-requisite/gosdk#creating-a-connection-to-the-orion-cluster) and [Open a database session](../../pre-requisite/gosdk#opening-a-database-session).
@@ -49,7 +50,7 @@ type UsersTxContext interface {
 When the cluster is started for the first time, it will contain only the admin user specified in the `config.yml`. This admin user can add any other user to the cluster.
 
 ### 1.1) Source Code
-The following code adds two new users `alice` and `bob` to the orion cluster.
+The following code adds two the new users `alice` and `bob` to the Orion cluster.
 ```go
 package main
 
@@ -140,12 +141,12 @@ func createBobUser() (*types.User, error) {
 
 ### 1.2) Source Code Commentary
 
-For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found [here](../../pre-requisite/gosdk).
+For the sake of simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found [here](../../pre-requisite/gosdk).
 
 The `session.UsersTx()` starts a new user administration transaction and returns the user administration transaction context. We can then perform all
 user administrative activities using this transaction context.
 
-The first setup is to create the user `alice` and `bob`. The structure of an user is shown below:
+The first setup is to create the users `alice` and `bob`. The structure of a user is shown below:
 ```go
 type User struct {
 	Id                   string
@@ -165,11 +166,10 @@ type Privilege struct {
 }
 ```
 
-The `Id` field holds an unique identifier or username. The `Certificate` field holds the pem decoded certificate of the user. The `Privilege` field holds 
-the access privileges of this user such as read and write permissions to various databases.
+The `Id` field holds a unique identifier or username. The `Certificate` field holds the pem-decoded certificate of the user. The `Privilege` field holds 
+the access privileges of this user, such as read and write permissions to various databases.
 
-In the above code, we have created the user `alice` with read permission to the database `db1` and read-write permission to the database `db2`. Then,
-we have created the user `bob` with only read permission to both `db1` and `db2`.
+In the above code, we created the user `alice` with read permission to the database `db1` and read-write permission to the database `db2`. We also created the user `bob` with only read permission to both `db1` and `db2`.
 
 Once the users are created, `tx.PutUser("alice", nil)` stores the user `alice` to the database while `tx.PutUser("bob", bobACL)` stores the user `bob`
 to the database with read-write ACL on the user `bob`.
@@ -185,20 +185,21 @@ type AccessControl struct {
 }
 ```
 
-The `ReadUsers` can be used to define which users have read access on this user. In the above code, only the `admin` user has the read access on the user `bob`.
-As no users in `ReadWriteUsers`, no one can update the user `bob`. In other words, the user `bob` can be read by `admin` and never be updated by anyone.
+`ReadUsers` can be used to define which users have read access on this user. In the above code, only the `admin` user has the read access on the user `bob`.
+As there are no users in `ReadWriteUsers`, no one can update the user `bob`. In other words, the user `bob` can be read by `admin` and never be updated by anyone.
 
-Finally, the transaction is committed by calling `dbtx.Commit(true)`. The argument true denotes that the synchronous submission. As a result, the `Commit()`
-would return the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
+Finally, the transaction is committed by calling `dbtx.Commit(true)`. The argument "true" denotes that this is a synchronous submission. As a result, the `Commit()`
+returns the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
 
-The structure of txReceipt can be seen [here]. The user can store this txReceipt as it is a committment used to verify the proof generated by the server.
+The structure of txReceipt can be seen [here]. The user can store this txReceipt as it is a commitment used to verify the proof generated by the server.
 
-## 2) Updation of Users
+## 2) Update users
 
 Let's update the user `alice` to have no privileges. This can be done by
-  1. fetching the `alice` record from the database
-  2. setting the `Privilege` field to `nil`
-  3. committing the updated `alice` record to the database
+
+  1. Fetching the `alice` record from the database
+  2. Setting the `Privilege` field to `nil`
+  3. Committing the updated `alice` record to the database
 
 ### 2.1) Source Code
 
@@ -235,28 +236,28 @@ func main() {
 ```
 
 ### 2.2) Source Code Commentary
-For simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found
+For the sake of simplicity, not all errors are handled in this code. Further, the implementation of `createConnection()` and `openSession()` can be found
 [here](../../pre-requisite/gosdk).
 
 The `session.UsersTx()` starts a new user administration transaction and returns the user administration transaction context. We can then perform
 all user administrative activities using this transaction context.
 
-In order to update the `Privilege` detail of the user `alice`, first, we fetch the `alice` record from the database. This is done by calling
+In order to update the `Privilege` detail of the user `alice`, first we fetch the `alice` record from the database. This is done by calling
 `tx.GetUser("alice")`. Second, to remove all privileges assigned to the user `alice`, we set `Privilege` to `nil` in the fetched record. Third, we
 store the updated `alice` to the database by calling `tx.PutUser(alice, nil)`.
 
-Finally, the transaction is committed by calling `dbtx.Commit(true)`. The argument true denotes that the synchronous submission. As a result,
-the `Commit()` would return the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
+Finally, the transaction is committed by calling `dbtx.Commit(true)`. The argument true denotes that this is a synchronous submission. As a result,
+the `Commit()` returns the transaction receipt if this transaction gets committed before the `TxTimeout` configured in the `openSession()`.
 
 ## 3) Deletion of a User
 
 Let's delete the user `bob`. To do that, we need to execute the following steps:
 
-  1. Fetch the user `alice`. This would record the read version in the transaction.
-  2. Delete the user `alice`
-  3. Commit the transaction
+  1. Fetch the user `alice`. This records the read version in the transaction.
+  2. Delete the user `alice`.
+  3. Commit the transaction.
 
-Note that if we do not fetch the user `alice` and instead delete the user directly, it would result in a blind delete.
+Note that if we do not fetch the user `alice` and instead delete the user directly, it results in a blind delete.
 
 ### 3.1) Source Code
 ```go
@@ -298,12 +299,12 @@ For simplicity, not all errors are handled in this code. Further, the implementa
 The `session.UsersTx()` starts a new user administration transaction and returns the user administration transaction context. We can then perform
 all user administrative activities using this transaction context.
 
-To delete the user `alice`, first, we fetch the user by calling `tx.GetUser("alice")`. This is just to record the version so that multi-version concurrency
+To delete the user `alice`, first we fetch the user by calling `tx.GetUser("alice")`. This is just to record the version so that multi-version concurrency
 control can be executed. Second, the user is deleted by calling `tx.RemoveUser("alice")`. Finally, the transaction is committed by calling `dbtx.Commit(true)`.
-The argument true denotes that the synchronous submission. As a result, the `Commit()` would return the transaction receipt if this transaction gets
+The argument "true" denotes that this is a synchronous submission. As a result, the `Commit()` returns the transaction receipt if this transaction gets
 committed before the `TxTimeout` configured in the `openSession()`.
 
 
 :::info Additional Examples
-In addition to this example, you can download and use user administration transaction example from gosdk examples folder: [orion-sdk-go/examples/api/user_tx/user_tx.go](https://github.com/hyperledger-labs/orion-sdk-go/blob/main/examples/api/user_tx/user_tx.go)
+In addition to this example, you can download and use user administration transaction example from the gosdk examples folder: [orion-sdk-go/examples/api/user_tx/user_tx.go](https://github.com/hyperledger-labs/orion-sdk-go/blob/main/examples/api/user_tx/user_tx.go)
 :::

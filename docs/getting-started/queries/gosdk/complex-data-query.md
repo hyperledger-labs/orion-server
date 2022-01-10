@@ -33,7 +33,7 @@ type JSONQuery interface {
 }
 ```
 
-To query data, we need to call `Execute()` method of the object from above.
+To query data, we need to call the `Execute()` method of the object from above.
 
 <details>
 <summary> Pre-requisite: Create db3 with index, provide read-write permission on db3 to Alice, write sample data for queries</summary>
@@ -138,7 +138,7 @@ func createAlice(s bcdb.DBSession) error {
 
 </details>
 
-## 1) Equal Operator (`$eq`)
+## 1) Equal operator (`$eq`)
 ```go
 package main
 
@@ -260,7 +260,7 @@ person4: {"name":"d","age":19,"graduated":false,"rating":-1}
 
 </details>
 
-## 2) Not Equal Operator (`$neq`)
+## 2) Not equal operator (`$neq`)
 
 ```go
 package main
@@ -390,7 +390,7 @@ person3: {"name":"c","age":20,"graduated":false,"rating":-4}
 
 </details>
 
-## 3) Greater than (`$gt`) Operator
+## 3) Greater than (`$gt`) operator
 ```go
 package main
 
@@ -519,7 +519,7 @@ person6: {"name":"f","age":24,"graduated":true,"rating":12,"degree":"bachelor"}
 
 </details>
 
-## 4) Lesser than (`$lt`) Operator
+## 4) Lesser than (`$lt`) operator
 
 ```go
 package main
@@ -644,7 +644,7 @@ person2: {"name":"b","age":48,"graduated":true,"rating":-100,"degree":"bachelor"
 
 </details>
 
-## 5) Greater than or equal (`$gte`) Operator
+## 5) Greater than or equal (`$gte`) operator
 
 ```go
 package main
@@ -778,7 +778,7 @@ person3: {"name":"c","age":20,"graduated":false,"rating":-4}
 
 </details>
 
-## 6) Lesser than or equal (`$gte`) Operator
+## 6) Lesser than or equal (`$gte`) operator
 
 ```go
 package main
@@ -909,7 +909,7 @@ person3: {"name":"c","age":20,"graduated":false,"rating":-4}
 
 </details>
 
-## 7) Multiple Logical Operators (`$gt`, `$lt`, `$gte`, `$lte`,`$neq`)
+## 7) Multiple logical operators (`$gt`, `$lt`, `$gte`, `$lte`,`$neq`)
 
 ```go
 package main
@@ -1045,7 +1045,7 @@ person7: {"name":"g","age":28,"graduated":false,"rating":100}
 
 </details>
 
-## 8) Combinational Operators - `$and` and `$or`
+## 8) Combinational operators - `$and` and `$or`
 
 ```go
 package main

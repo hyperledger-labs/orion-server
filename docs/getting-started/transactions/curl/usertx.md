@@ -4,27 +4,28 @@ title: User Administration Transaction
 ---
 # User Administration Transaction
 
-We can create, update and delete users of the Orion cluster using the user administration transaction. By issuing a `POST /user/tx {txPayload}`, we can perform the user administration.
+We can create, update, and delete users of the Orion cluster using the user administration transaction. By issuing a `POST /user/tx {txPayload}`, we can carry out user administration.
 
-Next, we will see an example for
-  1. [Addition of Users](#2-addition-of-users)
-  2. [Updation of Users](#3-updation-of-a-user)
-  3. [Deletion of Users](#4-deletion-of-a-user)
+In this document, we present examples for:
+
+  1. [Adding users](#2-adding-users)
+  2. [Updating users](#3-updating-a-user)
+  3. [Deleting users](#4-deleting-a-user)
 
 Note that all user administration transactions must be submitted by the admin.
 
 :::caution
-It is recommended to start a fresh orion server for executing these examples. Otherwise, you need to carefully change the block number specified as
-part of version in the read-set of the transaction payload. You will get more clarity as you read this doc. Once a fresh orion server is started
+It is recommended to start a fresh Orion server for executing these examples. Otherwise, you must carefully change the block number specified as
+part of the version in the read-set of the transaction payload. This document explains this issue in detail. Once a fresh Orion server is started
 after removing the `ledger` directory, create two databases named `db1` and `db2`. Refer [here](./dbtx.md#create-databases-named-db1-and-db2)
 for an example `cURL` command for creating databases named `db1` and `db2`.
 :::
 
-## 1) Addition of Users
+## 1) Adding Users
 
 ### 1.1) Adding users `alice` and `bob`
 
-When the cluster is started for the first time, it will contain only the admin user specified in the `config.yml`. This admin user can add any other user to the cluster.
+When the cluster is started for the first time, it contains only the admin user specified in the `config.yml`. This admin user can add any other user to the cluster.
 In the below example, the admin user is adding two users named `alice` and `bob` with certain privileges. The crypto materials associated with `alice` and `bob` can
 be found in `/deployment/sample/crypto`.
 
@@ -72,14 +73,14 @@ curl \
     "signature": "MEUCIHLCSwMzwxmnRfB6s1eON2bMfgDwFvxoSqaZ6ACXcbn0AiEA8KhjY56tSRg9Hh9UGchhGybTV2rWl1NcsAPLyW71Vu8="
 }'
 ```
-The user `alice` has read only access on the database `db1` and read-write access on the database `db2`. These privileges are defined under `db_permission`.
+The user `alice` has read-only access on the database `db1` and read-write access on the database `db2`. These privileges are defined under `db_permission`.
 The `"db1":0` denotes that the user has read-only privilege on database `db1` while `"db2":1` denotes that the user has read-write privilege on database `db2`.
 In other words, `0` denotes read-only privilege and `1` denotes read-write privilege. As the access control is not defined for the user,
-any user can read the credential and privilege of `alice` but only `admin` user can modify the properties of `alice` user.
+any user can read the credential and privilege of `alice`, but only the `admin` user can modify the properties of the `alice` user.
 
-The user `bob` has read-only privilege on the database `db1` and `db2`. Further, only the `admin` user can read the credential and privilege of `bob`.
+The user `bob` has read-only privilege on the database `db1` and `db2`. Furthermore, only the `admin` user can read the credential and privilege of `bob`.
 
-Moreover, the user `bob` cannot be modified as the `"read_write_users"` section is left out empty. This means no user has permission to write to user `bob`.
+Moreover, the user `bob` cannot be modified as the `"read_write_users"` section is left empty. This means no user has permission to write to user `bob`.
 
 The signature for the above transaction payload is computed by executing the following command:
 ```shell
@@ -91,7 +92,7 @@ The signature for the above transaction payload is computed by executing the fol
 MEYCIQCBA3pw0C1wgJMjOYDnhr5C0QeaSfradKdCFVCSWwXFdwIhAP80o5VZY2VBp4Lr5+4lG9hNuFL3Da53LXP9N7uAyNfn
 ```
 
-On a successful commit of the above transaction, the submitter of the transaction would receive the following transaction receipt:
+Upon a successful commit of the above transaction, the submitter of the transaction receives the following transaction receipt:
 ```webmanifest
 {
   "response": {
@@ -121,8 +122,8 @@ On a successful commit of the above transaction, the submitter of the transactio
 }
 ```
 
-### 1.2) Check the existance of alice
-Once the transaction get committed, we can query the user information as follows:
+### 1.2) Check the existence of alice
+Once the transaction gets committed, we can query the user information as follows:
 
 Let's fetch the user `alice`.
 ```shell
@@ -167,7 +168,7 @@ curl \
 }
 ```
 
-### 1.3) Check the existance of bob
+### 1.3) Check the existence of bob
 
 Let's fetch the user `bob`.
 ```shell
@@ -215,23 +216,23 @@ curl \
 }
 ```
 
-## 2) Updation of a User
+## 2) Updating a User
 
 ### 2.1) Remove all privileges of `alice`
-Let's remove all privileges given to `alice`. In order to do that, we can execute the following steps:
+Let's remove all privileges given to `alice`. To do that, we can execute the following steps:
 
-1. Fetch the current committed information of the `alice`.
+1. Fetch the current committed information of the user `alice`.
 2. Remove the privilege section and construct the transaction payload.
 3. Add the digital signature on the new transaction payload.
 3. Submit the transaction payload by issuing a `POST /user/tx {txPayload}`
 
-Though we can update multiple users within a transaction, for simplicity, in this example, we are updating only a single user `alice`.
+Though we can update multiple users within a transaction, for the sake of simplicity in this example, we are only updating a single user, `alice`.
 
 > **Important for Successful Execution of this Example:**
-The `user_reads` section in the below transaction payload contains the version of the read information. If this does not match the committed version, the transaction would be invalidated.
+The `user_reads` section in the below transaction payload contains a version of the read information. If this does not match the committed version, the transaction would be invalidated.
 This is useful because the `alice` user can be updated by any other admin between step 1 and 2 listed above.
-To ensure, serializability isolation, we must pass the read version. In our example, we use the version present in [this](#check-the-existance-of-alice-and-bob)
-returned result. To be specific, we can see the the version in the metadata section of the query result as shown below:
+To ensure serializability isolation, we must pass the read version. In our example, we use the version present in [this](#check-the-existence-of-alice-and-bob)
+returned result. To be specific, we can see the version in the metadata section of the query result as shown below:
 ```webmanifest
     "metadata": {
       "version": {
@@ -239,14 +240,13 @@ returned result. To be specific, we can see the the version in the metadata sect
       }
     }
 ```
-This version might be different for you. Hence, provide the appropirate version number in the transaction payload and compute the digital signature.
+This version might be different for you. Hence, provide the appropriate version number in the transaction payload and compute the digital signature.
 
-The `user_reads` section says that commit this transaction only if users specified in the `user_reads` list are at a specified version as per the current
-committed state. Otherwise, invalidate the transaction and do not apply the changes requested by the transaction.
+The `user_reads` section states you should commit this transaction only if the users specified in the `user_reads` list are at a specified version as per the current committed state. Otherwise, invalidate the transaction and do not apply the changes requested by the transaction.
 
 > Note that it is not necessary to pass the version in `user_reads`. If the `user_reads` is left out, the write would be considered as a blind write.
 
-> Within a single transaction, we can update more than a single user. For simplicity, the example updates a single user only.
+> Within a single transaction, we can update more than a single user. For the sake of simplicity, the example updates a single user only.
 
 ```shell
  curl \
@@ -277,8 +277,8 @@ committed state. Otherwise, invalidate the transaction and do not apply the chan
     "signature": "MEUCIDTrlQ8fKu2ZeVWincE8RzWd/Y/MWjZGHEu37EckcTFnAiEA/kmKAOc2LK2GHFIA1wU+9/oog0Nqj3GLYPjSFGCeOOk="
 }'
 ```
-In the above transaction, we have removed the privilege section from the user information (compare against the query result provided [here](#check-the-existance-of-alice-and-bob)).
-The signature is computed using the following command
+In the above transaction, we removed the privilege section from the user information (compare against the query result provided [here](#check-the-existence-of-alice-and-bob)).
+The signature is computed using the following command:
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-45d0-9723-1f31712add02","user_reads":[{"user_id":"alice","version":{"block_num":3}}],"user_writes":[{"user":{"id":"alice","certificate":"MIIBsjCCAVigAwIBAgIRAJp7i/UhOnaawHTSdkzxR1QwCgYIKoZIzj0EAwIwHjEcMBoGA1UEAxMTQ2FyIHJlZ2lzdHJ5IFJvb3RDQTAeFw0yMTA2MTYxMTEzMjdaFw0yMjA2MTYxMTE4MjdaMCQxIjAgBgNVBAMTGUNhciByZWdpc3RyeSBDbGllbnQgYWxpY2UwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAASdCmAgHdqck7uhAK5siEF/O1EIUEIYtiR3XVEjbVhNe/6GXFShtsSThXYL9/XK6p4qF4oSy9j/PURMGnWbzSnso3EwbzAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAU7nVzp7gto++BPlj5KAF1IA62TNEwDwYDVR0RBAgwBocEfwAAATAKBggqhkjOPQQDAgNIADBFAiEAsRZlR4sDyxS//BJnYpC684EWu1hO/JU8rkNW6Nn0FFQCIH/p6m6ELkLNQpx+1QJsWWtH/LdW94WinVylhuA4jggQ"}}]}'
 ```
@@ -288,7 +288,7 @@ MEQCIGy62qM0ZGdCd5FsCvgKJ0wVQi/uL5Gy0IXhevsNxUaeAiA2pOfu5vVuQ9MJnYakFyw8HcgHR6AA
 ```
 
 ### 2.2) Check the privilege of `alice`
-Once the transaction get committed, we can query the user information as follows to check whether all privileges given to the `alice` have been removed:
+Once the transaction get committed, we can query the user information as follows to check whether all privileges given to the `alice` user have been removed:
 
 ```shell
 curl \
@@ -319,18 +319,18 @@ curl \
 ```
 As we can see, the privilege section is no longer present and the version has been increased too.
 
-## 3) Deletion of a User
+## 3) Deleting a User
 
 ### 3.1) Delete the user `alice`
-Let's delete `alice` from the cluster. In order to do that, we can execute the following steps:
+Let's delete `alice` from the cluster. In order to do that, we execute the following steps:
 
-1. Fetch the current committed information of the `alice` to get the committed version.
+1. Fetch the current committed information of the `alice` user to get the committed version.
 2. Add the committed version to the `user_reads`.
-3. Add the `alice` to the `user_deletes`.
-4. Compute and add digital signature to the transaction payload.
+3. Add the `alice` user to the `user_deletes`.
+4. Compute and add the digital signature to the transaction payload.
 5. Submit the transaction payload by issuing a `POST /user/tx {txPayload}`.
 
-The example uses `"block_num": 4` as the version. While executing this example, query the user `alice` and use the version provided in the output of the query.
+The example uses `"block_num": 4` as the version. While executing this example, query the user `alice` and use the version provided in the output of that query.
 Refer [here](#updation-of-a-user) for the query result of `alice` after being updated. In the query result, we have
 ```webmanifest
     "metadata": {
@@ -341,9 +341,9 @@ Refer [here](#updation-of-a-user) for the query result of `alice` after being up
 ```
 Hence, this example uses `"block_num": 4` as the version.
 
-> Note that it is not necessary to pass the version in `user_reads`. If the `user_reads` is left out, the delete would be considered as a blind delete. For blind delete, steps 1 and 2 are not needed.
+> Note that it is not necessary to pass the version in `user_reads`. If the `user_reads` is left out, the delete would be considered as a blind delete. For blind deletes, steps 1 and 2 are not needed.
 
-> Within a single transaction, we can delete more than a single user. For simplicity, the example delete a single user only.
+> Within a single transaction, we can delete more than a single user. For the sake of simplicity, the example deletes a single user only.
 
 ```shell
  curl \
@@ -372,8 +372,8 @@ Hence, this example uses `"block_num": 4` as the version.
 }'
 ```
 
-The section `user_deletes` is an array and we can pass as many number of users in it and all will be deleted if they exist.
-The signature on the payload is computed using the following command
+The section `user_deletes` is an array and we can pass many users in it if we want, and all will be deleted if they exist.
+The signature on the payload is computed using the following command:
 ```shell
 ./bin/signer -privatekey=deployment/sample/crypto/admin/admin.key -data='{"user_id":"admin","tx_id":"1b6d6414-9b58-45d0-9723-1f31712add04","user_reads":[{"user_id":"alice","version":{"block_num":4}}],"user_deletes":[{"user_id":"alice"}]}'
 ```
@@ -382,7 +382,7 @@ The signature on the payload is computed using the following command
 MEQCID1O2vmSxgzJT8KNMws/ckV1oIf1R4oml6aWeZNzvjI9AiAphdfNAn+VKCJPPh+d0oW4/MH+cXy4xwQXXU5FQ8LpMQ==
 ```
 
-Once the transaction is validated and committed, the submitter of the transaction recevies the following transaction receipt
+Once the transaction is validated and committed, the submitter of the transaction receives the following transaction receipt:
 ```webmanifest
 {
   "response": {
@@ -414,7 +414,7 @@ Once the transaction is validated and committed, the submitter of the transactio
 ```
 
 ### 3.2) Check the non-existence of the user `alice`
-If we query the user, the response would not contain any details associated with the user.
+If we query the user, the response does not contain any details associated with the user.
 ```shell
 curl \
      -H "Content-Type: application/json" \
