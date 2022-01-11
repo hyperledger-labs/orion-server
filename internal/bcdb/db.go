@@ -70,6 +70,10 @@ type DB interface {
 	// GetDBStatus returns status for database, checks whenever database was created
 	GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, error)
 
+	// GetDBIndex returns the defined index for a given database. Index present in the
+	// response envelope is a JSON string.
+	GetDBIndex(dbName, querierUserID string) (*types.GetDBIndexResponseEnvelope, error)
+
 	// GetData retrieves values for given key
 	GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error)
 
@@ -471,6 +475,25 @@ func (d *db) GetDBStatus(dbName string) (*types.GetDBStatusResponseEnvelope, err
 
 	return &types.GetDBStatusResponseEnvelope{
 		Response:  dbStatusResponse,
+		Signature: sign,
+	}, nil
+}
+
+// GetDBIndex returns the defined index of a given database
+func (d *db) GetDBIndex(dbName, querierUserID string) (*types.GetDBIndexResponseEnvelope, error) {
+	dbIndexResponse, err := d.worldstateQueryProcessor.getDBIndex(dbName, querierUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	dbIndexResponse.Header = d.responseHeader()
+	sign, err := d.signature(dbIndexResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetDBIndexResponseEnvelope{
+		Response:  dbIndexResponse,
 		Signature: sign,
 	}, nil
 }

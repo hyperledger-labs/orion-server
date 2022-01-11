@@ -49,6 +49,13 @@ func TestURLConstruction(t *testing.T) {
 			expectedURL: "/db/db1",
 		},
 		{
+			name: "GetDBIndex",
+			execute: func() string {
+				return URLForGetDBIndex("db1")
+			},
+			expectedURL: "/db/index/db1",
+		},
+		{
 			name: "URLForGetConfig",
 			execute: func() string {
 				return URLForGetConfig()

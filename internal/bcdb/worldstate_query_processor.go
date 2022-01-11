@@ -58,6 +58,35 @@ func (q *worldstateQueryProcessor) getDBStatus(dbName string) (*types.GetDBStatu
 	}, nil
 }
 
+// getDBIndex returns the index definition associated with the given database.
+func (q *worldstateQueryProcessor) getDBIndex(dbName, querierUserID string) (*types.GetDBIndexResponse, error) {
+	if worldstate.IsSystemDB(dbName) {
+		return nil, &errors.PermissionErr{
+			ErrMsg: "no index for the system database [" + dbName + "]",
+		}
+	}
+
+	hasPerm, err := q.identityQuerier.HasReadAccessOnDataDB(querierUserID, dbName)
+	if err != nil {
+		return nil, err
+	}
+	if !hasPerm {
+		return nil, &errors.PermissionErr{
+			ErrMsg: "the user [" + querierUserID + "] has no permission to read from database [" + dbName + "]",
+		}
+	}
+
+	index, _, err := q.db.GetIndexDefinition(dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetDBIndexResponse{
+		Header: &types.ResponseHeader{},
+		Index:  string(index),
+	}, nil
+}
+
 // getState return the state associated with a given key
 func (q *worldstateQueryProcessor) getData(dbName, querierUserID, key string) (*types.GetDataResponse, error) {
 	if worldstate.IsSystemDB(dbName) {

@@ -212,6 +212,212 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 	}
 }
 
+func TestDBRequestHandler_DBIndex(t *testing.T) {
+	submittingUserName := "alice"
+	dbName := "testDBName"
+
+	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() (*http.Request, error)
+		dbMockFactory      func(response *types.GetDBIndexResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetDBIndexResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "valid dbIndex request",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBIndex(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBIndexQuery{UserId: submittingUserName, DbName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDBIndexResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDBIndex", dbName, submittingUserName).Return(response, nil)
+				return db
+			},
+			expectedResponse: &types.GetDBIndexResponseEnvelope{
+				Response:  &types.GetDBIndexResponse{Header: &types.ResponseHeader{NodeId: "testNodeID"}, Index: `{"field1": "value1", "field2": "value2"}`},
+				Signature: []byte{0, 0, 0},
+			},
+			expectedStatusCode: http.StatusOK,
+			expectedErr:        "",
+		},
+		{
+			name: "submitting user is not eligible to query the db index",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBIndex(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBIndexQuery{UserId: submittingUserName, DbName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDBIndexResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDBIndex", dbName, submittingUserName).Return(nil, &interrors.PermissionErr{ErrMsg: "the submitting user [alice] does not have the read permission on db [testDBName]"})
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusForbidden,
+			expectedErr:        "error while processing 'GET /db/index/testDBName' because the submitting user [alice] does not have the read permission on db [testDBName]",
+		},
+		{
+			name: "invalid dbIndex request missing user header",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBIndex(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBIndexQuery{UserId: submittingUserName, DbName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDBIndexResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
+		},
+		{
+			name: "invalid dbIndex request missing user's signature",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBIndex(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDBIndexResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
+		},
+		{
+			name: "invalid dbIndex request, submitting user doesn't exists",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBIndex(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBIndexQuery{UserId: submittingUserName, DbName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDBIndexResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "invalid dbIndex request, failed to verify signature",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBIndex(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, bobSigner, &types.GetDBIndexQuery{UserId: submittingUserName, DbName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDBIndexResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name: "invalid dbIndex request, failed to get db index",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDBIndex(dbName), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDBIndexQuery{UserId: submittingUserName, DbName: dbName})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDBIndexResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDBIndex", dbName, submittingUserName).Return(nil, errors.New("failed to retrieve db index"))
+				return db
+			},
+			expectedResponse:   nil,
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /db/index/testDBName' because failed to retrieve db index",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			handler := NewDBRequestHandler(db, logger)
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &types.HttpResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.GetDBIndexResponseEnvelope{}
+				err := json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+
+				require.Equal(t, tt.expectedResponse, res)
+			}
+		})
+	}
+}
+
 func TestDBRequestHandler_DBTransaction(t *testing.T) {
 	userID := "alice"
 	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})

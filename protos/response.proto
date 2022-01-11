@@ -24,6 +24,16 @@ message GetDBStatusResponse {
   bool exist = 2;
 }
 
+message GetDBIndexResponseEnvelope {
+  GetDBIndexResponse response = 1;
+  bytes signature = 2;
+}
+
+message GetDBIndexResponse {
+  ResponseHeader header = 1;
+  string index = 2;
+}
+
 // GetData
 message GetDataResponseEnvelope {
   GetDataResponse response = 1;
