@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -318,4 +319,146 @@ func TestNoMajorityToChooseLeader(t *testing.T) {
 	require.Equal(t, dataResp, []byte{uint8(newLeader)})
 	t.Logf("data: %+v", dataResp)
 
+}
+
+// Scenario:
+// - start 3 servers in a cluster.
+// - wait for one to be the leader.
+// - submit 2 txs
+// - shutting down and starting all servers in the cluster.
+// - make sure the servers is in sync with the txs made before they were shut down.
+func TestClusterRestart(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(3)
+	setupConfig := &setup.Config{
+		NumberOfServers:     3,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
+			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+
+	//find the leader
+	leaderVal := agreedLeader(t, c, 0, 1, 2)
+	require.NotEqual(t, leaderVal, -1)
+
+	keys := []string{"alice", "bob"}
+	for _, key := range keys {
+		txID, _, err := c.Servers[leaderVal].WriteDataTx(t, worldstate.DefaultDBName, key, []byte{uint8(leaderVal)})
+		require.NoError(t, err)
+		t.Logf("txID: %s, error: %s", txID, err)
+	}
+
+	require.NoError(t, c.Restart())
+
+	//find the new leader
+	newLeader := agreedLeader(t, c, 0, 1, 2)
+	require.NotEqual(t, newLeader, -1)
+
+	//make sure all 3 nodes are active
+	require.Eventually(t, func() bool {
+		clusterStatusResEnv, err := c.Servers[newLeader].QueryClusterStatus(t)
+		return err == nil && clusterStatusResEnv != nil && len(clusterStatusResEnv.GetResponse().GetActive()) == 3
+	}, 30*time.Second, 100*time.Millisecond)
+
+	for _, key := range keys {
+		require.Eventually(t, func() bool {
+			dataEnv, err := c.Servers[newLeader].QueryData(t, worldstate.DefaultDBName, key)
+			if dataEnv != nil && dataEnv.GetResponse().GetValue() != nil {
+				dataVal := dataEnv.GetResponse().GetValue()
+				require.Equal(t, dataVal, []byte{uint8(leaderVal)})
+				t.Logf("data: %+v", dataVal)
+			}
+			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+		}, 30*time.Second, 100*time.Millisecond)
+
+	}
+}
+
+// Scenario:
+// - start 3 servers in a cluster.
+// - wait for one to be the leader.
+// - stop the leader.
+// - wait for new server to be the leader.
+// - the leader submit a tx
+// - repeat until each server was a leader at least once.
+// - make sure each node submitted a valid tx as a leader
+func TestAllNodesGetLeadership(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(3)
+	setupConfig := &setup.Config{
+		NumberOfServers:     3,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
+			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+
+	leaders := [3]bool{false, false, false}
+	currentLeader := agreedLeader(t, c, 0, 1, 2)
+	oldLeader := -1
+	for !leaders[0] || !leaders[1] || !leaders[2] {
+		leaders[currentLeader] = true
+		txID, rcpt, err := c.Servers[currentLeader].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(currentLeader), []byte{uint8(currentLeader)})
+		require.NoError(t, err)
+		if err != nil {
+			t.Logf("txID: %s, error: %s", txID, err)
+		} else {
+			t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		}
+
+		require.NoError(t, c.ShutdownServer(c.Servers[currentLeader]))
+		if oldLeader != -1 {
+			require.NoError(t, c.StartServer(c.Servers[oldLeader]))
+
+		}
+		oldLeader = currentLeader
+		currentLeader = agreedLeader(t, c, (currentLeader+1)%3, (currentLeader+2)%3)
+		require.NotEqual(t, currentLeader, -1)
+	}
+
+	require.NoError(t, c.StartServer(c.Servers[oldLeader]))
+	currentLeader = agreedLeader(t, c, (currentLeader+1)%3, (currentLeader+2)%3)
+	require.NotEqual(t, currentLeader, -1)
+
+	//make sure all 3 nodes are active
+	require.Eventually(t, func() bool {
+		clusterStatusResEnv, err := c.Servers[currentLeader].QueryClusterStatus(t)
+		return err == nil && clusterStatusResEnv != nil && len(clusterStatusResEnv.GetResponse().GetActive()) == 3
+	}, 30*time.Second, 100*time.Millisecond)
+
+	for i := 0; i < 3; i++ {
+		require.Eventually(t, func() bool {
+			dataEnv, err := c.Servers[currentLeader].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(i))
+			if dataEnv != nil && dataEnv.GetResponse().GetValue() != nil {
+				dataVal := dataEnv.GetResponse().GetValue()
+				require.Equal(t, []byte{uint8(i)}, dataVal)
+				t.Logf("data: %+v", dataVal)
+			}
+			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+		}, 30*time.Second, 100*time.Millisecond)
+
+	}
 }
