@@ -106,12 +106,6 @@ func URLForGetConfig() string {
 	return GetConfig
 }
 
-// URLForGetClusterStatus returns url for GET request to find
-// status of the cluster
-func URLForGetClusterStatus() string {
-	return GetClusterStatus
-}
-
 func URLForLedgerBlock(blockNum uint64, augmented bool) string {
 	if augmented {
 		return LedgerEndpoint + fmt.Sprintf("block/%d?augmented=%t", blockNum, augmented)

@@ -97,12 +97,12 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 
 func (c *Client) GetClusterStatus(e *types.GetClusterStatusQueryEnvelope) (*types.GetClusterStatusResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
-		constants.URLForGetClusterStatus(),
+		constants.GetClusterStatus,
 		e.Payload.UserId,
 		e.Signature,
 	)
 	if err != nil {
-		return nil, errors.Wrap(err, "error while issuing "+constants.URLForGetClusterStatus())
+		return nil, errors.Wrap(err, "error while issuing "+constants.GetClusterStatus)
 	}
 
 	defer resp.Body.Close()

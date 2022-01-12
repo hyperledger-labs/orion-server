@@ -280,6 +280,9 @@ func (c *Cluster) StartServer(s *Server) error {
 }
 
 func (c *Cluster) GetServerByID(serverID string) (*Server, int) {
+	if serverID == "" {
+		return nil, -1
+	}
 	for i, srv := range c.Servers {
 		if srv.serverID == serverID {
 			return srv, i
