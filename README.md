@@ -1,4 +1,4 @@
-# Orion
+# Orion - a blockchain database
 Orion is a **key-value/document database** with certain blockchain properties such as
 
   - **Tamper Evident**: Data cannot be tampered with, without it going unnoticed. At any point in time, a user can request the database to provide proof for an existance of a transaction or data, and verify the same to ensure data integrity.
@@ -15,7 +15,7 @@ Orion **DOES NOT** have the following two blockchain properties:
   and all transactions need to be independently executed on all nodes.
   
 ## Documentation 
-Please visit our online documentation for information on getting started [here](http://labs.hyperledger.org/orion-server/docs/introduction/).
+Please visit our [online documentation](http://labs.hyperledger.org/orion-server/) for information on [getting started](http://labs.hyperledger.org/orion-server/docs/introduction/).
 
 ## How to Contribute
-We will be happy to receive help! In order to become an Orion contributor, please contact the project[maintainers](MAINTAINERS.md).
+We will be happy to receive help! In order to become an Orion contributor, please contact the project [maintainers](MAINTAINERS.md).
