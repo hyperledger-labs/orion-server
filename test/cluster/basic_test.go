@@ -290,3 +290,150 @@ func TestNodeRecoveryLeader(t *testing.T) {
 		return c.AgreedHeight(t, 5, 0, 1, 2)
 	}, 30*time.Second, 100*time.Millisecond)
 }
+
+//Scenario:
+// - start 3 servers in a cluster.
+// - wait for one to be the leader.
+// - stop the leader and one follower.
+// - submit a tx to the remaining server.
+// - there is no majority to pick leader => tx fails.
+// - restart one server so now there will be a majority to pick a leader.
+// - wait for one to be the leader.
+// - submit a tx => tx accepts.
+func TestNoMajorityToChooseLeader(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(3)
+	setupConfig := &setup.Config{
+		NumberOfServers:     3,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
+			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0, 1, 2)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, "alice", []byte("alice-data"))
+	require.NoError(t, err)
+	if err != nil {
+		t.Logf("txID: %s, error: %s", txID, err)
+	} else {
+		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	}
+
+	var dataEnv *types.GetDataResponseEnvelope
+	require.Eventually(t, func() bool {
+		dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, "alice")
+		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+	}, 30*time.Second, 100*time.Millisecond)
+	dataResp := dataEnv.GetResponse().GetValue()
+	require.Equal(t, dataResp, []byte("alice-data"))
+	t.Logf("data: %+v", string(dataResp))
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, 2, 0, 1, 2)
+	}, 30*time.Second, 100*time.Millisecond)
+
+	follower1 := (leaderIndex + 1) % 3
+	follower2 := (leaderIndex + 2) % 3
+
+	require.NoError(t, c.ShutdownServer(c.Servers[leaderIndex]))
+
+	//find new leader and make sure there are only 2 active nodes
+	newLeader := -1
+	require.Eventually(t, func() bool {
+		newLeader = c.AgreedLeader(t, follower1, follower2)
+		return newLeader >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		clusterStatusResEnv, err := c.Servers[newLeader].QueryClusterStatus(t)
+		return err == nil && clusterStatusResEnv != nil && len(clusterStatusResEnv.GetResponse().GetActive()) == 2
+	}, 30*time.Second, 100*time.Millisecond)
+
+	require.NoError(t, c.ShutdownServer(c.Servers[follower1]))
+
+	//only one server is active now => no majority to pick leader
+	require.Eventually(t, func() bool {
+		_, _, err = c.Servers[follower2].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
+		return err != nil && err.Error() == "failed to submit transaction, server returned: status: 503 Service Unavailable, message: Cluster leader unavailable"
+	}, 60*time.Second, 100*time.Millisecond)
+
+	//restart one server => 2 servers are active
+	require.NoError(t, c.StartServer(c.Servers[leaderIndex]))
+
+	//find the new leader
+	newLeader = -1
+	require.Eventually(t, func() bool {
+		newLeader = c.AgreedLeader(t, leaderIndex, follower2)
+		return newLeader >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	txID, rcpt, err = c.Servers[newLeader].WriteDataTx(t, worldstate.DefaultDBName, "charlie", []byte("charlie-data"))
+	require.NoError(t, err)
+	if err != nil {
+		t.Logf("txID: %s, error: %s", txID, err)
+	} else {
+		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	}
+
+	require.Eventually(t, func() bool {
+		dataEnv, err = c.Servers[newLeader].QueryData(t, worldstate.DefaultDBName, "charlie")
+		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+	}, 30*time.Second, 100*time.Millisecond)
+
+	dataResp = dataEnv.GetResponse().GetValue()
+	require.Equal(t, dataResp, []byte("charlie-data"))
+	t.Logf("data: %+v", string(dataResp))
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, 3, leaderIndex, follower2)
+	}, 30*time.Second, 100*time.Millisecond)
+
+	//restart the third node => all 3 nodes are active
+	require.NoError(t, c.StartServer(c.Servers[follower1]))
+
+	//find the new leader
+	newLeader = -1
+	require.Eventually(t, func() bool {
+		newLeader = c.AgreedLeader(t, leaderIndex, follower2)
+		return newLeader >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	txID, rcpt, err = c.Servers[newLeader].WriteDataTx(t, worldstate.DefaultDBName, "dan", []byte("dan-data"))
+	require.NoError(t, err)
+	if err != nil {
+		t.Logf("txID: %s, error: %s", txID, err)
+	} else {
+		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	}
+
+	require.Eventually(t, func() bool {
+		dataEnv, err = c.Servers[newLeader].QueryData(t, worldstate.DefaultDBName, "dan")
+		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
+	}, 30*time.Second, 100*time.Millisecond)
+
+	dataResp = dataEnv.GetResponse().GetValue()
+	require.Equal(t, dataResp, []byte("dan-data"))
+	t.Logf("data: %+v", string(dataResp))
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, 4, 0, 1, 2)
+	}, 30*time.Second, 100*time.Millisecond)
+
+}
