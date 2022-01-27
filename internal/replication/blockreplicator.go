@@ -79,6 +79,7 @@ type BlockReplicator struct {
 	raftNode                        raft.Node
 	lastKnownLeader                 uint64
 	lastKnownLeaderHost             string // cache the leader's Node host:port for client request redirection
+	justElectedInFlightBlocks       bool   // when a leader is just elected, it may have in-flight blocks
 	cancelProposeContext            func() // cancels the propose-context if leadership is lost
 	lastProposedBlockNumber         uint64
 	lastProposedBlockHeaderBaseHash []byte
@@ -391,6 +392,8 @@ Event_Loop:
 				break Event_Loop
 			}
 
+			br.processLeaderJustElected()
+
 			// update last known leader
 			if rd.SoftState != nil {
 				leader := atomic.LoadUint64(&rd.SoftState.Lead) // etcdraft requires atomic access to this var
@@ -429,6 +432,24 @@ Event_Loop:
 	br.lg.Info("Exiting block replicator event loop")
 }
 
+func (br *BlockReplicator) processLeaderJustElected() {
+	br.mutex.Lock()
+	defer br.mutex.Unlock()
+
+	if br.justElectedInFlightBlocks {
+		lastIndex, _ := br.raftStorage.MemoryStorage.LastIndex() //never returns error
+		msgInflight := lastIndex > br.appliedIndex
+		if msgInflight {
+			br.lg.Debugf("There are [%d] in flight blocks, Raft new leader should not serve requests", lastIndex-br.appliedIndex)
+		} else {
+			br.lg.Infof("Start accepting requests as Raft new leader at block [%d]", br.lastCommittedBlock.GetHeader().GetBaseHeader().GetNumber())
+			br.justElectedInFlightBlocks = false
+			br.resetLastProposed()
+		}
+	}
+
+}
+
 func (br *BlockReplicator) processLeaderChanges(leader uint64) {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
@@ -446,16 +467,17 @@ func (br *BlockReplicator) processLeaderChanges(leader uint64) {
 			br.cancelProposeContext = func() {} // NOOP
 		} else if assumedLeadership {
 			br.lg.Info("Assumed leadership")
+			lastIndex, _ := br.raftStorage.MemoryStorage.LastIndex() //never returns error
+			if lastIndex > br.appliedIndex {
+				br.lg.Infof("There are [%d] in flight blocks, Raft new leader will not serve requests util they are committed", lastIndex-br.appliedIndex)
+				br.justElectedInFlightBlocks = true
+			} else {
+				br.lg.Debugf("There are no in flight blocks, Raft new leader will serve requests, lastIndex: %d, appliedIndex: %d", lastIndex, br.appliedIndex)
+			}
 		}
 
 		if lostLeadership || assumedLeadership {
-			var err error
-			br.lastProposedBlockNumber = br.lastCommittedBlock.GetHeader().GetBaseHeader().GetNumber()
-			br.lastProposedBlockHeaderBaseHash, err = blockstore.ComputeBlockBaseHash(br.lastCommittedBlock)
-			if err != nil {
-				br.lg.Panicf("Error computing base header hash of last commited block: %+v; error: %s",
-					br.lastCommittedBlock.GetHeader(), err)
-			}
+			br.resetLastProposed()
 			br.numInFlightBlocks = 0
 			br.inFlightConfigBlockNumber = 0
 			br.condTooManyInFlightBlocks.Broadcast()
@@ -463,6 +485,16 @@ func (br *BlockReplicator) processLeaderChanges(leader uint64) {
 
 		br.lastKnownLeader = leader
 		br.lastKnownLeaderHost = br.nodeHostPortFromRaftID(leader)
+	}
+}
+
+func (br *BlockReplicator) resetLastProposed() {
+	var err error
+	br.lastProposedBlockNumber = br.lastCommittedBlock.GetHeader().GetBaseHeader().GetNumber()
+	br.lastProposedBlockHeaderBaseHash, err = blockstore.ComputeBlockBaseHash(br.lastCommittedBlock)
+	if err != nil {
+		br.lg.Panicf("Error computing base header hash of last commited block: %+v; error: %s",
+			br.lastCommittedBlock.GetHeader(), err)
 	}
 }
 
@@ -912,7 +944,7 @@ func (br *BlockReplicator) releasePendingTXs(blockToPropose *types.Block, reason
 func (br *BlockReplicator) prepareProposal(blockToPropose *types.Block) (ctx context.Context, blockBytes []byte, doPropose bool) {
 	br.mutex.Lock()
 
-	if errLeader := br.isLeader(); errLeader != nil {
+	if errLeader := br.isLeaderReady(); errLeader != nil {
 		br.mutex.Unlock() //do not call the pendingTxs component with a mutex locked
 
 		br.releasePendingTXs(blockToPropose, "Declined to propose block", errLeader)
@@ -1022,11 +1054,29 @@ func (br *BlockReplicator) IsLeader() *ierrors.NotLeaderError {
 	br.mutex.Lock()
 	defer br.mutex.Unlock()
 
-	return br.isLeader()
+	return br.isLeaderReady()
 }
 
 func (br *BlockReplicator) isLeader() *ierrors.NotLeaderError {
 	if br.lastKnownLeader == br.raftID {
+		return nil
+	}
+
+	return &ierrors.NotLeaderError{
+		LeaderID: br.lastKnownLeader, LeaderHostPort: br.lastKnownLeaderHost}
+}
+
+// isLeaderReady determines if this node is the leader, and if it is ready for proposing blocks.
+// If this node is the leader, and it is ready, it returns nil.
+// If this node is the leader, but it is not ready, it returns an empty `NotLeaderError` error.
+// If this node is not the leader, it returns the last know leader in a `NotLeaderError` error.
+// A leader is not ready when it was just elected and still has in-flight blocks.
+func (br *BlockReplicator) isLeaderReady() *ierrors.NotLeaderError {
+	if br.lastKnownLeader == br.raftID {
+		if br.justElectedInFlightBlocks {
+			// this node was just elected leader, but may be processing in-flight messages
+			return &ierrors.NotLeaderError{}
+		}
 		return nil
 	}
 
@@ -1046,7 +1096,12 @@ func (br *BlockReplicator) GetClusterStatus() (leaderID uint64, activePeers map[
 	defer br.mutex.Unlock()
 
 	activePeers = br.transport.ActivePeers(500*time.Millisecond, true)
-	leaderID = br.lastKnownLeader
+
+	if br.lastKnownLeader == br.raftID && br.justElectedInFlightBlocks {
+		leaderID = 0 // it is this node, but it is not ready yet
+	} else {
+		leaderID = br.lastKnownLeader
+	}
 
 	return
 }
