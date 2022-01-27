@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: orion-ns
+  labels:
+    service: orion
+  name: orion
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: orion
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        service: orion
+    spec:
+      containers:
+        - image: orionbcdb/orion-server
+          name: orion
+          ports:
+            - containerPort: 6001
+          volumeMounts:
+            - mountPath: /etc/orion-server/crypto/CA
+              name: orion-crypto-ca
+            - mountPath: /etc/orion-server/crypto/admin
+              name: orion-crypto-admin
+            - mountPath: /etc/orion-server/crypto/server
+              name: orion-crypto-server
+            - mountPath: /etc/orion-server/ledger
+              name: orion-ledger-data
+            - mountPath: /etc/orion-server/config
+              name: orion-config-data
+      restartPolicy: Always
+      volumes:
+        - name: orion-ledger-data
+          persistentVolumeClaim:
+            claimName: orion-ledger-data
+        - name: orion-config-data
+          secret:
+            secretName: orion-config-files
+            items:
+              - key: config.yml
+                path: config.yml
+              - key: 1node-shared-config-bootstrap.yml
+                path: 1node-shared-config-bootstrap.yml
+        - name: orion-crypto-ca
+          secret:
+            secretName: cacert
+            items:
+              - key: CA.pem
+                path: CA.pem
+        - name: orion-crypto-admin
+          secret:
+            secretName: admincert
+            items:
+              - key: admin.pem
+                path: admin.pem
+        - name: orion-crypto-server
+          secret:
+            secretName: servercert
+            items:
+              - key: server.pem
+                path: server.pem
+              - key: server.key
+                path: server.key

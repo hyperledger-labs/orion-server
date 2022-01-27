@@ -1,0 +1,142 @@
+# Creates namespace orion-ns
+# Creates 3 persistent volume claims
+# Creates one service to access Orion
+# Creates Orion deployment, including initiating certificates
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orion-ns
+  labels:
+    module: orion
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: orion-ns
+  labels:
+    service: orion-crypto-data
+  name: orion-crypto-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: orion-ns
+  labels:
+    service: orion-ledger-data
+  name: orion-ledger-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  namespace: orion-ns
+  labels:
+    service: orion-config-data
+  name: orion-config-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: orion-ns
+  name: orion
+  labels:
+    service: orion
+spec:
+  type: NodePort
+  ports:
+    - name: "6001"
+      port: 6001
+      targetPort: 6001
+  selector:
+    service: orion
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: orion-ns
+  labels:
+    service: orion
+  name: orion
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: orion
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        service: orion
+    spec:
+      containers:
+        - image: orionbcdb/orion-server
+          name: orion
+          ports:
+            - containerPort: 6001
+          volumeMounts:
+            - mountPath: /etc/orion-server/crypto
+              name: orion-crypto-data
+            - mountPath: /etc/orion-server/ledger
+              name: orion-ledger-data
+            - mountPath: /etc/orion-server/config
+              name: orion-config-data
+      initContainers:
+        - name: crypto-ca
+          image: frapsoft/openssl
+          command: ['sh', '-c', 'if ! [ -f /etc/orion-server/crypto/CA/CA.key ]; then mkdir  -p /etc/orion-server/crypto/CA/ && openssl ecparam -name prime256v1 -genkey -noout -out "/etc/orion-server/crypto/CA/CA.key" && openssl req -new -x509 -nodes -key "/etc/orion-server/crypto/CA/CA.key" -sha256 -days 1095 -out "/etc/orion-server/crypto/CA/CA.pem" -subj "/C=IL/ST=Haifa/O=BCDB" -extensions v3_ca; fi']
+          volumeMounts:
+            - mountPath: /etc/orion-server/crypto
+              name: orion-crypto-data
+        - name: crypto-server
+          image: frapsoft/openssl
+          command: ['sh', '-c', 'if ! [ -f /etc/orion-server/crypto/server/server.key ]; then mkdir  -p /etc/orion-server/crypto/server/ && openssl ecparam -name prime256v1 -genkey -noout -out "/etc/orion-server/crypto/server/server.key" && openssl req -new -key "/etc/orion-server/crypto/server/server.key" -out "/tmp/server.csr" -subj "/C=IL/ST=Haifa/O=BCDB" && openssl x509 -req -in "/tmp/server.csr" -CA "/etc/orion-server/crypto/CA/CA.pem" -CAkey "/etc/orion-server/crypto/CA/CA.key" -CAcreateserial -out "/etc/orion-server/crypto/server/server.pem" -days 365 -sha256; fi']
+          volumeMounts:
+            - mountPath: /etc/orion-server/crypto
+              name: orion-crypto-data
+        - name: crypto-admin
+          image: frapsoft/openssl
+          command: ['sh', '-c', 'if ! [ -f /etc/orion-server/crypto/admin/admin.key ]; then mkdir  -p /etc/orion-server/crypto/admin/ && openssl ecparam -name prime256v1 -genkey -noout -out "/etc/orion-server/crypto/admin/admin.key" && openssl req -new -key "/etc/orion-server/crypto/admin/admin.key" -out "/tmp/admin.csr" -subj "/C=IL/ST=Haifa/O=BCDB" && openssl x509 -req -in "/tmp/admin.csr" -CA "/etc/orion-server/crypto/CA/CA.pem" -CAkey "/etc/orion-server/crypto/CA/CA.key" -CAcreateserial -out "/etc/orion-server/crypto/admin/admin.pem" -days 365 -sha256; fi']
+          volumeMounts:
+            - mountPath: /etc/orion-server/crypto
+              name: orion-crypto-data
+        - name: orion-config-local
+          image: busybox:1.28
+          command: [ wget, '-O', '/etc/orion-server/config/config.yml', https://raw.githubusercontent.com/hyperledger-labs/orion-server/main/deployment/config-docker/config.yml ]
+          volumeMounts:
+            - mountPath: /etc/orion-server/config
+              name: orion-config-data
+        - name: orion-config-shared
+          image: busybox:1.28
+          command: [ wget, '-O',  '/etc/orion-server/config/1node-shared-config-bootstrap.yml', https://raw.githubusercontent.com/hyperledger-labs/orion-server/main/deployment/config-docker/1node-shared-config-bootstrap.yml ]
+          volumeMounts:
+            - mountPath: /etc/orion-server/config
+              name: orion-config-data
+      restartPolicy: Always
+      volumes:
+        - name: orion-crypto-data
+          persistentVolumeClaim:
+            claimName: orion-crypto-data
+        - name: orion-ledger-data
+          persistentVolumeClaim:
+            claimName: orion-ledger-data
+        - name: orion-config-data
+          persistentVolumeClaim:
+            claimName: orion-config-data
