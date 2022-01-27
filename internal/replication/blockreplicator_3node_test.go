@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -553,6 +554,134 @@ func TestBlockReplicator_3Node_LeadershipLoss(t *testing.T) {
 	t.Log("stopped: ")
 	err = env.nodes[leaderIdx].Close()
 	require.NoError(t, err)
+}
+
+func TestBlockReplicator_3Node_LeadershipLossRecovery(t *testing.T) {
+	env := createClusterEnv(t, 3, nil, "info")
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	//start 2 of 3
+	for i, node := range env.nodes {
+		if i == 2 {
+			continue
+		}
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex(0, 1) >= 0
+	}
+	assert.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number:                1,
+				LastCommittedBlockNum: 1,
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:1",
+						},
+					},
+					{
+						Payload: &types.DataTx{
+							TxId: "txid:2",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	leaderIdx := env.AgreedLeaderIndex(0, 1)
+	followerIdx := (leaderIdx + 1) % 2
+
+	numBlocks := uint64(100)
+	var numSubmitted uint64
+	stopCh := make(chan interface{})
+	wg100 := sync.WaitGroup{}
+	wg100.Add(1)
+	wgStop := sync.WaitGroup{}
+	wgStop.Add(1)
+
+	var lostLeadership bool
+
+	go func() {
+		defer wgStop.Done()
+
+	LOOP:
+		for i := uint64(0); ; i++ {
+			select {
+			case <-stopCh:
+				t.Logf("Submiter stopped: %d", i)
+				break LOOP
+			default:
+				b := proto.Clone(block).(*types.Block)
+				b.Header.BaseHeader.Number = 2 + i
+				err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+				if i <= numBlocks {
+					require.NoError(t, err)
+				} else {
+					if err != nil && !lostLeadership {
+						require.Contains(t, err.Error(), "not a leader")
+						lostLeadership = true
+						t.Logf("Lost leadership at block: %d", i)
+					}
+				}
+
+				if i == numBlocks {
+					t.Logf("Submitted: %d", i)
+					wg100.Done() // stop a node and eventually loose leadership
+				}
+				atomic.StoreUint64(&numSubmitted, i)
+			}
+		}
+	}()
+
+	wg100.Wait()
+
+	// close the follower
+	err := env.nodes[followerIdx].Close()
+	require.NoError(t, err)
+
+	// eventually there will be a Release, as the internal proposal channel drains
+	assert.Eventually(t, func() bool { return env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCallCount() > 0 }, 60*time.Second, 100*time.Millisecond)
+
+	// restart the follower
+	err = env.nodes[followerIdx].Restart()
+	require.NoError(t, err)
+
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+	leaderIdx2 := env.AgreedLeaderIndex(0, 1)
+	require.Equal(t, leaderIdx, leaderIdx2) // The old leader will be elected as the new one
+
+	numSubmittedAfterRecovery := atomic.LoadUint64(&numSubmitted)
+	require.Eventually(t, func() bool {
+		return atomic.LoadUint64(&numSubmitted) > numSubmittedAfterRecovery+1000
+	}, 30*time.Second, 100*time.Millisecond)
+
+	close(stopCh)
+	t.Log("before stopped: ")
+	wgStop.Wait()
+	t.Log("stopped: ")
+
+	require.Eventually(t, func() bool { return env.AssertEqualLedger(0, 1) == nil }, 30*time.Second, 100*time.Millisecond)
+
+	for i, node := range env.nodes {
+		if i == 2 {
+			continue
+		}
+		err := node.Close()
+		require.NoError(t, err)
+	}
 }
 
 // Scenario:
