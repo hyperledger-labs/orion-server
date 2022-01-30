@@ -72,14 +72,16 @@ func TestBlockReplicator_ReConfig_Endpoint(t *testing.T) {
 	follower2 := (leaderIdx + 2) % 3
 	numBlocks := uint64(100)
 	for i := uint64(0); i < numBlocks; i++ {
-		b := proto.Clone(block).(*types.Block)
-		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		b1 := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b1)
 		require.NoError(t, err)
 
 		// submission to a follower will cause an error
-		err = env.nodes[follower1].blockReplicator.Submit(b)
+		b2 := proto.Clone(block).(*types.Block)
+		err = env.nodes[follower1].blockReplicator.Submit(b2)
 		require.EqualError(t, err, expectedNotLeaderErr)
-		err = env.nodes[follower2].blockReplicator.Submit(b)
+		b3 := proto.Clone(block).(*types.Block)
+		err = env.nodes[follower2].blockReplicator.Submit(b3)
 		require.EqualError(t, err, expectedNotLeaderErr)
 	}
 
@@ -97,12 +99,13 @@ func TestBlockReplicator_ReConfig_Endpoint(t *testing.T) {
 	expectedNotLeaderErr = fmt.Sprintf("not a leader, leader is RaftID: %d, with HostPort: 127.0.0.1:2200%d", leaderIdx+1, leaderIdx+1)
 	follower1 = (leaderIdx + 1) % 2
 	for i := numBlocks; i < 2*numBlocks; i++ {
-		b := proto.Clone(block).(*types.Block)
-		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		b1 := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b1)
 		require.NoError(t, err)
 
 		// submission to a follower will cause an error
-		err = env.nodes[follower1].blockReplicator.Submit(b)
+		b2 := proto.Clone(block).(*types.Block)
+		err = env.nodes[follower1].blockReplicator.Submit(b2)
 		require.EqualError(t, err, expectedNotLeaderErr)
 	}
 
@@ -629,9 +632,12 @@ func TestBlockReplicator_ReConfig_PreorderValidation(t *testing.T) {
 	leaderIdx := env.AgreedLeaderIndex()
 	testSubmitDataBlocks(t, env, numBlocks, approxDataSize)
 
+	var releaseErrorsMutex sync.Mutex
 	var releaseErrors []string
 	env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCalls(func(txIDs []string, err error) {
+		releaseErrorsMutex.Lock()
 		releaseErrors = append(releaseErrors, err.Error())
+		releaseErrorsMutex.Unlock()
 	})
 
 	// A config tx that updates the membership by adding a peer:
@@ -656,8 +662,11 @@ func TestBlockReplicator_ReConfig_PreorderValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { return env.nodes[leaderIdx].pendingTxs.ReleaseWithErrorCallCount() == 2 }, 30*time.Second, 100*time.Millisecond)
 	require.Eventually(t, func() bool { return isCountEqualGreater(1) }, 30*time.Second, 100*time.Millisecond)
+
+	releaseErrorsMutex.Lock()
 	require.Equal(t, "mock failure message", releaseErrors[0])                            // release with internal error
 	require.Equal(t, "Invalid config tx, reason: mock failure message", releaseErrors[1]) // release with invalid config
+	releaseErrorsMutex.Unlock()
 
 	t.Log("Closing")
 	for _, node := range env.nodes {
