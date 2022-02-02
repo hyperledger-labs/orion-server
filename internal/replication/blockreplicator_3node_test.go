@@ -233,15 +233,16 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 	follower2 := (leaderIdx + 2) % 3
 	numBlocks := uint64(100)
 	for i := uint64(0); i < numBlocks; i++ {
-		b := proto.Clone(block).(*types.Block)
-		b.Header.BaseHeader.Number = 2 + i
-		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		b1 := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b1)
 		require.NoError(t, err)
 
 		// submission to a follower will cause an error
-		err = env.nodes[follower1].blockReplicator.Submit(b)
+		b2 := proto.Clone(block).(*types.Block)
+		err = env.nodes[follower1].blockReplicator.Submit(b2)
 		require.EqualError(t, err, expectedNotLeaderErr)
-		err = env.nodes[follower2].blockReplicator.Submit(b)
+		b3 := proto.Clone(block).(*types.Block)
+		err = env.nodes[follower2].blockReplicator.Submit(b3)
 		require.EqualError(t, err, expectedNotLeaderErr)
 	}
 
