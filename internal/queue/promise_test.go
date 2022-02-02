@@ -31,8 +31,6 @@ func TestPromise_Done(t *testing.T) {
 		require.NotNil(t, receipt)
 		require.Equal(t, uint64(666), receipt.TxIndex)
 		require.NoError(t, err)
-
-		checkPromiseAfterCompletion(t, promise)
 	})
 
 	t.Run("Done before Wait", func(t *testing.T) {
@@ -81,8 +79,6 @@ func TestPromise_Error(t *testing.T) {
 		require.Nil(t, receipt)
 		require.EqualError(t, err, "not a leader, leader is RaftID: 3, with HostPort: 10.10.10.10:12345")
 		require.IsType(t, &ierrors.NotLeaderError{}, err)
-
-		checkPromiseAfterCompletion(t, promise)
 	})
 
 	t.Run("Error before Wait", func(t *testing.T) {
