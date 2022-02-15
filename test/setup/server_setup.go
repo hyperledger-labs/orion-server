@@ -451,6 +451,13 @@ func (s *Server) URL() string {
 	return "http://" + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10)
 }
 
+func (s *Server) ID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return s.serverID
+}
+
 // NewRESTClient creates a new REST client for the user to submit requests and transactions
 // to the server
 func (s *Server) NewRESTClient(checkRedirect func(req *http.Request, via []*http.Request) error) (*mock.Client, error) {
@@ -469,4 +476,8 @@ type testFailure struct {
 
 func (t *testFailure) Fatalf(format string, args ...interface{}) {
 	log.Printf(format, args...)
+}
+
+
+func (t *testFailure) Helper() {
 }

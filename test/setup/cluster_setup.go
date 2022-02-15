@@ -77,7 +77,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 
 	cluster := &Cluster{
 		Servers:        make([]*Server, conf.NumberOfServers),
-		Users:          []string{"admin"},
+		Users:          []string{"admin", "alice", "bob", "charlie"},
 		logger:         l,
 		testDirAbsPath: conf.TestDirAbsolutePath,
 		bdbBinaryPath:  conf.BDBBinaryPath,
