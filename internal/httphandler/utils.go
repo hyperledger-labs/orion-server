@@ -46,6 +46,11 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			UserId: querierUserID,
 			DbName: params["dbname"],
 		}
+	case constants.GetDBIndex:
+		payload = &types.GetDBIndexQuery{
+			UserId: querierUserID,
+			DbName: params["dbname"],
+		}
 	case constants.GetConfig:
 		payload = &types.GetConfigQuery{
 			UserId: querierUserID,

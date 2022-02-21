@@ -44,6 +44,7 @@ const (
 
 	DBEndpoint  = "/db/"
 	GetDBStatus = "/db/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
+	GetDBIndex  = "/db/index/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
 	PostDBTx    = "/db/tx"
 
 	ConfigEndpoint     = "/config/"
@@ -98,6 +99,12 @@ func URLForGetUser(userID string) string {
 // status of a given database
 func URLForGetDBStatus(dbName string) string {
 	return DBEndpoint + dbName
+}
+
+// URLForGetDBIndex returns url for GET request to retrieve
+// the index definition of a given database
+func URLForGetDBIndex(dbName string) string {
+	return DBEndpoint + "index/" + dbName
 }
 
 // URLForGetConfig returns url for GET request to retrieve

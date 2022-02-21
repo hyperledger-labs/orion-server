@@ -96,8 +96,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
-				db.On("GetData", dbName, submittingUserName, "foo").
-					Return(nil, &interrors.PermissionErr{ErrMsg: "access forbidden"})
+				db.On("GetData", dbName, submittingUserName, "foo").Return(nil, &interrors.PermissionErr{ErrMsg: "access forbidden"})
 				return db
 			},
 			expectedStatusCode: http.StatusForbidden,

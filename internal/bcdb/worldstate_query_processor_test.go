@@ -119,6 +119,120 @@ func TestGetDBStatus(t *testing.T) {
 	})
 }
 
+func TestGetDBIndex(t *testing.T) {
+	index := &types.DBIndex{
+		AttributeAndType: map[string]types.IndexAttributeType{"field1": types.IndexAttributeType_STRING, "field2": types.IndexAttributeType_BOOLEAN},
+	}
+	indexValue, err := json.Marshal(index.GetAttributeAndType())
+	require.NoError(t, err)
+
+	setup := func(db worldstate.DB, userID, dbName string, index []byte) {
+		user := &types.User{
+			Id: userID,
+			Privilege: &types.Privilege{
+				DbPermission: map[string]types.Privilege_Access{
+					dbName: types.Privilege_ReadWrite,
+				},
+			},
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + userID,
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createUser, 2))
+
+		createDB := map[string]*worldstate.DBUpdates{
+			worldstate.DatabasesDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   dbName,
+						Value: index,
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createDB, 2))
+	}
+
+	t.Run("getDBIndex-returns-index", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		setup(env.q.db, "user1", "test-db1", indexValue)
+		setup(env.q.db, "user2", "test-db2", nil)
+
+		testCases := []struct {
+			dbName        string
+			user          string
+			expectedIndex string
+		}{
+			{
+				dbName:        "test-db1",
+				user:          "user1",
+				expectedIndex: `{"field1":1,"field2":2}`,
+			},
+			{
+				dbName:        "test-db2",
+				user:          "user2",
+				expectedIndex: "",
+			},
+		}
+
+		for _, testCase := range testCases {
+			index, err := env.q.getDBIndex(testCase.dbName, testCase.user)
+			require.NoError(t, err)
+			require.Equal(t, testCase.expectedIndex, index.GetIndex())
+		}
+	})
+
+	t.Run("getDBIndex-returns-error", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+
+		setup(env.q.db, "user1", "test-db1", indexValue)
+		setup(env.q.db, "user2", "test-db2", nil)
+
+		testCases := []struct {
+			dbName      string
+			user        string
+			expectedErr string
+		}{
+			{
+				dbName:      worldstate.DatabasesDBName,
+				user:        "user1",
+				expectedErr: "no index for the system database [_dbs]",
+			},
+			{
+				dbName:      "test-db1",
+				user:        "user2",
+				expectedErr: "the user [user2] has no permission to read from database [test-db1]",
+			},
+		}
+
+		for _, testCase := range testCases {
+			index, err := env.q.getDBIndex(testCase.dbName, testCase.user)
+			require.Nil(t, index)
+			require.EqualError(t, err, testCase.expectedErr)
+		}
+	})
+}
+
 func TestGetData(t *testing.T) {
 	setup := func(db worldstate.DB, userID, dbName string) {
 		user := &types.User{

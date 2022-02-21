@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	backend "github.com/hyperledger-labs/orion-server/internal/bcdb"
+	"github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
@@ -39,6 +40,7 @@ func NewDBRequestHandler(db backend.DB, logger *logger.SugarLogger) http.Handler
 	}
 
 	handler.router.HandleFunc(constants.GetDBStatus, handler.dbStatus).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetDBIndex, handler.dbIndex).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostDBTx, handler.dbTransaction).Methods(http.MethodPost)
 
 	return handler
@@ -68,6 +70,37 @@ func (d *dbRequestHandler) dbStatus(response http.ResponseWriter, request *http.
 	}
 
 	utils.SendHTTPResponse(response, http.StatusOK, dbStatus)
+}
+
+func (d *dbRequestHandler) dbIndex(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetDBIndex, d.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetDBIndexQuery)
+
+	dbIndex, err := d.db.GetDBIndex(query.DbName, query.UserId)
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *errors.PermissionErr:
+			status = http.StatusForbidden
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		utils.SendHTTPResponse(
+			response,
+			status,
+			&types.HttpResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			},
+		)
+		return
+	}
+
+	utils.SendHTTPResponse(response, http.StatusOK, dbIndex)
 }
 
 func (d *dbRequestHandler) dbTransaction(response http.ResponseWriter, request *http.Request) {

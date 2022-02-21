@@ -18,6 +18,16 @@ message GetDBStatusQuery {
   string db_name = 2;
 }
 
+message GetDBIndexQueryEnvelope {
+  GetDBIndexQuery payload = 1;
+  bytes signature = 2;
+}
+
+message GetDBIndexQuery {
+  string user_id = 1;
+  string db_name = 2;
+}
+
 message GetDataQueryEnvelope {
   GetDataQuery payload = 1;
   bytes signature = 2;
