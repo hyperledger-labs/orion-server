@@ -3,14 +3,17 @@
 package server
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/httphandler"
+	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/pkg/errors"
@@ -62,7 +65,52 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		return nil, errors.Wrapf(err, "error while creating a tcp listener on: %s", addr)
 	}
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{
+		Handler: mux,
+	}
+
+	if conf.LocalConfig.Server.TLS.Enabled {
+		// load and check the CA certificates
+		caCerts, err := certificateauthority.LoadCAConfig(&conf.SharedConfig.CAConfig)
+		if err != nil {
+			return nil, errors.Wrapf(err, "error while loading CA certificates from local configuration Server.TLS.CaConfig: %+v", conf.LocalConfig.Server.TLS.CaConfig)
+		}
+		caColl, err := certificateauthority.NewCACertCollection(caCerts.GetRoots(), caCerts.GetIntermediates())
+		if err != nil {
+			return nil, errors.Wrap(err, "error while creating a CA certificate collection")
+		}
+		if err := caColl.VerifyCollection(); err != nil {
+			return nil, errors.Wrap(err, "error while verifying the CA certificate collection")
+		}
+
+		// get a x509.CertPool of all the CA certificates for tls.Config
+		caCertPool := caColl.GetCertPool()
+
+		// server tls.Config
+		serverKeyBytes, err := os.ReadFile(conf.LocalConfig.Server.TLS.ServerKeyPath)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read local config Server.TLS.ServerKeyPath")
+		}
+		serverCertBytes, err := os.ReadFile(conf.LocalConfig.Server.TLS.ServerCertificatePath)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read local config Server.TLS.ServerCertificatePath")
+		}
+		serverKeyPair, err := tls.X509KeyPair(serverCertBytes, serverKeyBytes)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create server tls.X509KeyPair")
+		}
+
+		tlsServerConfig := &tls.Config{
+			Certificates: []tls.Certificate{serverKeyPair},
+			RootCAs:      caCertPool,
+			ClientCAs:    caCertPool,
+			MinVersion:   tls.VersionTLS12,
+		}
+		if conf.LocalConfig.Server.TLS.ClientAuthRequired {
+			tlsServerConfig.ClientAuth = tls.RequireAndVerifyClientCert
+		}
+		server.TLSConfig = tlsServerConfig
+	}
 
 	return &BCDBHTTPServer{
 		db:      db,
@@ -92,12 +140,17 @@ func (s *BCDBHTTPServer) Start() error {
 func (s *BCDBHTTPServer) serveRequests(l net.Listener) {
 	s.logger.Infof("Starting to serve requests on: %s", s.listen.Addr().String())
 
-	if err := s.server.Serve(l); err != nil {
-		if err == http.ErrServerClosed {
-			s.logger.Infof("Server stopped: %s", err)
-		} else {
-			s.logger.Panicf("server stopped unexpectedly, %v", err)
-		}
+	var err error
+	if s.conf.LocalConfig.Server.TLS.Enabled {
+		err = s.server.ServeTLS(l, "", "")
+	} else {
+		err = s.server.Serve(l)
+	}
+
+	if err == http.ErrServerClosed {
+		s.logger.Infof("Server stopped: %s", err)
+	} else {
+		s.logger.Panicf("server stopped unexpectedly, %v", err)
 	}
 
 	s.logger.Infof("Finished serving requests on: %s", s.listen.Addr().String())

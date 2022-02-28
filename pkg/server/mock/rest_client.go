@@ -4,8 +4,11 @@ package mock
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -26,7 +29,7 @@ type ResponseErr struct {
 	Error string `json:"error,omitempty"`
 }
 
-func NewRESTClient(rawurl string, checkRedirect func(req *http.Request, via []*http.Request) error) (*Client, error) {
+func NewRESTClient(rawurl string, checkRedirect func(req *http.Request, via []*http.Request) error, tlsConfig *tls.Config) (*Client, error) {
 	res := new(Client)
 	var err error
 	res.RawURL = rawurl
@@ -34,12 +37,16 @@ func NewRESTClient(rawurl string, checkRedirect func(req *http.Request, via []*h
 	if err != nil {
 		return nil, errors.Wrapf(err, "parsing url %s", rawurl)
 	}
+
 	httpClient := &http.Client{
 		Transport: &http.Transport{
 			DisableKeepAlives: true,
+			TLSClientConfig:   tlsConfig,
 		},
+
 		CheckRedirect: checkRedirect,
 	}
+
 	res.httpClient = httpClient
 
 	return res, nil
@@ -229,7 +236,15 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}, serverTimeout
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, u.String(), buf)
+	ctx := context.Background()
+	if serverTimeout > 0 {
+		contextTimeout := serverTimeout + time.Second
+		var cancelFnc context.CancelFunc
+		ctx, cancelFnc = context.WithTimeout(context.Background(), contextTimeout)
+		defer cancelFnc()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), buf)
 	if err != nil {
 		return nil, err
 	}
@@ -241,9 +256,11 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}, serverTimeout
 	}
 
 	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
+	if _, ok := err.(net.Error); ok {
+		if err.(net.Error).Timeout() {
+			err = errors.WithMessage(err, "timeout error")
+		}
 	}
 
-	return resp, nil
+	return resp, err
 }

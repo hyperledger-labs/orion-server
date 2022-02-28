@@ -367,7 +367,7 @@ func TestValidateConfigTx(t *testing.T) {
 				},
 			}),
 			expectedResult: &types.ValidationInfo{
-				Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 				ReasonIfInvalid: "error in ConsensusConfig: cannot make more than one membership change at a time: 2 added, 0 removed",
 			},
 		},
@@ -521,7 +521,7 @@ func TestValidateConfigTx(t *testing.T) {
 						RaftConfig: &types.RaftConfig{
 							TickInterval:   "100ms",
 							ElectionTicks:  101, //<<< changed
-							HeartbeatTicks: 11, //<<< changed
+							HeartbeatTicks: 11,  //<<< changed
 						},
 					},
 				},

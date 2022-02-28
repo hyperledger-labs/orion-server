@@ -464,10 +464,7 @@ func (s *Server) NewRESTClient(checkRedirect func(req *http.Request, via []*http
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return mock.NewRESTClient(
-		s.URL(),
-		checkRedirect,
-	)
+	return mock.NewRESTClient(s.URL(), checkRedirect, nil)
 }
 
 // testFailure is in lieu of *testing.T for gomega's types.GomegaTestingT
@@ -477,7 +474,6 @@ type testFailure struct {
 func (t *testFailure) Fatalf(format string, args ...interface{}) {
 	log.Printf(format, args...)
 }
-
 
 func (t *testFailure) Helper() {
 }

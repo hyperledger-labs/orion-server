@@ -514,7 +514,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the user [alice] in the write list has an invalid certificate: Error = error verifying certificate against trusted certificate authority (CA): x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"Clients RootCA\")",
+				ReasonIfInvalid: "the user [alice] in the write list has an invalid certificate: Error = error verifying certificate against trusted certificate authority (CA): x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"Orion RootCA\")",
 			},
 		},
 		{
