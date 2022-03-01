@@ -20,11 +20,11 @@ func TestValidateConfigTx(t *testing.T) {
 	t.Parallel()
 
 	userID := "adminUser"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser", "node"})
-	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
-	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node")
-	caCert, caKey := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"adminUser", "nonAdminUser", "node"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "adminUser")
+	nonAdminCert, nonAdminSigner := testutils.LoadTestCrypto(t, cryptoDir, "nonAdminUser")
+	nodeCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "node")
+	caCert, caKey := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 	require.NotNil(t, caKey)
 
 	setup := func(db worldstate.DB) {
@@ -601,9 +601,9 @@ func TestValidateConfigTx(t *testing.T) {
 func TestValidateCAConfig(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"node"})
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"node"})
+	nodeCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "node")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
 	//TODO add additional test cases once we implement: https://github.ibm.com/blockchaindb/server/issues/358
 	tests := []struct {
@@ -685,9 +685,9 @@ func TestValidateCAConfig(t *testing.T) {
 func TestValidateNodeConfig(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"node"})
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"node"})
+	nodeCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "node")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{caCert.Raw}, nil)
 	require.NoError(t, err)
 
@@ -839,9 +839,9 @@ func TestValidateNodeConfig(t *testing.T) {
 func TestValidateAdminConfig(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"admin"})
-	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"admin"})
+	adminCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "admin")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 	caCertCollection, err := certificateauthority.NewCACertCollection([][]byte{caCert.Raw}, nil)
 	require.NoError(t, err)
 

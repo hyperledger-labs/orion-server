@@ -126,11 +126,11 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	)
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "node1", "admin1"})
-	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
-	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin1")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"testUser", "node1", "admin1"})
+	userCert, userSigner := testutils.LoadTestCrypto(t, cryptoDir, "testUser")
+	nodeCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "node1")
+	adminCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "admin1")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
 	b := New(&Config{
 		BlockOneQueueBarrier: queue.NewOneQueueBarrier(logger),

@@ -24,8 +24,8 @@ func TestVerifyRequestSignature(t *testing.T) {
 		Name:          "unit-test",
 	})
 	require.NoError(t, err)
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	t.Run("good sig", func(t *testing.T) {
 		db := &mocks.DB{}

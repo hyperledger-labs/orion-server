@@ -159,7 +159,7 @@ func getTestdataCert(t *testing.T, pathToCert string) *x509.Certificate {
 	return cert
 }
 
-func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA ...bool) string {
+func GenerateTestCrypto(t *testing.T, names []string, withIntermediateCA ...bool) string {
 	withInterCA := false
 	if len(withIntermediateCA) > 0 {
 		withInterCA = withIntermediateCA[0]
@@ -228,7 +228,7 @@ func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA .
 	return tempDir
 }
 
-func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate, crypto.Signer) {
+func LoadTestCrypto(t *testing.T, tempDir, name string) (*x509.Certificate, crypto.Signer) {
 	cert := getTestdataCert(t, path.Join(tempDir, name+".pem"))
 	signer, err := crypto.NewSigner(
 		&crypto.SignerOptions{
@@ -240,7 +240,7 @@ func LoadTestClientCrypto(t *testing.T, tempDir, name string) (*x509.Certificate
 	return cert, signer
 }
 
-func LoadTestClientCA(t *testing.T, tempDir, name string) (cert *x509.Certificate, key []byte) {
+func LoadTestCA(t *testing.T, tempDir, name string) (cert *x509.Certificate, key []byte) {
 	cert = getTestdataCert(t, path.Join(tempDir, name+".pem"))
 	require.True(t, cert.IsCA)
 

@@ -114,7 +114,7 @@ func newTxProcessorTestEnv(t *testing.T, cryptoDir string, conf *config.Configur
 		t.Fatalf("error while creating state trie store, %v", err)
 	}
 
-	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "testUser")
+	userCert, userSigner := testutils.LoadTestCrypto(t, cryptoDir, "testUser")
 
 	txProcConf := &txProcessorConfig{
 		config:          conf,
@@ -589,7 +589,7 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 	ledgerDir, err := ioutil.TempDir("/tmp", "server")
 	require.NoError(t, err)
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "bdb-node-1", "admin"})
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"testUser", "bdb-node-1", "admin"})
 
 	return cryptoDir, &config.Configurations{
 		LocalConfig: &config.LocalConfiguration{
@@ -666,7 +666,7 @@ func testJoinConfiguration(t *testing.T) (string, *config.Configurations) {
 	ledgerDir, err := ioutil.TempDir("/tmp", "server")
 	require.NoError(t, err)
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"testUser", "bdb-node-1", "bdb-node-2", "admin"})
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"testUser", "bdb-node-1", "bdb-node-2", "admin"})
 
 	clusterConfig := &types.ClusterConfig{
 		Nodes: []*types.NodeConfig{

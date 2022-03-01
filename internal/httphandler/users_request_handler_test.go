@@ -27,9 +27,9 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 	submittingUserName := "alice"
 	targetUserID := "targetUserID"
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string
@@ -223,8 +223,8 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 	userGet := "userGet"
 	userWrite := "userWrite"
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	userTx := &types.UserAdministrationTx{
 		TxId:        "1",

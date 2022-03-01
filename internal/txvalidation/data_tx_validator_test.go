@@ -20,10 +20,10 @@ func TestValidateDataTx(t *testing.T) {
 
 	alice := "alice"
 	bob := "bob"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{alice, bob, "bogusUser"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, alice)
-	bobCert, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, bob)
-	bogusCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "bogusUser")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{alice, bob, "bogusUser"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, alice)
+	bobCert, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, bob)
+	bogusCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "bogusUser")
 
 	addUserWithCorrectPrivilege := func(db worldstate.DB) {
 		a := &types.User{

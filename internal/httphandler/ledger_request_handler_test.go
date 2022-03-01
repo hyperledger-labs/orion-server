@@ -25,8 +25,8 @@ import (
 
 func TestBlockQuery(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
 		name           string
@@ -265,8 +265,8 @@ func TestBlockQuery(t *testing.T) {
 
 func TestPathQuery(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
 		name               string
@@ -482,8 +482,8 @@ func TestPathQuery(t *testing.T) {
 
 func TestTxProofQuery(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
 		name               string
@@ -687,8 +687,8 @@ func TestTxProofQuery(t *testing.T) {
 
 func TestDataProofQuery(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
 		name               string
@@ -986,8 +986,8 @@ func TestDataProofQuery(t *testing.T) {
 
 func TestTxReceiptQuery(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	testCases := []struct {
 		name               string

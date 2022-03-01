@@ -871,7 +871,7 @@ func newTestSetup(t *testing.T, numServers int) ([]*config.LocalConfiguration, *
 	for i := 0; i < numServers; i++ {
 		nodeIDs = append(nodeIDs, fmt.Sprintf("node%d", i+1))
 	}
-	cryptoDir := testutils.GenerateTestClientCrypto(t, nodeIDs, true)
+	cryptoDir := testutils.GenerateTestCrypto(t, nodeIDs, true)
 	auxDir, err := ioutil.TempDir("/tmp", "UnitTestAux")
 	require.NoError(t, err)
 	t.Cleanup(func() {

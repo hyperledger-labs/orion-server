@@ -79,10 +79,10 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 func TestValidateGenesisBlock(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"admin1", "node1"})
-	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin1")
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"admin1", "node1"})
+	adminCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "admin1")
+	nodeCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "node1")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
 	//TODO test when admin and node cert are not signed by correct CA
 
@@ -356,8 +356,8 @@ func TestValidateGenesisBlock(t *testing.T) {
 func TestValidateDataBlock(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"operatingUser"})
-	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "operatingUser")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"operatingUser"})
+	userCert, userSigner := testutils.LoadTestCrypto(t, cryptoDir, "operatingUser")
 
 	addUserWithCorrectPrivilege := func(db worldstate.DB) {
 		user := &types.User{
@@ -657,9 +657,9 @@ func TestValidateDataBlock(t *testing.T) {
 func TestValidateUserBlock(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser"})
-	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"adminUser"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "adminUser")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 	require.True(t, caCert.IsCA)
 
 	adminUser := &types.User{
@@ -800,8 +800,8 @@ func TestValidateUserBlock(t *testing.T) {
 func TestValidateDBBlock(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"userWithMorePrivilege", "userWithLessPrivilege"})
-	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "userWithMorePrivilege")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"userWithMorePrivilege", "userWithLessPrivilege"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "userWithMorePrivilege")
 
 	setup := func(db worldstate.DB) {
 		userWithMorePrivilege := &types.User{
@@ -920,11 +920,11 @@ func TestValidateDBBlock(t *testing.T) {
 func TestValidateConfigBlock(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "admin1", "node1"})
-	userCert, userSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
-	adminCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "admin1")
-	nodeCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "node1")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"adminUser", "admin1", "node1"})
+	userCert, userSigner := testutils.LoadTestCrypto(t, cryptoDir, "adminUser")
+	adminCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "admin1")
+	nodeCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "node1")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
 	setup := func(db worldstate.DB) {
 		adminUser := &types.User{

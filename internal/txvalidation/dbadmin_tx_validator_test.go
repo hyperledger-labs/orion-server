@@ -17,9 +17,9 @@ import (
 func TestValidateDBAdminTx(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"userWithMorePrivilege", "userWithLessPrivilege"})
-	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "userWithMorePrivilege")
-	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "userWithLessPrivilege")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"userWithMorePrivilege", "userWithLessPrivilege"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "userWithMorePrivilege")
+	nonAdminCert, nonAdminSigner := testutils.LoadTestCrypto(t, cryptoDir, "userWithLessPrivilege")
 
 	sampleMetadataData := &types.Metadata{
 		Version: &types.Version{
