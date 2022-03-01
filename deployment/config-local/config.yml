@@ -41,6 +41,21 @@ server:
     block: 100
   # logLevel can be debug, info, warn, err, and panic
   logLevel: info
+  tls:
+    enabled: false
+    # Require client certificates / mutual TLS for inbound connections.
+    clientAuthRequired: false
+    # X.509 certificate used for TLS server
+    serverCertificatePath: ./testdata/tls/server/server.cert
+    # Private key for TLS server
+    serverKeyPath: ./testdata/tls/server/server.key
+    caConfig:
+      # The paths to root certificates. At least one is required. for example:
+      #   rootCACertsPath: ./testdata/rootcaA.cert, ./testdata/rootcaB.cert
+      rootCACertsPath: ./testdata/tls/CA/rootca.cert
+      # The paths to intermediate certificates. Optional. For example:
+      #   intermediateCACertsPath: ./testdata/cluster/midcaA.cert, ./testdata/cluster/midcaB.cert
+      intermediateCACertsPath: ./testdata/tls/CA/midca.cert
 
 # blockCreation carries block creation parameters.
 blockCreation:

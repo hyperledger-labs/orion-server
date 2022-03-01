@@ -171,7 +171,7 @@ func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA .
 		os.RemoveAll(tempDir)
 	})
 
-	rootCAPemCert, caPrivKey, err := GenerateRootCA("Clients RootCA", "127.0.0.1")
+	rootCAPemCert, caPrivKey, err := GenerateRootCA("Orion RootCA", "127.0.0.1")
 	require.NoError(t, err)
 	require.NotNil(t, rootCAPemCert)
 	require.NotNil(t, caPrivKey)
@@ -194,7 +194,7 @@ func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA .
 
 	var keyPair tls.Certificate
 	if withInterCA {
-		intermediateCAPemCert, intermediateCAPrivKey, err := GenerateIntermediateCA("Clients IntermediateCA", "127.0.0.1", rootCAkeyPair)
+		intermediateCAPemCert, intermediateCAPrivKey, err := GenerateIntermediateCA("Orion IntermediateCA", "127.0.0.1", rootCAkeyPair)
 		intermediateCACertFile, err := os.Create(path.Join(tempDir, IntermediateCAFileName+".pem"))
 		require.NoError(t, err)
 		_, err = intermediateCACertFile.Write(intermediateCAPemCert)
@@ -215,21 +215,13 @@ func GenerateTestClientCrypto(t *testing.T, names []string, withIntermediateCA .
 	}
 
 	for _, name := range names {
-		pemCert, privKey, err := IssueCertificate("BCDB Client "+name, "127.0.0.1", keyPair)
+		pemCert, privKey, err := IssueCertificate("Orion cert for "+name, "127.0.0.1", keyPair)
 		require.NoError(t, err)
 
-		pemCertFile, err := os.Create(path.Join(tempDir, name+".pem"))
-		require.NoError(t, err)
-		_, err = pemCertFile.Write(pemCert)
-		require.NoError(t, err)
-		err = pemCertFile.Close()
+		err = os.WriteFile(path.Join(tempDir, name+".pem"), pemCert, 0666)
 		require.NoError(t, err)
 
-		pemPrivKeyFile, err := os.Create(path.Join(tempDir, name+".key"))
-		require.NoError(t, err)
-		_, err = pemPrivKeyFile.Write(privKey)
-		require.NoError(t, err)
-		err = pemPrivKeyFile.Close()
+		err = os.WriteFile(path.Join(tempDir, name+".key"), privKey, 0666)
 		require.NoError(t, err)
 	}
 

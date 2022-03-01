@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"runtime"
@@ -35,13 +36,17 @@ var basePort uint32 = 6090
 var basePortMutex sync.Mutex
 
 type serverTestEnv struct {
-	serverConfig   *config.Configurations
-	bcdbHTTPServer *BCDBHTTPServer
-	caKeys         tls.Certificate
-	testDataPath   string
-	adminSigner    crypto.Signer
-	client         *mock.Client
-	certCol        *certificateauthority.CACertCollection
+	serverConfig                   *config.Configurations
+	bcdbHTTPServer                 *BCDBHTTPServer
+	caKeys                         tls.Certificate
+	testDataPath                   string
+	adminSigner                    crypto.Signer
+	client                         *mock.Client
+	signingCACertificateCollection *certificateauthority.CACertCollection
+	tlsCACertificateCollection     *certificateauthority.CACertCollection
+	serverTLS                      bool
+	clientTLS                      bool
+	tempDir                        string
 }
 
 func (env *serverTestEnv) restart(t *testing.T) {
@@ -67,10 +72,32 @@ func (env *serverTestEnv) restart(t *testing.T) {
 
 	port, err := env.bcdbHTTPServer.Port()
 	require.NoError(t, err)
-	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port), nil)
-	require.NoError(t, err)
+	if env.serverTLS {
+		caConfig, err := certificateauthority.LoadCAConfig(&env.serverConfig.SharedConfig.CAConfig)
+		require.NoError(t, err)
+		caCertCollection, err := certificateauthority.NewCACertCollection(caConfig.GetRoots(), caConfig.GetIntermediates())
+		require.NoError(t, err)
 
-	env.client = client
+		tlsClientConfig := &tls.Config{
+			RootCAs:    caCertCollection.GetCertPool(),
+			ClientCAs:  caCertCollection.GetCertPool(),
+			MinVersion: tls.VersionTLS12,
+		}
+		if env.clientTLS {
+			clientKeyBytes, err := os.ReadFile(path.Join(env.tempDir, "tlsClient.key"))
+			require.NoError(t, err)
+			clientCertBytes, err := os.ReadFile(path.Join(env.tempDir, "tlsClient.pem"))
+			require.NoError(t, err)
+			clientKeyPair, err := tls.X509KeyPair(clientCertBytes, clientKeyBytes)
+			require.NoError(t, err)
+			tlsClientConfig.Certificates = []tls.Certificate{clientKeyPair}
+		}
+
+		env.client, err = mock.NewRESTClient(fmt.Sprintf("https://127.0.0.1:%s", port), nil, tlsClientConfig)
+	} else {
+		env.client, err = mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port), nil, nil)
+	}
+	require.NoError(t, err)
 }
 
 func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, error) {
@@ -87,13 +114,13 @@ func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, er
 	require.NotNil(t, cfg)
 	require.NotNil(t, cfg.Response)
 
-	err = env.certCol.VerifyLeafCert(cfg.GetResponse().GetNodeConfig().GetCertificate())
+	err = env.signingCACertificateCollection.VerifyLeafCert(cfg.GetResponse().GetNodeConfig().GetCertificate())
 	require.NoError(t, err)
 
 	return crypto.NewVerifier(cfg.GetResponse().GetNodeConfig().GetCertificate())
 }
 
-func newServerTestEnv(t *testing.T) *serverTestEnv {
+func newServerTestEnv(t *testing.T, serverTLS bool, clientTLS bool) *serverTestEnv {
 	tempDir, err := ioutil.TempDir("/tmp", "serverTest")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -102,14 +129,14 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 		}
 	})
 
-	rootCAPemCert, caPrivKey, err := testutils.GenerateRootCA("BCDB RootCA", "127.0.0.1")
+	rootCAPemCert, caPrivKey, err := testutils.GenerateRootCA("Orion RootCA", "127.0.0.1")
 	require.NoError(t, err)
 	require.NotNil(t, rootCAPemCert)
 	require.NotNil(t, caPrivKey)
 
-	keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
+	caKeyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
 	require.NoError(t, err)
-	require.NotNil(t, keyPair)
+	require.NotNil(t, caKeyPair)
 
 	block, _ := pem.Decode(rootCAPemCert)
 	certsCollection, err := certificateauthority.NewCACertCollection([][]byte{block.Bytes}, nil)
@@ -118,40 +145,22 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	err = certsCollection.VerifyCollection()
 	require.NoError(t, err)
 
-	serverRootCACertFile, err := os.Create(path.Join(tempDir, "serverRootCACert.pem"))
-	require.NoError(t, err)
-	_, err = serverRootCACertFile.Write(rootCAPemCert)
-	require.NoError(t, err)
-	require.NoError(t, serverRootCACertFile.Close())
-
-	pemCert, privKey, err := testutils.IssueCertificate("BCDB Instance", "127.0.0.1", keyPair)
+	err = os.WriteFile(path.Join(tempDir, "serverRootCACert.pem"), rootCAPemCert, 0666)
 	require.NoError(t, err)
 
-	pemCertFile, err := os.Create(path.Join(tempDir, "server.pem"))
+	pemCert, privKey, err := testutils.IssueCertificate("Orion Instance", "127.0.0.1", caKeyPair)
 	require.NoError(t, err)
-	_, err = pemCertFile.Write(pemCert)
+	err = os.WriteFile(path.Join(tempDir, "server.pem"), pemCert, 0666)
 	require.NoError(t, err)
-	require.NoError(t, pemCertFile.Close())
+	err = os.WriteFile(path.Join(tempDir, "server.key"), privKey, 0666)
+	require.NoError(t, err)
 
-	pemPrivKeyFile, err := os.Create(path.Join(tempDir, "server.key"))
+	pemAdminCert, pemAdminKey, err := testutils.IssueCertificate("Orion Admin", "127.0.0.1", caKeyPair)
 	require.NoError(t, err)
-	_, err = pemPrivKeyFile.Write(privKey)
+	err = os.WriteFile(path.Join(tempDir, "admin.pem"), pemAdminCert, 0666)
 	require.NoError(t, err)
-	require.NoError(t, pemPrivKeyFile.Close())
-
-	pemAdminCert, pemAdminKey, err := testutils.IssueCertificate("BCDB Admin", "127.0.0.1", keyPair)
+	err = os.WriteFile(path.Join(tempDir, "admin.key"), pemAdminKey, 0666)
 	require.NoError(t, err)
-	pemAdminCertFile, err := os.Create(path.Join(tempDir, "admin.pem"))
-	require.NoError(t, err)
-	_, err = pemAdminCertFile.Write(pemAdminCert)
-	require.NoError(t, err)
-	require.NoError(t, pemAdminCertFile.Close())
-
-	pemAdminKeyFile, err := os.Create(path.Join(tempDir, "admin.key"))
-	require.NoError(t, err)
-	_, err = pemAdminKeyFile.Write(pemAdminKey)
-	require.NoError(t, err)
-	require.NoError(t, pemAdminKeyFile.Close())
 
 	adminSigner, err := crypto.NewSigner(
 		&crypto.SignerOptions{
@@ -160,6 +169,43 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 		},
 	)
 	require.NoError(t, err)
+
+	if serverTLS {
+		tlsRootCAPemCert, tlsCaPrivKey, err := testutils.GenerateRootCA("Orion TLS RootCA", "127.0.0.1")
+		require.NoError(t, err)
+		require.NotNil(t, tlsRootCAPemCert)
+		require.NotNil(t, tlsCaPrivKey)
+
+		tlsCAKeyPair, err := tls.X509KeyPair(tlsRootCAPemCert, tlsCaPrivKey)
+		require.NoError(t, err)
+		require.NotNil(t, tlsCAKeyPair)
+
+		block, _ := pem.Decode(tlsRootCAPemCert)
+		tlsCertsCollection, err := certificateauthority.NewCACertCollection([][]byte{block.Bytes}, nil)
+		require.NoError(t, err)
+
+		err = tlsCertsCollection.VerifyCollection()
+		require.NoError(t, err)
+
+		err = os.WriteFile(path.Join(tempDir, "tlsServerRootCACert.pem"), tlsRootCAPemCert, 0666)
+		require.NoError(t, err)
+
+		tlsPemCert, tlsPrivKey, err := testutils.IssueCertificate("Orion TLS Instance", "127.0.0.1", tlsCAKeyPair)
+		require.NoError(t, err)
+		err = os.WriteFile(path.Join(tempDir, "tlsServer.pem"), tlsPemCert, 0666)
+		require.NoError(t, err)
+		err = os.WriteFile(path.Join(tempDir, "tlsServer.key"), tlsPrivKey, 0666)
+		require.NoError(t, err)
+		if clientTLS {
+			tlsPemCert, tlsPrivKey, err := testutils.IssueCertificate("Orion Client TLS Instance", "127.0.0.1", tlsCAKeyPair)
+			require.NoError(t, err)
+			err = os.WriteFile(path.Join(tempDir, "tlsClient.pem"), tlsPemCert, 0666)
+			require.NoError(t, err)
+			err = os.WriteFile(path.Join(tempDir, "tlsClient.key"), tlsPrivKey, 0666)
+			require.NoError(t, err)
+
+		}
+	}
 
 	basePortMutex.Lock()
 	nodePort := basePort
@@ -240,6 +286,17 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 			},
 		},
 	}
+
+	if serverTLS {
+		serverConfig.SharedConfig.CAConfig.RootCACertsPath = append(serverConfig.SharedConfig.CAConfig.RootCACertsPath, path.Join(tempDir, "tlsServerRootCACert.pem"))
+		serverConfig.LocalConfig.Server.TLS.Enabled = true
+		serverConfig.LocalConfig.Server.TLS.ServerCertificatePath = path.Join(tempDir, "tlsServer.pem")
+		serverConfig.LocalConfig.Server.TLS.ServerKeyPath = path.Join(tempDir, "tlsServer.key")
+		if clientTLS {
+			serverConfig.LocalConfig.Server.TLS.ClientAuthRequired = true
+		}
+	}
+
 	server, err := New(serverConfig)
 	require.NoError(t, err)
 
@@ -252,18 +309,46 @@ func newServerTestEnv(t *testing.T) *serverTestEnv {
 	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
 
 	env := &serverTestEnv{
-		serverConfig:   serverConfig,
-		bcdbHTTPServer: server,
-		caKeys:         keyPair,
-		testDataPath:   tempDir,
-		adminSigner:    adminSigner,
-		certCol:        certsCollection,
+		serverConfig:                   serverConfig,
+		bcdbHTTPServer:                 server,
+		caKeys:                         caKeyPair,
+		testDataPath:                   tempDir,
+		adminSigner:                    adminSigner,
+		signingCACertificateCollection: certsCollection,
+		tempDir:                        tempDir,
+		clientTLS:                      clientTLS,
+		serverTLS:                      serverTLS,
 	}
 
 	port, err := server.Port()
 	require.NoError(t, err)
-	client, err := mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port), nil)
-	require.NoError(t, err)
+	var client *mock.Client
+	if serverTLS {
+		caConfig, err := certificateauthority.LoadCAConfig(&serverConfig.SharedConfig.CAConfig)
+		require.NoError(t, err)
+		caCertCollection, err := certificateauthority.NewCACertCollection(caConfig.GetRoots(), caConfig.GetIntermediates())
+		require.NoError(t, err)
+
+		tlsClientConfig := &tls.Config{
+			RootCAs:    caCertCollection.GetCertPool(),
+			ClientCAs:  caCertCollection.GetCertPool(),
+			MinVersion: tls.VersionTLS12,
+		}
+		if clientTLS {
+			clientKeyBytes, err := os.ReadFile(path.Join(tempDir, "tlsClient.key"))
+			require.NoError(t, err)
+			clientCertBytes, err := os.ReadFile(path.Join(tempDir, "tlsClient.pem"))
+			require.NoError(t, err)
+			clientKeyPair, err := tls.X509KeyPair(clientCertBytes, clientKeyBytes)
+			require.NoError(t, err)
+			tlsClientConfig.Certificates = []tls.Certificate{clientKeyPair}
+		}
+		client, err = mock.NewRESTClient(fmt.Sprintf("https://127.0.0.1:%s", port), nil, tlsClientConfig)
+		require.NoError(t, err)
+	} else {
+		client, err = mock.NewRESTClient(fmt.Sprintf("http://127.0.0.1:%s", port), nil, nil)
+		require.NoError(t, err)
+	}
 	env.client = client
 
 	return env
@@ -286,7 +371,7 @@ func (env *serverTestEnv) cleanup(t *testing.T) {
 func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	// Scenario: we instantiate a server, trying to query for key,
 	// making sure key does not exist and then posting it into DB
-	env := newServerTestEnv(t)
+	env := newServerTestEnv(t, false, false)
 	defer env.cleanup(t)
 
 	verifier, err := env.getNodeSigVerifier(t)
@@ -399,10 +484,10 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 }
 
 func TestServerWithUserAdminRequest(t *testing.T) {
-	env := newServerTestEnv(t)
+	env := newServerTestEnv(t, false, false)
 	defer env.cleanup(t)
 
-	userCert, _, err := testutils.IssueCertificate("BCDB User", "127.0.0.1", env.caKeys)
+	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
 	require.NoError(t, err)
 	certBlock, _ := pem.Decode(userCert)
 
@@ -470,7 +555,7 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 }
 
 func TestServerWithDBAdminRequest(t *testing.T) {
-	env := newServerTestEnv(t)
+	env := newServerTestEnv(t, false, false)
 	defer env.cleanup(t)
 
 	dbTx := &types.DBAdministrationTx{
@@ -629,7 +714,7 @@ func TestServerWithFailureScenarios(t *testing.T) {
 		t.Run(tt.testName, func(t *testing.T) {
 			t.Parallel()
 
-			env := newServerTestEnv(t)
+			env := newServerTestEnv(t, false, false)
 			defer env.cleanup(t)
 
 			envelope := tt.envelopeProvider(env.adminSigner)
@@ -640,11 +725,233 @@ func TestServerWithFailureScenarios(t *testing.T) {
 	}
 }
 
-func TestServerWithRestart(t *testing.T) {
-	env := newServerTestEnv(t)
+func TestSyncTxWithServerTLS(t *testing.T) {
+	env := newServerTestEnv(t, true, false)
 	defer env.cleanup(t)
 
-	userCert, _, err := testutils.IssueCertificate("BCDB User", "127.0.0.1", env.caKeys)
+	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
+	require.NoError(t, err)
+	certBlock, _ := pem.Decode(userCert)
+
+	userTx := &types.UserAdministrationTx{
+		TxId:   uuid.New().String(),
+		UserId: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: &types.User{
+					Id: "testUser",
+					Privilege: &types.Privilege{
+						DbPermission: map[string]types.Privilege_Access{
+							worldstate.DefaultDBName: types.Privilege_ReadWrite,
+						},
+					},
+					Certificate: certBlock.Bytes,
+				},
+			},
+		},
+	}
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
+		&types.UserAdministrationTxEnvelope{
+			Payload:   userTx,
+			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+		}, 30*time.Second, // Sync
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResp.StatusCode)
+	httpResp.Body.Close()
+
+	verifier, err := env.getNodeSigVerifier(t)
+	require.NoError(t, err)
+
+	query := &types.GetUserQuery{UserId: "admin", TargetUserId: "testUser"}
+	querySig, err := cryptoservice.SignQuery(env.adminSigner, query)
+	require.NoError(t, err)
+	user, err := env.client.GetUser(&types.GetUserQueryEnvelope{
+		Payload:   query,
+		Signature: querySig,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, user.GetResponse())
+
+	userBytes, err := json.Marshal(user.GetResponse())
+	require.NoError(t, err)
+
+	err = verifier.Verify(userBytes, user.GetSignature())
+	require.NoError(t, err)
+
+	require.True(t, user.GetResponse().GetUser() != nil &&
+		user.GetResponse().GetUser().GetId() == "testUser")
+}
+
+func TestSyncTxWithServerHttpsClientHttp(t *testing.T) {
+	env := newServerTestEnv(t, true, false)
+	defer env.cleanup(t)
+
+	// Convert https to http, should fail
+	var err error
+	port, err := env.bcdbHTTPServer.Port()
+	require.NoError(t, err)
+	env.client.RawURL = fmt.Sprintf("http://127.0.0.1:%s", port)
+	env.client.BaseURL, err = url.Parse(env.client.RawURL)
+
+	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
+	require.NoError(t, err)
+	certBlock, _ := pem.Decode(userCert)
+
+	userTx := &types.UserAdministrationTx{
+		TxId:   uuid.New().String(),
+		UserId: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: &types.User{
+					Id: "testUser",
+					Privilege: &types.Privilege{
+						DbPermission: map[string]types.Privilege_Access{
+							worldstate.DefaultDBName: types.Privilege_ReadWrite,
+						},
+					},
+					Certificate: certBlock.Bytes,
+				},
+			},
+		},
+	}
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
+		&types.UserAdministrationTxEnvelope{
+			Payload:   userTx,
+			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+		},
+		30*time.Second, //Sync
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResp.StatusCode)
+	httpResp.Body.Close()
+}
+
+func TestSyncTxWithServerTLSClientHasWrongCA(t *testing.T) {
+	env := newServerTestEnv(t, true, false)
+	defer env.cleanup(t)
+
+	// Recreating client
+	port, err := env.bcdbHTTPServer.Port()
+	require.NoError(t, err)
+
+	tlsRootCAPemCert, tlsCaPrivKey, err := testutils.GenerateRootCA("Orion TLS RootCA", "127.0.0.1")
+	require.NoError(t, err)
+	require.NotNil(t, tlsRootCAPemCert)
+	require.NotNil(t, tlsCaPrivKey)
+
+	tlsCAKeyPair, err := tls.X509KeyPair(tlsRootCAPemCert, tlsCaPrivKey)
+	require.NoError(t, err)
+	require.NotNil(t, tlsCAKeyPair)
+
+	block, _ := pem.Decode(tlsRootCAPemCert)
+	tlsCertsCollection, err := certificateauthority.NewCACertCollection([][]byte{block.Bytes}, nil)
+	require.NoError(t, err)
+
+	tlsClientConfig := &tls.Config{
+		RootCAs:    tlsCertsCollection.GetCertPool(),
+		ClientCAs:  tlsCertsCollection.GetCertPool(),
+		MinVersion: tls.VersionTLS12,
+	}
+
+	env.client, err = mock.NewRESTClient(fmt.Sprintf("https://127.0.0.1:%s", port), nil, tlsClientConfig)
+
+	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
+	require.NoError(t, err)
+	certBlock, _ := pem.Decode(userCert)
+
+	userTx := &types.UserAdministrationTx{
+		TxId:   uuid.New().String(),
+		UserId: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: &types.User{
+					Id: "testUser",
+					Privilege: &types.Privilege{
+						DbPermission: map[string]types.Privilege_Access{
+							worldstate.DefaultDBName: types.Privilege_ReadWrite,
+						},
+					},
+					Certificate: certBlock.Bytes,
+				},
+			},
+		},
+	}
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
+		&types.UserAdministrationTxEnvelope{
+			Payload:   userTx,
+			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+		},
+		30*time.Second, // Sync
+	)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "certificate signed by unknown authority")
+	require.Nil(t, httpResp)
+}
+
+func TestSyncTxWithServerAndClientTLS(t *testing.T) {
+	env := newServerTestEnv(t, true, true)
+	defer env.cleanup(t)
+
+	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
+	require.NoError(t, err)
+	certBlock, _ := pem.Decode(userCert)
+
+	userTx := &types.UserAdministrationTx{
+		TxId:   uuid.New().String(),
+		UserId: "admin",
+		UserWrites: []*types.UserWrite{
+			{
+				User: &types.User{
+					Id: "testUser",
+					Privilege: &types.Privilege{
+						DbPermission: map[string]types.Privilege_Access{
+							worldstate.DefaultDBName: types.Privilege_ReadWrite,
+						},
+					},
+					Certificate: certBlock.Bytes,
+				},
+			},
+		},
+	}
+	httpResp, err := env.client.SubmitTransaction(constants.PostUserTx,
+		&types.UserAdministrationTxEnvelope{
+			Payload:   userTx,
+			Signature: testutils.SignatureFromTx(t, env.adminSigner, userTx),
+		}, 30*time.Second, // Sync
+	)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResp.StatusCode)
+	httpResp.Body.Close()
+
+	verifier, err := env.getNodeSigVerifier(t)
+	require.NoError(t, err)
+
+	query := &types.GetUserQuery{UserId: "admin", TargetUserId: "testUser"}
+	querySig, err := cryptoservice.SignQuery(env.adminSigner, query)
+	require.NoError(t, err)
+	user, err := env.client.GetUser(&types.GetUserQueryEnvelope{
+		Payload:   query,
+		Signature: querySig,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, user.GetResponse())
+
+	userBytes, err := json.Marshal(user.GetResponse())
+	require.NoError(t, err)
+
+	err = verifier.Verify(userBytes, user.GetSignature())
+	require.NoError(t, err)
+
+	require.True(t, user.GetResponse().GetUser() != nil &&
+		user.GetResponse().GetUser().GetId() == "testUser")
+}
+
+func TestServerWithRestart(t *testing.T) {
+	env := newServerTestEnv(t, false, false)
+	defer env.cleanup(t)
+
+	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
 	require.NoError(t, err)
 	certBlock, _ := pem.Decode(userCert)
 

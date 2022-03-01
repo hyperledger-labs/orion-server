@@ -3,13 +3,12 @@
 package certificateauthority
 
 import (
-	"github.com/hyperledger-labs/orion-server/config"
 	"path"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
+	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -86,12 +85,12 @@ func TestCACertCollection_VerifyLeafCert(t *testing.T) {
 
 	t.Run("untrusted leaf certificate", func(t *testing.T) {
 		err := caCertCollection.VerifyLeafCert(untrustedUserCert.Raw)
-		require.EqualError(t, err, "error verifying certificate against trusted certificate authority (CA): x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"Clients RootCA\")")
+		require.EqualError(t, err, "error verifying certificate against trusted certificate authority (CA): x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"Orion RootCA\")")
 	})
 
 	t.Run("untrusted leaf certificate (self signed)", func(t *testing.T) {
 		err := caCertCollection.VerifyLeafCert(untrustedCaCert.Raw)
-		require.EqualError(t, err, "error verifying certificate against trusted certificate authority (CA): x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"Clients RootCA\")")
+		require.EqualError(t, err, "error verifying certificate against trusted certificate authority (CA): x509: certificate signed by unknown authority (possibly because of \"x509: ECDSA verification failure\" while trying to verify candidate authority certificate \"Orion RootCA\")")
 	})
 }
 

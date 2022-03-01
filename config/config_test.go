@@ -30,6 +30,16 @@ var expectedLocalConfig = &LocalConfiguration{
 			Block:                     100,
 		},
 		LogLevel: "info",
+		TLS: TLSConf{
+			Enabled:               false,
+			ClientAuthRequired:    false,
+			ServerCertificatePath: "./testdata/tls/server/server.cert",
+			ServerKeyPath:         "./testdata/tls/server/server.key",
+			CaConfig: CAConfiguration{
+				RootCACertsPath:         []string{"./testdata/tls/CA/rootca.cert"},
+				IntermediateCACertsPath: []string{"./testdata/tls/CA/midca.cert"},
+			},
+		},
 	},
 	BlockCreation: BlockCreationConf{
 		MaxBlockSize:                2,

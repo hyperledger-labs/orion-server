@@ -898,8 +898,8 @@ func newTestSetup(t *testing.T, numServers int) ([]*config.LocalConfiguration, *
 					ClientAuthRequired:    false,
 					ServerCertificatePath: path.Join(cryptoDir, nodeID+".pem"),
 					ServerKeyPath:         path.Join(cryptoDir, nodeID+".key"),
-					ClientCertificatePath: path.Join(cryptoDir, nodeID+".pem"),
-					ClientKeyPath:         path.Join(cryptoDir, nodeID+".key"),
+					ClientCertificatePath: path.Join(cryptoDir, "client_"+nodeID+".pem"),
+					ClientKeyPath:         path.Join(cryptoDir, "client_"+nodeID+".key"),
 					CaConfig: config.CAConfiguration{
 						RootCACertsPath:         []string{path.Join(cryptoDir, testutils.RootCAFileName+".pem")},
 						IntermediateCACertsPath: []string{path.Join(cryptoDir, testutils.IntermediateCAFileName+".pem")},

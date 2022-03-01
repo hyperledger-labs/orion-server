@@ -3,11 +3,12 @@ package config
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"path"
 	"testing"
+
+	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCAConfiguration_WriteBundle(t *testing.T) {

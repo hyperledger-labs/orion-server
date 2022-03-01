@@ -80,6 +80,8 @@ type ServerConf struct {
 	QueueLength QueueLengthConf
 	// Server logging level.
 	LogLevel string
+	// Server TLS configuration, for secure communication with clients.
+	TLS TLSConf
 }
 
 // IdentityConf holds the ID, path to x509 certificate and the private key associated with the database node.

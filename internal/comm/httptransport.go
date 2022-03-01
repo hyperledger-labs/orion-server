@@ -116,10 +116,7 @@ func NewHTTPTransport(config *Config) (*HTTPTransport, error) {
 		}
 
 		tr.tlsInfo = transport.TLSInfo{
-			CertFile:            tr.localConf.Replication.TLS.ClientCertificatePath,
-			KeyFile:             tr.localConf.Replication.TLS.ClientKeyPath,
 			TrustedCAFile:       caBundleFile,
-			ClientCertAuth:      config.LocalConf.Replication.TLS.ClientAuthRequired,
 			CRLFile:             "",
 			InsecureSkipVerify:  false,
 			SkipClientSANVerify: false,
@@ -132,26 +129,12 @@ func NewHTTPTransport(config *Config) (*HTTPTransport, error) {
 			EmptyCN:             false,
 		}
 
-		// catch-up client tls.Config
-		clientKeyBytes, err := os.ReadFile(tr.localConf.Replication.TLS.ClientKeyPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to read local config Replication.TLS.ClientKeyPath")
-		}
-		clientCertBytes, err := os.ReadFile(tr.localConf.Replication.TLS.ClientCertificatePath)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to read local config Replication.TLS.ClientCertificatePath")
-		}
-		clientKeyPair, err := tls.X509KeyPair(clientCertBytes, clientKeyBytes)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create client tls.X509KeyPair")
+		tr.tlsClientConfig = &tls.Config{
+			RootCAs:    caCertPool,
+			ClientCAs:  caCertPool,
+			MinVersion: tls.VersionTLS12,
 		}
 
-		tr.tlsClientConfig = &tls.Config{
-			Certificates: []tls.Certificate{clientKeyPair},
-			RootCAs:      caCertPool,
-			ClientCAs:    caCertPool,
-			MinVersion:   tls.VersionTLS12,
-		}
 		tr.catchUpClient = NewCatchUpClient(config.Logger, tr.tlsClientConfig)
 
 		// server tls.Config
