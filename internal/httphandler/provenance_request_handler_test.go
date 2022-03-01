@@ -33,8 +33,8 @@ func TestGetHistoricalData(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	dbName := "db1"
 	key := "key1"
@@ -236,8 +236,8 @@ func TestGetDataReaders(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	dbName := "db1"
 	key := "key1"
@@ -304,8 +304,8 @@ func TestGetDataWriters(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	dbName := "db1"
 	key := "key1"
@@ -372,8 +372,8 @@ func TestGetDataReadBy(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
@@ -441,8 +441,8 @@ func TestGetDataWrittenBy(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
@@ -510,8 +510,8 @@ func TestGetDataDeletedBy(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
@@ -579,8 +579,8 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	targetUserID := "user1"
 	genericResponse := &types.GetTxIDsSubmittedByResponseEnvelope{
@@ -643,8 +643,8 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 	t.Parallel()
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	sampleVer := &types.Version{
 		BlockNum: 5,

@@ -28,9 +28,9 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 	dbName := "test_database"
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	sigFoo := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataQuery{
 		UserId: submittingUserName,
@@ -244,9 +244,9 @@ func TestDataRequestHandler_DataJSONQuery(t *testing.T) {
 	dbName := "test_database"
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	bobCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	bobCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	q := `{"attr1":{"$eq":true}}`
 	queryBytes, err := json.Marshal(q)
@@ -513,10 +513,10 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 	alice := "alice"
 	bob := "bob"
 	charlie := "charlie"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob", "charlie"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	bobCert, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
-	_, charlieSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "charlie")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob", "charlie"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	bobCert, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
+	_, charlieSigner := testutils.LoadTestCrypto(t, cryptoDir, "charlie")
 
 	dataTx := &types.DataTx{
 		MustSignUserIds: []string{alice, bob},
@@ -957,8 +957,8 @@ func TestDataRequestHandler_DataJSONQueryWithContext(t *testing.T) {
 	dbName := "test_database"
 
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	q := `{"attr1":{"$eq":true}}`
 	queryBytes, err := json.Marshal(q)

@@ -18,11 +18,11 @@ import (
 func TestValidateUsedAdminTx(t *testing.T) {
 	t.Parallel()
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"adminUser", "nonAdminUser", "user1"})
-	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "adminUser")
-	nonAdminCert, nonAdminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
-	user1Cert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "nonAdminUser")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"adminUser", "nonAdminUser", "user1"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "adminUser")
+	nonAdminCert, nonAdminSigner := testutils.LoadTestCrypto(t, cryptoDir, "nonAdminUser")
+	user1Cert, _ := testutils.LoadTestCrypto(t, cryptoDir, "nonAdminUser")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
 	nonAdminUser := &types.User{
 		Id:          "nonAdminUser",
@@ -405,12 +405,12 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 	t.Parallel()
 
 	userID := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
-	untrustedCryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	untrustedAliceCert, _ := testutils.LoadTestClientCrypto(t, untrustedCryptoDir, "alice")
+	untrustedCryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	untrustedAliceCert, _ := testutils.LoadTestCrypto(t, untrustedCryptoDir, "alice")
 
 	tests := []struct {
 		name           string

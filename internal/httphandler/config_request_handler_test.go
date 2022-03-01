@@ -39,9 +39,9 @@ func createLogger(logLevel string) (*logger.SugarLogger, error) {
 
 func TestConfigRequestHandler_GetConfig(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string
@@ -216,8 +216,8 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 
 func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 	submittingUserName := "admin"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"admin"})
-	adminCert, adminSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "admin")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"admin"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "admin")
 
 	configTx := &types.ConfigTx{
 		UserId: submittingUserName,
@@ -546,9 +546,9 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 
 func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string
@@ -721,9 +721,9 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 
 func TestConfigRequestHandler_GetLastConfigBlock(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string
@@ -896,9 +896,9 @@ func TestConfigRequestHandler_GetLastConfigBlock(t *testing.T) {
 
 func TestConfigRequestHandler_GetClusterStatus(t *testing.T) {
 	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string

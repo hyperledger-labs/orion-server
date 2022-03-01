@@ -25,8 +25,8 @@ func TestSignQuery(t *testing.T) {
 		Name:          "unit-test",
 	})
 	require.NoError(t, err)
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	cert, signer := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	cert, signer := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	userDB := &mocks.UserDBQuerier{}
 	sigVerifier := cryptoservice.NewVerifier(userDB, lg)

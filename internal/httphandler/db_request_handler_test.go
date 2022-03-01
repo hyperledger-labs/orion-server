@@ -27,9 +27,9 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 	submittingUserName := "alice"
 	dbName := "testDBName"
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string
@@ -216,9 +216,9 @@ func TestDBRequestHandler_DBIndex(t *testing.T) {
 	submittingUserName := "alice"
 	dbName := "testDBName"
 
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice", "bob"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	_, bobSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "bob")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
 
 	testCases := []struct {
 		name               string
@@ -420,8 +420,8 @@ func TestDBRequestHandler_DBIndex(t *testing.T) {
 
 func TestDBRequestHandler_DBTransaction(t *testing.T) {
 	userID := "alice"
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	dbTx := &types.DBAdministrationTx{
 		TxId:      "1",

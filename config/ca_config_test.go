@@ -12,7 +12,7 @@ import (
 )
 
 func TestCAConfiguration_WriteBundle(t *testing.T) {
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"user", "node"}, true)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"user", "node"}, true)
 
 	rootCAFileName := path.Join(cryptoDir, testutils.RootCAFileName+".pem")
 	interCAFileName := path.Join(cryptoDir, testutils.IntermediateCAFileName+".pem")

@@ -13,10 +13,10 @@ import (
 )
 
 func TestNewCACertCollection(t *testing.T) {
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"user", "node"}, true)
-	userCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "user")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
-	midCaCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.IntermediateCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"user", "node"}, true)
+	userCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "user")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
+	midCaCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.IntermediateCAFileName)
 
 	t.Run("valid root CA certificate", func(t *testing.T) {
 		caCertCollection, err := NewCACertCollection([][]byte{caCert.Raw}, nil)
@@ -58,14 +58,14 @@ func TestNewCACertCollection(t *testing.T) {
 
 func TestCACertCollection_VerifyLeafCert(t *testing.T) {
 	// Trusted CA
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"user"})
-	userCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "user")
-	caCert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"user"})
+	userCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "user")
+	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
 	// Generate certificates from a different CA
-	untrustedCryptoDir := testutils.GenerateTestClientCrypto(t, []string{"user", "node"})
-	untrustedUserCert, _ := testutils.LoadTestClientCrypto(t, untrustedCryptoDir, "user")
-	untrustedCaCert, _ := testutils.LoadTestClientCA(t, untrustedCryptoDir, testutils.RootCAFileName)
+	untrustedCryptoDir := testutils.GenerateTestCrypto(t, []string{"user", "node"})
+	untrustedUserCert, _ := testutils.LoadTestCrypto(t, untrustedCryptoDir, "user")
+	untrustedCaCert, _ := testutils.LoadTestCA(t, untrustedCryptoDir, testutils.RootCAFileName)
 
 	caCertCollection, err := NewCACertCollection([][]byte{caCert.Raw}, nil)
 	require.NoError(t, err)
@@ -96,10 +96,10 @@ func TestCACertCollection_VerifyLeafCert(t *testing.T) {
 
 // Check the internal consistency of CA chains provided to the constructor.
 func TestCACertCollection_VerifyCollection(t *testing.T) {
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"alice"}, true)
-	aliceCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir, "alice")
-	rootCACert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.RootCAFileName)
-	midCACert, _ := testutils.LoadTestClientCA(t, cryptoDir, testutils.IntermediateCAFileName)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"}, true)
+	aliceCert, _ := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	rootCACert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
+	midCACert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.IntermediateCAFileName)
 
 	assert.NoError(t, midCACert.CheckSignatureFrom(rootCACert))
 	assert.NoError(t, rootCACert.CheckSignatureFrom(rootCACert))
@@ -110,10 +110,10 @@ func TestCACertCollection_VerifyCollection(t *testing.T) {
 	t.Logf("mid: SN: %d AKI: %x SKI: %x, I: %s, S: %s", midCACert.SerialNumber, midCACert.AuthorityKeyId, midCACert.SubjectKeyId, midCACert.Issuer, midCACert.Subject)
 	t.Logf("user: SN: %d AKI: %x SKI: %x, I: %s, S: %s", aliceCert.SerialNumber, aliceCert.AuthorityKeyId, aliceCert.SubjectKeyId, aliceCert.Issuer, aliceCert.Subject)
 
-	cryptoDir2 := testutils.GenerateTestClientCrypto(t, []string{"bob"}, true)
-	bobCert, _ := testutils.LoadTestClientCrypto(t, cryptoDir2, "bob")
-	rootCACert2, _ := testutils.LoadTestClientCA(t, cryptoDir2, testutils.RootCAFileName)
-	midCACert2, _ := testutils.LoadTestClientCA(t, cryptoDir2, testutils.IntermediateCAFileName)
+	cryptoDir2 := testutils.GenerateTestCrypto(t, []string{"bob"}, true)
+	bobCert, _ := testutils.LoadTestCrypto(t, cryptoDir2, "bob")
+	rootCACert2, _ := testutils.LoadTestCA(t, cryptoDir2, testutils.RootCAFileName)
+	midCACert2, _ := testutils.LoadTestCA(t, cryptoDir2, testutils.IntermediateCAFileName)
 
 	assert.NoError(t, midCACert2.CheckSignatureFrom(rootCACert2))
 	assert.NoError(t, rootCACert2.CheckSignatureFrom(rootCACert2))
@@ -192,7 +192,7 @@ func TestCACertCollection_VerifyCollection(t *testing.T) {
 }
 
 func TestLoadCAConfig(t *testing.T) {
-	cryptoDir := testutils.GenerateTestClientCrypto(t, []string{"user", "node"}, true)
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"user", "node"}, true)
 
 	rootCAFileName := path.Join(cryptoDir, testutils.RootCAFileName+".pem")
 	interCAFileName := path.Join(cryptoDir, testutils.IntermediateCAFileName+".pem")
