@@ -61,7 +61,6 @@ type Server struct {
 
 // NewServer creates a new blockchain database server
 func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint32, checkRedirect func(req *http.Request, via []*http.Request) error, logger *logger.SugarLogger) (*Server, error) {
-
 	sNumber := strconv.FormatInt(int64(id+1), 10)
 	s := &Server{
 		serverNum:           id + 1,
@@ -181,12 +180,47 @@ func (s *Server) QueryData(t *testing.T, db, key string) (*types.GetDataResponse
 	return response, err
 }
 
-func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string, *types.TxReceipt, error) {
-	client, err := s.NewRESTClient(s.clientCheckRedirect)
+func (s *Server) QueryUser(t *testing.T, userID string) (*types.GetUserResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
+	query := &types.GetUserQuery{
+		UserId:       s.AdminID(),
+		TargetUserId: userID,
+	}
+	response, err := client.GetUser(
+		&types.GetUserQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetDBStatus(t *testing.T, dbName string) (*types.GetDBStatusResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDBStatusQuery{
+		UserId: s.AdminID(),
+		DbName: dbName,
+	}
+	response, err := client.GetDBStatus(
+		&types.GetDBStatusQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string, *types.TxReceipt, error) {
 	txID := uuid.New().String()
 	dataTx := &types.DataTx{
 		MustSignUserIds: []string{"admin"},
@@ -205,40 +239,52 @@ func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string
 	}
 
 	// Post transaction into new database
-	response, err := client.SubmitTransaction(constants.PostDataTx, &types.DataTxEnvelope{
-		Payload: dataTx,
-		Signatures: map[string][]byte{
-			"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx),
-		},
-	}, 30*time.Second)
-
+	receipt, err := s.SubmitTransaction(t, constants.PostDataTx, &types.DataTxEnvelope{
+		Payload:    dataTx,
+		Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
+	})
 	if err != nil {
 		return txID, nil, err
+	}
+
+	return txID, receipt, nil
+}
+
+func (s *Server) SubmitTransaction(t *testing.T, urlPath string, tx interface{}) (*types.TxReceipt, error) {
+	client, err := s.NewRESTClient(s.clientCheckRedirect)
+	if err != nil {
+		return nil, err
+	}
+
+	// Post transaction into new database
+	response, err := client.SubmitTransaction(urlPath, tx, 30*time.Second)
+	if err != nil {
+		return nil, err
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
 		var errMsg string
 		if response.StatusCode == http.StatusAccepted {
-			return txID, nil, errors.Errorf("ServerTimeout TxID: %s", txID)
+			return nil, errors.Errorf("ServerTimeout")
 		}
 		if response.Body != nil {
 			errRes := &types.HttpResponseErr{}
-			if err := json.NewDecoder(response.Body).Decode(errRes); err != nil {
+			if err = json.NewDecoder(response.Body).Decode(errRes); err != nil {
 				errMsg = "(failed to parse the server's error message)"
 			} else {
 				errMsg = errRes.Error()
 			}
 		}
 
-		return txID, nil, errors.Errorf("failed to submit transaction, server returned: status: %s, message: %s", response.Status, errMsg)
+		return nil, errors.Errorf("failed to submit transaction, server returned: status: %s, message: %s", response.Status, errMsg)
 	}
 
 	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
 	err = json.NewDecoder(response.Body).Decode(txResponseEnvelope)
 	if err != nil {
 		t.Errorf("error: %s", err)
-		return txID, nil, err
+		return nil, err
 	}
 
 	receipt := txResponseEnvelope.GetResponse().GetReceipt()
@@ -246,16 +292,16 @@ func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string
 	if receipt != nil {
 		validationInfo := receipt.GetHeader().GetValidationInfo()
 		if validationInfo == nil {
-			return txID, receipt, errors.Errorf("server error: validation info is nil")
+			return receipt, errors.Errorf("server error: validation info is nil")
 		} else {
 			validFlag := validationInfo[receipt.TxIndex].GetFlag()
 			if validFlag != types.Flag_VALID {
-				return txID, receipt, errors.Errorf("TxValidation TxID: %s, Flag: %s, Reason: %s", txID, validFlag, validationInfo[receipt.TxIndex].ReasonIfInvalid)
+				return receipt, errors.Errorf("TxValidation: Flag: %s, Reason: %s", validFlag, validationInfo[receipt.TxIndex].ReasonIfInvalid)
 			}
 		}
 	}
 
-	return txID, receipt, nil
+	return receipt, nil
 }
 
 func (s *Server) createCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {

@@ -341,6 +341,26 @@ func (c *Cluster) AgreedHeight(t *testing.T, expectedBlockHeight uint64, activeS
 	return true
 }
 
+func (c *Cluster) GetUserCertDir() string {
+	return path.Join(c.testDirAbsPath, "users")
+}
+
+func (c *Cluster) GetUserCertKeyPath(userID string) (string, string) {
+	userCertPath := path.Join(c.testDirAbsPath, "users", userID+".pem")
+	userKeyPath := path.Join(c.testDirAbsPath, "users", userID+".key")
+	return userCertPath, userKeyPath
+}
+
+func (c *Cluster) GetSigner(userID string) (crypto.Signer, error) {
+	_, keyPath := c.GetUserCertKeyPath(userID)
+	return crypto.NewSigner(
+		&crypto.SignerOptions{
+			Identity:    "",
+			KeyFilePath: keyPath,
+		},
+	)
+}
+
 func (c *Cluster) createCryptoMaterials() error {
 	for _, s := range c.Servers {
 		if err := s.createCryptoMaterials(c.rootCAPemCert, c.caPrivKey); err != nil {
