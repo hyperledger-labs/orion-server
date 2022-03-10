@@ -50,6 +50,7 @@ type Server struct {
 	adminID              string
 	adminCertPath        string
 	adminKeyPath         string
+	usersCryptoDir       string
 	adminSigner          crypto.Signer
 	cmd                  *exec.Cmd
 	outBuffer            *gbytes.Buffer
@@ -73,6 +74,7 @@ func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint
 		configFilePath:      filepath.Join(clusterBaseDir, "node-"+sNumber, "config.yml"),
 		bootstrapFilePath:   filepath.Join(clusterBaseDir, "node-"+sNumber, "shared-config-bootstrap.yml"),
 		cryptoMaterialsDir:  filepath.Join(clusterBaseDir, "node-"+sNumber, "crypto"),
+		usersCryptoDir:      filepath.Join(clusterBaseDir, "users"),
 		clientCheckRedirect: checkRedirect,
 		logger:              logger,
 	}
@@ -100,6 +102,23 @@ func (s *Server) AdminSigner() crypto.Signer {
 	defer s.mu.Unlock()
 
 	return s.adminSigner
+}
+
+func (s *Server) Signer(userID string) (crypto.Signer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	signer, err := crypto.NewSigner(
+		&crypto.SignerOptions{
+			Identity:    userID,
+			KeyFilePath: path.Join(s.usersCryptoDir, userID+".key"),
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return signer, nil
 }
 
 func (s *Server) QueryBlockStatus(t *testing.T) (*types.GetBlockResponseEnvelope, error) {
@@ -220,6 +239,31 @@ func (s *Server) GetDBStatus(t *testing.T, dbName string) (*types.GetDBStatusRes
 	return response, err
 }
 
+func (s *Server) GetDBIndex(t *testing.T, dbName string, userID string) (*types.GetDBIndexResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDBIndexQuery{
+		UserId: userID,
+		DbName: dbName,
+	}
+	response, err := client.GetDBIndex(
+		&types.GetDBIndexQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
 func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string, *types.TxReceipt, error) {
 	txID := uuid.New().String()
 	dataTx := &types.DataTx{
@@ -248,6 +292,25 @@ func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string
 	}
 
 	return txID, receipt, nil
+}
+
+func (s *Server) CreateUsers(t *testing.T, users []*types.UserWrite) (*types.TxReceipt, error) {
+	userTx := &types.UserAdministrationTx{
+		UserId:     "admin",
+		TxId:       uuid.New().String(),
+		UserWrites: users,
+	}
+
+	receipt, err := s.SubmitTransaction(t, constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, s.AdminSigner(), userTx),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return receipt, nil
+
 }
 
 func (s *Server) SubmitTransaction(t *testing.T, urlPath string, tx interface{}) (*types.TxReceipt, error) {

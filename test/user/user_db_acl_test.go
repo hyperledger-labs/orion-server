@@ -340,16 +340,7 @@ func createDatabases(t *testing.T, s *setup.Server, dbNames []string) {
 }
 
 func createUsers(t *testing.T, s *setup.Server, users []*types.UserWrite) {
-	userTx := &types.UserAdministrationTx{
-		UserId:     "admin",
-		TxId:       uuid.New().String(),
-		UserWrites: users,
-	}
-
-	receipt, err := s.SubmitTransaction(t, constants.PostUserTx, &types.UserAdministrationTxEnvelope{
-		Payload:   userTx,
-		Signature: testutils.SignatureFromTx(t, s.AdminSigner(), userTx),
-	})
+	receipt, err := s.CreateUsers(t, users)
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
 
