@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: orion-ns
+  name: orion
+  labels:
+    service: orion
+spec:
+  type: NodePort
+  ports:
+    - name: "6001"
+      port: 6001
+      targetPort: 6001
+  selector:
+    service: orion
