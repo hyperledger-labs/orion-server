@@ -304,6 +304,72 @@ func (s *Server) SubmitTransaction(t *testing.T, urlPath string, tx interface{})
 	return receipt, nil
 }
 
+func (s *Server) SetConfigTx(t *testing.T, newConfig *types.ClusterConfig, version *types.Version, signer crypto.Signer) (string, *types.TxReceipt, error) {
+	client, err := s.NewRESTClient(s.clientCheckRedirect)
+	if err != nil {
+		return "", nil, err
+	}
+
+	txID := uuid.New().String()
+	configTx := &types.ConfigTx{
+		UserId:               "admin",
+		TxId:                 txID,
+		ReadOldConfigVersion: version,
+		NewConfig:            newConfig,
+	}
+
+	// Post transaction into new database
+	response, err := client.SubmitTransaction(constants.PostConfigTx, &types.ConfigTxEnvelope{
+		Payload:   configTx,
+		Signature: testutils.SignatureFromTx(t, signer, configTx),
+	}, 30*time.Second)
+
+	if err != nil {
+		return txID, nil, err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		var errMsg string
+		if response.StatusCode == http.StatusAccepted {
+			return txID, nil, errors.Errorf("ServerTimeout TxID: %s", txID)
+		}
+		if response.Body != nil {
+			errRes := &types.HttpResponseErr{}
+			if err := json.NewDecoder(response.Body).Decode(errRes); err != nil {
+				errMsg = "(failed to parse the server's error message)"
+			} else {
+				errMsg = errRes.Error()
+			}
+		}
+
+		return txID, nil, errors.Errorf("failed to submit transaction, server returned: status: %s, message: %s", response.Status, errMsg)
+	}
+
+	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
+	err = json.NewDecoder(response.Body).Decode(txResponseEnvelope)
+	if err != nil {
+		t.Errorf("error: %s", err)
+		return txID, nil, err
+	}
+
+	receipt := txResponseEnvelope.GetResponse().GetReceipt()
+
+	if receipt != nil {
+		validationInfo := receipt.GetHeader().GetValidationInfo()
+		if validationInfo == nil {
+			return txID, receipt, errors.Errorf("server error: validation info is nil")
+		} else {
+			validFlag := validationInfo[receipt.TxIndex].GetFlag()
+			if validFlag != types.Flag_VALID {
+				return txID, receipt, errors.Errorf("TxValidation TxID: %s, Flag: %s, Reason: %s", txID, validFlag, validationInfo[receipt.TxIndex].ReasonIfInvalid)
+			}
+		}
+	}
+
+	return txID, receipt, nil
+}
+
 func (s *Server) createCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

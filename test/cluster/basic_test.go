@@ -107,12 +107,12 @@ func TestBasicCluster(t *testing.T) {
 // Scenario:
 // - start 3 servers in a cluster.
 // - wait for one to be the leader.
-// - stop one follower.
+// - stop the leader/follower.
 // - submit a tx to the two remaining servers.
 // - start the stopped server.
 // - wait for one to be the new leader.
 // - make sure the stopped server is in sync with the transaction made while it was stopped.
-func TestNodeRecoveryFollower(t *testing.T) {
+func NodeRecovery(t *testing.T, victimIsLeader bool) {
 	dir, err := ioutil.TempDir("", "int-test")
 	require.NoError(t, err)
 
@@ -167,13 +167,17 @@ func TestNodeRecoveryFollower(t *testing.T) {
 		return c.AgreedHeight(t, 4, 0, 1, 2)
 	}, 30*time.Second, 100*time.Millisecond)
 
-	followerServer := c.Servers[(leaderIndex+1)%3]
-	require.NoError(t, c.ShutdownServer(followerServer))
+	followerServer := (leaderIndex + 1) % 3
+	victimServer, activeServer := followerServer, leaderIndex
+	if victimIsLeader {
+		victimServer, activeServer = leaderIndex, followerServer
+	}
+	require.NoError(t, c.ShutdownServer(c.Servers[victimServer]))
 
 	//find the new leader
 	newLeader := -1
 	require.Eventually(t, func() bool {
-		newLeader = c.AgreedLeader(t, leaderIndex, (leaderIndex+2)%3)
+		newLeader = c.AgreedLeader(t, activeServer, (leaderIndex+2)%3)
 		return newLeader >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
@@ -185,10 +189,10 @@ func TestNodeRecoveryFollower(t *testing.T) {
 	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
-	require.NoError(t, c.StartServer(followerServer))
+	require.NoError(t, c.StartServer(c.Servers[victimServer]))
 
 	require.Eventually(t, func() bool {
-		dataEnv, err = followerServer.QueryData(t, worldstate.DefaultDBName, "bob")
+		dataEnv, err = c.Servers[victimServer].QueryData(t, worldstate.DefaultDBName, "bob")
 		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 	}, 30*time.Second, 100*time.Millisecond)
 
@@ -201,95 +205,12 @@ func TestNodeRecoveryFollower(t *testing.T) {
 	}, 30*time.Second, 100*time.Millisecond)
 }
 
-// Scenario:
-// - start 3 servers in a cluster.
-// - wait for one to be the leader.
-// - stop the leader.
-// - wait for new server to be the leader.
-// - submit a tx to the two remaining servers.
-// - start the stopped server.
-// - make sure the stopped server is in sync with the transaction made while it was stopped.
+func TestNodeRecoveryFollower(t *testing.T) {
+	NodeRecovery(t, false)
+}
+
 func TestNodeRecoveryLeader(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
-
-	nPort, pPort := getPorts(3)
-	setupConfig := &setup.Config{
-		NumberOfServers:     3,
-		TestDirAbsolutePath: dir,
-		BDBBinaryPath:       "../../bin/bdb",
-		CmdTimeout:          10 * time.Second,
-		BaseNodePort:        nPort,
-		BasePeerPort:        pPort,
-		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
-			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
-		},
-	}
-	c, err := setup.NewCluster(setupConfig)
-	require.NoError(t, err)
-	defer c.ShutdownAndCleanup()
-
-	require.NoError(t, c.Start())
-
-	leaderIndex := -1
-	require.Eventually(t, func() bool {
-		leaderIndex = c.AgreedLeader(t, 0, 1, 2)
-		return leaderIndex >= 0
-	}, 30*time.Second, 100*time.Millisecond)
-
-	keys := []string{"alice", "charlie", "dan"}
-	for _, key := range keys {
-		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, key, []byte(key+"-data"))
-		require.NoError(t, err)
-		require.NotNil(t, rcpt)
-		require.True(t, txID != "")
-		require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
-		require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
-		t.Logf("tx submitted: %s, %+v", txID, rcpt)
-	}
-
-	var dataEnv *types.GetDataResponseEnvelope
-	for _, key := range keys {
-		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, key)
-			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
-		}, 30*time.Second, 100*time.Millisecond)
-		dataResp := dataEnv.GetResponse().GetValue()
-		require.Equal(t, dataResp, []byte(key+"-data"))
-		t.Logf("data: %+v", string(dataResp))
-	}
-
-	require.NoError(t, c.ShutdownServer(c.Servers[leaderIndex]))
-
-	//find the new leader
-	newLeader := -1
-	require.Eventually(t, func() bool {
-		newLeader = c.AgreedLeader(t, (leaderIndex+1)%3, (leaderIndex+2)%3)
-		return newLeader >= 0
-	}, 30*time.Second, 100*time.Millisecond)
-
-	txID, rcpt, err := c.Servers[newLeader].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
-	require.NoError(t, err)
-	require.NotNil(t, rcpt)
-	require.True(t, txID != "")
-	require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
-	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
-	t.Logf("tx submitted: %s, %+v", txID, rcpt)
-
-	require.NoError(t, c.StartServer(c.Servers[leaderIndex]))
-
-	require.Eventually(t, func() bool {
-		dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, "bob")
-		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
-	}, 30*time.Second, 100*time.Millisecond)
-
-	dataResp := dataEnv.GetResponse().GetValue()
-	require.Equal(t, dataResp, []byte("bob-data"))
-	t.Logf("data: %+v", string(dataResp))
-
-	require.Eventually(t, func() bool {
-		return c.AgreedHeight(t, 5, 0, 1, 2)
-	}, 30*time.Second, 100*time.Millisecond)
+	NodeRecovery(t, true)
 }
 
 //Scenario:
@@ -300,7 +221,7 @@ func TestNodeRecoveryLeader(t *testing.T) {
 // - stop the leader.
 // round 2:
 // - find leader2.
-// - shut down the follower.
+// - shut down the follower/leader.
 // - submit a tx to the remaining server.
 // - there is no majority to pick leader => tx fails.
 // - restart one server so now there will be a majority to pick a leader.
@@ -311,7 +232,7 @@ func TestNodeRecoveryLeader(t *testing.T) {
 // round 4:
 // - find leader4.
 // - submit a tx => tx accepted.
-func TestNoMajorityToChooseLeader(t *testing.T) {
+func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 	dir, err := ioutil.TempDir("", "int-test")
 	require.NoError(t, err)
 
@@ -386,16 +307,20 @@ func TestNoMajorityToChooseLeader(t *testing.T) {
 		return err == nil && clusterStatusResEnv != nil && len(clusterStatusResEnv.GetResponse().GetActive()) == 2
 	}, 30*time.Second, 100*time.Millisecond)
 
-	require.NoError(t, c.ShutdownServer(c.Servers[follower1Round2]))
+	victimServer, activeServer := follower1Round2, leaderRound2
+	if victimIsLeader {
+		victimServer, activeServer = leaderRound2, follower1Round2
+	}
+	require.NoError(t, c.ShutdownServer(c.Servers[victimServer]))
 
 	//only one server is active now => no majority to pick leader
 	require.Eventually(t, func() bool {
-		_, _, err = c.Servers[leaderRound2].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
+		_, _, err = c.Servers[activeServer].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
 		return err != nil && err.Error() == "failed to submit transaction, server returned: status: 503 Service Unavailable, message: Cluster leader unavailable"
 	}, 60*time.Second, 100*time.Millisecond)
 
-	//restart one server => 2 servers are active: leaderRound1, leaderRound2
-	require.NoError(t, c.StartServer(c.Servers[follower1Round2]))
+	//restart one server => 2 servers are active: follower1Round2, leaderRound2
+	require.NoError(t, c.StartServer(c.Servers[victimServer]))
 
 	//find the new leader
 	leaderRound3 := -1
@@ -404,7 +329,7 @@ func TestNoMajorityToChooseLeader(t *testing.T) {
 		return leaderRound3 >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	t.Logf("Started node %d, leader index is: %d; 2-node quorum", follower1Round2, leaderRound3)
+	t.Logf("Started node %d, leader index is: %d; 2-node quorum", victimServer, leaderRound3)
 
 	follower1Round3 := leaderRound2
 	if leaderRound3 == leaderRound2 {
@@ -464,6 +389,14 @@ func TestNoMajorityToChooseLeader(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return c.AgreedHeight(t, rcpt.Header.BaseHeader.Number, 0, 1, 2)
 	}, 30*time.Second, 100*time.Millisecond)
+}
+
+func TestStopFollowerNoMajorityToChooseLeader(t *testing.T) {
+	StopServerNoMajorityToChooseLeader(t, false)
+}
+
+func TestStopLeaderNoMajorityToChooseLeader(t *testing.T) {
+	StopServerNoMajorityToChooseLeader(t, true)
 }
 
 // Scenario:
