@@ -385,7 +385,7 @@ Event_Loop:
 				}
 			}
 
-			br.transport.SendConsensus(rd.Messages)
+			_ = br.transport.SendConsensus(rd.Messages)
 
 			if ok := br.deliverEntries(rd.CommittedEntries); !ok {
 				br.lg.Warningf("Stopping to deliver committed entries, breaking out of event loop")
@@ -601,6 +601,7 @@ func (br *BlockReplicator) catchUpToBlock(initBlockNumber, targetBlockNumber uin
 			<-blocksReadyCh
 			return &ierrors.ClosedError{ErrMsg: "server stopped during catch-up"}
 		case <-blocksReadyCh:
+			cancel()
 			if err != nil {
 				lastBlockNumber := br.getLastCommittedBlockNumber()
 				switch err.(type) {
@@ -772,7 +773,6 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				br.lg.Panicf("Error unmarshaling Normal entry [#%d], entry: %+v, error: %s", position, committedEntries[position], err)
 			}
 			snapData = committedEntries[position].Data
-
 		case raftpb.EntryConfChangeV2:
 			var ccV2 raftpb.ConfChangeV2
 			if err := ccV2.Unmarshal(committedEntries[position].Data); err != nil {
@@ -784,18 +784,22 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				}
 				snapData = ccV2.Context
 			}
+		default:
+			br.lg.Debug("entry [#%d], entry: %+v, does not contain a block, ignored", position, committedEntries[position])
 		}
 
-		if err := br.raftStorage.TakeSnapshot(br.appliedIndex, br.confState, snapData); err != nil {
-			br.lg.Fatalf("Failed to create snapshot at index %d: %s", br.appliedIndex, err)
+		if snapData != nil {
+			if err := br.raftStorage.TakeSnapshot(br.appliedIndex, br.confState, snapData); err != nil {
+				br.lg.Fatalf("Failed to create snapshot at index %d: %s", br.appliedIndex, err)
+			}
+
+			br.lg.Infof("Accumulated %d bytes since last snapshot, exceeding size limit (%d bytes), "+
+				"taking snapshot at block [%d] (index: %d), last snapshotted block number is %d, current voters: %+v",
+				br.accDataSize, br.sizeLimit, snapBlock.GetHeader().GetBaseHeader().GetNumber(), br.appliedIndex, br.lastSnapBlockNum, br.confState.Voters)
+
+			br.accDataSize = 0
+			br.lastSnapBlockNum = snapBlock.GetHeader().GetBaseHeader().GetNumber()
 		}
-
-		br.lg.Infof("Accumulated %d bytes since last snapshot, exceeding size limit (%d bytes), "+
-			"taking snapshot at block [%d] (index: %d), last snapshotted block number is %d, current voters: %+v",
-			br.accDataSize, br.sizeLimit, snapBlock.GetHeader().GetBaseHeader().GetNumber(), br.appliedIndex, br.lastSnapBlockNum, br.confState.Voters)
-
-		br.accDataSize = 0
-		br.lastSnapBlockNum = snapBlock.GetHeader().GetBaseHeader().GetNumber()
 	}
 
 	return true
