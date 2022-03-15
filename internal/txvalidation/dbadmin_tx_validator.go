@@ -180,6 +180,13 @@ func (v *dbAdminTxValidator) validateIndexEntries(dbsIndex map[string]*types.DBI
 			}
 		}
 
+		if v.db.Exist(dbName) {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "index update to an existing database is not allowed",
+			}
+		}
+
 		for attr, ty := range dbIndex.AttributeAndType {
 			switch ty {
 			case types.IndexAttributeType_NUMBER:

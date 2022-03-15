@@ -498,6 +498,24 @@ func TestValidateIndexDBEntries(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: index update on an existing database",
+			setup: func(db worldstate.DB) {
+				createDB := map[string]*worldstate.DBUpdates{worldstate.DatabasesDBName: {Writes: []*worldstate.KVWithMetadata{{Key: "db1"}}}}
+				require.NoError(t, db.Commit(createDB, 1))
+			},
+			toCreateDBs: []string{},
+			toDeleteDBs: []string{},
+			dbsIndex: map[string]*types.DBIndex{
+				"db1": {
+					AttributeAndType: map[string]types.IndexAttributeType{"attr1": types.IndexAttributeType_STRING},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "index update to an existing database is not allowed",
+			},
+		},
+		{
 			name:        "invalid: unknown attribute type",
 			toCreateDBs: []string{"db1"},
 			dbsIndex: map[string]*types.DBIndex{
