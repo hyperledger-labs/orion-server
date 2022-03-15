@@ -87,7 +87,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		basePeerPort:   conf.BasePeerPort,
 	}
 
-	if err := cluster.createRootCA(); err != nil {
+	if err = cluster.createRootCA(); err != nil {
 		return nil, err
 	}
 
@@ -361,6 +361,14 @@ func (c *Cluster) GetSigner(userID string) (crypto.Signer, error) {
 	)
 }
 
+func (c *Cluster) GetX509KeyPair() (tls.Certificate, error) {
+	keyPair, err := tls.X509KeyPair(c.rootCAPemCert, c.caPrivKey)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return keyPair, nil
+}
+
 func (c *Cluster) createCryptoMaterials() error {
 	for _, s := range c.Servers {
 		if err := s.createCryptoMaterials(c.rootCAPemCert, c.caPrivKey); err != nil {
@@ -380,51 +388,47 @@ func (c *Cluster) createUsersCryptoMaterials() error {
 		return err
 	}
 
-	keyPair, err := tls.X509KeyPair(c.rootCAPemCert, c.caPrivKey)
+	keyPair, err := c.GetX509KeyPair()
 	if err != nil {
 		return err
 	}
 
 	for _, user := range c.Users {
-		pemUserCert, pemUserKey, err := testutils.IssueCertificate("Cluster User: "+user, "127.0.0.1", keyPair)
+		c.CreateUserCerts(user, keyPair)
+	}
 
-		userCertPath := path.Join(c.testDirAbsPath, "users", user+".pem")
-		pemUserCertFile, err := os.Create(userCertPath)
-		if err != nil {
-			return err
-		}
-		_, err = pemUserCertFile.Write(pemUserCert)
-		if err != nil {
-			return err
-		}
-		if err = pemUserCertFile.Close(); err != nil {
-			return err
-		}
+	return nil
+}
 
-		userKeyPath := path.Join(c.testDirAbsPath, "users", user+".key")
-		pemUserKeyFile, err := os.Create(userKeyPath)
-		if err != nil {
-			return err
-		}
-		if _, err = pemUserKeyFile.Write(pemUserKey); err != nil {
-			return err
-		}
-		if err = pemUserKeyFile.Close(); err != nil {
-			return err
-		}
+func (c *Cluster) CreateUserCerts(user string, keyPair tls.Certificate) error {
+	var err error
 
-		if user == "admin" {
-			for _, s := range c.Servers {
-				s.adminCertPath = userCertPath
-				s.adminKeyPath = userKeyPath
-				adminSigner, err := crypto.NewSigner(
-					&crypto.SignerOptions{KeyFilePath: userKeyPath},
-				)
-				if err != nil {
-					return err
-				}
-				s.adminSigner = adminSigner
+	pemUserCert, pemUserKey, err := testutils.IssueCertificate("Cluster User: "+user, "127.0.0.1", keyPair)
+	if err != nil {
+		return err
+	}
+
+	userCertPath := path.Join(c.testDirAbsPath, "users", user+".pem")
+	if err = os.WriteFile(userCertPath, pemUserCert, 0644); err != nil {
+		return err
+	}
+
+	userKeyPath := path.Join(c.testDirAbsPath, "users", user+".key")
+	if err = os.WriteFile(userKeyPath, pemUserKey, 0644); err != nil {
+		return err
+	}
+
+	if user == "admin" {
+		for _, s := range c.Servers {
+			s.adminCertPath = userCertPath
+			s.adminKeyPath = userKeyPath
+			adminSigner, err := crypto.NewSigner(
+				&crypto.SignerOptions{KeyFilePath: userKeyPath},
+			)
+			if err != nil {
+				return err
 			}
+			s.adminSigner = adminSigner
 		}
 	}
 

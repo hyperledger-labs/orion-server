@@ -205,6 +205,119 @@ func TestUserACLOnDatabase(t *testing.T) {
 	})
 }
 
+// Scenario:
+func TestUserCertificateUpdate(t *testing.T) {
+	dir, err := ioutil.TempDir("", "update-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(1)
+	setupConfig := &setup.Config{
+		NumberOfServers:     1,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort + 100,
+		BasePeerPort:        pPort + 100,
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	s := c.Servers[0]
+
+	createDatabases(t, s, []string{"db1"})
+
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, c.GetUserCertDir(), "alice")
+	createUsers(t, s, []*types.UserWrite{
+		{
+			User: &types.User{
+				Id:          "alice",
+				Certificate: aliceCert.Raw,
+				Privilege: &types.Privilege{
+					DbPermission: map[string]types.Privilege_Access{
+						"db1": types.Privilege_Read,
+					},
+				},
+			},
+		},
+	})
+
+	client, err := s.NewRESTClient(nil)
+	require.NoError(t, err)
+
+	query := &types.GetDataQuery{
+		UserId: "alice",
+		DbName: "db1",
+		Key:    "key1",
+	}
+	signature := testutils.SignatureFromQuery(t, aliceSigner, query)
+
+	t.Run("read from db1 would succeed", func(t *testing.T) {
+		response, err := client.GetData(
+			&types.GetDataQueryEnvelope{
+				Payload:   query,
+				Signature: signature,
+			},
+		)
+		require.NoError(t, err)
+		require.Nil(t, response.GetResponse().GetValue())
+		require.Nil(t, response.GetResponse().GetMetadata())
+	})
+
+	keyPair, err := c.GetX509KeyPair()
+	require.NoError(t, err)
+	require.NoError(t, c.CreateUserCerts("alice", keyPair))
+	aliceCert, aliceSigner = testutils.LoadTestCrypto(t, c.GetUserCertDir(), "alice")
+	updateUser(t, s, "alice", aliceCert.Raw, nil)
+
+	t.Run("read from db1 using old signature would fail", func(t *testing.T) {
+		response, err := client.GetData(
+			&types.GetDataQueryEnvelope{
+				Payload:   query,
+				Signature: signature,
+			},
+		)
+		require.EqualError(t, err, "signature verification failed")
+		require.Nil(t, response.GetResponse().GetValue())
+		require.Nil(t, response.GetResponse().GetMetadata())
+	})
+
+	newSignature := testutils.SignatureFromQuery(t, aliceSigner, query)
+	t.Run("read from db1 using new signature would succeed", func(t *testing.T) {
+		response, err := client.GetData(
+			&types.GetDataQueryEnvelope{
+				Payload:   query,
+				Signature: newSignature,
+			},
+		)
+		require.NoError(t, err)
+		require.Nil(t, response.GetResponse().GetValue())
+		require.Nil(t, response.GetResponse().GetMetadata())
+	})
+
+	deleteUsers(t, s, []*types.UserDelete{{
+		UserId: "alice",
+	}})
+	t.Run("read from db1 fails as the user has been deleted", func(t *testing.T) {
+		response, err := client.GetData(
+			&types.GetDataQueryEnvelope{
+				Payload:   query,
+				Signature: newSignature,
+			},
+		)
+		require.EqualError(t, err, "signature verification failed")
+		require.Nil(t, response.GetResponse().GetValue())
+		require.Nil(t, response.GetResponse().GetMetadata())
+	})
+}
+
 func createDatabases(t *testing.T, s *setup.Server, dbNames []string) {
 	dbAdminTx := &types.DBAdministrationTx{
 		UserId:    s.AdminID(),
@@ -244,6 +357,27 @@ func createUsers(t *testing.T, s *setup.Server, users []*types.UserWrite) {
 		respEnv, err := s.QueryUser(t, user.GetUser().GetId())
 		require.NoError(t, err)
 		require.Equal(t, user.User, respEnv.GetResponse().User)
+	}
+}
+
+func deleteUsers(t *testing.T, s *setup.Server, users []*types.UserDelete) {
+	userTx := &types.UserAdministrationTx{
+		UserId:      "admin",
+		TxId:        uuid.New().String(),
+		UserDeletes: users,
+	}
+
+	receipt, err := s.SubmitTransaction(t, constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, s.AdminSigner(), userTx),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+
+	for _, user := range users {
+		respEnv, err := s.QueryUser(t, user.GetUserId())
+		require.NoError(t, err)
+		require.Nil(t, respEnv.GetResponse().GetUser())
 	}
 }
 
