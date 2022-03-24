@@ -19,11 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func init() {
-	baseNodePort = 6100
-	basePeerPort = 7100
-}
-
 func createKeys(k int) []int {
 	keys := make([]int, k)
 	for i, _ := range keys {
@@ -84,7 +79,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	txsCount := 0
 
 	//change SnapshotIntervalSize to 4K
-	txID, rcpt, err := c.Servers[leaderIndex].SetConfigTx(t, newConfig, version, c.Servers[leaderIndex].AdminSigner())
+	txID, rcpt, err := c.Servers[leaderIndex].SetConfigTx(t, newConfig, version, c.Servers[leaderIndex].AdminSigner(), "admin")
 	require.NoError(t, err)
 	require.NotNil(t, rcpt)
 	require.True(t, txID != "")
@@ -265,7 +260,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	txsCount := 0
 
 	//change SnapshotIntervalSize to 4K
-	txID, rcpt, err := c.Servers[leaderRound1].SetConfigTx(t, newConfig, version, c.Servers[leaderRound1].AdminSigner())
+	txID, rcpt, err := c.Servers[leaderRound1].SetConfigTx(t, newConfig, version, c.Servers[leaderRound1].AdminSigner(), "admin")
 	require.NoError(t, err)
 	require.NotNil(t, rcpt)
 	require.True(t, txID != "")
