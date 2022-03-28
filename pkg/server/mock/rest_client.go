@@ -69,6 +69,23 @@ func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBSta
 	return res, err
 }
 
+func (c *Client) GetDBIndex(e *types.GetDBIndexQueryEnvelope) (*types.GetDBIndexResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.URLForGetDBIndex(e.Payload.DbName),
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDBIndexResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.URLForGetData(e.Payload.DbName, e.Payload.Key),
