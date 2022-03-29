@@ -43,7 +43,7 @@ The image has three mappable volumes:
 To invoke the orion server docker container with all mappings, you can run:
 ```console
 docker run -it --rm -v crypto-materials-location:/etc/orion-server/crypto \
-                    -v ledger-data-location:/etc/orion-server/ledger \
+                    -v ledger-data-location:/var/orion-server/ledger \
                     -v orion-config-location:/etc/orion-server/config \
                     -p 6001:6001 -p 7050:7050 orionbcdb/orion-server
 ```
@@ -51,7 +51,7 @@ docker run -it --rm -v crypto-materials-location:/etc/orion-server/crypto \
 for example, running it for `orion-server` folder from [github](https://github.com/hyperledger-labs/orion-server), using configuration and crypro materials stored in `deployment` folder, will look like this:
 ```console
 docker run -it --rm -v $(pwd)/deployment/crypto/:/etc/orion-server/crypto \
-                    -v $(pwd)/ledger:/etc/orion-server/ledger \
+                    -v $(pwd)/ledger:/var/orion-server/ledger \
                     -v $(pwd)/deployment/config-docker:/etc/orion-server/config \
                     -p 6001:6001 -p 7050:7050 orionbcdb/orion-server
 ``` 
