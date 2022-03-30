@@ -104,6 +104,13 @@ func (s *Server) AdminSigner() crypto.Signer {
 	return s.adminSigner
 }
 
+func (s *Server) ConfigDir() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.configDir
+}
+
 func (s *Server) Signer(userID string) (crypto.Signer, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -4,16 +4,19 @@
 package cluster
 
 import (
+	"io/ioutil"
+	"net/http"
+	"path/filepath"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
-	"net/http"
-	"strconv"
-	"testing"
-	"time"
 )
 
 func init() {
@@ -64,6 +67,10 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 		return leaderIndex >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
+	snapList := replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderIndex].ConfigDir(), "etcdraft", "snap"))
+	require.Equal(t, 0, len(snapList))
+	t.Logf("Snap list: %v", snapList)
+
 	//get current cluster config
 	configEnv, err := c.Servers[leaderIndex].QueryConfig(t)
 	require.NoError(t, err)
@@ -83,6 +90,15 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 	txsCount++
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
+
+	//restart the cluster so that the SnapshotIntervalSize will update
+	require.NoError(t, c.Restart())
+
+	leaderIndex = -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0, 1, 2)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
 
 	keys := createKeys(15)
 	data := make([]byte, 1024)
@@ -154,6 +170,16 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 		dataResp := dataEnv.GetResponse().GetValue()
 		require.Equal(t, dataResp, data)
 	}
+
+	newLeaderIndex = -1
+	require.Eventually(t, func() bool {
+		newLeaderIndex = c.AgreedLeader(t, 0, 1, 2)
+		return newLeaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[newLeaderIndex].ConfigDir(), "etcdraft", "snap"))
+	require.Equal(t, 4, len(snapList))
+	t.Logf("Snap list: %v", snapList)
 }
 
 func TestFollowerRecoveryWithCatchup(t *testing.T) {
@@ -212,6 +238,10 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 		return leaderRound1 >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
+	snapList := replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderRound1].ConfigDir(), "etcdraft", "snap"))
+	require.Equal(t, 0, len(snapList))
+	t.Logf("Snap list: %v", snapList)
+
 	//get current cluster config
 	configEnv, err := c.Servers[leaderRound1].QueryConfig(t)
 	require.NoError(t, err)
@@ -231,6 +261,15 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 	txsCount++
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
+
+	//restart the cluster so that the SnapshotIntervalSize will update
+	require.NoError(t, c.Restart())
+
+	leaderRound1 = -1
+	require.Eventually(t, func() bool {
+		leaderRound1 = c.AgreedLeader(t, 0, 1, 2)
+		return leaderRound1 >= 0
+	}, 30*time.Second, 100*time.Millisecond)
 
 	keys := createKeys(10)
 	data := make([]byte, 1024)
@@ -371,6 +410,10 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	require.Eventually(t, func() bool {
 		return c.AgreedHeight(t, rcpt.Header.BaseHeader.Number, 0, 1, 2)
 	}, 30*time.Second, 100*time.Millisecond)
+
+	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderRound4].ConfigDir(), "etcdraft", "snap"))
+	require.Equal(t, 4, len(snapList))
+	t.Logf("Snap list: %v", snapList)
 }
 
 func TestStopFollowerNoMajorityToChooseLeaderWithCatchup(t *testing.T) {

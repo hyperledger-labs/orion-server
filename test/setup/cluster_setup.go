@@ -435,6 +435,10 @@ func (c *Cluster) CreateUserCerts(user string, keyPair tls.Certificate) error {
 	return nil
 }
 
+func (c *Cluster) GetLogger() *logger.SugarLogger {
+	return c.logger
+}
+
 func (c *Cluster) createConfigFile() error {
 	for _, s := range c.Servers {
 		if err := s.createConfigFile(); err != nil {
