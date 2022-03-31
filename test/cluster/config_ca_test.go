@@ -65,6 +65,7 @@ func TestAddCA(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
+
 	caConf := newConfig.CertAuthConfig
 	decodedCertRootCA, _ := pem.Decode(certRootCA)
 	caConf.Roots = append(caConf.Roots, decodedCertRootCA.Bytes)
