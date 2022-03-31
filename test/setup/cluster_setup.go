@@ -400,12 +400,19 @@ func (c *Cluster) createUsersCryptoMaterials() error {
 	return nil
 }
 
-func (c *Cluster) CreateAdditionalUserCryptoMaterials(user string) error {
-	keyPair, err := c.GetX509KeyPair()
+func (c *Cluster) CreateAdditionalUserCryptoMaterials(user string, certRootCA []byte, caPrivKey []byte) error {
+	keyPair, err := tls.X509KeyPair(certRootCA, caPrivKey)
 	if err != nil {
 		return err
 	}
-	c.CreateUserCerts(user, keyPair)
+	if err != nil {
+		return err
+	}
+	err = c.CreateUserCerts(user, keyPair)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
