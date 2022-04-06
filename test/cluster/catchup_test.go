@@ -165,7 +165,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	var dataEnv *types.GetDataResponseEnvelope
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[follower1].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key))
+			dataEnv, err = c.Servers[follower1].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key), "admin")
 			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 		}, 30*time.Second, 100*time.Millisecond)
 		dataResp := dataEnv.GetResponse().GetValue()
@@ -298,7 +298,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	var dataEnv *types.GetDataResponseEnvelope
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[leaderRound1].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key))
+			dataEnv, err = c.Servers[leaderRound1].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key), "admin")
 			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 		}, 30*time.Second, 100*time.Millisecond)
 		dataResp := dataEnv.GetResponse().GetValue()
@@ -376,7 +376,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[leaderRound3].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+100))
+			dataEnv, err = c.Servers[leaderRound3].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+100), "admin")
 			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 		}, 30*time.Second, 100*time.Millisecond)
 		dataResp := dataEnv.GetResponse().GetValue()
@@ -411,7 +411,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	}
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[leaderRound4].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+200))
+			dataEnv, err = c.Servers[leaderRound4].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+200), "admin")
 			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 		}, 30*time.Second, 100*time.Millisecond)
 		dataResp := dataEnv.GetResponse().GetValue()

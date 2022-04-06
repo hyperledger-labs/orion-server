@@ -94,7 +94,7 @@ func TestBasicCluster(t *testing.T) {
 	time.Sleep(time.Second)
 
 	for _, srv := range c.Servers {
-		dataEnv, err := srv.QueryData(t, worldstate.DefaultDBName, "john")
+		dataEnv, err := srv.QueryData(t, worldstate.DefaultDBName, "john", "admin")
 		require.NoError(t, err)
 		dataResp := dataEnv.GetResponse()
 		t.Logf("data: %+v", dataResp)
@@ -155,7 +155,7 @@ func NodeRecovery(t *testing.T, victimIsLeader bool) {
 	var dataEnv *types.GetDataResponseEnvelope
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, key)
+			dataEnv, err = c.Servers[leaderIndex].QueryData(t, worldstate.DefaultDBName, key, "admin")
 			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 		}, 30*time.Second, 100*time.Millisecond)
 
@@ -192,7 +192,7 @@ func NodeRecovery(t *testing.T, victimIsLeader bool) {
 	require.NoError(t, c.StartServer(c.Servers[victimServer]))
 
 	require.Eventually(t, func() bool {
-		dataEnv, err = c.Servers[victimServer].QueryData(t, worldstate.DefaultDBName, "bob")
+		dataEnv, err = c.Servers[victimServer].QueryData(t, worldstate.DefaultDBName, "bob", "admin")
 		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 	}, 30*time.Second, 100*time.Millisecond)
 
@@ -270,7 +270,7 @@ func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 
 	var dataEnv *types.GetDataResponseEnvelope
 	require.Eventually(t, func() bool {
-		dataEnv, err = c.Servers[leaderRound1].QueryData(t, worldstate.DefaultDBName, "alice")
+		dataEnv, err = c.Servers[leaderRound1].QueryData(t, worldstate.DefaultDBName, "alice", "admin")
 		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 	}, 30*time.Second, 100*time.Millisecond)
 	dataResp := dataEnv.GetResponse().GetValue()
@@ -345,7 +345,7 @@ func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
 	require.Eventually(t, func() bool {
-		dataEnv, err = c.Servers[leaderRound3].QueryData(t, worldstate.DefaultDBName, "charlie")
+		dataEnv, err = c.Servers[leaderRound3].QueryData(t, worldstate.DefaultDBName, "charlie", "admin")
 		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 	}, 30*time.Second, 100*time.Millisecond)
 
@@ -378,7 +378,7 @@ func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
 	require.Eventually(t, func() bool {
-		dataEnv, err = c.Servers[leaderRound4].QueryData(t, worldstate.DefaultDBName, "dan")
+		dataEnv, err = c.Servers[leaderRound4].QueryData(t, worldstate.DefaultDBName, "dan", "admin")
 		return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 	}, 30*time.Second, 100*time.Millisecond)
 
@@ -466,7 +466,7 @@ func TestClusterRestart(t *testing.T) {
 
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err := c.Servers[newLeader].QueryData(t, worldstate.DefaultDBName, key)
+			dataEnv, err := c.Servers[newLeader].QueryData(t, worldstate.DefaultDBName, key, "admin")
 			if dataEnv != nil && dataEnv.GetResponse().GetValue() != nil {
 				dataVal := dataEnv.GetResponse().GetValue()
 				require.Equal(t, dataVal, []byte(key+"-data"))
@@ -558,7 +558,7 @@ func TestAllNodesGetLeadership(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		require.Eventually(t, func() bool {
-			dataEnv, err := c.Servers[currentLeader].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(i))
+			dataEnv, err := c.Servers[currentLeader].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(i), "admin")
 			if dataEnv != nil && dataEnv.GetResponse().GetValue() != nil {
 				dataVal := dataEnv.GetResponse().GetValue()
 				require.Equal(t, []byte{uint8(i)}, dataVal)
