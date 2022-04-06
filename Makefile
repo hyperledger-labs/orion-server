@@ -99,7 +99,26 @@ test-coverage: test-coverage-tools
 docker:
 	$(DOCKER) build -t $(DOCKER_IMAGE) --no-cache -f $(DOCKERFILE) .
 
-.PHONY: docker-arm
-docker-arm:
-	$(DOCKER) buildx build --platform linux/amd64 -f $(DOCKERFILE) -t $(DOCKER_IMAGE):linux-arm64 --load .
+.PHONY: docker-multiarch
+docker-multiarch:
+	make docker-linux-amd64
+	make docker-linux-arm64
+	make docker-linux-arm-v7
+	make docker-linux-s390x
+	
+.PHONY: docker-linux-amd64
+docker-linux-amd64:
+	$(DOCKER) buildx build --platform linux/amd64 -f $(DOCKERFILE) -t $(DOCKER_IMAGE):linux-amd64 --load .
+
+.PHONY: docker-linux-arm64
+docker-linux-arm64:
+	$(DOCKER) buildx build --platform linux/arm64 -f $(DOCKERFILE) -t $(DOCKER_IMAGE):linux-arm64 --load .
+
+.PHONY: docker-linux-arm-v7
+docker-linux-arm-v7:
 	$(DOCKER) buildx build --platform linux/arm/v7 -f $(DOCKERFILE) -t $(DOCKER_IMAGE):linux-arm-v7 --load .
+
+.PHONY: docker-linux-s390x
+docker-linux-s390x:
+	$(DOCKER) buildx build --platform linux/s390x -f $(DOCKERFILE) -t $(DOCKER_IMAGE):linux-s390x --load .
+
