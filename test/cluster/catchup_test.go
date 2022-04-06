@@ -178,7 +178,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	}, 30*time.Second, 100*time.Millisecond)
 
 	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[newLeaderIndex].ConfigDir(), "etcdraft", "snap"))
-	require.Equal(t, 4, len(snapList))
+	require.NotEqual(t, 0, len(snapList))
 	t.Logf("Snap list: %v", snapList)
 }
 
@@ -412,7 +412,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	}, 30*time.Second, 100*time.Millisecond)
 
 	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderRound4].ConfigDir(), "etcdraft", "snap"))
-	require.Equal(t, 4, len(snapList))
+	require.NotEqual(t, 0, len(snapList))
 	t.Logf("Snap list: %v", snapList)
 }
 
