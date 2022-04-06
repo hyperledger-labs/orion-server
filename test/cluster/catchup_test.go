@@ -100,7 +100,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 		return leaderIndex >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	keys := createKeys(15)
+	keys := createKeys(100)
 	data := make([]byte, 1024)
 	for _, key := range keys {
 		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
@@ -137,7 +137,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 
 	//submit txs with data size > SnapshotIntervalSize
 	for _, key := range keys {
-		txID, rcpt, err := c.Servers[newLeaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+15), data)
+		txID, rcpt, err := c.Servers[newLeaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
 		t.Logf("key-%+v", key+15)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
@@ -160,7 +160,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 		return c.AgreedHeight(t, uint64(txsCount+1), 0, 1, 2)
 	}, 30*time.Second, 100*time.Millisecond)
 
-	keys = createKeys(30)
+	keys = createKeys(200)
 	var dataEnv *types.GetDataResponseEnvelope
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
@@ -178,7 +178,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	}, 30*time.Second, 100*time.Millisecond)
 
 	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[newLeaderIndex].ConfigDir(), "etcdraft", "snap"))
-	require.Equal(t, 4, len(snapList))
+	require.NotEqual(t, 0, len(snapList))
 	t.Logf("Snap list: %v", snapList)
 }
 
@@ -271,7 +271,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 		return leaderRound1 >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	keys := createKeys(10)
+	keys := createKeys(100)
 	data := make([]byte, 1024)
 	for _, key := range keys {
 		txID, rcpt, err = c.Servers[leaderRound1].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
@@ -353,7 +353,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	}
 
 	for _, key := range keys {
-		txID, rcpt, err = c.Servers[leaderRound3].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+10), data)
+		txID, rcpt, err = c.Servers[leaderRound3].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
 		t.Logf("key-%+v", key+10)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
@@ -365,7 +365,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[leaderRound3].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+10))
+			dataEnv, err = c.Servers[leaderRound3].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+100))
 			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 		}, 30*time.Second, 100*time.Millisecond)
 		dataResp := dataEnv.GetResponse().GetValue()
@@ -389,7 +389,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	t.Logf("Started node %d, leader index is: %d; all 3 nodes are up", follower2Round2, leaderRound4)
 
 	for _, key := range keys {
-		txID, rcpt, err = c.Servers[leaderRound4].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+20), data)
+		txID, rcpt, err = c.Servers[leaderRound4].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+200), data)
 		t.Logf("key-%+v", key+20)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
@@ -400,7 +400,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	}
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
-			dataEnv, err = c.Servers[leaderRound4].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+20))
+			dataEnv, err = c.Servers[leaderRound4].QueryData(t, worldstate.DefaultDBName, strconv.Itoa(key+200))
 			return dataEnv != nil && dataEnv.GetResponse().GetValue() != nil && err == nil
 		}, 30*time.Second, 100*time.Millisecond)
 		dataResp := dataEnv.GetResponse().GetValue()
@@ -412,7 +412,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	}, 30*time.Second, 100*time.Millisecond)
 
 	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderRound4].ConfigDir(), "etcdraft", "snap"))
-	require.Equal(t, 4, len(snapList))
+	require.NotEqual(t, 0, len(snapList))
 	t.Logf("Snap list: %v", snapList)
 }
 
