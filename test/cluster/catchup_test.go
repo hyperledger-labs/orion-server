@@ -60,6 +60,8 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	defer c.ShutdownAndCleanup()
 
 	require.NoError(t, c.Start())
+	clusterLogger := c.GetLogger()
+	clusterLogger.Info("NodeRecoveryWithCatchup starts")
 
 	leaderIndex := -1
 	require.Eventually(t, func() bool {
@@ -69,7 +71,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 
 	snapList := replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderIndex].ConfigDir(), "etcdraft", "snap"))
 	require.Equal(t, 0, len(snapList))
-	t.Logf("Snap list: %v", snapList)
+	clusterLogger.Info("Snap list: ", snapList)
 
 	//get current cluster config
 	configEnv, err := c.Servers[leaderIndex].QueryConfig(t)
@@ -89,7 +91,11 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 	txsCount++
-	t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	clusterLogger.Info("tx submitted: "+txID+", ", rcpt)
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, uint64(txsCount+1), 0, 1, 2)
+	}, 30*time.Second, 100*time.Millisecond)
 
 	//restart the cluster so that the SnapshotIntervalSize will update
 	require.NoError(t, c.Restart())
@@ -104,14 +110,14 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	data := make([]byte, 1024)
 	for _, key := range keys {
 		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
-		t.Logf("key-%+v", key)
+		clusterLogger.Info("key-", key)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
 		require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 		require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 		txsCount++
-		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		clusterLogger.Info("tx submitted: "+txID+", ", rcpt)
 	}
 
 	require.Eventually(t, func() bool {
@@ -138,14 +144,14 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	//submit txs with data size > SnapshotIntervalSize
 	for _, key := range keys {
 		txID, rcpt, err := c.Servers[newLeaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
-		t.Logf("key-%+v", key+15)
+		clusterLogger.Info("key-", key+100)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
 		require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 		require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 		txsCount++
-		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		clusterLogger.Info("tx submitted: "+txID+", ", rcpt)
 	}
 
 	require.Eventually(t, func() bool {
@@ -177,9 +183,13 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 		return newLeaderIndex >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[newLeaderIndex].ConfigDir(), "etcdraft", "snap"))
+	require.NoError(t, c.Shutdown())
+
+	snapList = replication.ListSnapshots(clusterLogger, filepath.Join(c.Servers[newLeaderIndex].ConfigDir(), "etcdraft", "snap"))
 	require.NotEqual(t, 0, len(snapList))
-	t.Logf("Snap list: %v", snapList)
+	clusterLogger.Info("Snap list: ", snapList)
+
+	clusterLogger.Info("NodeRecoveryWithCatchup ends")
 }
 
 func TestFollowerRecoveryWithCatchup(t *testing.T) {
@@ -188,7 +198,6 @@ func TestFollowerRecoveryWithCatchup(t *testing.T) {
 
 func TestLeaderRecoveryWithCatchup(t *testing.T) {
 	NodeRecoveryWithCatchup(t, true)
-
 }
 
 //Scenario:
@@ -232,6 +241,9 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 
 	require.NoError(t, c.Start())
 
+	clusterLogger := c.GetLogger()
+	clusterLogger.Info("StopServerNoMajorityToChooseLeaderWithCatchup starts")
+
 	leaderRound1 := -1
 	require.Eventually(t, func() bool {
 		leaderRound1 = c.AgreedLeader(t, 0, 1, 2)
@@ -240,7 +252,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 
 	snapList := replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderRound1].ConfigDir(), "etcdraft", "snap"))
 	require.Equal(t, 0, len(snapList))
-	t.Logf("Snap list: %v", snapList)
+	clusterLogger.Info("Snap list: ", snapList)
 
 	//get current cluster config
 	configEnv, err := c.Servers[leaderRound1].QueryConfig(t)
@@ -260,7 +272,11 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 	txsCount++
-	t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	clusterLogger.Info("tx submitted: "+txID+", ", rcpt)
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, uint64(txsCount+1), 0, 1, 2)
+	}, 30*time.Second, 100*time.Millisecond)
 
 	//restart the cluster so that the SnapshotIntervalSize will update
 	require.NoError(t, c.Restart())
@@ -275,14 +291,14 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	data := make([]byte, 1024)
 	for _, key := range keys {
 		txID, rcpt, err = c.Servers[leaderRound1].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
-		t.Logf("key-%+v", key)
+		clusterLogger.Info("key-", key)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
 		require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 		require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 		txsCount++
-		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		clusterLogger.Info("tx submitted: "+txID+", ", rcpt)
 	}
 	var dataEnv *types.GetDataResponseEnvelope
 	for _, key := range keys {
@@ -309,7 +325,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 		return leaderRound2 >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	t.Logf("Stopped node %d, new leader index is: %d; 2-node quorum", leaderRound1, leaderRound2)
+	clusterLogger.Info("Stopped node ", leaderRound1, ", new leader index is: ", leaderRound2, "; 2-node quorum")
 
 	follower1Round2 := follower1
 	follower2Round2 := leaderRound1
@@ -345,7 +361,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 		return leaderRound3 >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	t.Logf("Started node %d, leader index is: %d; 2-node quorum", victimServer, leaderRound3)
+	clusterLogger.Info("Started node ", victimServer, ", leader index is: ", leaderRound3, "; 2-node quorum")
 
 	follower1Round3 := leaderRound2
 	if leaderRound3 == leaderRound2 {
@@ -354,13 +370,13 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 
 	for _, key := range keys {
 		txID, rcpt, err = c.Servers[leaderRound3].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
-		t.Logf("key-%+v", key+10)
+		clusterLogger.Info("key-", key+100)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
 		require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 		require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
-		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		clusterLogger.Info("tx submitted: "+txID+", ", rcpt)
 	}
 
 	for _, key := range keys {
@@ -386,17 +402,17 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 		return leaderRound4 >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	t.Logf("Started node %d, leader index is: %d; all 3 nodes are up", follower2Round2, leaderRound4)
+	clusterLogger.Info("Started node ", follower2Round2, ", leader index is: ", leaderRound4, "; all 3 nodes are up")
 
 	for _, key := range keys {
 		txID, rcpt, err = c.Servers[leaderRound4].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+200), data)
-		t.Logf("key-%+v", key+20)
+		clusterLogger.Info("key-", key+200)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
 		require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 		require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
-		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+		clusterLogger.Info("tx submitted: "+txID+", ", rcpt)
 	}
 	for _, key := range keys {
 		require.Eventually(t, func() bool {
@@ -411,9 +427,13 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 		return c.AgreedHeight(t, rcpt.Header.BaseHeader.Number, 0, 1, 2)
 	}, 30*time.Second, 100*time.Millisecond)
 
-	snapList = replication.ListSnapshots(c.GetLogger(), filepath.Join(c.Servers[leaderRound4].ConfigDir(), "etcdraft", "snap"))
+	require.NoError(t, c.Shutdown())
+
+	snapList = replication.ListSnapshots(clusterLogger, filepath.Join(c.Servers[leaderRound4].ConfigDir(), "etcdraft", "snap"))
 	require.NotEqual(t, 0, len(snapList))
-	t.Logf("Snap list: %v", snapList)
+	clusterLogger.Info("Snap list: ", snapList)
+
+	clusterLogger.Info("StopServerNoMajorityToChooseLeaderWithCatchup ends")
 }
 
 func TestStopFollowerNoMajorityToChooseLeaderWithCatchup(t *testing.T) {
@@ -422,5 +442,4 @@ func TestStopFollowerNoMajorityToChooseLeaderWithCatchup(t *testing.T) {
 
 func TestStopLeaderNoMajorityToChooseLeaderWithCatchup(t *testing.T) {
 	StopServerNoMajorityToChooseLeaderWithCatchup(t, true)
-
 }
