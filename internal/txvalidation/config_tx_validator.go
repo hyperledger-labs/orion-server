@@ -169,31 +169,19 @@ func validateNodeConfig(nodes []*types.NodeConfig, caCertCollection *certificate
 				ReasonIfInvalid: "there is a node in the node config with an empty ID. A valid nodeID must be an non-empty string",
 			}
 
-		case n.Address == "":
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [" + n.Id + "] has an empty ip address",
-			}
-
-		case net.ParseIP(n.Address) == nil:
-			// TODO allow host names for cluster nodes
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [" + n.Id + "] has an invalid ip address [" + n.Address + "]",
-			}
-
-		case n.Port == 0 || n.Port >= (1<<16):
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: fmt.Sprintf("the node [%s] has an invalid port number [%d]", n.Id, n.Port),
-			}
-
 		default:
 			if err := caCertCollection.VerifyLeafCert(n.Certificate); err != nil {
 				return &types.ValidationInfo{
 					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
 					ReasonIfInvalid: "the node [" + n.Id + "] has an invalid certificate: " + err.Error(),
 				}
+			}
+		}
+
+		if err := validateHostPort(n.Address, n.Port); err != nil {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the node [" + n.Id + "] has " + err.Error(),
 			}
 		}
 
@@ -546,7 +534,7 @@ func (v *ConfigTxValidator) validateConfigTransitionRules(currentConfig, updated
 				ReasonIfInvalid: fmt.Sprintf("error in ConsensusConfig: %s", err.Error()),
 			}, nil
 		}
-		v.logger.Debugf("ClusterConfig ConsensusConfig changed: current: %v; updated: %v", currentConfig.ConsensusConfig, updatedConfig.ConsensusConfig)
+		v.logger.Infof("ClusterConfig ConsensusConfig changed: current: %v; updated: %v", currentConfig.ConsensusConfig, updatedConfig.ConsensusConfig)
 	}
 
 	return &types.ValidationInfo{
