@@ -122,6 +122,23 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 	return res, err
 }
 
+func (c *Client) GetLastConfigBlockStatus(e *types.GeConfigBlockQueryEnvelope) (*types.GetConfigBlockResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		constants.GetLastConfigBlock,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+constants.GetLastConfigBlock)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetConfigBlockResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetLastBlock(e *types.GetLastBlockQueryEnvelope) (*types.GetBlockResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.GetLastBlockHeader,
