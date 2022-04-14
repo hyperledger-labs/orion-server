@@ -128,6 +128,17 @@ func (s *Server) Signer(userID string) (crypto.Signer, error) {
 	return signer, nil
 }
 
+func (s *Server) SetAdmin(newAdminID string, newAdminCertPath string, newAdminKeyPath string, newAdminSigner crypto.Signer) {
+	s.adminID = newAdminID
+	s.adminSigner = newAdminSigner
+	s.adminCertPath = newAdminCertPath
+	s.adminKeyPath = newAdminKeyPath
+}
+
+func (s *Server) SetAdminSigner(newAdminSigner crypto.Signer) {
+	s.adminSigner = newAdminSigner
+}
+
 func (s *Server) QueryBlockStatus(t *testing.T) (*types.GetBlockResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
@@ -374,7 +385,7 @@ func (s *Server) SubmitTransaction(t *testing.T, urlPath string, tx interface{})
 	return receipt, nil
 }
 
-func (s *Server) SetConfigTx(t *testing.T, newConfig *types.ClusterConfig, version *types.Version, signer crypto.Signer) (string, *types.TxReceipt, error) {
+func (s *Server) SetConfigTx(t *testing.T, newConfig *types.ClusterConfig, version *types.Version, signer crypto.Signer, user string) (string, *types.TxReceipt, error) {
 	client, err := s.NewRESTClient(s.clientCheckRedirect)
 	if err != nil {
 		return "", nil, err
@@ -382,7 +393,7 @@ func (s *Server) SetConfigTx(t *testing.T, newConfig *types.ClusterConfig, versi
 
 	txID := uuid.New().String()
 	configTx := &types.ConfigTx{
-		UserId:               "admin",
+		UserId:               user,
 		TxId:                 txID,
 		ReadOldConfigVersion: version,
 		NewConfig:            newConfig,

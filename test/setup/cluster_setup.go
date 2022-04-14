@@ -400,6 +400,15 @@ func (c *Cluster) createUsersCryptoMaterials() error {
 	return nil
 }
 
+func (c *Cluster) CreateAdditionalUserCryptoMaterials(user string) error {
+	keyPair, err := c.GetX509KeyPair()
+	if err != nil {
+		return err
+	}
+	c.CreateUserCerts(user, keyPair)
+	return nil
+}
+
 func (c *Cluster) CreateUserCerts(user string, keyPair tls.Certificate) error {
 	var err error
 
@@ -432,6 +441,33 @@ func (c *Cluster) CreateUserCerts(user string, keyPair tls.Certificate) error {
 		}
 	}
 
+	return nil
+}
+
+func (c *Cluster) GetUser(user string) ([]byte, []byte, error) {
+	userCertPath, userKeyPath := c.GetUserCertKeyPath(user)
+	keyBytes, err := os.ReadFile(userKeyPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	certBytes, err := os.ReadFile(userCertPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return certBytes, keyBytes, err
+}
+
+func (c *Cluster) UpdateServersAdmin(newAdmin string, newAdminKeyPath string, newAdminCertPath string) error {
+	for _, s := range c.Servers {
+		newAdminSigner, err := crypto.NewSigner(
+			&crypto.SignerOptions{KeyFilePath: newAdminKeyPath},
+		)
+		if err != nil {
+			return err
+		}
+		s.SetAdmin(newAdmin, newAdminCertPath, newAdminKeyPath, newAdminSigner)
+	}
 	return nil
 }
 
