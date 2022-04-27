@@ -324,7 +324,7 @@ func (c *Cluster) AgreedLeader(t *testing.T, activeServers ...int) int {
 
 func (c *Cluster) AgreedHeight(t *testing.T, expectedBlockHeight uint64, activeServers ...int) bool {
 	for _, srvVal := range activeServers {
-		blockResEnv, err := c.Servers[srvVal].QueryBlockStatus(t)
+		blockResEnv, err := c.Servers[srvVal].QueryLastBlockStatus(t)
 		if err != nil {
 			t.Logf("error: %s", err.Error())
 			return false
