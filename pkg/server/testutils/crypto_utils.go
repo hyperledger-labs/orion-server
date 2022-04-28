@@ -260,8 +260,8 @@ func SignatureFromTx(t *testing.T, signer crypto.Signer, tx interface{}) []byte 
 	return sig
 }
 
-func SignatureFromQuery(t *testing.T, signner crypto.Signer, query interface{}) []byte {
-	sig, err := cryptoservice.SignQuery(signner, query)
+func SignatureFromQuery(t *testing.T, signer crypto.Signer, query interface{}) []byte {
+	sig, err := cryptoservice.SignQuery(signer, query)
 	require.NoError(t, err)
 	return sig
 }
