@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
@@ -124,12 +125,18 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 
 // Start starts the server
 func (s *BCDBHTTPServer) Start() error {
-	if blockHeight, err := s.db.LedgerHeight(); err != nil {
-		return err
-	} else if blockHeight == 0 {
-		return errors.New("ledger height == 0, bootstrap failed")
-	} else {
-		s.logger.Infof("Server starting at ledger height [%d]", blockHeight)
+	for {
+		if blockHeight, err := s.db.LedgerHeight(); err != nil {
+			return err
+		} else if blockHeight == 0 {
+			// If the server is bootstrapping from the peers, it might still be trying to get the genesis block; We
+			// wait for that to happen before we start serving requests.
+			s.logger.Infof("Ledger height =0, server boostraping from peers; waiting for height >0; going to sleep for 1s...")
+			time.Sleep(time.Second)
+		} else {
+			s.logger.Infof("Server starting at ledger height [%d]", blockHeight)
+			break
+		}
 	}
 
 	go s.serveRequests(s.listen)
