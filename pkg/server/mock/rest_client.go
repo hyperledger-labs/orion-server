@@ -139,6 +139,25 @@ func (c *Client) GetLastBlock(e *types.GetLastBlockQueryEnvelope) (*types.GetBlo
 	return res, err
 }
 
+func (c *Client) GetLedgerPath(e *types.GetLedgerPathQueryEnvelope) (*types.GetLedgerPathResponseEnvelope, error) {
+	path := constants.URLForLedgerPath(e.Payload.StartBlockNumber, e.Payload.EndBlockNumber)
+
+	resp, err := c.handleGetRequest(
+		path,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+path)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetLedgerPathResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetBlockHeader(e *types.GetBlockQueryEnvelope, forceParam bool) (*types.GetBlockResponseEnvelope, error) {
 	path := constants.LedgerEndpoint + fmt.Sprintf("block/%d", e.Payload.BlockNumber)
 	if forceParam {
