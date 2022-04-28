@@ -31,6 +31,7 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 // Server holds parameters related to the server
@@ -196,21 +197,26 @@ func (s *Server) QueryConfig(t *testing.T) (*types.GetConfigResponseEnvelope, er
 	return response, err
 }
 
-func (s *Server) QueryData(t *testing.T, db, key string) (*types.GetDataResponseEnvelope, error) {
+func (s *Server) QueryData(t *testing.T, db, key string, userID string) (*types.GetDataResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
 	}
 
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	query := &types.GetDataQuery{
-		UserId: s.AdminID(),
+		UserId: userID,
 		DbName: db,
 		Key:    key,
 	}
 	response, err := client.GetData(
 		&types.GetDataQueryEnvelope{
 			Payload:   query,
-			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+			Signature: testutils.SignatureFromQuery(t, signer, query),
 		},
 	)
 
@@ -669,4 +675,37 @@ func (t *testFailure) Fatalf(format string, args ...interface{}) {
 }
 
 func (t *testFailure) Helper() {
+}
+
+func CreateDatabases(t *testing.T, s *Server, dbNames []string) {
+	dbAdminTx := &types.DBAdministrationTx{
+		UserId:    s.AdminID(),
+		TxId:      uuid.New().String(),
+		CreateDbs: dbNames,
+	}
+
+	receipt, err := s.SubmitTransaction(t, constants.PostDBTx, &types.DBAdministrationTxEnvelope{
+		Payload:   dbAdminTx,
+		Signature: testutils.SignatureFromTx(t, s.AdminSigner(), dbAdminTx),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+
+	for _, dbName := range dbNames {
+		response, err := s.GetDBStatus(t, dbName)
+		require.NoError(t, err)
+		require.Equal(t, true, response.GetResponse().Exist)
+	}
+}
+
+func CreateUsers(t *testing.T, s *Server, users []*types.UserWrite) {
+	receipt, err := s.CreateUsers(t, users)
+	require.NoError(t, err)
+	require.NotNil(t, receipt)
+
+	for _, user := range users {
+		respEnv, err := s.QueryUser(t, user.GetUser().GetId())
+		require.NoError(t, err)
+		require.Equal(t, user.User, respEnv.GetResponse().User)
+	}
 }
