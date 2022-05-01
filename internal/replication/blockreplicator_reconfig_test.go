@@ -449,6 +449,527 @@ func TestBlockReplicator_ReConfig_AddPeer_WithSnapshots(t *testing.T) {
 	}
 }
 
+// Scenario: add a peer to the cluster, with frequent snapshots, and restarts
+// - start 3 nodes, configured to take frequent snapshots, wait for leader,
+// - submit a few blocks and verify reception by all, these blocks will create snapshots
+// - submit a config tx to adds a 4th peer, wait for all 3 to get it
+// - shut down the 3 nodes
+// - start the 4th peer with a join block derived from said config-tx
+// - on height==0, check: cluster status, is-leader
+// - start node 1, check: on-boarding completes, cluster status, is-leader
+// - start node 2, check: leader
+// - submit a few blocks and check that 1,2,4 nodes got them
+// - start node 3, confirm it catches up
+func TestBlockReplicator_ReConfig_AddPeer_WithSnapshots_RestartsAfterJoin(t *testing.T) {
+	block, dataBlockLength := testDataBlock(2048)
+	raftConfig := proto.Clone(raftConfigNoSnapshots).(*types.RaftConfig)
+	raftConfig.SnapshotIntervalSize = 4 * dataBlockLength
+	t.Logf("configure frequent snapshots, 4x block size; block size: %d, SnapshotIntervalSize: %d", dataBlockLength, raftConfig.SnapshotIntervalSize)
+
+	env := createClusterEnv(t, 3, raftConfig, "info")
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	leaderIdx := env.AgreedLeaderIndex()
+	numBlocks := uint64(10)
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	// a config tx that updates the membership by adding a 4th peer
+	next, updatedClusterConfig, proposeBlock := env.NextNodeConfig()
+	err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks+2, 0, 1, 2) }, 30*time.Second, 100*time.Millisecond)
+	joinBlock, err := env.nodes[0].ledger.Get(numBlocks + 2)
+	require.NoError(t, err)
+	t.Logf("join-block: H: %+v, M: %+v", joinBlock.GetHeader(), joinBlock.GetConsensusMetadata())
+	t.Logf("join-block: Config: %+v", joinBlock.GetPayload().(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope.GetPayload().GetNewConfig())
+
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(2*numBlocks + 2) }, 30*time.Second, 100*time.Millisecond)
+
+	env.AddNode(t, next, updatedClusterConfig, joinBlock)
+	env.UpdateConfig()
+
+	t.Log("Closing nodes: 1,2,3")
+	// stop nodes 1,2,3
+	for i := 0; i < 3; i++ {
+		err := env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+
+	// Start the new node - no peers
+	err = env.nodes[next-1].Start()
+	require.NoError(t, err)
+	t.Logf("Started node: %d", next)
+
+	leaderID, activePeers := env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, uint64(0), leaderID)
+	require.Len(t, activePeers, 1)
+	_, existNode4 := activePeers[env.nodes[next-1].conf.LocalConf.Server.Identity.ID]
+	require.True(t, existNode4)
+	heightNode4, err := env.nodes[next-1].ledger.Height()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), heightNode4)
+	require.EqualError(t, env.nodes[next-1].blockReplicator.IsLeader(), "not a leader, leader is RaftID: 0, with HostPort: ")
+	require.Equal(t, uint64(0), env.nodes[next-1].blockReplicator.GetLeaderID())
+
+	t.Log("Closing node 4")
+	err = env.nodes[next-1].Close()
+	require.NoError(t, err)
+
+	t.Log("Restarting node 4")
+	err = env.nodes[next-1].Restart()
+	require.NoError(t, err)
+
+	leaderID, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, uint64(0), leaderID)
+	require.Len(t, activePeers, 1)
+	_, existNode4 = activePeers[env.nodes[next-1].conf.LocalConf.Server.Identity.ID]
+	require.True(t, existNode4)
+	heightNode4, err = env.nodes[next-1].ledger.Height()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), heightNode4)
+	require.EqualError(t, env.nodes[next-1].blockReplicator.IsLeader(), "not a leader, leader is RaftID: 0, with HostPort: ")
+	require.Equal(t, uint64(0), env.nodes[next-1].blockReplicator.GetLeaderID())
+
+	t.Log("Restarting node 1")
+	err = env.nodes[0].Restart()
+	require.NoError(t, err)
+
+	require.Eventually(t,
+		func() bool {
+			h4, err := env.nodes[next-1].ledger.Height()
+			require.NoError(t, err)
+			return h4 >= numBlocks+2
+		},
+		30*time.Second, 100*time.Millisecond)
+
+	leaderID, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, uint64(0), leaderID)
+	_, existNode4 = activePeers[env.nodes[next-1].conf.LocalConf.Server.Identity.ID]
+	require.True(t, existNode4)
+	require.EqualError(t, env.nodes[next-1].blockReplicator.IsLeader(), "not a leader, leader is RaftID: 0, with HostPort: ")
+	require.Equal(t, uint64(0), env.nodes[next-1].blockReplicator.GetLeaderID())
+
+	t.Log("Restarting node 2")
+	err = env.nodes[1].Restart()
+	require.NoError(t, err)
+
+	//nodes 1,2,4 select a leader, node 4 catches up
+	require.Eventually(t, func() bool {
+		return env.AgreedLeaderIndex(0, 1, 3) >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(2*numBlocks+2, 0, 1, 3) }, 30*time.Second, 100*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		_, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+		if len(activePeers) == 3 {
+			return true
+		}
+		return false
+	}, 30*time.Second, 100*time.Millisecond)
+
+	t.Log("Restarting node 3")
+	err = env.nodes[2].Restart()
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		return env.AgreedLeaderIndex(0, 1, 2, 3) >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(2*numBlocks+2, 0, 1, 2, 3) }, 30*time.Second, 100*time.Millisecond)
+
+	t.Log("Closing all")
+	for _, i := range []int{0, 1, 2, 3} {
+		err = env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+}
+
+// Scenario: add a peer to the cluster, restarts after join
+// - start 3 nodes, wait for leader,
+// - submit a few blocks and verify reception by all,
+// - submit a config tx to adds a 4th peer, wait for all 3 to get it
+// - shut down the 3 nodes
+// - start the 4th peer with a join block derived from said config-tx
+// - on height==0, check: cluster status, is-leader
+// - start node 1, check: on-boarding completes, cluster status, is-leader
+// - start node 2, check: agreed leader
+// - submit a few blocks and check that 1,2,4 nodes got them
+// - start node 3, confirm it catches up
+func TestBlockReplicator_ReConfig_AddPeer_RestartsAfterJoin(t *testing.T) {
+	block, _ := testDataBlock(128)
+	env := createClusterEnv(t, 3, nil, "info")
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	leaderIdx := env.AgreedLeaderIndex()
+	numBlocks := uint64(10)
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	// a config tx that updates the membership by adding a 4th peer
+	next, updatedClusterConfig, proposeBlock := env.NextNodeConfig()
+	err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks+2, 0, 1, 2) }, 30*time.Second, 100*time.Millisecond)
+	joinBlock, err := env.nodes[0].ledger.Get(numBlocks + 2)
+	require.NoError(t, err)
+	t.Logf("join-block: H: %+v, M: %+v", joinBlock.GetHeader(), joinBlock.GetConsensusMetadata())
+	t.Logf("join-block: Config: %+v", joinBlock.GetPayload().(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope.GetPayload().GetNewConfig())
+
+	t.Log("Closing nodes: 1,2,3")
+	// stop nodes 1,2,3
+	for i := 0; i < 3; i++ {
+		err := env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+
+	// Start the new node - no peers
+	env.AddNode(t, next, updatedClusterConfig, joinBlock)
+	env.UpdateConfig()
+	err = env.nodes[next-1].Start()
+	require.NoError(t, err)
+	t.Logf("Started node: %d", next)
+
+	leaderID, activePeers := env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, uint64(0), leaderID)
+	require.Len(t, activePeers, 1)
+	_, existNode4 := activePeers[env.nodes[next-1].conf.LocalConf.Server.Identity.ID]
+	require.True(t, existNode4)
+	heightNode4, err := env.nodes[next-1].ledger.Height()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), heightNode4)
+	require.EqualError(t, env.nodes[next-1].blockReplicator.IsLeader(), "not a leader, leader is RaftID: 0, with HostPort: ")
+	require.Equal(t, uint64(0), env.nodes[next-1].blockReplicator.GetLeaderID())
+
+	t.Log("Closing node 4")
+	err = env.nodes[next-1].Close()
+	require.NoError(t, err)
+
+	t.Log("Restarting node 4")
+	err = env.nodes[next-1].Restart()
+	require.NoError(t, err)
+
+	leaderID, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, uint64(0), leaderID)
+	require.Len(t, activePeers, 1)
+	_, existNode4 = activePeers[env.nodes[next-1].conf.LocalConf.Server.Identity.ID]
+	require.True(t, existNode4)
+	heightNode4, err = env.nodes[next-1].ledger.Height()
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), heightNode4)
+	require.EqualError(t, env.nodes[next-1].blockReplicator.IsLeader(), "not a leader, leader is RaftID: 0, with HostPort: ")
+	require.Equal(t, uint64(0), env.nodes[next-1].blockReplicator.GetLeaderID())
+
+	t.Log("Restarting node 1")
+	err = env.nodes[0].Restart()
+	require.NoError(t, err)
+
+	require.Eventually(t,
+		func() bool {
+			h4, err := env.nodes[next-1].ledger.Height()
+			require.NoError(t, err)
+			return h4 == numBlocks+2
+		},
+		30*time.Second, 100*time.Millisecond)
+
+	leaderID, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, uint64(0), leaderID)
+	_, existNode4 = activePeers[env.nodes[next-1].conf.LocalConf.Server.Identity.ID]
+	require.True(t, existNode4)
+	heightNode4, err = env.nodes[next-1].ledger.Height()
+	require.NoError(t, err)
+	require.Equal(t, numBlocks+2, heightNode4)
+	require.EqualError(t, env.nodes[next-1].blockReplicator.IsLeader(), "not a leader, leader is RaftID: 0, with HostPort: ")
+	require.Equal(t, uint64(0), env.nodes[next-1].blockReplicator.GetLeaderID())
+
+	t.Log("Restarting node 2")
+	err = env.nodes[1].Restart()
+	require.NoError(t, err)
+
+	//nodes 1,2,4 select a leader
+	require.Eventually(t, func() bool {
+		return env.AgreedLeaderIndex(0, 1, 3) >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	leaderID, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.True(t, leaderID > 0)
+	require.Len(t, activePeers, 3)
+	for _, i := range []int{0, 1, 3} {
+		_, existNode := activePeers[env.nodes[i].conf.LocalConf.Server.Identity.ID]
+		require.True(t, existNode)
+	}
+
+	// add some blocks
+	leaderIdx = env.AgreedLeaderIndex(0, 1, 3)
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	t.Log("Restarting node 3")
+	err = env.nodes[2].Restart()
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		return env.AgreedLeaderIndex(0, 1, 2, 3) >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(2*numBlocks + 2) }, 30*time.Second, 100*time.Millisecond)
+
+	t.Log("Closing all")
+	for _, i := range []int{0, 1, 2, 3} {
+		err = env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+}
+
+// Scenario: add a peer to the cluster, with restarts
+// - start 3 nodes, wait for leader,
+// - submit a few blocks and verify reception by all,
+// - submit a config tx to adds a 4th peer, wait for all 3 to get it
+// - restart the 3 nodes, they re-apply the config change
+// - start the 4th peer with a join block derived from said config-tx
+func TestBlockReplicator_ReConfig_AddPeer_RestartBeforeJoin(t *testing.T) {
+	block, _ := testDataBlock(128)
+	env := createClusterEnv(t, 3, nil, "debug")
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	leaderIdx := env.AgreedLeaderIndex()
+	numBlocks := uint64(10)
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	// a config tx that updates the membership by adding a 4th peer
+	next, updatedClusterConfig, proposeBlock := env.NextNodeConfig()
+	err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks+2, 0, 1, 2) }, 30*time.Second, 100*time.Millisecond)
+	joinBlock, err := env.nodes[0].ledger.Get(numBlocks + 2)
+	require.NoError(t, err)
+	t.Logf("join-block: H: %+v, M: %+v", joinBlock.GetHeader(), joinBlock.GetConsensusMetadata())
+	t.Logf("join-block: Config: %+v", joinBlock.GetPayload().(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope.GetPayload().GetNewConfig())
+
+	env.AddNode(t, next, updatedClusterConfig, joinBlock)
+	env.UpdateConfig()
+
+	t.Log("Stopping nodes: 1,2,3")
+	// stop nodes 1,2,3
+	for i := 0; i < 3; i++ {
+		err := env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+	t.Log("Restarting nodes: 1,2,3")
+	for i := 0; i < 3; i++ {
+		err := env.nodes[i].Restart()
+		require.NoError(t, err)
+	}
+	require.Eventually(t, func() bool { return env.AgreedLeaderIndex(0, 1, 2) >= 0 }, 30*time.Second, 100*time.Millisecond)
+
+	// Start the new node
+	err = env.nodes[next-1].Start()
+	require.NoError(t, err)
+	t.Logf("Started node: %d", next)
+
+	require.Eventually(t,
+		func() bool {
+			h4, err := env.nodes[next-1].ledger.Height()
+			require.NoError(t, err)
+			return h4 == numBlocks+2
+		},
+		30*time.Second, 100*time.Millisecond)
+
+	//nodes 1,2,3,4 select a leader
+	require.Eventually(t, func() bool {
+		return env.AgreedLeaderIndex(0, 1, 2, 3) >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	leaderIdx = env.AgreedLeaderIndex()
+	leaderID, activePeers := env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, leaderID, env.nodes[leaderIdx].blockReplicator.RaftID())
+
+	require.Eventually(t, func() bool {
+		_, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+		if len(activePeers) == 4 {
+			return true
+		}
+		return false
+	}, 30*time.Second, 100*time.Millisecond)
+
+	t.Log("Closing all")
+	for _, i := range []int{0, 1, 2, 3} {
+		err = env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+}
+
+// Scenario: add a peer to the cluster, with frequent snapshots, and restarts
+// - start 3 nodes, configured to take frequent snapshots, wait for leader,
+// - submit a few blocks and verify reception by all, these blocks will create snapshots
+// - submit a config tx to adds a 4th peer, wait for all 3 to get it
+// - submit a few blocks and verify reception by all, these blocks will create snapshots which capture config change
+// - restart the 3 nodes
+// - start the 4th peer with a join block derived from said config-tx
+func TestBlockReplicator_ReConfig_AddPeer_WithSnapshots_RestartBeforeJoin(t *testing.T) {
+	block, dataBlockLength := testDataBlock(2048)
+	raftConfig := proto.Clone(raftConfigNoSnapshots).(*types.RaftConfig)
+	raftConfig.SnapshotIntervalSize = 4 * dataBlockLength
+	t.Logf("configure frequent snapshots, 4x block size; block size: %d, SnapshotIntervalSize: %d", dataBlockLength, raftConfig.SnapshotIntervalSize)
+
+	env := createClusterEnv(t, 3, raftConfig, "debug")
+	defer os.RemoveAll(env.testDir)
+	require.Equal(t, 3, len(env.nodes))
+
+	for _, node := range env.nodes {
+		err := node.Start()
+		require.NoError(t, err)
+	}
+
+	// wait for some node to become a leader
+	isLeaderCond := func() bool {
+		return env.AgreedLeaderIndex() >= 0
+	}
+	require.Eventually(t, isLeaderCond, 30*time.Second, 100*time.Millisecond)
+
+	leaderIdx := env.AgreedLeaderIndex()
+	numBlocks := uint64(10)
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
+
+	// a config tx that updates the membership by adding a 4th peer
+	next, updatedClusterConfig, proposeBlock := env.NextNodeConfig()
+	err := env.nodes[leaderIdx].blockReplicator.Submit(proposeBlock)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(numBlocks+2, 0, 1, 2) }, 30*time.Second, 100*time.Millisecond)
+	joinBlock, err := env.nodes[0].ledger.Get(numBlocks + 2)
+	require.NoError(t, err)
+	t.Logf("join-block: H: %+v, M: %+v", joinBlock.GetHeader(), joinBlock.GetConsensusMetadata())
+	t.Logf("join-block: Config: %+v", joinBlock.GetPayload().(*types.Block_ConfigTxEnvelope).ConfigTxEnvelope.GetPayload().GetNewConfig())
+
+	for i := uint64(0); i < numBlocks; i++ {
+		b := proto.Clone(block).(*types.Block)
+		err := env.nodes[leaderIdx].blockReplicator.Submit(b)
+		require.NoError(t, err)
+	}
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(2*numBlocks+2, 0, 1, 2) }, 30*time.Second, 100*time.Millisecond)
+
+	env.AddNode(t, next, updatedClusterConfig, joinBlock)
+	env.UpdateConfig()
+
+	t.Log("Stopping nodes: 1,2,3")
+	// stop nodes 1,2,3
+	for i := 0; i < 3; i++ {
+		err := env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+	t.Log("Restarting nodes: 1,2,3")
+	for i := 0; i < 3; i++ {
+		err := env.nodes[i].Restart()
+		require.NoError(t, err)
+	}
+	require.Eventually(t, func() bool { return env.AgreedLeaderIndex(0, 1, 2) >= 0 }, 30*time.Second, 100*time.Millisecond)
+
+	// Start the new node
+	err = env.nodes[next-1].Start()
+	require.NoError(t, err)
+	t.Logf("Started node: %d", next)
+
+	require.Eventually(t,
+		func() bool {
+			h4, err := env.nodes[next-1].ledger.Height()
+			require.NoError(t, err)
+			return h4 >= numBlocks+2
+		},
+		30*time.Second, 100*time.Millisecond)
+
+	//nodes 1,2,3,4 select a leader
+	require.Eventually(t, func() bool {
+		return env.AgreedLeaderIndex(0, 1, 2, 3) >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	leaderIdx = env.AgreedLeaderIndex()
+	leaderID, activePeers := env.nodes[next-1].blockReplicator.GetClusterStatus()
+	require.Equal(t, leaderID, env.nodes[leaderIdx].blockReplicator.RaftID())
+	require.Eventually(t, func() bool {
+		_, activePeers = env.nodes[next-1].blockReplicator.GetClusterStatus()
+		if len(activePeers) == 4 {
+			return true
+		}
+		return false
+	}, 30*time.Second, 100*time.Millisecond)
+	require.Eventually(t, func() bool { return env.AssertEqualHeight(2*numBlocks+2, 0, 1, 2, 3) }, 30*time.Second, 100*time.Millisecond)
+
+	t.Log("Closing all")
+	for _, i := range []int{0, 1, 2, 3} {
+		err = env.nodes[i].Close()
+		require.NoError(t, err)
+	}
+}
+
 // Scenario: add and remove nodes until original IDs are all removed
 func TestBlockReplicator_ReConfig_AddRemovePeersRolling(t *testing.T) {
 	approxDataSize := 32

@@ -36,7 +36,7 @@ type DB interface {
 	// Height returns ledger height
 	Height() (uint64, error)
 
-	// IsLeader returns whether the this server is the leader
+	// IsLeader returns whether this server is the leader
 	IsLeader() *ierrors.NotLeaderError
 
 	// DoesUserExist checks whenever user with given userID exists

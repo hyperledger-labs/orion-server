@@ -290,6 +290,9 @@ func (br *BlockReplicator) startOnBoarding() {
 		switch err.(type) {
 		case *ierrors.ClosedError:
 			br.lg.Warn("Closing, stopping on-boarding")
+			_ = br.raftStorage.Close()
+			close(br.doneProposeCh)
+			close(br.doneEventCh)
 			return // do not cause panic when the server shuts down
 		default:
 			br.lg.Panicf("Failed to on-board to join-block number: %d, block: %+v", br.joinBlockNumber, br.joinBlock)
@@ -711,15 +714,17 @@ func (br *BlockReplicator) deliverEntries(committedEntries []raftpb.Entry) bool 
 				continue
 			}
 
-			// we need to avoid re-committing a block that was created during membership config changes., but apply
-			// the 'ConfChangeV2' to the raft state machine. This may happen when the node joins an existing cluster.
-			// as on-boarding brings all the ledger from a remote peer, and then we start raft.
+			// we need to avoid re-committing a block that was created during membership config changes, but apply
+			// the 'ConfChangeV2' to the raft state machine. This may happen when:
+			// - existing nodes apply a config change but then restart from a snapshot prior to the config change;
+			// - a node joins an existing cluster, as on-boarding brings all the ledger from a remote peer, and then we start raft.
+			skipCommit := false
 			if committedEntries[i].Index <= br.appliedIndex {
-				br.lg.Debugf("Received config block with raft index (%d) <= applied index (%d), skip", committedEntries[i].Index, br.appliedIndex)
-				break
+				br.lg.Debugf("Received config block with raft index (%d) <= applied index (%d), skip commit", committedEntries[i].Index, br.appliedIndex)
+				skipCommit = true
 			}
 
-			if ccV2.Context != nil {
+			if !skipCommit && ccV2.Context != nil {
 				var block = &types.Block{}
 				if err := proto.Unmarshal(ccV2.Context, block); err != nil {
 					br.lg.Panicf("Error unmarshaling entry [#%d], entry: %+v, error: %s", i, committedEntries[i], err)
