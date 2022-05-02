@@ -249,9 +249,9 @@ func (c *Client) GetNodeConfig(e *types.GetNodeConfigQueryEnvelope) (*types.GetN
 	return res, err
 }
 
-func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*types.GetHistoricalDataResponseEnvelope, error) {
+func (c *Client) GetHistoricalData(urlPath string, e *types.GetHistoricalDataQueryEnvelope) (*types.GetHistoricalDataResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
-		constants.URLForGetHistoricalData(e.Payload.DbName, e.Payload.Key),
+		urlPath,
 		e.Payload.UserId,
 		e.Signature,
 	)
