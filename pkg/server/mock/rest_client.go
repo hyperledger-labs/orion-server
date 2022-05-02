@@ -8,6 +8,8 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -120,7 +122,7 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 	return res, err
 }
 
-func (c *Client) GetLastBlockStatus(e *types.GetBlockQueryEnvelope) (*types.GetBlockResponseEnvelope, error) {
+func (c *Client) GetLastBlock(e *types.GetLastBlockQueryEnvelope) (*types.GetBlockResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.GetLastBlockHeader,
 		e.Payload.UserId,
@@ -133,6 +135,46 @@ func (c *Client) GetLastBlockStatus(e *types.GetBlockQueryEnvelope) (*types.GetB
 	defer resp.Body.Close()
 
 	res := &types.GetBlockResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetBlockHeader(e *types.GetBlockQueryEnvelope, forceParam bool) (*types.GetBlockResponseEnvelope, error) {
+	path := constants.LedgerEndpoint + fmt.Sprintf("block/%d", e.Payload.BlockNumber)
+	if forceParam {
+		path = constants.LedgerEndpoint + fmt.Sprintf("block/%d?augmented=%t", e.Payload.BlockNumber, false)
+	}
+
+	resp, err := c.handleGetRequest(
+		path,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+path)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetBlockResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetAugmentedBlockHeader(e *types.GetBlockQueryEnvelope) (*types.GetAugmentedBlockHeaderResponseEnvelope, error) {
+	path := constants.URLForLedgerBlock(e.Payload.BlockNumber, true)
+	resp, err := c.handleGetRequest(
+		path,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+path)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetAugmentedBlockHeaderResponseEnvelope{}
 	err = json.NewDecoder(resp.Body).Decode(res)
 	return res, err
 }
@@ -206,11 +248,12 @@ func (c *Client) GetHistoricalData(e *types.GetHistoricalDataQueryEnvelope) (*ty
 }
 
 func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*http.Response, error) {
-	u := c.BaseURL.ResolveReference(
-		&url.URL{
-			Path: urlPath,
-		},
-	)
+	parsedURL, err := url.Parse(urlPath)
+	if err != nil {
+		return nil, err
+	}
+
+	u := c.BaseURL.ResolveReference(parsedURL)
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		return nil, err
@@ -228,6 +271,15 @@ func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*ht
 
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
+		ct := resp.Header.Get("Content-Type")
+		if ct != "application/json" {
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read response; status: %d", resp.StatusCode)
+			}
+			bodyString := string(bodyBytes)
+			return nil, errors.Errorf("status: %d; body: %s", resp.StatusCode, bodyString)
+		}
 		errorRes := new(ResponseErr)
 		err = json.NewDecoder(resp.Body).Decode(errorRes)
 		if err != nil {

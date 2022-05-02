@@ -140,19 +140,67 @@ func (s *Server) SetAdminSigner(newAdminSigner crypto.Signer) {
 	s.adminSigner = newAdminSigner
 }
 
-func (s *Server) QueryBlockStatus(t *testing.T) (*types.GetBlockResponseEnvelope, error) {
+func (s *Server) QueryLastBlockStatus(t *testing.T) (*types.GetBlockResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
 	}
 
-	query := &types.GetBlockQuery{
+	query := &types.GetLastBlockQuery{
 		UserId: s.AdminID(),
 	}
-	response, err := client.GetLastBlockStatus(
-		&types.GetBlockQueryEnvelope{
+	response, err := client.GetLastBlock(
+		&types.GetLastBlockQueryEnvelope{
 			Payload:   query,
 			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) QueryBlockHeader(t *testing.T, number uint64, forceParam bool, user string) (*types.GetBlockResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	userSigner, err := s.Signer(user)
+	require.NoError(t, err)
+
+	query := &types.GetBlockQuery{
+		UserId:      user,
+		BlockNumber: number,
+	}
+	response, err := client.GetBlockHeader(
+		&types.GetBlockQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, userSigner, query),
+		},
+		forceParam,
+	)
+
+	return response, err
+}
+
+func (s *Server) QueryAugmentedBlockHeader(t *testing.T, number uint64, user string) (*types.GetAugmentedBlockHeaderResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	userSigner, err := s.Signer(user)
+	require.NoError(t, err)
+
+	query := &types.GetBlockQuery{
+		UserId:      user,
+		BlockNumber: number,
+		Augmented:   true,
+	}
+	response, err := client.GetAugmentedBlockHeader(
+		&types.GetBlockQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, userSigner, query),
 		},
 	)
 

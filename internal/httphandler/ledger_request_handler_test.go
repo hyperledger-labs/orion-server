@@ -73,6 +73,40 @@ func TestBlockQuery(t *testing.T) {
 			augmentedHeader:    false,
 		},
 		{
+			name: "valid get header request with augmented=false",
+			expectedResponse: &types.GetBlockResponseEnvelope{
+				Response: &types.GetBlockResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					BlockHeader: &types.BlockHeader{
+						BaseHeader: &types.BlockHeaderBase{
+							Number: 1,
+						},
+					},
+				},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint + fmt.Sprintf("block/%d?augmented=%t", 1, false), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetBlockQuery{UserId: submittingUserName, BlockNumber: 1})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response proto.Message) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetBlockHeader", submittingUserName, uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+			augmentedHeader:    false,
+		},
+
+		{
 			name: "valid get augmented header request",
 			expectedResponse: &types.GetAugmentedBlockHeaderResponseEnvelope{
 				Response: &types.GetAugmentedBlockHeaderResponse{
