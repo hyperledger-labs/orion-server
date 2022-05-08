@@ -226,14 +226,14 @@ func (s *Server) QueryClusterStatus(t *testing.T) (*types.GetClusterStatusRespon
 	return response, err
 }
 
-func (s *Server) QueryConfig(t *testing.T) (*types.GetConfigResponseEnvelope, error) {
+func (s *Server) QueryConfig(t *testing.T, user string) (*types.GetConfigResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
 	}
 
 	query := &types.GetConfigQuery{
-		UserId: s.AdminID(),
+		UserId: user,
 	}
 	response, err := client.GetConfig(
 		&types.GetConfigQueryEnvelope{

@@ -69,7 +69,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	clusterLogger.Info("Snap list: ", snapList)
 
 	//get current cluster config
-	configEnv, err := c.Servers[leaderIndex].QueryConfig(t)
+	configEnv, err := c.Servers[leaderIndex].QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 
@@ -250,7 +250,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	clusterLogger.Info("Snap list: ", snapList)
 
 	//get current cluster config
-	configEnv, err := c.Servers[leaderRound1].QueryConfig(t)
+	configEnv, err := c.Servers[leaderRound1].QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 
