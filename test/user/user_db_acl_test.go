@@ -38,7 +38,6 @@ func getPorts(num uint32) (node uint32, peer uint32) {
 	return
 }
 
-// Scenario:
 func TestUserACLOnDatabase(t *testing.T) {
 	dir, err := ioutil.TempDir("", "int-test")
 	require.NoError(t, err)
