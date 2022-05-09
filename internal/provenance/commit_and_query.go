@@ -308,6 +308,7 @@ func (s *Store) getDeletedValuesWithoutLock(dbName, key string) ([]*types.ValueW
 	s.logger.Debugf("fetch all historical deleted values associated with the key [%s] in db [%s]", key, dbName)
 	cKey := constructCompositeKey(dbName, key)
 	p := cayley.StartPath(s.cayleyGraph, quad.String(cKey)).Out().Tag("deleted_value").In(quad.String(DELETES)).Back("deleted_value")
+	// p := cayley.StartPath(s.cayleyGraph, quad.String(cKey)).Out().In(quad.String(DELETES))
 
 	valueVertices, err := p.Iterate(context.Background()).AllValues(s.cayleyGraph)
 	if err != nil {
