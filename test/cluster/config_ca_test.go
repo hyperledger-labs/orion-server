@@ -61,7 +61,7 @@ func TestAddCA(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, certIntCA)
 
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -96,7 +96,7 @@ func TestAddCA(t *testing.T) {
 	}
 
 	//get current cluster config
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -115,7 +115,7 @@ func TestAddCA(t *testing.T) {
 	c.UpdateServersAdmin("david", davidKeyPath, davidCertPath)
 
 	//get current cluster config
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "david")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -144,7 +144,7 @@ func TestAddCA(t *testing.T) {
 	}
 
 	//get current cluster config
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "david")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -163,7 +163,7 @@ func TestAddCA(t *testing.T) {
 	c.UpdateServersAdmin("elijah", elijahKeyPath, elijahCertPath)
 
 	//get current cluster config
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "elijah")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -220,7 +220,7 @@ func TestInvalidCABrokenChain(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, certIntCA)
 
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -272,7 +272,7 @@ func TestInvalidCAs(t *testing.T) {
 	leaderServer := c.Servers[leaderIndex]
 
 	// add a bad ֹCA
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -295,7 +295,7 @@ func TestInvalidCAs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, certIntCA)
 
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -323,7 +323,7 @@ func TestInvalidCAs(t *testing.T) {
 	require.Contains(t, err.Error(), ": x509: ECDSA verification failure")
 
 	// update to empty CA
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -379,7 +379,7 @@ func TestRemoveCA(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, certIntCA)
 
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -398,7 +398,7 @@ func TestRemoveCA(t *testing.T) {
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
 	// try to remove the original CA
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()

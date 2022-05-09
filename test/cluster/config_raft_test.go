@@ -48,7 +48,7 @@ func TestUpdateRaft(t *testing.T) {
 	//	leaderServer := c.Servers[leaderIndex]
 
 	//get current cluster config
-	configEnv, err := c.Servers[leaderIndex].QueryConfig(t)
+	configEnv, err := c.Servers[leaderIndex].QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 
@@ -84,7 +84,7 @@ func TestUpdateRaft(t *testing.T) {
 		return newLeaderIndex >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	configEnv, err = c.Servers[newLeaderIndex].QueryConfig(t)
+	configEnv, err = c.Servers[newLeaderIndex].QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	raftConfig := configEnv.GetResponse().GetConfig().GetConsensusConfig().GetRaftConfig()

@@ -60,7 +60,7 @@ func TestAddNewAdmins(t *testing.T) {
 	}
 
 	//get current cluster config
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -88,7 +88,7 @@ func TestAddNewAdmins(t *testing.T) {
 	}
 
 	//get current cluster config
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -109,7 +109,7 @@ func TestAddNewAdmins(t *testing.T) {
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
 	//make sure alice and bob are in the admins list
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "alice")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	admins := configEnv.GetResponse().GetConfig().GetAdmins()
@@ -163,7 +163,7 @@ func TestAddNewAdminWithInvalidCertificate(t *testing.T) {
 	}
 
 	//get current cluster config
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -211,7 +211,7 @@ func TestDeleteAdmin(t *testing.T) {
 	leaderServer := c.Servers[leaderIndex]
 
 	//try to delete the only admin in the cluster
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -234,7 +234,7 @@ func TestDeleteAdmin(t *testing.T) {
 		},
 	}
 	//get current cluster config
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig = configEnv.GetResponse().GetConfig()
@@ -252,7 +252,7 @@ func TestDeleteAdmin(t *testing.T) {
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
 	//make sure alice in the admins list
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	admins := configEnv.GetResponse().GetConfig().GetAdmins()
@@ -277,7 +277,7 @@ func TestDeleteAdmin(t *testing.T) {
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
 	//make sure admin was deleted from admins list
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "alice")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	admins = configEnv.GetResponse().GetConfig().GetAdmins()
@@ -328,12 +328,8 @@ func TestChangeAdminCA(t *testing.T) {
 	require.NotNil(t, aliceCert)
 	decodedCert, _ := pem.Decode(aliceCert)
 
-	aliceSigner, err := c.GetSigner("alice")
-	require.NoError(t, err)
-	require.NotNil(t, aliceSigner)
-
 	//get current cluster config
-	configEnv, err := leaderServer.QueryConfig(t)
+	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -352,14 +348,94 @@ func TestChangeAdminCA(t *testing.T) {
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
 	//try to get config envelope with admin old signer
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
 	require.EqualError(t, err, "error while issuing /config/tx: signature verification failed")
 
 	//update admin signer
+	aliceSigner, err := c.GetSigner("alice")
+	require.NoError(t, err)
+	require.NotNil(t, aliceSigner)
 	leaderServer.SetAdminSigner(aliceSigner)
 
 	//get config envelope with new signer
-	configEnv, err = leaderServer.QueryConfig(t)
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
+	require.NoError(t, err)
+	require.NotNil(t, configEnv)
+}
+
+// Scenario:
+// - check that GetClusterConfig is only available to admin users
+// - alice is a regular user so access to ClusterConfig is denied
+// - adding alice to admins list => alice can get ClusterConfig
+func TestGetClusterConfigAccessibility(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(1)
+	setupConfig := &setup.Config{
+		NumberOfServers:     1,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
+			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+	leaderServer := c.Servers[leaderIndex]
+
+	// alice tries to get current cluster config
+	configEnv, err := leaderServer.QueryConfig(t, "alice")
+	require.EqualError(t, err, "error while issuing /config/tx: signature verification failed")
+	require.Nil(t, configEnv)
+
+	// admin successfully gets current cluster config
+	configEnv, err = leaderServer.QueryConfig(t, "admin")
+	require.NoError(t, err)
+	require.NotNil(t, configEnv)
+
+	// add alice to admins list
+	cert, _, err := c.GetUser("alice")
+	require.NoError(t, err)
+	require.NotNil(t, cert)
+	decodedCert, _ := pem.Decode(cert)
+	alice := []*types.Admin{
+		{
+			Id:          "alice",
+			Certificate: decodedCert.Bytes,
+		},
+	}
+
+	newConfig := configEnv.GetResponse().GetConfig()
+	newConfig.Admins = append(newConfig.Admins, alice...)
+
+	txID, rcpt, err := leaderServer.SetConfigTx(t, newConfig, configEnv.GetResponse().GetMetadata().GetVersion(), c.Servers[leaderIndex].AdminSigner(), "admin")
+	require.NoError(t, err)
+	require.NotNil(t, rcpt)
+	require.True(t, txID != "")
+	require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
+	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
+	t.Logf("tx submitted: %s, %+v", txID, rcpt)
+
+	aliceSigner, err := c.GetSigner("alice")
+	require.NoError(t, err)
+	require.NotNil(t, aliceSigner)
+	leaderServer.SetAdminSigner(aliceSigner)
+
+	//alice successfully gets current cluster config
+	configEnv, err = leaderServer.QueryConfig(t, "alice")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 }
