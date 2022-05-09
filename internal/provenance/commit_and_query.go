@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
-	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/cayleygraph/cayley"
 	"github.com/cayleygraph/cayley/graph"
 	"github.com/cayleygraph/quad"
+	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 )
 
@@ -153,7 +153,7 @@ func (s *Store) addWrites(tx *TxDataForProvenance, batch graph.BatchWriter) erro
 			// old version would not have been passed if it was deleted in the worldstate database already
 			// but we can find the old version from the provenance store even if it was deleted already
 			s.logger.Debug("fetching last deleted version of key [" + actualKey + "] from db [" + tx.DBName + "]")
-			lastVer, err := s.getLastDeletedVersion(tx.DBName, write.Key)
+			lastVer, err := s.getLastDeletedVersion(tx.DBName, actualKey)
 			if err != nil {
 				return err
 			}
