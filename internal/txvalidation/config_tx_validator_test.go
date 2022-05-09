@@ -730,26 +730,59 @@ func TestValidateNodeConfig(t *testing.T) {
 			name: "invalid: node IP address is empty",
 			nodes: []*types.NodeConfig{
 				{
-					Id:      "node1",
-					Address: "",
+					Id:          "node1",
+					Address:     "",
+					Port:        6060,
+					Certificate: nodeCert.Raw,
 				},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [node1] has an empty ip address",
+				ReasonIfInvalid: "the node [node1] has an empty host",
 			},
 		},
 		{
-			name: "invalid: node IP address is not valid",
+			name: "invalid: node address is not valid",
 			nodes: []*types.NodeConfig{
 				{
-					Id:      "node1",
-					Address: "127.0.0",
+					Id:          "node1",
+					Address:     "127/0/0/1",
+					Port:        6060,
+					Certificate: nodeCert.Raw,
 				},
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [node1] has an invalid ip address [127.0.0]",
+				ReasonIfInvalid: "the node [node1] has an invalid host [127/0/0/1]",
+			},
+		},
+		{
+			name: "invalid: node port is not valid",
+			nodes: []*types.NodeConfig{
+				{
+					Id:          "node1",
+					Address:     "127.0.0.1",
+					Port:        66000,
+					Certificate: nodeCert.Raw,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the node [node1] has an invalid port number [66000]",
+			},
+		},
+		{
+			name: "invalid: node port is missing",
+			nodes: []*types.NodeConfig{
+				{
+					Id:          "node1",
+					Address:     "127.0.0.1",
+					Certificate: nodeCert.Raw,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "the node [node1] has an invalid port number [0]",
 			},
 		},
 		{
@@ -810,7 +843,21 @@ func TestValidateNodeConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "valid",
+			name: "valid host name",
+			nodes: []*types.NodeConfig{
+				{
+					Id:          "node1",
+					Address:     "example.com",
+					Port:        6090,
+					Certificate: nodeCert.Raw,
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag: types.Flag_VALID,
+			},
+		},
+		{
+			name: "valid IP",
 			nodes: []*types.NodeConfig{
 				{
 					Id:          "node1",
