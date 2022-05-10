@@ -161,6 +161,8 @@ func (p *ledgerRequestHandler) pathQuery(response http.ResponseWriter, request *
 			status = http.StatusForbidden
 		case *errors.NotFoundErr:
 			status = http.StatusNotFound
+		case *errors.BadRequestError:
+			status = http.StatusBadRequest
 		default:
 			status = http.StatusInternalServerError
 		}
