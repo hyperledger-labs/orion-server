@@ -27,7 +27,20 @@ import (
 // - Stop the leader, wait for new leader,
 // - Stop the leader, remaining node has no leader.
 func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
-	env := createClusterEnv(t, 3, nil, "info")
+	var countMutex sync.Mutex
+	var campaignLogMsgCount int
+	campaignLogMsgHook := func(entry zapcore.Entry) error {
+		if strings.Contains(entry.Message, "Starting to campaign every") ||
+			strings.Contains(entry.Message,"This node was selected to run a leader election campaign on the new cluster") {
+			countMutex.Lock()
+			defer countMutex.Unlock()
+
+			campaignLogMsgCount++
+		}
+		return nil
+	}
+
+	env := createClusterEnv(t, 3, nil, "info", zap.Hooks(campaignLogMsgHook))
 	defer os.RemoveAll(env.testDir)
 	require.Equal(t, 3, len(env.nodes))
 
@@ -40,9 +53,14 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 	// wait for an agreed leader
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader() }, 30*time.Second, 100*time.Millisecond)
 	assert.Eventually(t, func() bool { return env.SymmetricConnectivity() }, 30*time.Second, 100*time.Millisecond)
+	assert.Eventually(t, func() bool {
+		countMutex.Lock()
+		defer countMutex.Unlock()
+		return campaignLogMsgCount == 2 }, 30*time.Second, 100*time.Millisecond)
 	leaderIndex1 := env.FindLeaderIndex()
 	followerIndex1 := (leaderIndex1 + 1) % 3
 	followerIndex2 := (leaderIndex1 + 1) % 3
+
 
 	//check the followers redirect to the leader
 	expectedLeaderErr := &interrors.NotLeaderError{
