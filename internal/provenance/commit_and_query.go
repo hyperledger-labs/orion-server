@@ -257,7 +257,7 @@ func (s *Store) GetValueAt(dbName, key string, version *types.Version) (*types.V
 }
 
 // GetValuesReadByUser returns all values read by a given user
-func (s *Store) GetValuesReadByUser(userID string) ([]*types.KVWithMetadata, error) {
+func (s *Store) GetValuesReadByUser(userID string) (map[string]*types.KVsWithMetadata, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -270,7 +270,7 @@ func (s *Store) GetValuesReadByUser(userID string) ([]*types.KVWithMetadata, err
 }
 
 // GetValuesWrittenByUser returns all values written by a given user
-func (s *Store) GetValuesWrittenByUser(userID string) ([]*types.KVWithMetadata, error) {
+func (s *Store) GetValuesWrittenByUser(userID string) (map[string]*types.KVsWithMetadata, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -283,7 +283,7 @@ func (s *Store) GetValuesWrittenByUser(userID string) ([]*types.KVWithMetadata, 
 }
 
 // GetValuesDeletedByUser returns all values deleted by a given user
-func (s *Store) GetValuesDeletedByUser(userID string) ([]*types.KVWithMetadata, error) {
+func (s *Store) GetValuesDeletedByUser(userID string) (map[string]*types.KVsWithMetadata, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
@@ -489,11 +489,11 @@ func (s *Store) getValueVertex(dbName, key string, version *types.Version) (quad
 	return p.Iterate(context.Background()).FirstValue(s.cayleyGraph)
 }
 
-func (s *Store) outEdgesFrom(verticies []string, predicate string) ([]*types.KVWithMetadata, error) {
+func (s *Store) outEdgesFrom(verticies []string, predicate string) (map[string]*types.KVsWithMetadata, error) {
 	// TODO: convert the array to map to include counts for each value. For now, the returned array
 	// might contain duplicate entries if more than two vertices connects to the same vertex with an
 	// edge for a given predicate
-	var values []*types.KVWithMetadata
+	values := map[string]*types.KVsWithMetadata{}
 
 	for _, vertex := range verticies {
 		s.logger.Debugf("finding all out edges from vertex [%s] with predicate [%s]", vertex, predicate)
@@ -504,30 +504,38 @@ func (s *Store) outEdgesFrom(verticies []string, predicate string) ([]*types.KVW
 			return nil, err
 		}
 
-		kvs, err := verticesToKVs(vertices)
+		DBsKV, err := verticesToKVs(vertices)
 		if err != nil {
 			return nil, err
 		}
-		values = append(values, kvs...)
+		for db, KVs := range DBsKV {
+			if _, ok := values[db]; !ok {
+				values[db] = &types.KVsWithMetadata{}
+			}
+			values[db].KVs = append(values[db].KVs, KVs.KVs...)
+		}
 	}
 
 	return values, nil
 }
 
-func verticesToKVs(qvs []quad.Value) ([]*types.KVWithMetadata, error) {
-	var KVs []*types.KVWithMetadata
+func verticesToKVs(qvs []quad.Value) (map[string]*types.KVsWithMetadata, error) {
+	DBsKV := map[string]*types.KVsWithMetadata{}
+	var dbName string
 
 	for _, qv := range qvs {
 		kv := &types.KVWithMetadata{}
 		if err := json.Unmarshal([]byte(quad.ToString(qv)), kv); err != nil {
 			return nil, err
 		}
-		_, kv.Key = splitCompositeKey(kv.Key)
-
-		KVs = append(KVs, kv)
+		dbName, kv.Key = splitCompositeKey(kv.Key)
+		if _, ok := DBsKV[dbName]; !ok {
+			DBsKV[dbName] = &types.KVsWithMetadata{}
+		}
+		DBsKV[dbName].KVs = append(DBsKV[dbName].KVs, kv)
 	}
 
-	return KVs, nil
+	return DBsKV, nil
 }
 
 func verticesToValues(qvs []quad.Value) ([]*types.ValueWithMetadata, error) {

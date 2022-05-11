@@ -1695,20 +1695,22 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 			},
 			query: func(s *provenance.Store, _ string) ([]*types.ValueWithMetadata, error) {
-				kvs, err := s.GetValuesReadByUser("user1")
+				dbskvs, err := s.GetValuesReadByUser("user1")
 				if err != nil {
 					return nil, err
 				}
 
 				var values []*types.ValueWithMetadata
-				for _, kv := range kvs {
-					values = append(
-						values,
-						&types.ValueWithMetadata{
-							Value:    kv.Value,
-							Metadata: kv.Metadata,
-						},
-					)
+				for _, kvs := range dbskvs {
+					for _, kv := range kvs.KVs {
+						values = append(
+							values,
+							&types.ValueWithMetadata{
+								Value:    kv.Value,
+								Metadata: kv.Metadata,
+							},
+						)
+					}
 				}
 
 				return values, nil
@@ -1806,20 +1808,22 @@ func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 				},
 			},
 			query: func(s *provenance.Store, _ string) ([]*types.ValueWithMetadata, error) {
-				kvs, err := s.GetValuesReadByUser("user1")
+				dbskvs, err := s.GetValuesReadByUser("user1")
 				if err != nil {
 					return nil, err
 				}
 
 				var values []*types.ValueWithMetadata
-				for _, kv := range kvs {
-					values = append(
-						values,
-						&types.ValueWithMetadata{
-							Value:    kv.Value,
-							Metadata: kv.Metadata,
-						},
-					)
+				for _, kvs := range dbskvs {
+					for _, kv := range kvs.KVs {
+						values = append(
+							values,
+							&types.ValueWithMetadata{
+								Value:    kv.Value,
+								Metadata: kv.Metadata,
+							},
+						)
+					}
 				}
 
 				return values, nil
