@@ -27,7 +27,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -522,7 +521,21 @@ func TestGetPath(t *testing.T) {
 			user:           "testUser",
 		},
 		{
-			name:           "path 17 2 wrong user",
+			name:           "path 6 6",
+			startNumber:    6,
+			endNumber:      6,
+			expectedBlocks: []*types.BlockHeader{env.blocks[5]},
+			user:           "testUser",
+		},
+		{
+			name:           "path 1 1",
+			startNumber:    1,
+			endNumber:      1,
+			expectedBlocks: []*types.BlockHeader{env.blocks[0]},
+			user:           "testUser",
+		},
+		{
+			name:           "error: path 17 2 wrong user",
 			startNumber:    2,
 			endNumber:      17,
 			expectedBlocks: nil,
@@ -530,20 +543,36 @@ func TestGetPath(t *testing.T) {
 			expectedErr:    &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the ledger"},
 		},
 		{
-			name:           "path 2 17 wrong direction",
+			name:           "error: path 2 17 wrong direction",
 			startNumber:    17,
 			endNumber:      2,
 			expectedBlocks: nil,
 			user:           "testUser",
-			expectedErr:    errors.New("can't find path from smaller block 2 to bigger 17"),
+			expectedErr:    &interrors.BadRequestError{ErrMsg: "can't find path from start block 17 to end block 2, start must be <= end"},
 		},
 		{
-			name:           "path 2 117 end block not in ledger",
+			name:           "error: path 2 117 end block not in ledger",
 			startNumber:    2,
 			endNumber:      117,
 			expectedBlocks: nil,
 			user:           "testUser",
 			expectedErr:    &interrors.NotFoundErr{Message: "can't find path in blocks skip list between 117 2: block not found: 117"},
+		},
+		{
+			name:           "error: path 115 117 start block not in ledger",
+			startNumber:    2,
+			endNumber:      117,
+			expectedBlocks: nil,
+			user:           "testUser",
+			expectedErr:    &interrors.NotFoundErr{Message: "can't find path in blocks skip list between 117 2: block not found: 117"},
+		},
+		{
+			name:           "error: path 0 6 start block out of range",
+			startNumber:    0,
+			endNumber:      6,
+			expectedBlocks: nil,
+			user:           "testUser",
+			expectedErr:    &interrors.BadRequestError{ErrMsg: "start block number must be >=1"},
 		},
 	}
 

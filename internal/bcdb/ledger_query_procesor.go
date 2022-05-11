@@ -1,11 +1,10 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package bcdb
 
 import (
 	"fmt"
-
-	"github.com/hyperledger-labs/orion-server/pkg/state"
 
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
@@ -15,6 +14,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 )
@@ -87,8 +87,12 @@ func (p *ledgerQueryProcessor) getAugmentedBlockHeader(userId string, blockNum u
 }
 
 func (p *ledgerQueryProcessor) getPath(userId string, startBlockIdx, endBlockIdx uint64) (*types.GetLedgerPathResponse, error) {
+	if startBlockIdx < 1 {
+		return nil, &interrors.BadRequestError{ErrMsg: "start block number must be >=1"}
+	}
+
 	if endBlockIdx < startBlockIdx {
-		return nil, errors.Errorf("can't find path from smaller block %d to bigger %d", endBlockIdx, startBlockIdx)
+		return nil, &interrors.BadRequestError{ErrMsg: fmt.Sprintf("can't find path from start block %d to end block %d, start must be <= end", startBlockIdx, endBlockIdx)}
 	}
 
 	hasAccess, err := p.identityQuerier.HasLedgerAccess(userId)
@@ -224,6 +228,9 @@ func (p *ledgerQueryProcessor) calculateProof(block *types.Block, txIdx uint64) 
 func (p *ledgerQueryProcessor) findPath(endBlock *types.BlockHeader, startIndex uint64) ([]*types.BlockHeader, error) {
 	headers := make([]*types.BlockHeader, 0)
 	headers = append(headers, endBlock)
+	if endBlock.GetBaseHeader().GetNumber() == startIndex {
+		return headers, nil
+	}
 	for currentBlock := endBlock; currentBlock.GetBaseHeader().GetNumber() > startIndex; {
 		blockSkipIndexes := blockstore.CalculateSkipListLinks(currentBlock.GetBaseHeader().GetNumber())
 		for i := len(blockSkipIndexes) - 1; i >= 0; i-- {
