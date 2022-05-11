@@ -183,6 +183,29 @@ func (s *Server) QueryBlockHeader(t *testing.T, number uint64, forceParam bool, 
 	return response, err
 }
 
+func (s *Server) QueryLedgerPath(t *testing.T, startNum, endNum uint64, user string) (*types.GetLedgerPathResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	userSigner, err := s.Signer(user)
+	require.NoError(t, err)
+
+	query := &types.GetLedgerPathQuery{
+		UserId:           user,
+		StartBlockNumber: startNum,
+		EndBlockNumber:   endNum,
+	}
+
+	response, err := client.GetLedgerPath(&types.GetLedgerPathQueryEnvelope{
+		Payload:   query,
+		Signature: testutils.SignatureFromQuery(t, userSigner, query),
+	})
+
+	return response, err
+}
+
 func (s *Server) QueryAugmentedBlockHeader(t *testing.T, number uint64, user string) (*types.GetAugmentedBlockHeaderResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {

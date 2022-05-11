@@ -112,7 +112,9 @@ type DB interface {
 	// GetDataProof returns hashes path from value to root in merkle-patricia trie
 	GetDataProof(userID string, blockNum uint64, dbname string, key string, deleted bool) (*types.GetDataProofResponseEnvelope, error)
 
-	// GetLedgerPath returns list of blocks that forms shortest path in skip list chain in ledger
+	// GetLedgerPath returns list of blocks that forms the shortest path in the skip list chain of the ledger.
+	// Parameter 'start' is the block number of the earlier block, 'end' is the block number of the last block. That is
+	// 'start'<='end'. The returned path is the shortest path from the 'end' block to the 'start' block.
 	GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
 
 	// GetValues returns all values associated with a given key
