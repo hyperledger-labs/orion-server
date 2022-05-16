@@ -122,6 +122,24 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 	return res, err
 }
 
+func (c *Client) GetTxProof(e *types.GetTxProofQueryEnvelope) (*types.GetTxProofResponseEnvelope, error) {
+	path := constants.URLTxProof(e.Payload.BlockNumber, e.Payload.TxIndex)
+	resp, err := c.handleGetRequest(
+		path,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while issuing %s", path)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetTxProofResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetLastConfigBlockStatus(e *types.GeConfigBlockQueryEnvelope) (*types.GetConfigBlockResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.GetLastConfigBlock,

@@ -243,7 +243,7 @@ func TestAddFrom1To3(t *testing.T) {
 
 	t.Logf("submit data tx and verify it is received by all 3 nodes")
 
-	txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, "alice", []byte("alice-data"))
+	txID, rcpt, _, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, "alice", []byte("alice-data"))
 	require.NoError(t, err)
 	require.NotNil(t, rcpt)
 	require.True(t, txID != "")

@@ -104,7 +104,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 	keys := createKeys(100)
 	data := make([]byte, 1024)
 	for _, key := range keys {
-		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
+		txID, rcpt, _, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
 		clusterLogger.Info("key-", key)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
@@ -138,7 +138,7 @@ func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
 
 	//submit txs with data size > SnapshotIntervalSize
 	for _, key := range keys {
-		txID, rcpt, err := c.Servers[newLeaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
+		txID, rcpt, _, err := c.Servers[newLeaderIndex].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
 		clusterLogger.Info("key-", key+100)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
@@ -285,7 +285,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	keys := createKeys(100)
 	data := make([]byte, 1024)
 	for _, key := range keys {
-		txID, rcpt, err = c.Servers[leaderRound1].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
+		txID, rcpt, _, err = c.Servers[leaderRound1].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key), data)
 		clusterLogger.Info("key-", key)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
@@ -342,7 +342,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 
 	//only one server is active now => no majority to pick leader
 	require.Eventually(t, func() bool {
-		_, _, err = c.Servers[activeServer].WriteDataTx(t, worldstate.DefaultDBName, "bob", data)
+		_, _, _, err = c.Servers[activeServer].WriteDataTx(t, worldstate.DefaultDBName, "bob", data)
 		return err != nil && err.Error() == "failed to submit transaction, server returned: status: 503 Service Unavailable, message: Cluster leader unavailable"
 	}, 60*time.Second, 100*time.Millisecond)
 
@@ -364,7 +364,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	}
 
 	for _, key := range keys {
-		txID, rcpt, err = c.Servers[leaderRound3].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
+		txID, rcpt, _, err = c.Servers[leaderRound3].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+100), data)
 		clusterLogger.Info("key-", key+100)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
@@ -400,7 +400,7 @@ func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader 
 	clusterLogger.Info("Started node ", follower2Round2, ", leader index is: ", leaderRound4, "; all 3 nodes are up")
 
 	for _, key := range keys {
-		txID, rcpt, err = c.Servers[leaderRound4].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+200), data)
+		txID, rcpt, _, err = c.Servers[leaderRound4].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(key+200), data)
 		clusterLogger.Info("key-", key+200)
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
