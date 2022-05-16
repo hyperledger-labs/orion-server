@@ -38,13 +38,14 @@ type Cluster struct {
 
 // Config holds configuration detail needed to instantiate a cluster
 type Config struct {
-	NumberOfServers     int
-	TestDirAbsolutePath string
-	BDBBinaryPath       string
-	CmdTimeout          time.Duration
-	BaseNodePort        uint32
-	BasePeerPort        uint32
-	CheckRedirectFunc   func(req *http.Request, via []*http.Request) error // rest client checks redirects
+	NumberOfServers       int
+	TestDirAbsolutePath   string
+	BDBBinaryPath         string
+	CmdTimeout            time.Duration
+	BaseNodePort          uint32
+	BasePeerPort          uint32
+	CheckRedirectFunc     func(req *http.Request, via []*http.Request) error // rest client checks redirects
+	BlockCreationOverride *config.BlockCreationConf
 }
 
 // NewCluster creates a new cluster environment for the blockchain database
@@ -102,7 +103,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		return nil, err
 	}
 
-	if err := cluster.createConfigFile(); err != nil {
+	if err := cluster.createConfigFile(conf.BlockCreationOverride); err != nil {
 		return nil, err
 	}
 
@@ -490,9 +491,9 @@ func (c *Cluster) GetLogger() *logger.SugarLogger {
 	return c.logger
 }
 
-func (c *Cluster) createConfigFile() error {
+func (c *Cluster) createConfigFile(blockCreationOverride *config.BlockCreationConf) error {
 	for _, s := range c.Servers {
-		if err := s.CreateConfigFile(); err != nil {
+		if err := s.CreateConfigFile(blockCreationOverride); err != nil {
 			return err
 		}
 	}
