@@ -466,6 +466,7 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	}
 
 	values, err := env.client.GetHistoricalData(
+		constants.URLForGetHistoricalData(worldstate.DefaultDBName, "foo"),
 		&types.GetHistoricalDataQueryEnvelope{
 			Payload:   provenanceQuery,
 			Signature: testutils.SignatureFromQuery(t, env.adminSigner, provenanceQuery),

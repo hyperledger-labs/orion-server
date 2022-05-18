@@ -6,6 +6,7 @@ package setup
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -286,6 +287,149 @@ func (s *Server) QueryData(t *testing.T, db, key string, userID string) (*types.
 	}
 	response, err := client.GetData(
 		&types.GetDataQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetAllValues(t *testing.T, db, key, userID string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetHistoricalDataQuery{
+		UserId: userID,
+		DbName: db,
+		Key:    key,
+	}
+	response, err := client.GetHistoricalData(
+		constants.URLForGetHistoricalData(db, key),
+		&types.GetHistoricalDataQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetValueAt(t *testing.T, db, key, userID string, ver *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetHistoricalDataQuery{
+		UserId:  userID,
+		DbName:  db,
+		Key:     key,
+		Version: ver,
+	}
+	fmt.Println(constants.URLForGetHistoricalDataAt(db, key, ver))
+	response, err := client.GetHistoricalData(
+		constants.URLForGetHistoricalDataAt(db, key, ver),
+		&types.GetHistoricalDataQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetPreviousValues(t *testing.T, db, key, userID string, ver *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetHistoricalDataQuery{
+		UserId:    userID,
+		DbName:    db,
+		Key:       key,
+		Version:   ver,
+		Direction: "previous",
+	}
+	response, err := client.GetHistoricalData(
+		constants.URLForGetPreviousHistoricalData(db, key, ver),
+		&types.GetHistoricalDataQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetNextValues(t *testing.T, db, key, userID string, ver *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetHistoricalDataQuery{
+		UserId:    userID,
+		DbName:    db,
+		Key:       key,
+		Version:   ver,
+		Direction: "next",
+	}
+	response, err := client.GetHistoricalData(
+		constants.URLForGetNextHistoricalData(db, key, ver),
+		&types.GetHistoricalDataQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetMostRecentValueAtOrBelow(t *testing.T, db, key, userID string, ver *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetHistoricalDataQuery{
+		UserId:     userID,
+		DbName:     db,
+		Key:        key,
+		Version:    ver,
+		MostRecent: true,
+	}
+	response, err := client.GetHistoricalData(
+		constants.URLForGetHistoricalDataAtOrBelow(db, key, ver),
+		&types.GetHistoricalDataQueryEnvelope{
 			Payload:   query,
 			Signature: testutils.SignatureFromQuery(t, signer, query),
 		},
