@@ -65,7 +65,7 @@ func TestDataTx(t *testing.T) {
 	s := c.Servers[0]
 
 	// creating two databases -- db1 and db2
-	setup.CreateDatabases(t, s, []string{"db1", "db2"})
+	setup.CreateDatabases(t, s, []string{"db1", "db2"}, nil)
 
 	// creating two users -- alice and bob
 	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, c.GetUserCertDir(), "alice")

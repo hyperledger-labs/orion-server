@@ -403,6 +403,44 @@ func (c *Client) GetTxIDsSubmitedBy(urlPath string, e *types.GetTxIDsSubmittedBy
 	return res, err
 }
 
+func (c *Client) ExecuteJSONQuery(urlPath string, e *types.DataJSONQuery, signature []byte) (*types.DataQueryResponseEnvelope, error) {
+	marshaledJSONQuery, err := json.Marshal(e.Query)
+	if err != nil {
+		return nil, errors.WithMessage(err, "check whether the query string passed is in JSON format")
+	}
+
+	resp, err := c.handlePostRequest(
+		urlPath,
+		e.UserId,
+		marshaledJSONQuery,
+		signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.DataQueryResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) handlePostRequest(urlPath string, userID string, postData, signature []byte) (*http.Response, error) {
+	parsedURL, err := url.Parse(urlPath)
+	if err != nil {
+		return nil, err
+	}
+
+	u := c.BaseURL.ResolveReference(parsedURL)
+	req, err := http.NewRequest(http.MethodPost, u.String(), bytes.NewReader(postData))
+	if err != nil {
+		return nil, err
+	}
+
+	return c.handleGetPostRequest(req, userID, signature)
+}
+
 func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*http.Response, error) {
 	parsedURL, err := url.Parse(urlPath)
 	if err != nil {
@@ -415,6 +453,11 @@ func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*ht
 		return nil, err
 	}
 
+	return c.handleGetPostRequest(req, userID, signature)
+
+}
+
+func (c *Client) handleGetPostRequest(req *http.Request, userID string, signature []byte) (*http.Response, error) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.UserAgent)
 	req.Header.Set(constants.UserHeader, userID)
