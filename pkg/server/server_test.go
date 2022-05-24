@@ -120,6 +120,21 @@ func (env *serverTestEnv) getNodeSigVerifier(t *testing.T) (*crypto.Verifier, er
 	return crypto.NewVerifier(cfg.GetResponse().GetNodeConfig().GetCertificate())
 }
 
+func (env *serverTestEnv) getConfigResponse(t *testing.T) *types.GetConfigResponse {
+	configQuery := &types.GetConfigQuery{
+		UserId: "admin",
+	}
+	cfg, err := env.client.GetConfig(&types.GetConfigQueryEnvelope{
+		Payload:   configQuery,
+		Signature: testutils.SignatureFromQuery(t, env.adminSigner, configQuery),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+	require.NotNil(t, cfg.Response)
+
+	return cfg.Response
+}
+
 func newServerTestEnv(t *testing.T, serverTLS bool, clientTLS bool) *serverTestEnv {
 	tempDir, err := ioutil.TempDir("/tmp", "serverTest")
 	require.NoError(t, err)
@@ -662,8 +677,41 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 }
 
 func TestServerWithConfigRequest(t *testing.T) {
-	t.Skip("TODO")
-	// TODO cover config transactions and requests, see: https://github.com/hyperledger-labs/orion-server/issues/306
+	env := newServerTestEnv(t, false, false)
+	defer env.cleanup(t)
+
+	configRes := env.getConfigResponse(t)
+	newConfig := configRes.Config
+
+	//update raft parameters
+	newConfig.ConsensusConfig.RaftConfig.TickInterval = "300ms"
+	newConfig.ConsensusConfig.RaftConfig.HeartbeatTicks = 3
+	newConfig.ConsensusConfig.RaftConfig.ElectionTicks = 30
+
+	newConfigTx := &types.ConfigTx{
+		UserId:               "admin",
+		TxId:                 uuid.New().String(),
+		ReadOldConfigVersion: configRes.Metadata.Version,
+		NewConfig:            newConfig,
+	}
+
+	httpResp, err := env.client.SubmitTransaction(
+		constants.GetConfig,
+		&types.ConfigTxEnvelope{
+			Payload:   newConfigTx,
+			Signature: testutils.SignatureFromTx(t, env.adminSigner, newConfigTx),
+		},
+		30*time.Second, // sync
+	)
+	require.NoError(t, err)
+	require.True(t, httpResp.StatusCode == http.StatusOK)
+	httpResp.Body.Close()
+	require.NoError(t, err)
+
+	configRes = env.getConfigResponse(t)
+	require.Equal(t, "300ms", configRes.Config.ConsensusConfig.RaftConfig.TickInterval)
+	require.Equal(t, uint32(0x3), configRes.Config.ConsensusConfig.RaftConfig.HeartbeatTicks)
+	require.Equal(t, uint32(0x1e), configRes.Config.ConsensusConfig.RaftConfig.ElectionTicks)
 }
 
 func TestServerWithFailureScenarios(t *testing.T) {
