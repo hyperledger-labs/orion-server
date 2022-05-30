@@ -381,10 +381,14 @@ func TestGetDataReadBy(t *testing.T) {
 			Header: &types.ResponseHeader{
 				NodeId: "testNodeID",
 			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
+			DBKeyValues: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+						},
+					},
 				},
 			},
 		},
@@ -450,10 +454,14 @@ func TestGetDataWrittenBy(t *testing.T) {
 			Header: &types.ResponseHeader{
 				NodeId: "testNodeID",
 			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
+			DBKeyValues: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+						},
+					},
 				},
 			},
 		},
@@ -519,10 +527,14 @@ func TestGetDataDeletedBy(t *testing.T) {
 			Header: &types.ResponseHeader{
 				NodeId: "testNodeID",
 			},
-			KVs: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
+			DBKeyValues: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+						},
+					},
 				},
 			},
 		},

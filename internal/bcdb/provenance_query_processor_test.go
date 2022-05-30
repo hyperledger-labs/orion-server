@@ -107,6 +107,24 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 			IsValid: false,
 			TxID:    "tx10",
 		},
+		{
+			IsValid: true,
+			DBName:  "db2",
+			UserID:  "user1",
+			TxID:    "tx1-db2",
+			Writes: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	block2TxsData := []*provenance.TxDataForProvenance{
@@ -115,6 +133,39 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 			DBName:  "db1",
 			UserID:  "user1",
 			TxID:    "tx3",
+			Reads: []*provenance.KeyWithVersion{
+				{
+					Key: "key1",
+					Version: &types.Version{
+						BlockNum: 1,
+						TxNum:    0,
+					},
+				},
+			},
+			Writes: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+			OldVersionOfWrites: map[string]*types.Version{
+				"key1": {
+					BlockNum: 1,
+					TxNum:    0,
+				},
+			},
+		},
+		{
+			IsValid: true,
+			DBName:  "db2",
+			UserID:  "user1",
+			TxID:    "tx3-db2",
 			Reads: []*provenance.KeyWithVersion{
 				{
 					Key: "key1",
@@ -225,6 +276,18 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 				},
 			},
 		},
+		{
+			IsValid: true,
+			DBName:  "db2",
+			UserID:  "user2",
+			TxID:    "tx50",
+			Deletes: map[string]*types.Version{
+				"key1": {
+					BlockNum: 2,
+					TxNum:    0,
+				},
+			},
+		},
 	}
 
 	block5TxsData := []*provenance.TxDataForProvenance{
@@ -239,16 +302,10 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 					Value: []byte("value5"),
 					Metadata: &types.Metadata{
 						Version: &types.Version{
-							BlockNum: 4,
+							BlockNum: 5,
 							TxNum:    0,
 						},
 					},
-				},
-			},
-			OldVersionOfWrites: map[string]*types.Version{
-				"key1": {
-					BlockNum: 3,
-					TxNum:    0,
 				},
 			},
 		},
@@ -262,7 +319,7 @@ func setupProvenanceStore(t *testing.T, s *provenance.Store) {
 			TxID:    "tx50",
 			Deletes: map[string]*types.Version{
 				"key1": {
-					BlockNum: 4,
+					BlockNum: 5,
 					TxNum:    0,
 				},
 			},
@@ -326,7 +383,7 @@ func TestGetValues(t *testing.T) {
 						Value: []byte("value5"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
-								BlockNum: 4,
+								BlockNum: 5,
 								TxNum:    0,
 							},
 						},
@@ -384,7 +441,7 @@ func TestGetDeletedValues(t *testing.T) {
 						Value: []byte("value5"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
-								BlockNum: 4,
+								BlockNum: 5,
 								TxNum:    0,
 							},
 						},
@@ -512,7 +569,7 @@ func TestGetNextValues(t *testing.T) {
 						Value: []byte("value5"),
 						Metadata: &types.Metadata{
 							Version: &types.Version{
-								BlockNum: 4,
+								BlockNum: 5,
 								TxNum:    0,
 							},
 						},
@@ -757,14 +814,32 @@ func TestGetValuesReadByUser(t *testing.T) {
 			name: "fetch values read by user1",
 			user: "user1",
 			expectedPayload: &types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    0,
+				DBKeyValues: map[string]*types.KVsWithMetadata{
+					"db1": {
+						KVs: []*types.KVWithMetadata{
+							{
+								Key:   "key1",
+								Value: []byte("value1"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    0,
+									},
+								},
+							},
+						},
+					},
+					"db2": {
+						KVs: []*types.KVWithMetadata{
+							{
+								Key:   "key1",
+								Value: []byte("value1"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    0,
+									},
+								},
 							},
 						},
 					},
@@ -775,7 +850,7 @@ func TestGetValuesReadByUser(t *testing.T) {
 			name: "fetch values read by user5",
 			user: "user5",
 			expectedPayload: &types.GetDataProvenanceResponse{
-				KVs: nil,
+				DBKeyValues: nil,
 			},
 		},
 	}
@@ -785,7 +860,10 @@ func TestGetValuesReadByUser(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, envelope)
-		require.Equal(t, tt.expectedPayload, envelope)
+		require.Len(t, envelope.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
+		for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
+			require.ElementsMatch(t, expectedKVs.KVs, envelope.DBKeyValues[dbName].KVs)
+		}
 	}
 }
 
@@ -804,40 +882,68 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 			name: "fetch values read by user1",
 			user: "user1",
 			expectedPayload: &types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    0,
-							},
-						},
-					},
-					{
-						Key:   "key2",
-						Value: []byte("value1"),
-						Metadata: &types.Metadata{
-							AccessControl: &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"user1": true,
-									"user2": true,
+				DBKeyValues: map[string]*types.KVsWithMetadata{
+					"db1": {
+						KVs: []*types.KVWithMetadata{
+							{
+								Key:   "key1",
+								Value: []byte("value1"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    0,
+									},
 								},
 							},
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    1,
+							{
+								Key:   "key2",
+								Value: []byte("value1"),
+								Metadata: &types.Metadata{
+									AccessControl: &types.AccessControl{
+										ReadWriteUsers: map[string]bool{
+											"user1": true,
+											"user2": true,
+										},
+									},
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    1,
+									},
+								},
+							},
+							{
+								Key:   "key1",
+								Value: []byte("value2"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 2,
+										TxNum:    0,
+									},
+								},
 							},
 						},
 					},
-					{
-						Key:   "key1",
-						Value: []byte("value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 2,
-								TxNum:    0,
+					"db2": {
+						KVs: []*types.KVWithMetadata{
+							{
+								Key:   "key1",
+								Value: []byte("value1"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 1,
+										TxNum:    0,
+									},
+								},
+							},
+							{
+								Key:   "key1",
+								Value: []byte("value2"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 2,
+										TxNum:    0,
+									},
+								},
 							},
 						},
 					},
@@ -848,7 +954,7 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 			name: "fetch values read by user5",
 			user: "user5",
 			expectedPayload: &types.GetDataProvenanceResponse{
-				KVs: nil,
+				DBKeyValues: nil,
 			},
 		},
 	}
@@ -858,7 +964,10 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, payload)
-		require.Equal(t, tt.expectedPayload, payload)
+		require.Len(t, payload.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
+		for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
+			require.ElementsMatch(t, expectedKVs.KVs, payload.DBKeyValues[dbName].KVs)
+		}
 	}
 }
 
@@ -877,24 +986,42 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 			name: "fetch values deleted by user1",
 			user: "user2",
 			expectedPayload: &types.GetDataProvenanceResponse{
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("value4"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 3,
-								TxNum:    0,
+				DBKeyValues: map[string]*types.KVsWithMetadata{
+					"db1": {
+						KVs: []*types.KVWithMetadata{
+							{
+								Key:   "key1",
+								Value: []byte("value4"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 3,
+										TxNum:    0,
+									},
+								},
+							},
+							{
+								Key:   "key1",
+								Value: []byte("value5"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 5,
+										TxNum:    0,
+									},
+								},
 							},
 						},
 					},
-					{
-						Key:   "key1",
-						Value: []byte("value5"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 4,
-								TxNum:    0,
+					"db2": {
+						KVs: []*types.KVWithMetadata{
+							{
+								Key:   "key1",
+								Value: []byte("value2"),
+								Metadata: &types.Metadata{
+									Version: &types.Version{
+										BlockNum: 2,
+										TxNum:    0,
+									},
+								},
 							},
 						},
 					},
@@ -905,7 +1032,7 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 			name: "fetch values deleted by user5",
 			user: "user5",
 			expectedPayload: &types.GetDataProvenanceResponse{
-				KVs: nil,
+				DBKeyValues: nil,
 			},
 		},
 	}
@@ -915,7 +1042,10 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, payload)
-		require.Equal(t, tt.expectedPayload, payload)
+		require.Len(t, payload.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
+		for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
+			require.ElementsMatch(t, expectedKVs.KVs, payload.DBKeyValues[dbName].KVs)
+		}
 	}
 }
 

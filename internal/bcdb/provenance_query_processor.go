@@ -102,7 +102,7 @@ func (p *provenanceQueryProcessor) GetValuesReadByUser(userID string) (*types.Ge
 	}
 
 	return &types.GetDataProvenanceResponse{
-		KVs: kvs,
+		DBKeyValues: kvs,
 	}, nil
 }
 
@@ -114,7 +114,7 @@ func (p *provenanceQueryProcessor) GetValuesWrittenByUser(userID string) (*types
 	}
 
 	return &types.GetDataProvenanceResponse{
-		KVs: kvs,
+		DBKeyValues: kvs,
 	}, nil
 }
 
@@ -125,7 +125,7 @@ func (p *provenanceQueryProcessor) GetValuesDeletedByUser(userID string) (*types
 	}
 
 	return &types.GetDataProvenanceResponse{
-		KVs: kvs,
+		DBKeyValues: kvs,
 	}, nil
 }
 

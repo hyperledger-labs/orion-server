@@ -212,9 +212,13 @@ message GetDataProvenanceResponseEnvelope {
   bytes signature = 2;
 }
 
+message KVsWithMetadata {
+    repeated KVWithMetadata KVs = 1;
+}
+
 message GetDataProvenanceResponse {
   ResponseHeader header = 1;
-  repeated KVWithMetadata KVs = 2;
+  map<string, KVsWithMetadata> DBKeyValues = 2;
 }
 
 // GetTxIDsSubmittedBy

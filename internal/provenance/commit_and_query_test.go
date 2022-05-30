@@ -108,6 +108,24 @@ func setup(t *testing.T, s *Store) {
 			IsValid: false,
 			TxID:    "tx10",
 		},
+		{
+			IsValid: true,
+			DBName:  "db2",
+			UserID:  "user1",
+			TxID:    "tx1-db2",
+			Writes: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+		},
 	}
 
 	block2TxsData := []*TxDataForProvenance{
@@ -116,6 +134,39 @@ func setup(t *testing.T, s *Store) {
 			DBName:  "db1",
 			UserID:  "user1",
 			TxID:    "tx3",
+			Reads: []*KeyWithVersion{
+				{
+					Key: "key1",
+					Version: &types.Version{
+						BlockNum: 1,
+						TxNum:    0,
+					},
+				},
+			},
+			Writes: []*types.KVWithMetadata{
+				{
+					Key:   "key1",
+					Value: []byte("value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    0,
+						},
+					},
+				},
+			},
+			OldVersionOfWrites: map[string]*types.Version{
+				"key1": {
+					BlockNum: 1,
+					TxNum:    0,
+				},
+			},
+		},
+		{
+			IsValid: true,
+			DBName:  "db2",
+			UserID:  "user1",
+			TxID:    "tx3-db2",
 			Reads: []*KeyWithVersion{
 				{
 					Key: "key1",
@@ -218,6 +269,18 @@ func setup(t *testing.T, s *Store) {
 			Deletes: map[string]*types.Version{
 				"key1": {
 					BlockNum: 3,
+					TxNum:    0,
+				},
+			},
+		},
+		{
+			IsValid: true,
+			DBName:  "db2",
+			UserID:  "user2",
+			TxID:    "tx50",
+			Deletes: map[string]*types.Version{
+				"key1": {
+					BlockNum: 2,
 					TxNum:    0,
 				},
 			},
@@ -472,7 +535,7 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 		{
 			name:          "fetch ids of tx submitted by user1",
 			userID:        "user1",
-			expectedTxIDs: []string{"tx1", "tx2", "tx3"},
+			expectedTxIDs: []string{"tx1", "tx2", "tx3", "tx1-db2", "tx3-db2"},
 		},
 		{
 			name:          "fetch ids of tx submitted by user2",
@@ -603,19 +666,37 @@ func TestGetValuesReadByUser(t *testing.T) {
 	tests := []struct {
 		name          string
 		userID        string
-		expectedReads []*types.KVWithMetadata
+		expectedReads map[string]*types.KVsWithMetadata
 	}{
 		{
 			name:   "fetch all values read by user1",
 			userID: "user1",
-			expectedReads: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    0,
+			expectedReads: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
+						},
+					},
+				},
+				"db2": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
@@ -624,30 +705,34 @@ func TestGetValuesReadByUser(t *testing.T) {
 		{
 			name:   "fetch all values read by user2",
 			userID: "user2",
-			expectedReads: []*types.KVWithMetadata{
-				{
-					Key:   "key2",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						AccessControl: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
-								"user2": true,
+			expectedReads: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key2",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								AccessControl: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{
+										"user1": true,
+										"user2": true,
+									},
+								},
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
 							},
 						},
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
-						},
-					},
-				},
-				{
-					Key:   "key1",
-					Value: []byte("value2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
+						{
+							Key:   "key1",
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
@@ -656,7 +741,7 @@ func TestGetValuesReadByUser(t *testing.T) {
 		{
 			name:          "fetch all values read by user3",
 			userID:        "user3",
-			expectedReads: nil,
+			expectedReads: map[string]*types.KVsWithMetadata{},
 		},
 	}
 
@@ -665,7 +750,10 @@ func TestGetValuesReadByUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			kvs, err := env.s.GetValuesReadByUser(tt.userID)
 			require.NoError(t, err)
-			require.ElementsMatch(t, tt.expectedReads, kvs)
+			require.Len(t, kvs, len(tt.expectedReads))
+			for dbName, expectedKVs := range tt.expectedReads {
+				require.ElementsMatch(t, expectedKVs.KVs, kvs[dbName].KVs)
+			}
 		})
 	}
 }
@@ -680,45 +768,73 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		expectedWrites []*types.KVWithMetadata
+		expectedWrites map[string]*types.KVsWithMetadata
 	}{
 		{
 			name:   "fetch all values written by user1",
 			userID: "user1",
-			expectedWrites: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    0,
-						},
-					},
-				},
-				{
-					Key:   "key2",
-					Value: []byte("value1"),
-					Metadata: &types.Metadata{
-						AccessControl: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
-								"user2": true,
+			expectedWrites: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
 							},
 						},
-						Version: &types.Version{
-							BlockNum: 1,
-							TxNum:    1,
+						{
+							Key:   "key2",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								AccessControl: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{
+										"user1": true,
+										"user2": true,
+									},
+								},
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    1,
+								},
+							},
+						},
+						{
+							Key:   "key1",
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
-				{
-					Key:   "key1",
-					Value: []byte("value2"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 2,
-							TxNum:    0,
+				"db2": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 1,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Key:   "key1",
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
@@ -727,40 +843,44 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 		{
 			name:   "fetch all values written by user2",
 			userID: "user2",
-			expectedWrites: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value4"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 3,
-							TxNum:    0,
-						},
-					},
-				},
-				{
-					Key:   "key1",
-					Value: []byte("value5"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 5,
-							TxNum:    0,
-						},
-					},
-				},
-				{
-					Key:   "key2",
-					Value: []byte("value2"),
-					Metadata: &types.Metadata{
-						AccessControl: &types.AccessControl{
-							ReadWriteUsers: map[string]bool{
-								"user1": true,
-								"user2": true,
+			expectedWrites: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value4"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 3,
+									TxNum:    0,
+								},
 							},
 						},
-						Version: &types.Version{
-							BlockNum: 3,
-							TxNum:    0,
+						{
+							Key:   "key1",
+							Value: []byte("value5"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 5,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Key:   "key2",
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								AccessControl: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{
+										"user1": true,
+										"user2": true,
+									},
+								},
+								Version: &types.Version{
+									BlockNum: 3,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
@@ -778,7 +898,10 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			kvs, err := env.s.GetValuesWrittenByUser(tt.userID)
 			require.NoError(t, err)
-			require.ElementsMatch(t, tt.expectedWrites, kvs)
+			require.Len(t, kvs, len(tt.expectedWrites))
+			for dbName, expectedKVs := range tt.expectedWrites {
+				require.ElementsMatch(t, expectedKVs.KVs, kvs[dbName].KVs)
+			}
 		})
 	}
 }
@@ -1184,29 +1307,47 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         string
-		expectedWrites []*types.KVWithMetadata
+		expectedWrites map[string]*types.KVsWithMetadata
 	}{
 		{
 			name:   "fetch all values deleted by user2",
 			userID: "user2",
-			expectedWrites: []*types.KVWithMetadata{
-				{
-					Key:   "key1",
-					Value: []byte("value4"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 3,
-							TxNum:    0,
+			expectedWrites: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value4"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 3,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Key:   "key1",
+							Value: []byte("value5"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 5,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
-				{
-					Key:   "key1",
-					Value: []byte("value5"),
-					Metadata: &types.Metadata{
-						Version: &types.Version{
-							BlockNum: 5,
-							TxNum:    0,
+				"db2": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 2,
+									TxNum:    0,
+								},
+							},
 						},
 					},
 				},
@@ -1224,7 +1365,10 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			kvs, err := env.s.GetValuesDeletedByUser(tt.userID)
 			require.NoError(t, err)
-			require.ElementsMatch(t, tt.expectedWrites, kvs)
+			require.Len(t, kvs, len(tt.expectedWrites))
+			for dbName, expectedKVs := range tt.expectedWrites {
+				require.ElementsMatch(t, expectedKVs.KVs, kvs[dbName].KVs)
+			}
 		})
 	}
 }
