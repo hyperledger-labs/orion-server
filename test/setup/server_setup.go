@@ -438,6 +438,192 @@ func (s *Server) GetMostRecentValueAtOrBelow(t *testing.T, db, key, userID strin
 	return response, err
 }
 
+func (s *Server) GetDeletedValues(t *testing.T, db, key, userID string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetHistoricalDataQuery{
+		UserId:      userID,
+		DbName:      db,
+		Key:         key,
+		OnlyDeletes: true,
+	}
+	response, err := client.GetHistoricalData(
+		constants.URLForGetHistoricalDeletedData(db, key),
+		&types.GetHistoricalDataQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetValuesReadByUser(t *testing.T, userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataReadByQuery{
+		UserId:       userID,
+		TargetUserId: userID,
+	}
+	response, err := client.GetDataReadByUser(
+		constants.URLForGetDataReadBy(userID),
+		&types.GetDataReadByQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetValuesWrittenByUser(t *testing.T, userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataWrittenByQuery{
+		UserId:       userID,
+		TargetUserId: userID,
+	}
+	response, err := client.GetDataWrittenByUser(
+		constants.URLForGetDataWrittenBy(userID),
+		&types.GetDataWrittenByQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetValuesDeletedByUser(t *testing.T, userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataDeletedByQuery{
+		UserId:       userID,
+		TargetUserId: userID,
+	}
+	response, err := client.GetDataDeletedByUser(
+		constants.URLForGetDataDeletedBy(userID),
+		&types.GetDataDeletedByQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetReaders(t *testing.T, dbName, key, userID string) (*types.GetDataReadersResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataReadersQuery{
+		UserId: userID,
+		DbName: dbName,
+		Key:    key,
+	}
+	response, err := client.GetDataReaders(
+		constants.URLForGetDataReaders(dbName, key),
+		&types.GetDataReadersQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetWriters(t *testing.T, dbName, key, userID string) (*types.GetDataWritersResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataWritersQuery{
+		UserId: userID,
+		DbName: dbName,
+		Key:    key,
+	}
+	response, err := client.GetDataWriters(
+		constants.URLForGetDataWriters(dbName, key),
+		&types.GetDataWritersQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
+func (s *Server) GetTxIDsSubmittedBy(t *testing.T, userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetTxIDsSubmittedByQuery{
+		UserId:       userID,
+		TargetUserId: userID,
+	}
+	response, err := client.GetTxIDsSubmitedBy(
+		constants.URLForGetTxIDsSubmittedBy(userID),
+		&types.GetTxIDsSubmittedByQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		},
+	)
+
+	return response, err
+}
+
 func (s *Server) QueryUser(t *testing.T, userID string) (*types.GetUserResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -359,6 +358,297 @@ func TestProvenanceQueries(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
 	})
+
+	t.Run("Get Deleted Values", func(t *testing.T) {
+		expectedKey1Values := []*types.ValueWithMetadata{
+			{
+				Value: []byte("key1value2"),
+				Metadata: &types.Metadata{
+					Version: &types.Version{
+						BlockNum: 5,
+						TxNum:    0,
+					},
+				},
+			},
+		}
+
+		resp, err := s.GetDeletedValues(t, "db1", "key1", "alice")
+		require.NoError(t, err)
+		require.ElementsMatch(t, expectedKey1Values, resp.GetResponse().GetValues())
+	})
+
+	t.Run("Get Values Read By", func(t *testing.T) {
+		expectedAliceReads := map[string]*types.KVsWithMetadata{
+			"db1": {
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("key1value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 5,
+								TxNum:    0,
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("key2value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 4,
+								TxNum:    0,
+							},
+							AccessControl: &types.AccessControl{
+								ReadWriteUsers: map[string]bool{"alice": true},
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("key2value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 6,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+			},
+			"db2": {
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key3",
+						Value: []byte("key3value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 4,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		resp, err := s.GetValuesReadByUser(t, "alice")
+		require.NoError(t, err)
+		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
+		require.NotNil(t, actualDBsKVs)
+		require.Len(t, actualDBsKVs, len(expectedAliceReads))
+
+		for dbName, expectedKVs := range expectedAliceReads {
+			require.ElementsMatch(t, expectedKVs.KVs, actualDBsKVs[dbName].KVs)
+		}
+	})
+
+	t.Run("Get Values Written By", func(t *testing.T) {
+		expectedAliceWrites := map[string]*types.KVsWithMetadata{
+			"db1": {
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("key1value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 4,
+								TxNum:    0,
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("key2value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 4,
+								TxNum:    0,
+							},
+							AccessControl: &types.AccessControl{
+								ReadWriteUsers: map[string]bool{"alice": true},
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("key2value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 6,
+								TxNum:    0,
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("key2value3"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 7,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+			},
+			"db2": {
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key3",
+						Value: []byte("key3value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 4,
+								TxNum:    0,
+							},
+						},
+					},
+					{
+						Key:   "key3",
+						Value: []byte("key3value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 7,
+								TxNum:    0,
+							},
+							AccessControl: &types.AccessControl{
+								ReadWriteUsers: map[string]bool{"alice": true},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		resp, err := s.GetValuesWrittenByUser(t, "alice")
+		require.NoError(t, err)
+		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
+		require.NotNil(t, actualDBsKVs)
+		require.Len(t, actualDBsKVs, len(expectedAliceWrites))
+
+		for dbName, expectedKVs := range expectedAliceWrites {
+			require.ElementsMatch(t, expectedKVs.KVs, actualDBsKVs[dbName].KVs)
+		}
+	})
+
+	t.Run("Get Values Deleted By", func(t *testing.T) {
+		expectedAliceDeletes := map[string]*types.KVsWithMetadata{
+			"db1": {
+				KVs: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("key1value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 5,
+								TxNum:    0,
+							},
+						},
+					},
+				},
+			},
+		}
+
+		resp, err := s.GetValuesDeletedByUser(t, "alice")
+		require.NoError(t, err)
+		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
+		require.NotNil(t, actualDBsKVs)
+		require.Len(t, actualDBsKVs, len(expectedAliceDeletes))
+
+		for dbName, expectedKVs := range expectedAliceDeletes {
+			require.ElementsMatch(t, expectedKVs.KVs, actualDBsKVs[dbName].KVs)
+		}
+	})
+
+	t.Run("Get Readers", func(t *testing.T) {
+		testCases := []struct {
+			dbName          string
+			key             string
+			expectedReaders map[string]uint32
+		}{
+			{
+				dbName: "db1",
+				key:    "key1",
+				expectedReaders: map[string]uint32{
+					"alice": 1,
+					"bob":   1,
+				},
+			},
+			{
+				dbName: "db1",
+				key:    "key2",
+				expectedReaders: map[string]uint32{
+					"alice": 2,
+				},
+			},
+			{
+				dbName: "db2",
+				key:    "key3",
+				expectedReaders: map[string]uint32{
+					"alice": 1,
+				},
+			},
+		}
+
+		for _, tt := range testCases {
+			resp, err := s.GetReaders(t, tt.dbName, tt.key, "bob")
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedReaders, resp.GetResponse().GetReadBy())
+		}
+	})
+
+	t.Run("Get Writers", func(t *testing.T) {
+		testCases := []struct {
+			dbName          string
+			key             string
+			expectedWriters map[string]uint32
+		}{
+			{
+				dbName: "db1",
+				key:    "key1",
+				expectedWriters: map[string]uint32{
+					"alice": 1,
+					"bob":   2,
+				},
+			},
+			{
+				dbName: "db2",
+				key:    "key3",
+				expectedWriters: map[string]uint32{
+					"alice": 2,
+				},
+			},
+		}
+
+		for _, tt := range testCases {
+			resp, err := s.GetWriters(t, tt.dbName, tt.key, "bob")
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedWriters, resp.GetResponse().GetWrittenBy())
+		}
+	})
+
+	t.Run("Get TxIDs", func(t *testing.T) {
+		testCases := []struct {
+			userId        string
+			expectedTxIDs []string
+		}{
+			{
+				userId:        "alice",
+				expectedTxIDs: []string{"tx1", "tx3", "tx4"},
+			},
+			{
+				userId:        "bob",
+				expectedTxIDs: []string{"tx2", "tx5"},
+			},
+		}
+
+		for _, tt := range testCases {
+			resp, err := s.GetTxIDsSubmittedBy(t, tt.userId)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedTxIDs, resp.GetResponse().GetTxIDs())
+		}
+	})
 }
 
 // 1. Store key1 with open access to all users in database 1
@@ -376,7 +666,7 @@ func prepareDataForProvenanceQueries(t *testing.T, s *setup.Server) {
 		MustSignUserIds: []string{
 			"alice",
 		},
-		TxId: uuid.New().String(),
+		TxId: "tx1",
 		DbOperations: []*types.DBOperation{
 			{
 				DbName: "db1",
@@ -425,7 +715,7 @@ func prepareDataForProvenanceQueries(t *testing.T, s *setup.Server) {
 		MustSignUserIds: []string{
 			"bob",
 		},
-		TxId: uuid.New().String(),
+		TxId: "tx2",
 		DbOperations: []*types.DBOperation{
 			{
 				DbName: "db1",
@@ -469,7 +759,7 @@ func prepareDataForProvenanceQueries(t *testing.T, s *setup.Server) {
 		MustSignUserIds: []string{
 			"alice",
 		},
-		TxId: uuid.New().String(),
+		TxId: "tx3",
 		DbOperations: []*types.DBOperation{
 			{
 				DbName: "db1",
@@ -519,7 +809,7 @@ func prepareDataForProvenanceQueries(t *testing.T, s *setup.Server) {
 		MustSignUserIds: []string{
 			"alice",
 		},
-		TxId: uuid.New().String(),
+		TxId: "tx4",
 		DbOperations: []*types.DBOperation{
 			{
 				DbName: "db1",
@@ -572,7 +862,7 @@ func prepareDataForProvenanceQueries(t *testing.T, s *setup.Server) {
 		MustSignUserIds: []string{
 			"bob",
 		},
-		TxId: uuid.New().String(),
+		TxId: "tx5",
 		DbOperations: []*types.DBOperation{
 			{
 				DbName: "db1",

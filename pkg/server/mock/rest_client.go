@@ -266,6 +266,108 @@ func (c *Client) GetHistoricalData(urlPath string, e *types.GetHistoricalDataQue
 	return res, err
 }
 
+func (c *Client) GetDataReadByUser(urlPath string, e *types.GetDataReadByQueryEnvelope) (*types.GetDataProvenanceResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		urlPath,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataProvenanceResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetDataWrittenByUser(urlPath string, e *types.GetDataWrittenByQueryEnvelope) (*types.GetDataProvenanceResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		urlPath,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataProvenanceResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetDataDeletedByUser(urlPath string, e *types.GetDataDeletedByQueryEnvelope) (*types.GetDataProvenanceResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		urlPath,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataProvenanceResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetDataReaders(urlPath string, e *types.GetDataReadersQueryEnvelope) (*types.GetDataReadersResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		urlPath,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataReadersResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetDataWriters(urlPath string, e *types.GetDataWritersQueryEnvelope) (*types.GetDataWritersResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		urlPath,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataWritersResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
+func (c *Client) GetTxIDsSubmitedBy(urlPath string, e *types.GetTxIDsSubmittedByQueryEnvelope) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		urlPath,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetTxIDsSubmittedByResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) handleGetRequest(urlPath, userID string, signature []byte) (*http.Response, error) {
 	parsedURL, err := url.Parse(urlPath)
 	if err != nil {
