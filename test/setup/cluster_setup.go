@@ -45,6 +45,7 @@ type Config struct {
 	BaseNodePort          uint32
 	BasePeerPort          uint32
 	CheckRedirectFunc     func(req *http.Request, via []*http.Request) error // rest client checks redirects
+	ClusterTLSEnabled     bool
 	BlockCreationOverride *config.BlockCreationConf
 }
 
@@ -103,7 +104,18 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		return nil, err
 	}
 
-	if err := cluster.createConfigFile(conf.BlockCreationOverride); err != nil {
+	localConf := &config.LocalConfiguration{
+		Replication: config.ReplicationConf{
+			TLS: config.TLSConf{
+				Enabled: conf.ClusterTLSEnabled,
+			},
+		},
+	}
+	if conf.BlockCreationOverride != nil {
+		localConf.BlockCreation = *conf.BlockCreationOverride
+	}
+
+	if err := cluster.createConfigFile(localConf); err != nil {
 		return nil, err
 	}
 
@@ -293,7 +305,8 @@ func (c *Cluster) GetServerByID(serverID string) (*Server, int) {
 	return nil, -1
 }
 
-func (c *Cluster) AgreedLeader(t *testing.T, activeServers ...int) int {
+func (c *Cluster) AgreedLeader(t *testing.T,
+	activeServers ...int) int {
 	var leaders []int
 	var leader int
 
@@ -491,9 +504,9 @@ func (c *Cluster) GetLogger() *logger.SugarLogger {
 	return c.logger
 }
 
-func (c *Cluster) createConfigFile(blockCreationOverride *config.BlockCreationConf) error {
+func (c *Cluster) createConfigFile(conf *config.LocalConfiguration) error {
 	for _, s := range c.Servers {
-		if err := s.CreateConfigFile(blockCreationOverride); err != nil {
+		if err := s.CreateConfigFile(conf); err != nil {
 			return err
 		}
 	}

@@ -5,15 +5,15 @@ package cluster
 
 import (
 	"encoding/pem"
-	"github.com/hyperledger-labs/orion-server/config"
-	"github.com/hyperledger-labs/orion-server/internal/worldstate"
-	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/hyperledger-labs/orion-server/config"
+	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -51,13 +51,13 @@ func createNewServer(c *setup.Cluster, conf *setup.Config, serverNum int) (*setu
 	return newServer, newPeer, newNode, nil
 }
 
-func addServerTx(t *testing.T, c *setup.Cluster, setupConfig *setup.Config, configEnv *types.GetConfigResponseEnvelope, leaderIndex int, serverNum int) *setup.Server {
+func addServerTx(t *testing.T, c *setup.Cluster, setupConfig *setup.Config, configEnv *types.GetConfigResponseEnvelope, leaderIndex int, serverNum int, conf *config.LocalConfiguration) *setup.Server {
 	newServer, newPeer, newNode, err := createNewServer(c, setupConfig, serverNum)
 	require.NoError(t, err)
 	require.NotNil(t, newServer)
 	require.NotNil(t, newPeer)
 	require.NotNil(t, newNode)
-	require.NoError(t, newServer.CreateConfigFile(nil))
+	require.NoError(t, newServer.CreateConfigFile(conf))
 
 	newConfig := configEnv.GetResponse().GetConfig()
 	newConfig.ConsensusConfig.Members = append(newConfig.ConsensusConfig.Members, newPeer)
@@ -133,7 +133,7 @@ func TestBasicAddServer(t *testing.T) {
 	require.NotNil(t, configEnv)
 
 	// adding node-4
-	newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 3)
+	newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 3, &config.LocalConfiguration{})
 
 	require.Eventually(t, func() bool {
 		return c.AgreedHeight(t, 2, 0, 1, 2)
@@ -194,7 +194,7 @@ func TestAddFrom1To3(t *testing.T) {
 	require.NotNil(t, configEnv)
 
 	t.Logf("adding node-2")
-	server2 := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 1)
+	server2 := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 1, &config.LocalConfiguration{})
 
 	t.Logf("starting node-2")
 	require.NoError(t, c.StartServer(server2))
@@ -221,7 +221,7 @@ func TestAddFrom1To3(t *testing.T) {
 	}, 30*time.Second, 100*time.Millisecond)
 
 	t.Logf("adding node-3")
-	server3 := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 2)
+	server3 := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 2, &config.LocalConfiguration{})
 
 	t.Logf("starting node-3")
 	require.NoError(t, c.StartServer(server3))
@@ -303,7 +303,7 @@ func TestInvalidAdd(t *testing.T) {
 	require.NotNil(t, server4)
 	require.NotNil(t, peer4)
 	require.NotNil(t, node4)
-	require.NoError(t, server4.CreateConfigFile(nil))
+	require.NoError(t, server4.CreateConfigFile(&config.LocalConfiguration{}))
 
 	t.Logf("create node-5")
 	server5, peer5, node5, err := createNewServer(c, setupConfig, 4)
@@ -311,7 +311,7 @@ func TestInvalidAdd(t *testing.T) {
 	require.NotNil(t, server5)
 	require.NotNil(t, peer5)
 	require.NotNil(t, node5)
-	require.NoError(t, server5.CreateConfigFile(nil))
+	require.NoError(t, server5.CreateConfigFile(&config.LocalConfiguration{}))
 
 	t.Logf("add nodes 4-5 in one tx")
 	newConfig := configEnv.GetResponse().GetConfig()
@@ -433,7 +433,7 @@ func TestAddAndRemove(t *testing.T) {
 		require.NotNil(t, configEnv)
 
 		t.Logf("adding node-%d", i+1)
-		newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, i)
+		newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, i, &config.LocalConfiguration{})
 
 		t.Logf("starting node-%d", i+1)
 		require.NoError(t, c.StartServer(newServer))
@@ -481,7 +481,7 @@ func TestAddAndRemove(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
 	t.Logf("adding node-7")
-	newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 6)
+	newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 6, &config.LocalConfiguration{})
 
 	require.NoError(t, c.ShutdownServer(c.Servers[4]))
 	require.NoError(t, c.ShutdownServer(c.Servers[5]))
