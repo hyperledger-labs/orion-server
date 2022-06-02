@@ -45,6 +45,7 @@ type Server struct {
 	configDir            string
 	configFilePath       string
 	bootstrapFilePath    string
+	method               string
 	cryptoMaterialsDir   string
 	serverRootCACertPath string
 	serverCertPath       string
@@ -63,8 +64,12 @@ type Server struct {
 }
 
 // NewServer creates a new blockchain database server
-func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint32, checkRedirect func(req *http.Request, via []*http.Request) error, logger *logger.SugarLogger) (*Server, error) {
+func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint32, checkRedirect func(req *http.Request, via []*http.Request) error, logger *logger.SugarLogger, method string) (*Server, error) {
 	sNumber := strconv.FormatInt(int64(id+1), 10)
+	bootstrapFile := filepath.Join(clusterBaseDir, "node-"+sNumber, "shared-config-bootstrap.yml")
+	if method == "join" {
+		bootstrapFile = filepath.Join(clusterBaseDir, "node-"+sNumber, "join-block.yml")
+	}
 	s := &Server{
 		serverNum:           id + 1,
 		serverID:            "node-" + sNumber,
@@ -74,7 +79,8 @@ func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint
 		adminID:             "admin",
 		configDir:           filepath.Join(clusterBaseDir, "node-"+sNumber),
 		configFilePath:      filepath.Join(clusterBaseDir, "node-"+sNumber, "config.yml"),
-		bootstrapFilePath:   filepath.Join(clusterBaseDir, "node-"+sNumber, "shared-config-bootstrap.yml"),
+		bootstrapFilePath:   bootstrapFile,
+		method:              method,
 		cryptoMaterialsDir:  filepath.Join(clusterBaseDir, "node-"+sNumber, "crypto"),
 		usersCryptoDir:      filepath.Join(clusterBaseDir, "users"),
 		clientCheckRedirect: checkRedirect,
@@ -99,6 +105,20 @@ func (s *Server) AdminID() string {
 	return s.adminID
 }
 
+func (s *Server) AdminCertPath() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.adminCertPath
+}
+
+func (s *Server) AdminKeyPath() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.adminKeyPath
+}
+
 func (s *Server) AdminSigner() crypto.Signer {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -111,6 +131,20 @@ func (s *Server) ConfigDir() string {
 	defer s.mu.Unlock()
 
 	return s.configDir
+}
+
+func (s *Server) ConfigFilePath() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.configFilePath
+}
+
+func (s *Server) BootstrapFilePath() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.bootstrapFilePath
 }
 
 func (s *Server) Signer(userID string) (crypto.Signer, error) {
@@ -139,6 +173,25 @@ func (s *Server) SetAdmin(newAdminID string, newAdminCertPath string, newAdminKe
 
 func (s *Server) SetAdminSigner(newAdminSigner crypto.Signer) {
 	s.adminSigner = newAdminSigner
+}
+
+func (s *Server) QueryConfigBlockStatus(t *testing.T) (*types.GetConfigBlockResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetConfigBlockQuery{
+		UserId: s.AdminID(),
+	}
+	response, err := client.GetLastConfigBlockStatus(
+		&types.GeConfigBlockQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+		},
+	)
+
+	return response, err
 }
 
 func (s *Server) QueryLastBlockStatus(t *testing.T) (*types.GetBlockResponseEnvelope, error) {
@@ -858,7 +911,7 @@ func (s *Server) SetConfigTx(t *testing.T, newConfig *types.ClusterConfig, versi
 	return txID, receipt, nil
 }
 
-func (s *Server) createCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
+func (s *Server) CreateCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -910,7 +963,7 @@ func (s *Server) createCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
 	return nil
 }
 
-func (s *Server) createConfigFile() error {
+func (s *Server) CreateConfigFile() error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -953,7 +1006,7 @@ func (s *Server) createConfigFile() error {
 			},
 		},
 		Bootstrap: config.BootstrapConf{
-			Method: "genesis",
+			Method: s.method,
 			File:   s.bootstrapFilePath,
 		},
 	}

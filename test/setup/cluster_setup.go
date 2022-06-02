@@ -92,7 +92,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 	}
 
 	for i := 0; i < conf.NumberOfServers; i++ {
-		cluster.Servers[i], err = NewServer(uint64(i), conf.TestDirAbsolutePath, conf.BaseNodePort, conf.BasePeerPort, conf.CheckRedirectFunc, l)
+		cluster.Servers[i], err = NewServer(uint64(i), conf.TestDirAbsolutePath, conf.BaseNodePort, conf.BasePeerPort, conf.CheckRedirectFunc, l, "genesis")
 		if err != nil {
 			return nil, err
 		}
@@ -341,6 +341,10 @@ func (c *Cluster) AgreedHeight(t *testing.T, expectedBlockHeight uint64, activeS
 	return true
 }
 
+func (c *Cluster) AddNewServerToCluster(server *Server) {
+	c.Servers = append(c.Servers, server)
+}
+
 func (c *Cluster) GetUserCertDir() string {
 	return path.Join(c.testDirAbsPath, "users")
 }
@@ -369,9 +373,13 @@ func (c *Cluster) GetX509KeyPair() (tls.Certificate, error) {
 	return keyPair, nil
 }
 
+func (c *Cluster) GetKeyAndCA() ([]byte, []byte) {
+	return c.caPrivKey, c.rootCAPemCert
+}
+
 func (c *Cluster) createCryptoMaterials() error {
 	for _, s := range c.Servers {
-		if err := s.createCryptoMaterials(c.rootCAPemCert, c.caPrivKey); err != nil {
+		if err := s.CreateCryptoMaterials(c.rootCAPemCert, c.caPrivKey); err != nil {
 			return err
 		}
 	}
@@ -484,7 +492,7 @@ func (c *Cluster) GetLogger() *logger.SugarLogger {
 
 func (c *Cluster) createConfigFile() error {
 	for _, s := range c.Servers {
-		if err := s.createConfigFile(); err != nil {
+		if err := s.CreateConfigFile(); err != nil {
 			return err
 		}
 	}
