@@ -72,10 +72,6 @@ func addServerTx(t *testing.T, c *setup.Cluster, setupConfig *setup.Config, conf
 	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
 	t.Logf("tx submitted: %s, %+v", txID, rcpt)
 
-	statusResponseEnvelope, err := c.Servers[leaderIndex].QueryClusterStatus(t)
-	require.Equal(t, serverNum+1, len(statusResponseEnvelope.GetResponse().Nodes))
-	require.Equal(t, serverNum, len(statusResponseEnvelope.GetResponse().Active))
-
 	configBlockResponseEnvelope, err := c.Servers[leaderIndex].QueryConfigBlockStatus(t)
 	require.NoError(t, err)
 	require.NotNil(t, configBlockResponseEnvelope)
@@ -387,4 +383,116 @@ func TestInvalidAdd(t *testing.T) {
 	_, _, err = c.Servers[leaderIndex].SetConfigTx(t, newConfig, configEnv.GetResponse().GetMetadata().GetVersion(), c.Servers[leaderIndex].AdminSigner(), "admin")
 	require.EqualError(t, err, "failed to submit transaction, server returned: status: 400 Bad Request, message: Invalid config tx, "+
 		"reason: Consensus config has two members with the same Raft ID [3], Raft IDs must be unique.")
+}
+
+// Scenario:
+// - Start a 3 node cluster
+// - add 3 new servers (4,5,6)
+// - remove servers 1,2,3
+// - shutdown and remove node 4
+// - restart nodes 5,6
+// - add node 7
+// - restart nodes 5,6
+// - start node 7
+func TestAddAndRemove(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(3)
+	setupConfig := &setup.Config{
+		NumberOfServers:     3,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		CheckRedirectFunc: func(req *http.Request, via []*http.Request) error {
+			return errors.Errorf("Redirect blocked in test client: url: '%s', referrer: '%s', #via: %d", req.URL, req.Referer(), len(via))
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0, 1, 2)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	statusResponseEnvelope, err := c.Servers[leaderIndex].QueryClusterStatus(t)
+	require.Equal(t, 3, len(statusResponseEnvelope.GetResponse().Nodes))
+	require.Equal(t, 3, len(statusResponseEnvelope.GetResponse().Active))
+
+	// add nodes 4-5-6
+	activeServers := []int{0, 1, 2}
+	for i := 3; i < 6; i++ {
+		configEnv, err := c.Servers[leaderIndex].QueryConfig(t, "admin")
+		require.NoError(t, err)
+		require.NotNil(t, configEnv)
+
+		t.Logf("adding node-%d", i+1)
+		newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, i)
+
+		t.Logf("starting node-%d", i+1)
+		require.NoError(t, c.StartServer(newServer))
+
+		activeServers = append(activeServers, i)
+
+		leaderIndex = -1
+		require.Eventually(t, func() bool {
+			leaderIndex = c.AgreedLeader(t, activeServers...)
+			return leaderIndex >= 0
+		}, 30*time.Second, 100*time.Millisecond)
+	}
+
+	require.Eventually(t, func() bool {
+		return c.AgreedHeight(t, 4, activeServers...)
+	}, 30*time.Second, 100*time.Millisecond)
+
+	// remove nodes 1-2-3
+	leaderIndex = removeServer(t, c.Servers[leaderIndex], c, 0, []int{1, 2, 3, 4, 5}, true, true)
+	leaderIndex = removeServer(t, c.Servers[leaderIndex], c, 1, []int{2, 3, 4, 5}, true, true)
+	removeServer(t, c.Servers[leaderIndex], c, 2, []int{3, 4, 5}, true, true)
+
+	// shutdown and remove node 4
+	require.NoError(t, c.ShutdownServer(c.Servers[3]))
+	leaderIndex = -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, []int{4, 5}...)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+	leaderIndex = removeServer(t, c.Servers[leaderIndex], c, 3, []int{4, 5}, true, false)
+
+	// nodes in cluster - 5,6
+	require.NoError(t, c.ShutdownServer(c.Servers[4]))
+	require.NoError(t, c.ShutdownServer(c.Servers[5]))
+	require.NoError(t, c.StartServer(c.Servers[4]))
+	require.NoError(t, c.StartServer(c.Servers[5]))
+
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, []int{4, 5}...)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	// add node 7
+	configEnv, err := c.Servers[leaderIndex].QueryConfig(t, "admin")
+	require.NoError(t, err)
+	require.NotNil(t, configEnv)
+	t.Logf("adding node-7")
+	newServer := addServerTx(t, c, setupConfig, configEnv, leaderIndex, 6)
+
+	require.NoError(t, c.ShutdownServer(c.Servers[4]))
+	require.NoError(t, c.ShutdownServer(c.Servers[5]))
+	require.NoError(t, c.StartServer(c.Servers[4]))
+	require.NoError(t, c.StartServer(c.Servers[5]))
+
+	t.Logf("starting node-7")
+	require.NoError(t, c.StartServer(newServer))
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, []int{4, 5, 6}...)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
 }

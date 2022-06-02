@@ -55,7 +55,7 @@ func removeServerFromNodes(nodes []*types.NodeConfig, serverID int) []*types.Nod
 	return nodes
 }
 
-func removeServer(t *testing.T, leaderServer *setup.Server, c *setup.Cluster, removeIndex int, activeServersAfterRemove []int, majority bool) int {
+func removeServer(t *testing.T, leaderServer *setup.Server, c *setup.Cluster, removeIndex int, activeServersAfterRemove []int, majority bool, removedAlive bool) int {
 	configEnv, err := leaderServer.QueryConfig(t, "admin")
 	require.NoError(t, err)
 	require.NotNil(t, configEnv)
@@ -74,7 +74,7 @@ func removeServer(t *testing.T, leaderServer *setup.Server, c *setup.Cluster, re
 	require.True(t, txID != "")
 	require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
 	require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
-	t.Logf("tx submitted: %s, %+v", txID, rcpt)
+	t.Logf("Removed server index: %d, tx submitted: %s, %+v", removeIndex, txID, rcpt)
 
 	leaderIndex := -1
 	if majority {
@@ -84,11 +84,13 @@ func removeServer(t *testing.T, leaderServer *setup.Server, c *setup.Cluster, re
 		}, 60*time.Second, 100*time.Millisecond)
 
 		statusResponseEnvelope, err := c.Servers[leaderIndex].QueryClusterStatus(t)
+		require.NoError(t, err)
 		require.Equal(t, len(activeServersAfterRemove), len(statusResponseEnvelope.GetResponse().Nodes))
 		require.Equal(t, len(activeServersAfterRemove), len(statusResponseEnvelope.GetResponse().Active))
+	}
+	if removedAlive {
 		removedServerResponse, err := c.Servers[removeIndex].QueryClusterStatus(t)
 		require.NoError(t, err)
-		require.Equal(t, 0, len(removedServerResponse.GetResponse().Active))
 		require.Equal(t, "", removedServerResponse.GetResponse().Leader)
 	}
 
@@ -135,13 +137,13 @@ func TestRemoveLeaderAndFollower(t *testing.T) {
 	// remove leader
 	follower1 := (leaderIndex + 1) % 3
 	follower2 := (leaderIndex + 2) % 3
-	newLeaderIndex := removeServer(t, leaderServer, c, leaderIndex, []int{follower1, follower2}, true)
+	newLeaderIndex := removeServer(t, leaderServer, c, leaderIndex, []int{follower1, follower2}, true, true)
 
 	//remove follower1
 	if follower1 == newLeaderIndex {
 		follower1 = follower2
 	}
-	removeServer(t, c.Servers[newLeaderIndex], c, follower1, []int{newLeaderIndex}, true)
+	removeServer(t, c.Servers[newLeaderIndex], c, follower1, []int{newLeaderIndex}, true, true)
 }
 
 // Scenario:
@@ -195,7 +197,7 @@ func TestRemoveNodeLossOfQuorum(t *testing.T) {
 	}, 30*time.Second, 100*time.Millisecond)
 
 	// remove node 5 => no leader
-	leaderIndex = removeServer(t, c.Servers[leaderIndex], c, 4, []int{0, 3}, false)
+	leaderIndex = removeServer(t, c.Servers[leaderIndex], c, 4, []int{0, 3}, false, true)
 	require.Eventually(t, func() bool {
 		statusResponseEnvelope, err = c.Servers[0].QueryClusterStatus(t)
 		return statusResponseEnvelope.GetResponse().Leader == ""
