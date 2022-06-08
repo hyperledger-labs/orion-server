@@ -28,6 +28,13 @@ func TestURLConstruction(t *testing.T) {
 			expectedURL: "/data/db1/key1",
 		},
 		{
+			name: "GetDataRange",
+			execute: func() string {
+				return URLForGetDataRange("db1", "key1", "key10", 10)
+			},
+			expectedURL: "/data/db1?startkey=\"key1\"&endkey=\"key10\"&limit=10",
+		},
+		{
 			name: "JSONQuery",
 			execute: func() string {
 				return URLForJSONQuery("db1")

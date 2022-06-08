@@ -78,6 +78,8 @@ type ServerConf struct {
 	Database DatabaseConf
 	// The lengths of various queues that buffer between internal components.
 	QueueLength QueueLengthConf
+	// QueryProcessing holds limits associated with query responses
+	QueryProcessing QueryProcessingConf
 	// Server logging level.
 	LogLevel string
 	// Server TLS configuration, for secure communication with clients.
@@ -116,6 +118,11 @@ type QueueLengthConf struct {
 	Transaction               uint32
 	ReorderedTransactionBatch uint32
 	Block                     uint32
+}
+
+// QueueProcessingConf holds the configuration associated with rich and range query processing
+type QueryProcessingConf struct {
+	ResponseSizeLimitInBytes uint64
 }
 
 // BlockCreationConf holds the block creation parameters.
@@ -197,6 +204,7 @@ func readLocalConfig(localConfigFile string) (*LocalConfiguration, error) {
 
 	v.SetDefault("server.database.name", "leveldb")
 	v.SetDefault("server.database.ledgerDirectory", "./tmp/")
+	v.SetDefault("server.queryProcessing.responseSizeLimitInBytes", 1048576)
 
 	if err := v.ReadInConfig(); err != nil {
 		return nil, errors.Wrap(err, "error reading local config file")

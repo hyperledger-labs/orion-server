@@ -77,6 +77,9 @@ type DB interface {
 	// GetData retrieves values for given key
 	GetData(dbName, querierUserID, key string) (*types.GetDataResponseEnvelope, error)
 
+	// GetDataRange retrieves a range of values
+	GetDataRange(dbName, querierUserID, startKey, endKey string, limit uint64) (*types.GetDataRangeResponseEnvelope, error)
+
 	// DataQuery executes a given JSON query and return key-value pairs which are matching
 	// the criteria provided in the query. The query is a json marshled bytes which needs
 	// to contain a top level combinational operator followed by a list of attributes and
@@ -255,11 +258,12 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 
 	worldstateQueryProcessor := newWorldstateQueryProcessor(
 		&worldstateQueryProcessorConfig{
-			nodeID:          localConf.Server.Identity.ID,
-			db:              levelDB,
-			blockStore:      blockStore,
-			identityQuerier: querier,
-			logger:          logger,
+			nodeID:              localConf.Server.Identity.ID,
+			db:                  levelDB,
+			queryProcessingConf: &localConf.Server.QueryProcessing,
+			blockStore:          blockStore,
+			identityQuerier:     querier,
+			logger:              logger,
 		},
 	)
 
@@ -536,6 +540,25 @@ func (d *db) GetData(dbName, querierUserID, key string) (*types.GetDataResponseE
 	}
 
 	return &types.GetDataResponseEnvelope{
+		Response:  dataResponse,
+		Signature: sign,
+	}, nil
+}
+
+// GetDataRange returns a range of values starting from the start key and till before the end key
+func (d *db) GetDataRange(dbName, querierUserID, startKey, endKey string, limit uint64) (*types.GetDataRangeResponseEnvelope, error) {
+	dataResponse, err := d.worldstateQueryProcessor.getDataRange(dbName, querierUserID, startKey, endKey, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	dataResponse.Header = d.responseHeader()
+	sign, err := d.signature(dataResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetDataRangeResponseEnvelope{
 		Response:  dataResponse,
 		Signature: sign,
 	}, nil

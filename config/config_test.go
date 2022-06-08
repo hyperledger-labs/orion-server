@@ -29,6 +29,9 @@ var expectedLocalConfig = &LocalConfiguration{
 			ReorderedTransactionBatch: 100,
 			Block:                     100,
 		},
+		QueryProcessing: QueryProcessingConf{
+			ResponseSizeLimitInBytes: 1048576,
+		},
 		LogLevel: "info",
 		TLS: TLSConf{
 			Enabled:               false,

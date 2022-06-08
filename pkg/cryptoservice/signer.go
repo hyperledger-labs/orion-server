@@ -16,6 +16,7 @@ func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
 	case *types.GetConfigBlockQuery:
 	case *types.GetClusterStatusQuery:
 	case *types.GetDataQuery:
+	case *types.GetDataRangeQuery:
 	case *types.GetDBStatusQuery:
 	case *types.GetDBIndexQuery:
 	case *types.GetUserQuery:

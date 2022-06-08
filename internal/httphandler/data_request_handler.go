@@ -42,6 +42,13 @@ func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler 
 		logger: logger,
 	}
 
+	rangeKeys := []string{
+		"startkey", "{startkey}",
+		"endkey", "{endkey}",
+		"limit", "{limit}",
+	}
+
+	handler.router.HandleFunc(constants.GetDataRange, handler.dataRangeQuery).Methods(http.MethodGet).Queries(rangeKeys...)
 	handler.router.HandleFunc(constants.GetData, handler.dataQuery).Methods(http.MethodGet)
 	handler.router.HandleFunc(constants.PostDataTx, handler.dataTransaction).Methods(http.MethodPost)
 	handler.router.HandleFunc(constants.PostDataQuery, handler.dataJSONQuery).Methods(http.MethodPost)
@@ -68,6 +75,43 @@ func (d *dataRequestHandler) dataQuery(response http.ResponseWriter, request *ht
 	}
 
 	data, err := d.db.GetData(query.DbName, query.UserId, query.Key)
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *errors.PermissionErr:
+			status = http.StatusForbidden
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		utils.SendHTTPResponse(
+			response,
+			status,
+			&types.HttpResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	utils.SendHTTPResponse(response, http.StatusOK, data)
+}
+
+func (d *dataRequestHandler) dataRangeQuery(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetDataRange, d.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetDataRangeQuery)
+
+	if !d.db.IsDBExists(query.DbName) {
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{
+			ErrMsg: "error db '" + query.DbName + "' doesn't exist",
+		})
+		return
+	}
+
+	data, err := d.db.GetDataRange(query.DbName, query.UserId, query.StartKey, query.EndKey, query.Limit)
 	if err != nil {
 		var status int
 

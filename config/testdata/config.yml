@@ -39,6 +39,10 @@ server:
     # queueLength.block denotes the maximum queue length
     # of waiting blocks
     block: 100
+  queryProcessing:
+    # queryProcessing.responseSizeLimitInBytes denotes the maximum
+    # memory size of the query response
+    responseSizeLimitInBytes: 1048576
   # logLevel can be debug, info, warn, err, and panic
   logLevel: info
   tls:

@@ -39,6 +39,7 @@ const (
 
 	DataEndpoint  = "/data/"
 	GetData       = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
+	GetDataRange  = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
 	PostDataTx    = "/data/tx"
 	PostDataQuery = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/jsonquery"
 
@@ -80,6 +81,13 @@ const (
 // value of the key present in the dbName
 func URLForGetData(dbName, key string) string {
 	return DataEndpoint + path.Join(dbName, key)
+}
+
+// URLForGetDataRange returns url for GET request to retrieve
+// a range of values.
+func URLForGetDataRange(dbName, startKey, endKey string, limit uint64) string {
+	return path.Join(DataEndpoint, dbName) +
+		fmt.Sprintf("?startkey=\"%s\"&endkey=\"%s\"&limit=%d", startKey, endKey, limit)
 }
 
 // URLForJSONQuery returns url for GET request to retrieve
