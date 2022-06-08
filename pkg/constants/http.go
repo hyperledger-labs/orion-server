@@ -128,7 +128,7 @@ func URLForLedgerPath(start, end uint64) string {
 	return LedgerEndpoint + fmt.Sprintf("path?start=%d&end=%d", start, end)
 }
 
-func URLTxProof(blockNum uint64, txIdx int) string {
+func URLTxProof(blockNum uint64, txIdx uint64) string {
 	return LedgerEndpoint + fmt.Sprintf("proof/tx/%d?idx=%d", blockNum, txIdx)
 }
 

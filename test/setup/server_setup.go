@@ -175,6 +175,32 @@ func (s *Server) SetAdminSigner(newAdminSigner crypto.Signer) {
 	s.adminSigner = newAdminSigner
 }
 
+func (s *Server) GetTxProof(t *testing.T, userID string, blockNumber, txIndex uint64) (*types.GetTxProofResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetTxProofQuery{
+		UserId:      userID,
+		BlockNumber: blockNumber,
+		TxIndex:     txIndex,
+	}
+
+	response, err := client.GetTxProof(
+		&types.GetTxProofQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		})
+
+	return response, err
+}
+
 func (s *Server) QueryConfigBlockStatus(t *testing.T) (*types.GetConfigBlockResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
@@ -742,7 +768,7 @@ func (s *Server) GetDBIndex(t *testing.T, dbName string, userID string) (*types.
 	return response, err
 }
 
-func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string, *types.TxReceipt, error) {
+func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string, *types.TxReceipt, *types.DataTxEnvelope, error) {
 	txID := uuid.New().String()
 	dataTx := &types.DataTx{
 		MustSignUserIds: []string{"admin"},
@@ -761,15 +787,16 @@ func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string
 	}
 
 	// Post transaction into new database
-	receipt, err := s.SubmitTransaction(t, constants.PostDataTx, &types.DataTxEnvelope{
+	txEnv := &types.DataTxEnvelope{
 		Payload:    dataTx,
 		Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
-	})
+	}
+	receipt, err := s.SubmitTransaction(t, constants.PostDataTx, txEnv)
 	if err != nil {
-		return txID, nil, err
+		return txID, nil, nil, err
 	}
 
-	return txID, receipt, nil
+	return txID, receipt, txEnv, nil
 }
 
 func (s *Server) CreateUsers(t *testing.T, users []*types.UserWrite) (*types.TxReceipt, error) {

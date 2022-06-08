@@ -74,7 +74,7 @@ func TestBasicCluster(t *testing.T) {
 	var txOK int
 	var txRedirected int
 	for i, srv := range c.Servers {
-		txID, rcpt, err := srv.WriteDataTx(t, worldstate.DefaultDBName, "john", []byte{uint8(i), uint8(i)})
+		txID, rcpt, _, err := srv.WriteDataTx(t, worldstate.DefaultDBName, "john", []byte{uint8(i), uint8(i)})
 		if err != nil {
 			t.Logf("txID: %s, error: %s", txID, err)
 			require.Contains(t, err.Error(), "Redirect blocked in test client: url:")
@@ -143,7 +143,7 @@ func NodeRecovery(t *testing.T, victimIsLeader bool) {
 
 	keys := []string{"alice", "charlie", "dan"}
 	for _, key := range keys {
-		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, key, []byte(key+"-data"))
+		txID, rcpt, _, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, key, []byte(key+"-data"))
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
@@ -181,7 +181,7 @@ func NodeRecovery(t *testing.T, victimIsLeader bool) {
 		return newLeader >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	txID, rcpt, err := c.Servers[newLeader].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
+	txID, rcpt, _, err := c.Servers[newLeader].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
 	require.NoError(t, err)
 	require.NotNil(t, rcpt)
 	require.True(t, txID != "")
@@ -260,7 +260,7 @@ func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 		return leaderRound1 >= 0
 	}, 30*time.Second, 100*time.Millisecond)
 
-	txID, rcpt, err := c.Servers[leaderRound1].WriteDataTx(t, worldstate.DefaultDBName, "alice", []byte("alice-data"))
+	txID, rcpt, _, err := c.Servers[leaderRound1].WriteDataTx(t, worldstate.DefaultDBName, "alice", []byte("alice-data"))
 	require.NoError(t, err)
 	require.NotNil(t, rcpt)
 	require.True(t, txID != "")
@@ -315,7 +315,7 @@ func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 
 	//only one server is active now => no majority to pick leader
 	require.Eventually(t, func() bool {
-		_, _, err = c.Servers[activeServer].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
+		_, _, _, err = c.Servers[activeServer].WriteDataTx(t, worldstate.DefaultDBName, "bob", []byte("bob-data"))
 		return err != nil && err.Error() == "failed to submit transaction, server returned: status: 503 Service Unavailable, message: Cluster leader unavailable"
 	}, 60*time.Second, 100*time.Millisecond)
 
@@ -336,7 +336,7 @@ func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 		follower1Round3 = follower1Round2
 	}
 
-	txID, rcpt, err = c.Servers[leaderRound3].WriteDataTx(t, worldstate.DefaultDBName, "charlie", []byte("charlie-data"))
+	txID, rcpt, _, err = c.Servers[leaderRound3].WriteDataTx(t, worldstate.DefaultDBName, "charlie", []byte("charlie-data"))
 	require.NoError(t, err)
 	require.NotNil(t, rcpt)
 	require.True(t, txID != "")
@@ -369,7 +369,7 @@ func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
 
 	t.Logf("Started node %d, leader index is: %d; all 3 nodes are up", follower2Round2, leaderRound4)
 
-	txID, rcpt, err = c.Servers[leaderRound4].WriteDataTx(t, worldstate.DefaultDBName, "dan", []byte("dan-data"))
+	txID, rcpt, _, err = c.Servers[leaderRound4].WriteDataTx(t, worldstate.DefaultDBName, "dan", []byte("dan-data"))
 	require.NoError(t, err)
 	require.NotNil(t, rcpt)
 	require.True(t, txID != "")
@@ -436,7 +436,7 @@ func TestClusterRestart(t *testing.T) {
 
 	keys := []string{"alice", "bob"}
 	for _, key := range keys {
-		txID, rcpt, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, key, []byte(key+"-data"))
+		txID, rcpt, _, err := c.Servers[leaderIndex].WriteDataTx(t, worldstate.DefaultDBName, key, []byte(key+"-data"))
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
@@ -519,7 +519,7 @@ func TestAllNodesGetLeadership(t *testing.T) {
 	oldLeader := -1
 	for !leaders[0] || !leaders[1] || !leaders[2] {
 		leaders[currentLeader] = true
-		txID, rcpt, err := c.Servers[currentLeader].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(currentLeader), []byte{uint8(currentLeader)})
+		txID, rcpt, _, err := c.Servers[currentLeader].WriteDataTx(t, worldstate.DefaultDBName, strconv.Itoa(currentLeader), []byte{uint8(currentLeader)})
 		require.NoError(t, err)
 		require.NotNil(t, rcpt)
 		require.True(t, txID != "")
