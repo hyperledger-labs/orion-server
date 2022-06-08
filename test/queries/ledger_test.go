@@ -435,7 +435,6 @@ func TestLedgerTxProof(t *testing.T) {
 			respEnv, err := s.GetTxProof(t, "admin", blockNum, 0)
 			require.NoError(t, err)
 			require.NotNil(t, respEnv)
-			respEnv.GetResponse().GetHashes()
 			require.Len(t, respEnv.GetResponse().GetHashes(), 1)
 
 			ok, err := verifyTxProof(respEnv.GetResponse().GetHashes(), txRcpt[blockNum-2], txEnvs[blockNum-2])
@@ -445,9 +444,9 @@ func TestLedgerTxProof(t *testing.T) {
 	})
 
 	t.Run("invalid: index out of range", func(t *testing.T) {
-			respEnv, err := s.GetTxProof(t, "admin", 2, 1)
-			require.EqualError(t, err, "error while issuing /ledger/proof/tx/2?idx=1: error while processing 'GET /ledger/proof/tx/2?idx=1' because node with index 1 is not part of merkle tree (0, 0)")
-			require.Nil(t, respEnv)
+		respEnv, err := s.GetTxProof(t, "admin", 2, 1)
+		require.EqualError(t, err, "error while issuing /ledger/proof/tx/2?idx=1: error while processing 'GET /ledger/proof/tx/2?idx=1' because node with index 1 is not part of merkle tree (0, 0)")
+		require.Nil(t, respEnv)
 	})
 
 	t.Run("invalid: block out of range", func(t *testing.T) {
