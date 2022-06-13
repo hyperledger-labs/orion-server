@@ -703,6 +703,31 @@ func (s *Server) GetTxIDsSubmittedBy(t *testing.T, userID string) (*types.GetTxI
 	return response, err
 }
 
+func (s *Server) ExecuteJSONQuery(t *testing.T, userID, dbName, query string) (*types.DataQueryResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	dataJSONQuery := &types.DataJSONQuery{
+		UserId: userID,
+		DbName: dbName,
+		Query:  query,
+	}
+	response, err := client.ExecuteJSONQuery(
+		constants.URLForJSONQuery(dbName),
+		dataJSONQuery,
+		testutils.SignatureFromQuery(t, signer, dataJSONQuery),
+	)
+
+	return response, err
+}
+
 func (s *Server) QueryUser(t *testing.T, userID string) (*types.GetUserResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
@@ -1158,11 +1183,12 @@ func (t *testFailure) Fatalf(format string, args ...interface{}) {
 func (t *testFailure) Helper() {
 }
 
-func CreateDatabases(t *testing.T, s *Server, dbNames []string) {
+func CreateDatabases(t *testing.T, s *Server, dbNames []string, dbsIndex map[string]*types.DBIndex) {
 	dbAdminTx := &types.DBAdministrationTx{
 		UserId:    s.AdminID(),
 		TxId:      uuid.New().String(),
 		CreateDbs: dbNames,
+		DbsIndex:  dbsIndex,
 	}
 
 	receipt, err := s.SubmitTransaction(t, constants.PostDBTx, &types.DBAdministrationTxEnvelope{
