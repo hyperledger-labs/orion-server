@@ -36,6 +36,20 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			DbName: params["dbname"],
 			Key:    params["key"],
 		}
+	case constants.GetDataRange:
+		limit, err := strconv.ParseUint(params["limit"], 10, 64)
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+			return nil, true
+		}
+
+		payload = &types.GetDataRangeQuery{
+			UserId:   querierUserID,
+			DbName:   params["dbname"],
+			StartKey: params["startkey"][1 : len(params["startkey"])-1],
+			EndKey:   params["endkey"][1 : len(params["endkey"])-1],
+			Limit:    limit,
+		}
 	case constants.GetUser:
 		payload = &types.GetUserQuery{
 			UserId:       querierUserID,

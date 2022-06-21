@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
@@ -64,11 +65,12 @@ func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorT
 	}
 
 	qProcConfig := &worldstateQueryProcessorConfig{
-		nodeID:          nodeID,
-		db:              db,
-		blockStore:      nil,
-		identityQuerier: identity.NewQuerier(db),
-		logger:          logger,
+		nodeID:              nodeID,
+		db:                  db,
+		queryProcessingConf: &config.QueryProcessingConf{},
+		blockStore:          nil,
+		identityQuerier:     identity.NewQuerier(db),
+		logger:              logger,
 	}
 
 	qProc := newWorldstateQueryProcessor(qProcConfig)
@@ -229,6 +231,547 @@ func TestGetDBIndex(t *testing.T) {
 			index, err := env.q.getDBIndex(testCase.dbName, testCase.user)
 			require.Nil(t, index)
 			require.EqualError(t, err, testCase.expectedErr)
+		}
+	})
+}
+
+func TestGetDataRange(t *testing.T) {
+	aliceKVs := []*worldstate.KVWithMetadata{
+		{
+			Key:   "key1",
+			Value: []byte("value1"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 3,
+					TxNum:    1,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"alice": true,
+					},
+				},
+			},
+		},
+		{
+			Key:   "key2",
+			Value: []byte("value2"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 5,
+					TxNum:    1,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"alice": true,
+					},
+				},
+			},
+		},
+		{
+			Key:   "key3",
+			Value: []byte("value3"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 6,
+					TxNum:    1,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"alice": true,
+					},
+				},
+			},
+		},
+		{
+			Key:   "key5",
+			Value: []byte("value5"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 8,
+					TxNum:    54,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"alice": true,
+					},
+				},
+			},
+		},
+		{
+			Key:   "key8",
+			Value: []byte("value8"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 8,
+					TxNum:    55,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"alice": true,
+					},
+				},
+			},
+		},
+	}
+
+	bobKVs := []*worldstate.KVWithMetadata{
+		{
+			Key:   "key4",
+			Value: []byte("value4"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 7,
+					TxNum:    1,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"bob": true,
+					},
+				},
+			},
+		},
+		{
+			Key:   "key6",
+			Value: []byte("value6"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 10,
+					TxNum:    11,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"bob": true,
+					},
+				},
+			},
+		},
+		{
+			Key:   "key7",
+			Value: []byte("value7"),
+			Metadata: &types.Metadata{
+				Version: &types.Version{
+					BlockNum: 13,
+					TxNum:    5,
+				},
+				AccessControl: &types.AccessControl{
+					ReadUsers: map[string]bool{
+						"bob": true,
+					},
+				},
+			},
+		},
+	}
+
+	setup := func(db worldstate.DB, userID, dbName string) {
+		user := &types.User{
+			Id: userID,
+			Privilege: &types.Privilege{
+				DbPermission: map[string]types.Privilege_Access{
+					dbName: types.Privilege_ReadWrite,
+				},
+			},
+		}
+
+		u, err := proto.Marshal(user)
+		require.NoError(t, err)
+
+		createUser := map[string]*worldstate.DBUpdates{
+			worldstate.UsersDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key:   string(identity.UserNamespace) + userID,
+						Value: u,
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 2,
+								TxNum:    1,
+							},
+						},
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createUser, 2))
+
+		createDB := map[string]*worldstate.DBUpdates{
+			worldstate.DatabasesDBName: {
+				Writes: []*worldstate.KVWithMetadata{
+					{
+						Key: dbName,
+					},
+				},
+			},
+		}
+		require.NoError(t, db.Commit(createDB, 2))
+
+		kvs := aliceKVs
+		kvs = append(kvs, bobKVs...)
+		dbsUpdates := map[string]*worldstate.DBUpdates{
+			"test-db": {
+				Writes: kvs,
+			},
+		}
+		require.NoError(t, db.Commit(dbsUpdates, 10))
+	}
+
+	t.Run("getDataRange", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+		env.q.queryProcessingConf.ResponseSizeLimitInBytes = 50
+
+		setup(env.db, "alice", "test-db")
+		setup(env.db, "bob", "test-db")
+
+		testCases := []struct {
+			startKey       string
+			endKey         string
+			limit          uint64
+			user           string
+			expectedResult []*types.KVWithMetadata
+		}{
+			{
+				startKey: "key1",
+				endKey:   "key9",
+				limit:    100,
+				user:     "alice",
+				expectedResult: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 3,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 5,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key3",
+						Value: []byte("value3"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 6,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key5",
+						Value: []byte("value5"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 8,
+								TxNum:    54,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key8",
+						Value: []byte("value8"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 8,
+								TxNum:    55,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				startKey: "key1",
+				endKey:   "key4",
+				limit:    1,
+				user:     "alice",
+				expectedResult: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 3,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 5,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key3",
+						Value: []byte("value3"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 6,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				startKey: "",
+				endKey:   "key4",
+				limit:    0,
+				user:     "alice",
+				expectedResult: []*types.KVWithMetadata{
+					{
+						Key:   "key1",
+						Value: []byte("value1"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 3,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key2",
+						Value: []byte("value2"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 5,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key3",
+						Value: []byte("value3"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 6,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"alice": true,
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				startKey: "",
+				endKey:   "",
+				user:     "bob",
+				expectedResult: []*types.KVWithMetadata{
+					{
+						Key:   "key4",
+						Value: []byte("value4"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 7,
+								TxNum:    1,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"bob": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key6",
+						Value: []byte("value6"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 10,
+								TxNum:    11,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"bob": true,
+								},
+							},
+						},
+					},
+					{
+						Key:   "key7",
+						Value: []byte("value7"),
+						Metadata: &types.Metadata{
+							Version: &types.Version{
+								BlockNum: 13,
+								TxNum:    5,
+							},
+							AccessControl: &types.AccessControl{
+								ReadUsers: map[string]bool{
+									"bob": true,
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				startKey:       "key9",
+				endKey:         "",
+				limit:          1,
+				user:           "bob",
+				expectedResult: nil,
+			},
+			{
+				startKey:       "2",
+				endKey:         "1",
+				limit:          0,
+				user:           "alice",
+				expectedResult: nil,
+			},
+		}
+
+		for _, testCase := range testCases {
+			var actualKVs []*types.KVWithMetadata
+			for {
+				payload, err := env.q.getDataRange("test-db", testCase.user, testCase.startKey, testCase.endKey, testCase.limit)
+				require.NoError(t, err)
+				require.NotNil(t, payload)
+				actualKVs = append(actualKVs, payload.GetKVs()...)
+				if !payload.PendingResult {
+					break
+				}
+				testCase.startKey = payload.NextStartKey
+			}
+			require.Equal(t, testCase.expectedResult, actualKVs)
+		}
+	})
+
+	t.Run("getDataRange returns user does not have permission to read from the database", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+		env.q.queryProcessingConf.ResponseSizeLimitInBytes = 30
+
+		setup(env.db, "alice", "test-db")
+		setup(env.db, "bob", "another-test-db")
+
+		actualVal, err := env.q.getDataRange("another-test-db", "alice", "", "", 0)
+		require.EqualError(t, err, "the user [alice] has no permission to read from database [another-test-db]")
+		require.Nil(t, actualVal)
+	})
+
+	t.Run("getDataRange returns user server restriction error", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+		env.q.queryProcessingConf.ResponseSizeLimitInBytes = 10
+
+		setup(env.db, "alice", "test-db")
+
+		actualVal, err := env.q.getDataRange("test-db", "alice", "key1", "key2", 10)
+		require.EqualError(t, err, "response size limit for queries is configured as 10 bytes but a single record size itself is 33 bytes. Increase the query response size limit at the server")
+		require.Nil(t, actualVal)
+	})
+
+	t.Run("getData returns permission error due to directly accessing system database", func(t *testing.T) {
+		env := newWorldstateQueryProcessorTestEnv(t)
+		defer env.cleanup(t)
+		env.q.queryProcessingConf.ResponseSizeLimitInBytes = 50
+
+		setup(env.db, "testUser", "test-db")
+
+		tests := []struct {
+			name     string
+			dbName   string
+			user     string
+			startKey string
+			endKey   string
+		}{
+			{
+				name:     "accessing config db",
+				dbName:   worldstate.ConfigDBName,
+				user:     "alice",
+				startKey: "c",
+				endKey:   "",
+			},
+			{
+				name:     "accessing users db",
+				dbName:   worldstate.UsersDBName,
+				user:     "alice",
+				startKey: "user1",
+				endKey:   "user10",
+			},
+			{
+				name:     "accessing databases db",
+				dbName:   worldstate.DatabasesDBName,
+				user:     "alice",
+				startKey: "db1",
+				endKey:   "db10",
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.name, func(t *testing.T) {
+				actualVal, err := env.q.getDataRange(tt.dbName, tt.user, tt.startKey, tt.endKey, 0)
+				require.EqualError(t, err, "no user can directly read from a system database ["+tt.dbName+"]. "+
+					"To read from a system database, use /config, /user, /db rest endpoints instead of /data")
+				require.Nil(t, actualVal)
+			})
 		}
 	})
 }

@@ -46,6 +46,18 @@ message GetDataResponse {
   Metadata metadata = 3;
 }
 
+message GetDataRangeResponseEnvelope {
+  GetDataRangeResponse response = 1;
+  bytes signature = 2;
+}
+
+message GetDataRangeResponse {
+  ResponseHeader header = 1;
+  repeated KVWithMetadata KVs = 2;
+  bool pending_result = 3;
+  string next_start_key = 4;
+}
+
 // GetUser
 message GetUserResponseEnvelope {
   GetUserResponse response = 1;

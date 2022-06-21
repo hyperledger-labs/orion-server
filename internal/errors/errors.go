@@ -75,3 +75,11 @@ type BadRequestError struct {
 func (c *BadRequestError) Error() string {
 	return c.ErrMsg
 }
+
+type ServerRestrictionError struct {
+	ErrMsg string
+}
+
+func (c *ServerRestrictionError) Error() string {
+	return c.ErrMsg
+}

@@ -39,6 +39,14 @@ message GetDataQuery {
   string key = 3;
 }
 
+message GetDataRangeQuery {
+  string user_id = 1;
+  string db_name = 2;
+  string start_key = 3;
+  string end_key = 4;
+  uint64 limit = 5;
+}
+
 message GetUserQueryEnvelope {
   GetUserQuery payload = 1;
   bytes signature = 2;

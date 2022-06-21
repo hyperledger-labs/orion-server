@@ -308,6 +308,29 @@ func (_m *DB) GetDataProof(userID string, blockNum uint64, dbname string, key st
 	return r0, r1
 }
 
+// GetDataRange provides a mock function with given fields: dbName, querierUserID, startKey, endKey, limit
+func (_m *DB) GetDataRange(dbName string, querierUserID string, startKey string, endKey string, limit uint64) (*types.GetDataRangeResponseEnvelope, error) {
+	ret := _m.Called(dbName, querierUserID, startKey, endKey, limit)
+
+	var r0 *types.GetDataRangeResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string, string, string, string, uint64) *types.GetDataRangeResponseEnvelope); ok {
+		r0 = rf(dbName, querierUserID, startKey, endKey, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetDataRangeResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, string, string, string, uint64) error); ok {
+		r1 = rf(dbName, querierUserID, startKey, endKey, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetDeletedValues provides a mock function with given fields: dbname, key
 func (_m *DB) GetDeletedValues(dbname string, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
 	ret := _m.Called(dbname, key)

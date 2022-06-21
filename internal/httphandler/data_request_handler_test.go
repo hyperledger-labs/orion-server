@@ -1,4 +1,3 @@
-// Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 package httphandler
 
@@ -231,6 +230,391 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 
 			if tt.expectedResponse != nil {
 				res := &types.GetDataResponseEnvelope{}
+				err = json.NewDecoder(rr.Body).Decode(res)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedResponse, res)
+				//TODO verify signature on response
+			}
+		})
+	}
+}
+
+func TestDataRequestHandler_DataRangeQuery(t *testing.T) {
+	dbName := "test_database"
+
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice", "bob"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	_, bobSigner := testutils.LoadTestCrypto(t, cryptoDir, "bob")
+
+	sigFoo := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataRangeQuery{
+		UserId:   submittingUserName,
+		DbName:   dbName,
+		StartKey: "key1",
+		EndKey:   "key10",
+		Limit:    10,
+	})
+
+	sigFooNoLimits := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataRangeQuery{
+		UserId:   submittingUserName,
+		DbName:   dbName,
+		StartKey: "key1",
+		EndKey:   "key10",
+		Limit:    0,
+	})
+
+	sigFooWithEmptyStartKey := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataRangeQuery{
+		UserId:   submittingUserName,
+		DbName:   dbName,
+		StartKey: "",
+		EndKey:   "key10",
+		Limit:    10,
+	})
+
+	sigFooWithEmptyEndKey := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataRangeQuery{
+		UserId:   submittingUserName,
+		DbName:   dbName,
+		StartKey: "key1",
+		EndKey:   "",
+		Limit:    10,
+	})
+
+	sigFooWithEmptyStartEndKeys := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataRangeQuery{
+		UserId:   submittingUserName,
+		DbName:   dbName,
+		StartKey: "",
+		EndKey:   "",
+		Limit:    0,
+	})
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() (*http.Request, error)
+		dbMockFactory      func(response *types.GetDataRangeResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetDataRangeResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "valid get data range with a limit",
+			expectedResponse: &types.GetDataRangeResponseEnvelope{
+				Response: &types.GetDataRangeResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key2",
+							Value: []byte("value2"),
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", 10), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataRange", dbName, submittingUserName, "key1", "key10", uint64(10)).Return(response, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get data range with a limit and empty start key",
+			expectedResponse: &types.GetDataRangeResponseEnvelope{
+				Response: &types.GetDataRangeResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key2",
+							Value: []byte("value2"),
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "", "key10", 10), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooWithEmptyStartKey))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataRange", dbName, submittingUserName, "", "key10", uint64(10)).Return(response, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get data range with a limit and empty end key",
+			expectedResponse: &types.GetDataRangeResponseEnvelope{
+				Response: &types.GetDataRangeResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key2",
+							Value: []byte("value2"),
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "", 10), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooWithEmptyEndKey))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataRange", dbName, submittingUserName, "key1", "", uint64(10)).Return(response, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get data range without a limit",
+			expectedResponse: &types.GetDataRangeResponseEnvelope{
+				Response: &types.GetDataRangeResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key2",
+							Value: []byte("value2"),
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", 0), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooNoLimits))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataRange", dbName, submittingUserName, "key1", "key10", uint64(0)).Return(response, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get data range without a limit and empty start/end keys",
+			expectedResponse: &types.GetDataRangeResponseEnvelope{
+				Response: &types.GetDataRangeResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key2",
+							Value: []byte("value2"),
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "", "", 0), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooWithEmptyStartEndKeys))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetDataRange", dbName, submittingUserName, "", "", uint64(0)).Return(response, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "submitting user is not eligible to read from the database",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", 10), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				db.On("GetDataRange", dbName, submittingUserName, "key1", "key10", uint64(10)).Return(nil, &interrors.PermissionErr{ErrMsg: "access forbidden"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
+			expectedErr:        "error while processing 'GET /data/test_database?startkey=\"key1\"&endkey=\"key10\"&limit=10' because access forbidden",
+		},
+		{
+			name: "failed to get data",
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", 10), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				db.On("GetDataRange", dbName, submittingUserName, "key1", "key10", uint64(10)).
+					Return(nil, errors.New("failed to get data"))
+				return db
+			},
+			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET /data/test_database?startkey=\"key1\"&endkey=\"key10\"&limit=10' because failed to get data",
+		},
+		{
+			name:             "user doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", uint64(10)), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name:             "fail to verify signature",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", uint64(10)), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sigFooBob := testutils.SignatureFromQuery(t, bobSigner, &types.GetDataQuery{
+					UserId: submittingUserName,
+					DbName: dbName,
+					Key:    "foo",
+				})
+
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFooBob))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name:             "missing userID http header",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", uint64(10)), nil)
+				if err != nil {
+					return nil, err
+				}
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				return &mocks.DB{}
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "UserID is not set in the http request header",
+		},
+		{
+			name:             "missing signature http header",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetDataRange(dbName, "key1", "key10", uint64(10)), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataRangeResponseEnvelope) bcdb.DB {
+				return &mocks.DB{}
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "Signature is not set in the http request header",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			rr := httptest.NewRecorder()
+			handler := NewDataRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &types.HttpResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				res := &types.GetDataRangeResponseEnvelope{}
 				err = json.NewDecoder(rr.Body).Decode(res)
 				require.NoError(t, err)
 				require.Equal(t, tt.expectedResponse, res)
