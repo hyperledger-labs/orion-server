@@ -6,6 +6,7 @@ package replication
 import (
 	"context"
 	"fmt"
+	"hash/crc64"
 	"net/http"
 	"sort"
 	"sync"
@@ -76,6 +77,7 @@ type BlockReplicator struct {
 	clusterConfig                   *types.ClusterConfig
 	joinExistingCluster             bool
 	finishedJoin                    bool
+	runCampaign                     bool // this node starts a campaign on a new cluster
 	raftNode                        raft.Node
 	lastKnownLeader                 uint64
 	lastKnownLeaderHost             string // cache the leader's Node host:port for client request redirection
@@ -220,7 +222,18 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 				conf.JoinBlock.GetConsensusMetadata())
 		} else {
 			startPeers := raftPeers(br.clusterConfig)
+
 			lg.Infof("Starting Raft on a new cluster, start peers: %v", startPeers)
+			genesisBytes, err := proto.Marshal(br.lastCommittedBlock)
+			if err != nil {
+				br.lg.Panicf("Failed to read genesis block: %s", err)
+			}
+			genesisHash := crc64.Checksum(genesisBytes, crc64.MakeTable(crc64.ISO))
+			index := int(genesisHash % uint64(len(startPeers)))
+			if startPeers[index].ID == br.raftID {
+				br.runCampaign = true
+				lg.Info("This node was selected to run a leader election campaign on the new cluster")
+			}
 			br.raftNode = raft.StartNode(br.raftConfig, startPeers)
 		}
 	}
@@ -359,7 +372,12 @@ func (br *BlockReplicator) runRaftEventLoop(readyCh chan<- struct{}) {
 	electionTimeout := tickInterval.Seconds() * float64(br.clusterConfig.ConsensusConfig.RaftConfig.ElectionTicks)
 	halfElectionTimeout := electionTimeout / 2
 
-	// TODO proactive campaign to speed up leader election on a new cluster
+	// Proactive campaign to speed up leader election on a new cluster
+	stopCampaignCh := make(chan struct{})
+	finishedCampaign := false
+	if br.runCampaign {
+		go br.runCampaignLoop(stopCampaignCh)
+	}
 
 	var raftStatusStr string
 Event_Loop:
@@ -402,6 +420,11 @@ Event_Loop:
 				leader := atomic.LoadUint64(&rd.SoftState.Lead) // etcdraft requires atomic access to this var
 				if leader != raft.None {
 					br.lg.Debugf("Leader %d is present", leader)
+					// finish the campaign on the first leader, whether it is running or not
+					if !finishedCampaign {
+						close(stopCampaignCh)
+						finishedCampaign = true
+					}
 				} else {
 					br.lg.Debug("No leader")
 				}
@@ -433,6 +456,40 @@ Event_Loop:
 	}
 
 	br.lg.Info("Exiting block replicator event loop")
+}
+
+// Initiate a leader election campaign every two HeartbeatTimeout elapses, until leader is present. Either this
+// node successfully claims leadership, or another leader already existed when this node starts.
+// We could do this more lazily and exit proactive campaign once transitioned to Candidate state
+// (not PreCandidate because other nodes might not have started yet, in which case PreVote
+// messages are dropped at recipients). But there is no obvious reason (for now) to be lazy.
+//
+// 2*HeartbeatTicks is used to avoid excessive campaign when network latency is significant and
+// Raft term keeps advancing in this extreme case.
+func (br *BlockReplicator) runCampaignLoop(stopCampaignCh chan struct{}) {
+	tickInterval, err := time.ParseDuration(br.clusterConfig.ConsensusConfig.RaftConfig.TickInterval)
+	if err != nil {
+		br.lg.Panicf("Error parsing raft tick interval duration: %s", err)
+	}
+	campaignInterval := 2 * time.Duration(br.clusterConfig.ConsensusConfig.RaftConfig.HeartbeatTicks) * tickInterval
+
+	br.lg.Infof("Starting to campaign every %s", campaignInterval)
+	for i := 1; ; i++ {
+		select {
+		case <-br.stopCh:
+			br.lg.Debugf("Closing, exiting campaign loop")
+			return
+		case <-stopCampaignCh:
+			br.lg.Debugf("Done, exiting campaign loop")
+			return
+		case <-time.After(campaignInterval):
+			if err := br.raftNode.Campaign(context.TODO()); err != nil {
+				br.lg.Errorf("Error starting campaign, aborting campaign loop: %s", err)
+				return
+			}
+			br.lg.Debugf("Started campaign #%d", i)
+		}
+	}
 }
 
 func (br *BlockReplicator) processLeaderJustElected() {
