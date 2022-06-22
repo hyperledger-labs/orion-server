@@ -201,6 +201,34 @@ func (s *Server) GetTxProof(t *testing.T, userID string, blockNumber, txIndex ui
 	return response, err
 }
 
+func (s *Server) GetDataProof(t *testing.T, db, key, userID string, blockNumber uint64, isDeleted bool) (*types.GetDataProofResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataProofQuery{
+		UserId:      userID,
+		BlockNumber: blockNumber,
+		DbName:      db,
+		Key:         key,
+		IsDeleted:   isDeleted,
+	}
+
+	response, err := client.GetDataProof(
+		&types.GetDataProofQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		})
+
+	return response, err
+}
+
 func (s *Server) QueryConfigBlockStatus(t *testing.T) (*types.GetConfigBlockResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
