@@ -7,20 +7,24 @@ import (
 	"os"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
+	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 
 type provenanceQueryProcessorTestEnv struct {
-	p *provenanceQueryProcessor
-
+	p       *provenanceQueryProcessor
+	db      worldstate.DB
 	cleanup func(t *testing.T)
 }
 
 func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorTestEnv {
-	path, err := ioutil.TempDir("/tmp", "provenanceQueryProcessor")
+	provenancePath, err := ioutil.TempDir("/tmp", "provenanceQueryProcessor")
 	require.NoError(t, err)
 
 	c := &logger.Config{
@@ -34,18 +38,48 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 
 	provenanceStore, err := provenance.Open(
 		&provenance.Config{
-			StoreDir: path,
+			StoreDir: provenancePath,
 			Logger:   logger,
 		},
 	)
+	if err != nil {
+		if err := os.RemoveAll(provenancePath); err != nil {
+			t.Errorf("failed to remove %s due to %v", provenancePath, err)
+		}
+
+		t.Fatalf("failed to create a new provenance store, %v", err)
+	}
+
+	dbPath, err := ioutil.TempDir("/tmp", "db")
 	require.NoError(t, err)
+	db, err := leveldb.Open(
+		&leveldb.Config{
+			DBRootDir: dbPath,
+			Logger:    logger,
+		},
+	)
+	if err != nil {
+		if err := os.RemoveAll(dbPath); err != nil {
+			t.Errorf("failed to remove %s due to %v", dbPath, err)
+		}
+
+		t.Fatalf("failed to create a new leveldb instance, %v", err)
+	}
 
 	cleanup := func(t *testing.T) {
 		if err := provenanceStore.Close(); err != nil {
 			t.Errorf("failed to close the provenance store: %v", err)
 		}
-		if err := os.RemoveAll(path); err != nil {
-			t.Fatalf("failed to remove %s due to %v", path, err)
+
+		if err := db.Close(); err != nil {
+			t.Errorf("failed to close leveldb: %v", err)
+		}
+		if err := os.RemoveAll(provenancePath); err != nil {
+			t.Fatalf("failed to remove %s due to %v", provenancePath, err)
+		}
+
+		if err := os.RemoveAll(dbPath); err != nil {
+			t.Fatalf("failed to remove %s due to %v", dbPath, err)
 		}
 	}
 
@@ -53,8 +87,10 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 		p: newProvenanceQueryProcessor(
 			&provenanceQueryProcessorConfig{
 				provenanceStore: provenanceStore,
+				identityQuerier: identity.NewQuerier(db),
 				logger:          logger,
 			}),
+		db:      db,
 		cleanup: cleanup,
 	}
 }
@@ -799,20 +835,57 @@ func TestGetWriters(t *testing.T) {
 	}
 }
 
+func setupUserForTest(t *testing.T, userID string, admin bool, db worldstate.DB) {
+	user := &types.User{
+		Id: userID,
+		Privilege: &types.Privilege{
+			Admin: admin,
+		},
+	}
+
+	u, err := proto.Marshal(user)
+	require.NoError(t, err)
+
+	createUser := map[string]*worldstate.DBUpdates{
+		worldstate.UsersDBName: {
+			Writes: []*worldstate.KVWithMetadata{
+				{
+					Key:   string(identity.UserNamespace) + userID,
+					Value: u,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 2,
+							TxNum:    1,
+						},
+					},
+				},
+			},
+		},
+	}
+	require.NoError(t, db.Commit(createUser, 2))
+}
+
 func TestGetValuesReadByUser(t *testing.T) {
 	env := newProvenanceQueryProcessorTestEnv(t)
 	defer env.cleanup(t)
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+	setupUserForTest(t, "user5", false, env.db)
+
 	tests := []struct {
 		name            string
-		user            string
+		targetUser      string
+		querierUsers    []string
 		expectedPayload *types.GetDataProvenanceResponse
+		expectedError   string
 	}{
 		{
-			name: "fetch values read by user1",
-			user: "user1",
+			name:         "fetch values read by user1",
+			targetUser:   "user1",
+			querierUsers: []string{"user1", "admin1"},
 			expectedPayload: &types.GetDataProvenanceResponse{
 				DBKeyValues: map[string]*types.KVsWithMetadata{
 					"db1": {
@@ -847,22 +920,37 @@ func TestGetValuesReadByUser(t *testing.T) {
 			},
 		},
 		{
-			name: "fetch values read by user5",
-			user: "user5",
+			name:         "fetch values read by user5",
+			targetUser:   "user5",
+			querierUsers: []string{"user5", "admin1"},
 			expectedPayload: &types.GetDataProvenanceResponse{
 				DBKeyValues: nil,
 			},
 		},
+		{
+			name:            "fetch values read by user5 with no permission",
+			targetUser:      "user5",
+			querierUsers:    []string{"user1"},
+			expectedPayload: nil,
+			expectedError:   "The querier [user1] is neither an admin nor requesting operations performed by [user1]. Only an admin can query operations performed by other users.",
+		},
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetValuesReadByUser(tt.user)
-		require.NoError(t, err)
+		for _, querier := range tt.querierUsers {
+			envelope, err := env.p.GetValuesReadByUser(querier, tt.targetUser)
+			if tt.expectedError != "" {
+				require.EqualError(t, err, tt.expectedError)
+				require.Nil(t, envelope)
+				continue
+			}
 
-		require.NotNil(t, envelope)
-		require.Len(t, envelope.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
-		for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
-			require.ElementsMatch(t, expectedKVs.KVs, envelope.DBKeyValues[dbName].KVs)
+			require.NoError(t, err)
+			require.NotNil(t, envelope)
+			require.Len(t, envelope.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
+			for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
+				require.ElementsMatch(t, expectedKVs.KVs, envelope.DBKeyValues[dbName].KVs)
+			}
 		}
 	}
 }
@@ -873,14 +961,21 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+	setupUserForTest(t, "user5", false, env.db)
+
 	tests := []struct {
 		name            string
-		user            string
+		targetUser      string
+		querierUsers    []string
 		expectedPayload *types.GetDataProvenanceResponse
+		expectedError   string
 	}{
 		{
-			name: "fetch values read by user1",
-			user: "user1",
+			name:         "fetch values written by user1",
+			targetUser:   "user1",
+			querierUsers: []string{"user1", "admin1"},
 			expectedPayload: &types.GetDataProvenanceResponse{
 				DBKeyValues: map[string]*types.KVsWithMetadata{
 					"db1": {
@@ -951,22 +1046,36 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 			},
 		},
 		{
-			name: "fetch values read by user5",
-			user: "user5",
+			name:       "fetch values written by user5",
+			targetUser: "user5",
 			expectedPayload: &types.GetDataProvenanceResponse{
 				DBKeyValues: nil,
 			},
 		},
+		{
+			name:            "fetch values written by user1 with other users: error case",
+			targetUser:      "user1",
+			querierUsers:    []string{"user5"},
+			expectedPayload: nil,
+			expectedError:   "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users.",
+		},
 	}
 
 	for _, tt := range tests {
-		payload, err := env.p.GetValuesWrittenByUser(tt.user)
-		require.NoError(t, err)
+		for _, querierUser := range tt.querierUsers {
+			payload, err := env.p.GetValuesWrittenByUser(querierUser, tt.targetUser)
+			if tt.expectedError != "" {
+				require.EqualError(t, err, tt.expectedError)
+				require.Nil(t, payload)
+				continue
+			}
 
-		require.NotNil(t, payload)
-		require.Len(t, payload.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
-		for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
-			require.ElementsMatch(t, expectedKVs.KVs, payload.DBKeyValues[dbName].KVs)
+			require.NoError(t, err)
+			require.NotNil(t, payload)
+			require.Len(t, payload.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
+			for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
+				require.ElementsMatch(t, expectedKVs.KVs, payload.DBKeyValues[dbName].KVs)
+			}
 		}
 	}
 }
@@ -977,14 +1086,21 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user2", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+	setupUserForTest(t, "user5", false, env.db)
+
 	tests := []struct {
 		name            string
-		user            string
+		targetUser      string
+		querierUsers    []string
 		expectedPayload *types.GetDataProvenanceResponse
+		expectedError   string
 	}{
 		{
-			name: "fetch values deleted by user1",
-			user: "user2",
+			name:         "fetch values deleted by user1",
+			targetUser:   "user2",
+			querierUsers: []string{"user2", "admin1"},
 			expectedPayload: &types.GetDataProvenanceResponse{
 				DBKeyValues: map[string]*types.KVsWithMetadata{
 					"db1": {
@@ -1029,22 +1145,37 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 			},
 		},
 		{
-			name: "fetch values deleted by user5",
-			user: "user5",
+			name:         "fetch values deleted by user5",
+			targetUser:   "user5",
+			querierUsers: []string{"user5", "admin1"},
 			expectedPayload: &types.GetDataProvenanceResponse{
 				DBKeyValues: nil,
 			},
 		},
+		{
+			name:            "fetch values deleted by user1 with other users: error case",
+			targetUser:      "user2",
+			querierUsers:    []string{"user5"},
+			expectedPayload: nil,
+			expectedError:   "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users.",
+		},
 	}
 
 	for _, tt := range tests {
-		payload, err := env.p.GetValuesDeletedByUser(tt.user)
-		require.NoError(t, err)
+		for _, querierUser := range tt.querierUsers {
+			payload, err := env.p.GetValuesDeletedByUser(querierUser, tt.targetUser)
+			if tt.expectedError != "" {
+				require.EqualError(t, err, tt.expectedError)
+				require.Nil(t, payload)
+				continue
+			}
 
-		require.NotNil(t, payload)
-		require.Len(t, payload.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
-		for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
-			require.ElementsMatch(t, expectedKVs.KVs, payload.DBKeyValues[dbName].KVs)
+			require.NoError(t, err)
+			require.NotNil(t, payload)
+			require.Len(t, payload.DBKeyValues, len(tt.expectedPayload.DBKeyValues))
+			for dbName, expectedKVs := range tt.expectedPayload.DBKeyValues {
+				require.ElementsMatch(t, expectedKVs.KVs, payload.DBKeyValues[dbName].KVs)
+			}
 		}
 	}
 }
@@ -1055,32 +1186,54 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user2", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+	setupUserForTest(t, "user5", false, env.db)
+
 	tests := []struct {
 		name            string
-		user            string
+		targetUser      string
+		querierUsers    []string
 		expectedPayload *types.GetTxIDsSubmittedByResponse
+		expectedError   string
 	}{
 		{
-			name: "fetch tx submitted by user",
-			user: "user2",
+			name:         "fetch tx submitted by user",
+			targetUser:   "user2",
+			querierUsers: []string{"user2", "admin1"},
 			expectedPayload: &types.GetTxIDsSubmittedByResponse{
 				TxIDs: []string{"tx5", "tx50", "tx6"},
 			},
 		},
 		{
-			name: "fetch tx submitted by user - empty",
-			user: "user5",
+			name:         "fetch tx submitted by user - empty",
+			targetUser:   "user5",
+			querierUsers: []string{"user5", "admin1"},
 			expectedPayload: &types.GetTxIDsSubmittedByResponse{
 				TxIDs: nil,
 			},
 		},
+		{
+			name:            "fetch tx submitted by user2 from other user - error case",
+			targetUser:      "user2",
+			querierUsers:    []string{"user5"},
+			expectedPayload: nil,
+			expectedError:   "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users.",
+		},
 	}
 
 	for _, tt := range tests {
-		payload, err := env.p.GetTxIDsSubmittedByUser(tt.user)
-		require.NoError(t, err)
+		for _, querierUser := range tt.querierUsers {
+			payload, err := env.p.GetTxIDsSubmittedByUser(querierUser, tt.targetUser)
+			if tt.expectedError != "" {
+				require.EqualError(t, err, tt.expectedError)
+				require.Nil(t, payload)
+				continue
+			}
 
-		require.NotNil(t, payload)
-		require.Equal(t, tt.expectedPayload, payload)
+			require.NoError(t, err)
+			require.NotNil(t, payload)
+			require.Equal(t, tt.expectedPayload, payload)
+		}
 	}
 }
