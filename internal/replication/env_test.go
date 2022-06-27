@@ -68,6 +68,7 @@ type nodeEnv struct {
 	pendingTxs      *mocks.PendingTxsReleaser
 	configValidator *mocks.ConfigTxValidator
 	stopServeCh     chan struct{}
+	isRunning       bool
 }
 
 func createNodeEnv(t *testing.T, level string) *nodeEnv {
@@ -93,6 +94,7 @@ func (n *nodeEnv) Start() error {
 
 	go n.ServeCommit()
 
+	n.isRunning = true
 	return nil
 }
 
@@ -100,6 +102,8 @@ func (n *nodeEnv) Close() error {
 	close(n.stopServeCh)
 	err := n.blockReplicator.Close()
 	n.conf.Transport.Close()
+
+	n.isRunning = false
 	return err
 }
 
@@ -252,6 +256,22 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 	}
 
 	return cEnv
+}
+
+func destroyClusterEnv(t *testing.T, env *clusterEnv) {
+	var errs []error
+
+	for _, node := range env.nodes {
+		if node.isRunning {
+			errs = append(errs, node.Close())
+		}
+	}
+
+	errs = append(errs, os.RemoveAll(env.testDir))
+
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
 }
 
 // create a BlockReplicator environment with a genesis block
