@@ -33,9 +33,9 @@ type testCase struct {
 func TestGetHistoricalData(t *testing.T) {
 	t.Parallel()
 
-	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	submittingUserName := "admin"
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"admin"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "admin")
 
 	dbName := "db1"
 	key := "key1"
@@ -67,13 +67,13 @@ func TestGetHistoricalData(t *testing.T) {
 					DbName: dbName,
 					Key:    key,
 				},
-				aliceSigner,
+				adminSigner,
 				submittingUserName,
 			),
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValues", dbName, key).Return(genericResponse, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetValues", submittingUserName, dbName, key).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -90,13 +90,13 @@ func TestGetHistoricalData(t *testing.T) {
 					Key:         key,
 					OnlyDeletes: true,
 				},
-				aliceSigner,
+				adminSigner,
 				submittingUserName,
 			),
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetDeletedValues", dbName, key).Return(genericResponse, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetDeletedValues", submittingUserName, dbName, key).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -113,13 +113,13 @@ func TestGetHistoricalData(t *testing.T) {
 					Key:     key,
 					Version: version,
 				},
-				aliceSigner,
+				adminSigner,
 				submittingUserName,
 			),
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValueAt", dbName, key, version).Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetValueAt", submittingUserName, dbName, key, version).Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -137,13 +137,13 @@ func TestGetHistoricalData(t *testing.T) {
 					Version:    version,
 					MostRecent: true,
 				},
-				aliceSigner,
+				adminSigner,
 				submittingUserName,
 			),
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetMostRecentValueAtOrBelow", dbName, key, version).Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetMostRecentValueAtOrBelow", submittingUserName, dbName, key, version).Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -161,13 +161,13 @@ func TestGetHistoricalData(t *testing.T) {
 					Version:   version,
 					Direction: "previous",
 				},
-				aliceSigner,
+				adminSigner,
 				submittingUserName,
 			),
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetPreviousValues", dbName, key, version).Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetPreviousValues", submittingUserName, dbName, key, version).Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -185,13 +185,13 @@ func TestGetHistoricalData(t *testing.T) {
 					Version:   version,
 					Direction: "next",
 				},
-				aliceSigner,
+				adminSigner,
 				submittingUserName,
 			),
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetNextValues", dbName, key, version).Return(response, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetNextValues", submittingUserName, dbName, key, version).Return(response, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -207,17 +207,39 @@ func TestGetHistoricalData(t *testing.T) {
 					DbName: dbName,
 					Key:    key,
 				},
-				aliceSigner,
+				adminSigner,
 				submittingUserName,
 			),
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValues", dbName, key).Return(nil, errors.New("error in provenance db"))
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetValues", submittingUserName, dbName, key).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
 			expectedErr:        "error while processing 'GET " + constants.URLForGetHistoricalData(dbName, key) + "' because error in provenance db",
+		},
+		{
+			name: "permission error",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetHistoricalData(dbName, key),
+				&types.GetHistoricalDataQuery{
+					UserId: submittingUserName,
+					DbName: dbName,
+					Key:    key,
+				},
+				adminSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetValues", submittingUserName, dbName, key).Return(nil, &ierrors.PermissionErr{ErrMsg: "no permission: only admin can access historical data"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
+			expectedErr:        "error while processing 'GET " + constants.URLForGetHistoricalData(dbName, key) + "' because no permission: only admin can access historical data",
 		},
 		constructTestCaseForSigVerificationFailure(t, constants.URLForGetHistoricalData(dbName, key), submittingUserName),
 	}
@@ -236,9 +258,9 @@ func TestGetHistoricalData(t *testing.T) {
 func TestGetDataReaders(t *testing.T) {
 	t.Parallel()
 
-	submittingUserName := "alice"
-	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	submittingUserName := "admin"
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"admin"})
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "admin")
 
 	dbName := "db1"
 	key := "key1"
@@ -262,7 +284,7 @@ func TestGetDataReaders(t *testing.T) {
 			DbName: dbName,
 			Key:    key,
 		},
-		aliceSigner,
+		adminSigner,
 		submittingUserName,
 	)
 
@@ -272,8 +294,8 @@ func TestGetDataReaders(t *testing.T) {
 			request: req,
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetReaders", dbName, key).Return(genericResponse, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetReaders", submittingUserName, dbName, key).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -284,12 +306,25 @@ func TestGetDataReaders(t *testing.T) {
 			request: req,
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetReaders", dbName, key).Return(nil, errors.New("error in provenance db"))
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetReaders", submittingUserName, dbName, key).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "permission error",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetReaders", submittingUserName, dbName, key).Return(nil, &ierrors.PermissionErr{ErrMsg: "no permission: only admin can access historical data"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
+			expectedResponse:   nil,
+			expectedErr:        "error while processing 'GET " + url + "' because no permission: only admin can access historical data",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
@@ -306,7 +341,7 @@ func TestGetDataWriters(t *testing.T) {
 
 	submittingUserName := "alice"
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
-	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
 	dbName := "db1"
 	key := "key1"
@@ -330,7 +365,7 @@ func TestGetDataWriters(t *testing.T) {
 			DbName: dbName,
 			Key:    key,
 		},
-		aliceSigner,
+		adminSigner,
 		submittingUserName,
 	)
 
@@ -340,8 +375,8 @@ func TestGetDataWriters(t *testing.T) {
 			request: req,
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetWriters", dbName, key).Return(genericResponse, nil)
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetWriters", submittingUserName, dbName, key).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -352,12 +387,25 @@ func TestGetDataWriters(t *testing.T) {
 			request: req,
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
-				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetWriters", dbName, key).Return(nil, errors.New("error in provenance db"))
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetWriters", submittingUserName, dbName, key).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "permission error",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetWriters", submittingUserName, dbName, key).Return(nil, &ierrors.PermissionErr{ErrMsg: "no permission: only admin can access historical data"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
+			expectedResponse:   nil,
+			expectedErr:        "error while processing 'GET " + url + "' because no permission: only admin can access historical data",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
@@ -761,7 +809,7 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetMostRecentValueAtOrBelow", worldstate.ConfigDBName, "node1", sampleVer).Return(nodeResponse, nil)
+				db.On("GetMostRecentValueAtOrBelow", submittingUserName, worldstate.ConfigDBName, "node1", sampleVer).Return(nodeResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -784,7 +832,7 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetMostRecentValueAtOrBelow", worldstate.UsersDBName, "user1", sampleVer).Return(userResponse, nil)
+				db.On("GetMostRecentValueAtOrBelow", submittingUserName, worldstate.UsersDBName, "user1", sampleVer).Return(userResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -807,11 +855,34 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetMostRecentValueAtOrBelow", worldstate.UsersDBName, "user1", sampleVer).Return(nil, errors.New("error in provenance db"))
+				db.On("GetMostRecentValueAtOrBelow", submittingUserName, worldstate.UsersDBName, "user1", sampleVer).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
 			expectedErr:        "error while processing 'GET " + constants.URLForGetMostRecentUserInfo("user1", sampleVer) + "' because error in provenance db",
+		},
+		{
+			name: "permission error",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetMostRecentUserInfo("user1", sampleVer),
+				&types.GetMostRecentUserOrNodeQuery{
+					Type:    types.GetMostRecentUserOrNodeQuery_USER,
+					UserId:  submittingUserName,
+					Id:      "user1",
+					Version: sampleVer,
+				},
+				aliceSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetMostRecentValueAtOrBelow", submittingUserName, worldstate.UsersDBName, "user1", sampleVer).Return(nil, &ierrors.PermissionErr{ErrMsg: "no permission: only admin can access historical data"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
+			expectedErr:        "error while processing 'GET " + constants.URLForGetMostRecentUserInfo("user1", sampleVer) + "' because no permission: only admin can access historical data",
 		},
 		constructTestCaseForSigVerificationFailure(t, constants.URLForGetMostRecentUserInfo("user1", sampleVer), submittingUserName),
 	}

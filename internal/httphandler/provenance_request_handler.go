@@ -86,17 +86,17 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 
 	switch {
 	case query.OnlyDeletes:
-		response, err = p.db.GetDeletedValues(query.DbName, query.Key)
+		response, err = p.db.GetDeletedValues(query.UserId, query.DbName, query.Key)
 	case query.Version == nil:
-		response, err = p.db.GetValues(query.DbName, query.Key)
+		response, err = p.db.GetValues(query.UserId, query.DbName, query.Key)
 	case query.Direction == "" && query.MostRecent:
-		response, err = p.db.GetMostRecentValueAtOrBelow(query.DbName, query.Key, query.Version)
+		response, err = p.db.GetMostRecentValueAtOrBelow(query.UserId, query.DbName, query.Key, query.Version)
 	case query.Direction == "":
-		response, err = p.db.GetValueAt(query.DbName, query.Key, query.Version)
+		response, err = p.db.GetValueAt(query.UserId, query.DbName, query.Key, query.Version)
 	case query.Direction == "previous":
-		response, err = p.db.GetPreviousValues(query.DbName, query.Key, query.Version)
+		response, err = p.db.GetPreviousValues(query.UserId, query.DbName, query.Key, query.Version)
 	case query.Direction == "next":
-		response, err = p.db.GetNextValues(query.DbName, query.Key, query.Version)
+		response, err = p.db.GetNextValues(query.UserId, query.DbName, query.Key, query.Version)
 	default:
 		utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{
 			ErrMsg: "direction must be either [previous] or [next]",
@@ -118,7 +118,7 @@ func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http
 	}
 	query := payload.(*types.GetDataReadersQuery)
 
-	response, err := p.db.GetReaders(query.DbName, query.Key)
+	response, err := p.db.GetReaders(query.UserId, query.DbName, query.Key)
 	if err != nil {
 		handleError(w, r, err)
 		return
@@ -134,7 +134,7 @@ func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http
 	}
 	query := payload.(*types.GetDataWritersQuery)
 
-	response, err := p.db.GetWriters(query.DbName, query.Key)
+	response, err := p.db.GetWriters(query.UserId, query.DbName, query.Key)
 	if err != nil {
 		handleError(w, r, err)
 		return
@@ -240,7 +240,7 @@ func (p *provenanceRequestHandler) getMostRecentUserOrNode(w http.ResponseWriter
 		dbName = worldstate.UsersDBName
 	}
 
-	response, err := p.db.GetMostRecentValueAtOrBelow(dbName, query.Id, query.Version)
+	response, err := p.db.GetMostRecentValueAtOrBelow(query.UserId, dbName, query.Id, query.Version)
 	if err != nil {
 		handleError(w, r, err)
 		return

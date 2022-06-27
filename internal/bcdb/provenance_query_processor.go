@@ -31,7 +31,11 @@ func newProvenanceQueryProcessor(conf *provenanceQueryProcessorConfig) *provenan
 }
 
 // GetValues returns all values associated with a given key
-func (p *provenanceQueryProcessor) GetValues(dbName, key string) (*types.GetHistoricalDataResponse, error) {
+func (p *provenanceQueryProcessor) GetValues(userID, dbName, key string) (*types.GetHistoricalDataResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	values, err := p.provenanceStore.GetValues(dbName, key)
 	if err != nil {
 		return nil, err
@@ -41,7 +45,11 @@ func (p *provenanceQueryProcessor) GetValues(dbName, key string) (*types.GetHist
 }
 
 // GetValueAt returns the value of a given key at a particular version
-func (p *provenanceQueryProcessor) GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+func (p *provenanceQueryProcessor) GetValueAt(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	value, err := p.provenanceStore.GetValueAt(dbName, key, version)
 	if err != nil {
 		return nil, err
@@ -55,7 +63,11 @@ func (p *provenanceQueryProcessor) GetValueAt(dbName, key string, version *types
 }
 
 // GetMostRecentValueAtOrBelow returns the most recent value of a given key at or below the given version
-func (p *provenanceQueryProcessor) GetMostRecentValueAtOrBelow(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+func (p *provenanceQueryProcessor) GetMostRecentValueAtOrBelow(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	value, err := p.provenanceStore.GetMostRecentValueAtOrBelow(dbName, key, version)
 	if err != nil {
 		return nil, err
@@ -70,7 +82,11 @@ func (p *provenanceQueryProcessor) GetMostRecentValueAtOrBelow(dbName, key strin
 
 // GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
-func (p *provenanceQueryProcessor) GetPreviousValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+func (p *provenanceQueryProcessor) GetPreviousValues(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	values, err := p.provenanceStore.GetPreviousValues(dbName, key, version, -1)
 	if err != nil {
 		return nil, err
@@ -81,7 +97,11 @@ func (p *provenanceQueryProcessor) GetPreviousValues(dbName, key string, version
 
 // GetNextValues returns next values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
-func (p *provenanceQueryProcessor) GetNextValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+func (p *provenanceQueryProcessor) GetNextValues(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	values, err := p.provenanceStore.GetNextValues(dbName, key, version, -1)
 	if err != nil {
 		return nil, err
@@ -90,7 +110,11 @@ func (p *provenanceQueryProcessor) GetNextValues(dbName, key string, version *ty
 	return p.composeHistoricalDataResponse(values)
 }
 
-func (p *provenanceQueryProcessor) GetDeletedValues(dbName, key string) (*types.GetHistoricalDataResponse, error) {
+func (p *provenanceQueryProcessor) GetDeletedValues(userID, dbName, key string) (*types.GetHistoricalDataResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	values, err := p.provenanceStore.GetDeletedValues(dbName, key)
 	if err != nil {
 		return nil, err
@@ -147,7 +171,11 @@ func (p *provenanceQueryProcessor) GetValuesDeletedByUser(querierUserID, targetU
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-func (p *provenanceQueryProcessor) GetReaders(dbName, key string) (*types.GetDataReadersResponse, error) {
+func (p *provenanceQueryProcessor) GetReaders(userID, dbName, key string) (*types.GetDataReadersResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	users, err := p.provenanceStore.GetReaders(dbName, key)
 	if err != nil {
 		return nil, err
@@ -163,7 +191,11 @@ func (p *provenanceQueryProcessor) GetReaders(dbName, key string) (*types.GetDat
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-func (p *provenanceQueryProcessor) GetWriters(dbName, key string) (*types.GetDataWritersResponse, error) {
+func (p *provenanceQueryProcessor) GetWriters(userID, dbName, key string) (*types.GetDataWritersResponse, error) {
+	if err := p.aclCheckForData(userID); err != nil {
+		return nil, err
+	}
+
 	users, err := p.provenanceStore.GetWriters(dbName, key)
 	if err != nil {
 		return nil, err
@@ -203,6 +235,21 @@ func (p *provenanceQueryProcessor) aclCheckForUserOperation(querierUserID, targe
 	if !isAdmin && querierUserID != targetUserID {
 		return &errors.PermissionErr{
 			ErrMsg: "The querier [" + querierUserID + "] is neither an admin nor requesting operations performed by [" + querierUserID + "]. Only an admin can query operations performed by other users.",
+		}
+	}
+
+	return nil
+}
+
+func (p *provenanceQueryProcessor) aclCheckForData(querierUserID string) error {
+	isAdmin, err := p.identityQuerier.HasAdministrationPrivilege(querierUserID)
+	if err != nil {
+		return err
+	}
+
+	if !isAdmin {
+		return &errors.PermissionErr{
+			ErrMsg: "The querier [" + querierUserID + "] is not an admin. Only an admin can query historical data",
 		}
 	}
 

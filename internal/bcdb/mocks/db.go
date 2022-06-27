@@ -331,13 +331,13 @@ func (_m *DB) GetDataRange(dbName string, querierUserID string, startKey string,
 	return r0, r1
 }
 
-// GetDeletedValues provides a mock function with given fields: dbname, key
-func (_m *DB) GetDeletedValues(dbname string, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
-	ret := _m.Called(dbname, key)
+// GetDeletedValues provides a mock function with given fields: userID, dbname, key
+func (_m *DB) GetDeletedValues(userID string, dbname string, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	ret := _m.Called(userID, dbname, key)
 
 	var r0 *types.GetHistoricalDataResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string) *types.GetHistoricalDataResponseEnvelope); ok {
-		r0 = rf(dbname, key)
+	if rf, ok := ret.Get(0).(func(string, string, string) *types.GetHistoricalDataResponseEnvelope); ok {
+		r0 = rf(userID, dbname, key)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetHistoricalDataResponseEnvelope)
@@ -345,8 +345,8 @@ func (_m *DB) GetDeletedValues(dbname string, key string) (*types.GetHistoricalD
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(dbname, key)
+	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
+		r1 = rf(userID, dbname, key)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -377,13 +377,13 @@ func (_m *DB) GetLedgerPath(userID string, start uint64, end uint64) (*types.Get
 	return r0, r1
 }
 
-// GetMostRecentValueAtOrBelow provides a mock function with given fields: dbName, key, version
-func (_m *DB) GetMostRecentValueAtOrBelow(dbName string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	ret := _m.Called(dbName, key, version)
+// GetMostRecentValueAtOrBelow provides a mock function with given fields: userID, dbName, key, version
+func (_m *DB) GetMostRecentValueAtOrBelow(userID string, dbName string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	ret := _m.Called(userID, dbName, key, version)
 
 	var r0 *types.GetHistoricalDataResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
-		r0 = rf(dbName, key, version)
+	if rf, ok := ret.Get(0).(func(string, string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
+		r0 = rf(userID, dbName, key, version)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetHistoricalDataResponseEnvelope)
@@ -391,8 +391,8 @@ func (_m *DB) GetMostRecentValueAtOrBelow(dbName string, key string, version *ty
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string, *types.Version) error); ok {
-		r1 = rf(dbName, key, version)
+	if rf, ok := ret.Get(1).(func(string, string, string, *types.Version) error); ok {
+		r1 = rf(userID, dbName, key, version)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -400,13 +400,13 @@ func (_m *DB) GetMostRecentValueAtOrBelow(dbName string, key string, version *ty
 	return r0, r1
 }
 
-// GetNextValues provides a mock function with given fields: dbname, key, version
-func (_m *DB) GetNextValues(dbname string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	ret := _m.Called(dbname, key, version)
+// GetNextValues provides a mock function with given fields: userID, dbname, key, version
+func (_m *DB) GetNextValues(userID string, dbname string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	ret := _m.Called(userID, dbname, key, version)
 
 	var r0 *types.GetHistoricalDataResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
-		r0 = rf(dbname, key, version)
+	if rf, ok := ret.Get(0).(func(string, string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
+		r0 = rf(userID, dbname, key, version)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetHistoricalDataResponseEnvelope)
@@ -414,8 +414,8 @@ func (_m *DB) GetNextValues(dbname string, key string, version *types.Version) (
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string, *types.Version) error); ok {
-		r1 = rf(dbname, key, version)
+	if rf, ok := ret.Get(1).(func(string, string, string, *types.Version) error); ok {
+		r1 = rf(userID, dbname, key, version)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -446,13 +446,13 @@ func (_m *DB) GetNodeConfig(nodeID string) (*types.GetNodeConfigResponseEnvelope
 	return r0, r1
 }
 
-// GetPreviousValues provides a mock function with given fields: dbname, key, version
-func (_m *DB) GetPreviousValues(dbname string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	ret := _m.Called(dbname, key, version)
+// GetPreviousValues provides a mock function with given fields: userID, dbname, key, version
+func (_m *DB) GetPreviousValues(userID string, dbname string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	ret := _m.Called(userID, dbname, key, version)
 
 	var r0 *types.GetHistoricalDataResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
-		r0 = rf(dbname, key, version)
+	if rf, ok := ret.Get(0).(func(string, string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
+		r0 = rf(userID, dbname, key, version)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetHistoricalDataResponseEnvelope)
@@ -460,8 +460,8 @@ func (_m *DB) GetPreviousValues(dbname string, key string, version *types.Versio
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string, *types.Version) error); ok {
-		r1 = rf(dbname, key, version)
+	if rf, ok := ret.Get(1).(func(string, string, string, *types.Version) error); ok {
+		r1 = rf(userID, dbname, key, version)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -469,13 +469,13 @@ func (_m *DB) GetPreviousValues(dbname string, key string, version *types.Versio
 	return r0, r1
 }
 
-// GetReaders provides a mock function with given fields: dbName, key
-func (_m *DB) GetReaders(dbName string, key string) (*types.GetDataReadersResponseEnvelope, error) {
-	ret := _m.Called(dbName, key)
+// GetReaders provides a mock function with given fields: userID, dbName, key
+func (_m *DB) GetReaders(userID string, dbName string, key string) (*types.GetDataReadersResponseEnvelope, error) {
+	ret := _m.Called(userID, dbName, key)
 
 	var r0 *types.GetDataReadersResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string) *types.GetDataReadersResponseEnvelope); ok {
-		r0 = rf(dbName, key)
+	if rf, ok := ret.Get(0).(func(string, string, string) *types.GetDataReadersResponseEnvelope); ok {
+		r0 = rf(userID, dbName, key)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetDataReadersResponseEnvelope)
@@ -483,8 +483,8 @@ func (_m *DB) GetReaders(dbName string, key string) (*types.GetDataReadersRespon
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(dbName, key)
+	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
+		r1 = rf(userID, dbName, key)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -584,13 +584,13 @@ func (_m *DB) GetUser(querierUserID string, targetUserID string) (*types.GetUser
 	return r0, r1
 }
 
-// GetValueAt provides a mock function with given fields: dbName, key, version
-func (_m *DB) GetValueAt(dbName string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	ret := _m.Called(dbName, key, version)
+// GetValueAt provides a mock function with given fields: userID, dbName, key, version
+func (_m *DB) GetValueAt(userID string, dbName string, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	ret := _m.Called(userID, dbName, key, version)
 
 	var r0 *types.GetHistoricalDataResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
-		r0 = rf(dbName, key, version)
+	if rf, ok := ret.Get(0).(func(string, string, string, *types.Version) *types.GetHistoricalDataResponseEnvelope); ok {
+		r0 = rf(userID, dbName, key, version)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetHistoricalDataResponseEnvelope)
@@ -598,8 +598,8 @@ func (_m *DB) GetValueAt(dbName string, key string, version *types.Version) (*ty
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string, *types.Version) error); ok {
-		r1 = rf(dbName, key, version)
+	if rf, ok := ret.Get(1).(func(string, string, string, *types.Version) error); ok {
+		r1 = rf(userID, dbName, key, version)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -607,13 +607,13 @@ func (_m *DB) GetValueAt(dbName string, key string, version *types.Version) (*ty
 	return r0, r1
 }
 
-// GetValues provides a mock function with given fields: dbName, key
-func (_m *DB) GetValues(dbName string, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
-	ret := _m.Called(dbName, key)
+// GetValues provides a mock function with given fields: userID, dbName, key
+func (_m *DB) GetValues(userID string, dbName string, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	ret := _m.Called(userID, dbName, key)
 
 	var r0 *types.GetHistoricalDataResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string) *types.GetHistoricalDataResponseEnvelope); ok {
-		r0 = rf(dbName, key)
+	if rf, ok := ret.Get(0).(func(string, string, string) *types.GetHistoricalDataResponseEnvelope); ok {
+		r0 = rf(userID, dbName, key)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetHistoricalDataResponseEnvelope)
@@ -621,8 +621,8 @@ func (_m *DB) GetValues(dbName string, key string) (*types.GetHistoricalDataResp
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(dbName, key)
+	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
+		r1 = rf(userID, dbName, key)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -699,13 +699,13 @@ func (_m *DB) GetValuesWrittenByUser(querierUserID string, targetUserID string) 
 	return r0, r1
 }
 
-// GetWriters provides a mock function with given fields: dbName, key
-func (_m *DB) GetWriters(dbName string, key string) (*types.GetDataWritersResponseEnvelope, error) {
-	ret := _m.Called(dbName, key)
+// GetWriters provides a mock function with given fields: userID, dbName, key
+func (_m *DB) GetWriters(userID string, dbName string, key string) (*types.GetDataWritersResponseEnvelope, error) {
+	ret := _m.Called(userID, dbName, key)
 
 	var r0 *types.GetDataWritersResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string, string) *types.GetDataWritersResponseEnvelope); ok {
-		r0 = rf(dbName, key)
+	if rf, ok := ret.Get(0).(func(string, string, string) *types.GetDataWritersResponseEnvelope); ok {
+		r0 = rf(userID, dbName, key)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetDataWritersResponseEnvelope)
@@ -713,8 +713,8 @@ func (_m *DB) GetWriters(dbName string, key string) (*types.GetDataWritersRespon
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, string) error); ok {
-		r1 = rf(dbName, key)
+	if rf, ok := ret.Get(1).(func(string, string, string) error); ok {
+		r1 = rf(userID, dbName, key)
 	} else {
 		r1 = ret.Error(1)
 	}
