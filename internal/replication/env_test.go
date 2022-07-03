@@ -21,6 +21,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -68,6 +69,7 @@ type nodeEnv struct {
 	pendingTxs      *mocks.PendingTxsReleaser
 	configValidator *mocks.ConfigTxValidator
 	stopServeCh     chan struct{}
+	isRunning       bool
 }
 
 func createNodeEnv(t *testing.T, level string) *nodeEnv {
@@ -93,6 +95,7 @@ func (n *nodeEnv) Start() error {
 
 	go n.ServeCommit()
 
+	n.isRunning = true
 	return nil
 }
 
@@ -100,6 +103,8 @@ func (n *nodeEnv) Close() error {
 	close(n.stopServeCh)
 	err := n.blockReplicator.Close()
 	n.conf.Transport.Close()
+
+	n.isRunning = false
 	return err
 }
 
@@ -252,6 +257,18 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 	}
 
 	return cEnv
+}
+
+func destroyClusterEnv(t *testing.T, env *clusterEnv) {
+	for _, node := range env.nodes {
+		if node.isRunning {
+			err := node.Close()
+			assert.NoError(t, err)
+		}
+	}
+
+	err := os.RemoveAll(env.testDir)
+	assert.NoError(t, err)
 }
 
 // create a BlockReplicator environment with a genesis block

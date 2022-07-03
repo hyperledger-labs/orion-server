@@ -5,7 +5,6 @@ package replication_test
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,7 +30,7 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 	var campaignLogMsgCount int
 	campaignLogMsgHook := func(entry zapcore.Entry) error {
 		if strings.Contains(entry.Message, "Starting to campaign every") ||
-			strings.Contains(entry.Message,"This node was selected to run a leader election campaign on the new cluster") {
+			strings.Contains(entry.Message, "This node was selected to run a leader election campaign on the new cluster") {
 			countMutex.Lock()
 			defer countMutex.Unlock()
 
@@ -41,7 +40,7 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 	}
 
 	env := createClusterEnv(t, 3, nil, "info", zap.Hooks(campaignLogMsgHook))
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	// start 3 at once
@@ -56,11 +55,11 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		countMutex.Lock()
 		defer countMutex.Unlock()
-		return campaignLogMsgCount == 2 }, 30*time.Second, 100*time.Millisecond)
+		return campaignLogMsgCount == 2
+	}, 30*time.Second, 100*time.Millisecond)
 	leaderIndex1 := env.FindLeaderIndex()
 	followerIndex1 := (leaderIndex1 + 1) % 3
 	followerIndex2 := (leaderIndex1 + 1) % 3
-
 
 	//check the followers redirect to the leader
 	expectedLeaderErr := &interrors.NotLeaderError{
@@ -117,7 +116,7 @@ func TestBlockReplicator_3Node_StartCloseStep(t *testing.T) {
 // - Start 3rd, wait for consistent leader on all
 func TestBlockReplicator_3Node_StartStepClose(t *testing.T) {
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	err := env.nodes[0].Start()
@@ -140,12 +139,6 @@ func TestBlockReplicator_3Node_StartStepClose(t *testing.T) {
 	require.NoError(t, err)
 	assert.Eventually(t, func() bool { return env.ExistsAgreedLeader() }, 30*time.Second, 100*time.Millisecond)
 	assert.Eventually(t, func() bool { return env.SymmetricConnectivity() }, 30*time.Second, 100*time.Millisecond)
-
-	//close all
-	for _, node := range env.nodes {
-		err := node.Close()
-		require.NoError(t, err)
-	}
 }
 
 // Scenario:
@@ -156,7 +149,7 @@ func TestBlockReplicator_3Node_StartStepClose(t *testing.T) {
 // - Restart the node, wait for consistent leader on all
 func TestBlockReplicator_3Node_Restart(t *testing.T) {
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	// start 3 at once
@@ -209,12 +202,6 @@ func TestBlockReplicator_3Node_Restart(t *testing.T) {
 	err = env.nodes[followerIndex].Restart()
 	require.NoError(t, err)
 	assert.Eventually(t, sameLeaderCond, 30*time.Second, 100*time.Millisecond)
-
-	//close all
-	for _, node := range env.nodes {
-		err := node.Close()
-		require.NoError(t, err)
-	}
 }
 
 // Scenario:
@@ -222,7 +209,7 @@ func TestBlockReplicator_3Node_Restart(t *testing.T) {
 // - Submit 100 blocks, wait for all ledgers to get them.
 func TestBlockReplicator_3Node_Submit(t *testing.T) {
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -286,7 +273,7 @@ func TestBlockReplicator_3Node_Submit(t *testing.T) {
 // - Restart the node, wait for leader, wait for node to get missing blocks.
 func TestBlockReplicator_3Node_SubmitRecover(t *testing.T) {
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -362,11 +349,6 @@ func TestBlockReplicator_3Node_SubmitRecover(t *testing.T) {
 	require.NoError(t, err)
 	t.Logf("Restarted old leader node, index: %d", leaderIdx)
 	assert.Eventually(t, func() bool { return env.AssertEqualHeight(3*numBlocks + 1) }, 30*time.Second, 100*time.Millisecond)
-
-	for _, node := range env.nodes {
-		err := node.Close()
-		require.NoError(t, err)
-	}
 }
 
 // Scenario:
@@ -392,7 +374,7 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 	raftConfig.SnapshotIntervalSize = uint64(4*len(utils.MarshalOrPanic(block)) + 1) // snapshot every ~5 blocks
 
 	env := createClusterEnv(t, 3, raftConfig, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -474,7 +456,7 @@ func TestBlockReplicator_3Node_Catchup(t *testing.T) {
 // - Wait for a ReleaseWithError to be called from within the block replicator as it drains the internal proposal channel.
 func TestBlockReplicator_3Node_LeadershipLoss(t *testing.T) {
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	//start 2 of 3
@@ -576,7 +558,7 @@ func TestBlockReplicator_3Node_LeadershipLoss(t *testing.T) {
 
 func TestBlockReplicator_3Node_LeadershipLossRecovery(t *testing.T) {
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	//start 2 of 3
@@ -692,14 +674,6 @@ func TestBlockReplicator_3Node_LeadershipLossRecovery(t *testing.T) {
 	t.Log("stopped: ")
 
 	require.Eventually(t, func() bool { return env.AssertEqualLedger(0, 1) == nil }, 30*time.Second, 100*time.Millisecond)
-
-	for i, node := range env.nodes {
-		if i == 2 {
-			continue
-		}
-		err := node.Close()
-		require.NoError(t, err)
-	}
 }
 
 // Scenario:
@@ -715,7 +689,7 @@ func TestBlockReplicator_3Node_LeadershipLossRecovery(t *testing.T) {
 // This tests for consistent block numbering at the leader after re-election.
 func TestBlockReplicator_3Node_LeaderReElected(t *testing.T) {
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	//start 3
@@ -843,7 +817,7 @@ func TestBlockReplicator_3Node_InFlightBlocks(t *testing.T) {
 	}
 
 	env := createClusterEnv(t, 3, nil, "debug", zap.Hooks(inFlightLogMsgHook))
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
