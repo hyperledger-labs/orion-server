@@ -21,6 +21,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
@@ -259,19 +260,15 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 }
 
 func destroyClusterEnv(t *testing.T, env *clusterEnv) {
-	var errs []error
-
 	for _, node := range env.nodes {
 		if node.isRunning {
-			errs = append(errs, node.Close())
+			err := node.Close()
+			assert.NoError(t, err)
 		}
 	}
 
-	errs = append(errs, os.RemoveAll(env.testDir))
-
-	for _, err := range errs {
-		require.NoError(t, err)
-	}
+	err := os.RemoveAll(env.testDir)
+	assert.NoError(t, err)
 }
 
 // create a BlockReplicator environment with a genesis block

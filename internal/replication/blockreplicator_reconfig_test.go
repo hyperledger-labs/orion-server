@@ -5,7 +5,6 @@ package replication_test
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -50,7 +49,7 @@ func TestBlockReplicator_ReConfig_Endpoint(t *testing.T) {
 	}
 
 	env := createClusterEnv(t, 3, nil, "info", zap.Hooks(clusterConfigHook))
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -157,7 +156,7 @@ func TestBlockReplicator_ReConfig_Endpoint(t *testing.T) {
 // - ensure removed node had shut-down replication and is detached from the cluster
 func TestBlockReplicator_ReConfig_RemovePeer(t *testing.T) {
 	env := createClusterEnv(t, 5, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 5, len(env.nodes))
 
 	numBlocks := uint64(10)
@@ -180,7 +179,7 @@ func TestBlockReplicator_ReConfig_RemovePeer(t *testing.T) {
 // - ensure removed node had shut-down replication and is detached from the cluster
 func TestBlockReplicator_ReConfig_RemovePeerLeader(t *testing.T) {
 	env := createClusterEnv(t, 5, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 5, len(env.nodes))
 
 	numBlocks := uint64(10)
@@ -295,7 +294,7 @@ func TestBlockReplicator_ReConfig_AddPeer(t *testing.T) {
 	}
 
 	env := createClusterEnv(t, 3, nil, "info", zap.Hooks(nodeAddedHook))
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -382,7 +381,7 @@ func TestBlockReplicator_ReConfig_AddPeer_WithSnapshots(t *testing.T) {
 	t.Logf("configure frequent snapshots, 4x block size; block size: %d, SnapshotIntervalSize: %d", dataBlockLength, raftConfig.SnapshotIntervalSize)
 
 	env := createClusterEnv(t, 3, raftConfig, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -467,7 +466,7 @@ func TestBlockReplicator_ReConfig_AddPeer_WithSnapshots_RestartsAfterJoin(t *tes
 	t.Logf("configure frequent snapshots, 4x block size; block size: %d, SnapshotIntervalSize: %d", dataBlockLength, raftConfig.SnapshotIntervalSize)
 
 	env := createClusterEnv(t, 3, raftConfig, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -621,7 +620,7 @@ func TestBlockReplicator_ReConfig_AddPeer_WithSnapshots_RestartsAfterJoin(t *tes
 func TestBlockReplicator_ReConfig_AddPeer_RestartsAfterJoin(t *testing.T) {
 	block, _ := testDataBlock(128)
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -773,7 +772,7 @@ func TestBlockReplicator_ReConfig_AddPeer_RestartsAfterJoin(t *testing.T) {
 func TestBlockReplicator_ReConfig_AddPeer_RestartBeforeJoin(t *testing.T) {
 	block, _ := testDataBlock(128)
 	env := createClusterEnv(t, 3, nil, "debug")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -875,7 +874,7 @@ func TestBlockReplicator_ReConfig_AddPeer_WithSnapshots_RestartBeforeJoin(t *tes
 	t.Logf("configure frequent snapshots, 4x block size; block size: %d, SnapshotIntervalSize: %d", dataBlockLength, raftConfig.SnapshotIntervalSize)
 
 	env := createClusterEnv(t, 3, raftConfig, "debug")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -976,7 +975,7 @@ func TestBlockReplicator_ReConfig_AddRemovePeersRolling(t *testing.T) {
 	numBlocks := uint64(10)
 
 	env := createClusterEnv(t, 3, nil, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -1024,7 +1023,7 @@ func TestBlockReplicator_ReConfig_AddRemovePeersRolling_WithSnapshots(t *testing
 	t.Logf("configure frequent snapshots, 4x block size; block size: %d, SnapshotIntervalSize: %d", dataBlockLength, raftConfig.SnapshotIntervalSize)
 
 	env := createClusterEnv(t, 3, raftConfig, "info")
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -1140,7 +1139,7 @@ func TestBlockReplicator_ReConfig_PreorderValidation(t *testing.T) {
 		return rejectCount >= num
 	}
 	env := createClusterEnv(t, 3, nil, "info", zap.Hooks(rejectedConfigHook))
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
@@ -1224,7 +1223,7 @@ func TestBlockReplicator_3Node_InFlightConfig(t *testing.T) {
 	raftConfig := proto.Clone(raftConfigNoSnapshots).(*types.RaftConfig)
 	raftConfig.SnapshotIntervalSize = 1000000
 	env := createClusterEnv(t, 3, raftConfig, "debug", zap.Hooks(inFlightLogMsgHook))
-	defer os.RemoveAll(env.testDir)
+	defer destroyClusterEnv(t, env)
 	require.Equal(t, 3, len(env.nodes))
 
 	for _, node := range env.nodes {
