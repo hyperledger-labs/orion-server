@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -1118,25 +1117,12 @@ func (s *Server) shutdown() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return errors.Wrapf(err, "error while gracefully shutting down %s", s.serverID)
+	if err := s.cmd.Process.Kill(); err != nil {
+		return errors.Wrap(err, "error while shutting down "+s.serverID)
 	}
 
-	done := make(chan error)
-	go func() { done <- s.cmd.Wait() }()
-
-	select {
-	case err := <-done:
-		if err == nil {
-			break
-		}
-		if _, ok := err.(*exec.ExitError); !ok {
-			return errors.Wrapf(err, "error while shutting down %s", s.serverID)
-		}
-	case <-time.After(10 * time.Second):
-		if err := s.cmd.Process.Kill(); err != nil {
-			return errors.Wrapf(err, "error while forcing shutting down %s", s.serverID)
-		}
+	if _, err := s.cmd.Process.Wait(); err != nil {
+		return errors.Wrap(err, "error while shutting down "+s.serverID)
 	}
 
 	return nil
