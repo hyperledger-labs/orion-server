@@ -54,6 +54,7 @@ type Server struct {
 	adminCertPath        string
 	adminKeyPath         string
 	usersCryptoDir       string
+	queryLimit           uint64
 	adminSigner          crypto.Signer
 	cmd                  *exec.Cmd
 	outBuffer            *gbytes.Buffer
@@ -64,7 +65,7 @@ type Server struct {
 }
 
 // NewServer creates a new blockchain database server
-func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint32, checkRedirect func(req *http.Request, via []*http.Request) error, logger *logger.SugarLogger, method string) (*Server, error) {
+func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint32, checkRedirect func(req *http.Request, via []*http.Request) error, logger *logger.SugarLogger, method string, queryLimit uint64) (*Server, error) {
 	sNumber := strconv.FormatInt(int64(id+1), 10)
 	bootstrapFile := filepath.Join(clusterBaseDir, "node-"+sNumber, "shared-config-bootstrap.yml")
 	if method == "join" {
@@ -83,6 +84,7 @@ func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint
 		method:              method,
 		cryptoMaterialsDir:  filepath.Join(clusterBaseDir, "node-"+sNumber, "crypto"),
 		usersCryptoDir:      filepath.Join(clusterBaseDir, "users"),
+		queryLimit:          queryLimit,
 		clientCheckRedirect: checkRedirect,
 		logger:              logger,
 	}
@@ -197,6 +199,38 @@ func (s *Server) GetTxProof(t *testing.T, userID string, blockNumber, txIndex ui
 			Payload:   query,
 			Signature: testutils.SignatureFromQuery(t, signer, query),
 		})
+
+	return response, err
+}
+
+func (s *Server) QueryDataRange(t *testing.T, userID, dbName, startKey, endKey string, limit uint64) (*types.GetDataRangeResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	dataQuery := &types.GetDataQuery{
+		UserId: userID,
+		DbName: dbName,
+	}
+	dataRangeQuery := &types.GetDataRangeQuery{
+		UserId:   userID,
+		DbName:   dbName,
+		StartKey: startKey,
+		EndKey:   endKey,
+		Limit:    limit,
+	}
+
+	response, err := client.GetDataRange(
+		&types.GetDataQueryEnvelope{
+			Payload:   dataQuery,
+			Signature: testutils.SignatureFromQuery(t, signer, dataRangeQuery),
+		}, startKey, endKey, limit)
 
 	return response, err
 }
@@ -1152,6 +1186,9 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 				Transaction:               1000,
 				ReorderedTransactionBatch: 100,
 				Block:                     100,
+			},
+			QueryProcessing: config.QueryProcessingConf{
+				ResponseSizeLimitInBytes: s.queryLimit,
 			},
 			LogLevel: "info",
 		},

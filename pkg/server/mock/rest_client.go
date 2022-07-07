@@ -140,6 +140,24 @@ func (c *Client) GetTxProof(e *types.GetTxProofQueryEnvelope) (*types.GetTxProof
 	return res, err
 }
 
+func (c *Client) GetDataRange(e *types.GetDataQueryEnvelope, startKey, endKey string, limit uint64) (*types.GetDataRangeResponseEnvelope, error) {
+	path := constants.URLForGetDataRange(e.Payload.DbName, startKey, endKey, limit)
+	resp, err := c.handleGetRequest(
+		path,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while issuing %s", path)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataRangeResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetLastConfigBlockStatus(e *types.GeConfigBlockQueryEnvelope) (*types.GetConfigBlockResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.GetLastConfigBlock,

@@ -6,6 +6,7 @@ package cluster
 import (
 	"encoding/pem"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"strconv"
 	"testing"
@@ -20,8 +21,7 @@ import (
 )
 
 func createNewServer(c *setup.Cluster, conf *setup.Config, serverNum int) (*setup.Server, *types.PeerConfig, *types.NodeConfig, error) {
-	newServer, err := setup.NewServer(uint64(serverNum), conf.TestDirAbsolutePath, conf.BaseNodePort, conf.BasePeerPort,
-		conf.CheckRedirectFunc, c.GetLogger(), "join")
+	newServer, err := setup.NewServer(uint64(serverNum), conf.TestDirAbsolutePath, conf.BaseNodePort, conf.BasePeerPort, conf.CheckRedirectFunc, c.GetLogger(), "join", math.MaxUint64)
 	if err != nil {
 		return nil, nil, nil, err
 	}
