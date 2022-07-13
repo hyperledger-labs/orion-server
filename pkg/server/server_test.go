@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var basePort uint32 = 6090
+var basePort uint32 = 5100
 var basePortMutex sync.Mutex
 
 type serverTestEnv struct {
