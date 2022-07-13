@@ -89,9 +89,10 @@ func removeServer(t *testing.T, leaderServer *setup.Server, c *setup.Cluster, re
 		require.Equal(t, len(activeServersAfterRemove), len(statusResponseEnvelope.GetResponse().Active))
 	}
 	if removedAlive {
-		removedServerResponse, err := c.Servers[removeIndex].QueryClusterStatus(t)
-		require.NoError(t, err)
-		require.Equal(t, "", removedServerResponse.GetResponse().Leader)
+		require.Eventually(t, func() bool {
+			removedServerResponse, err := c.Servers[removeIndex].QueryClusterStatus(t)
+			return err == nil && removedServerResponse.GetResponse().Leader == ""
+		}, 60*time.Second, 100*time.Millisecond)
 	}
 
 	return leaderIndex
