@@ -135,7 +135,7 @@ func (env *serverTestEnv) getConfigResponse(t *testing.T) *types.GetConfigRespon
 	return cfg.Response
 }
 
-func newServerTestEnv(t *testing.T, serverTLS bool, clientTLS bool) *serverTestEnv {
+func newServerTestEnv(t *testing.T, serverTLS bool, clientTLS bool, disableProvenance bool) *serverTestEnv {
 	tempDir, err := ioutil.TempDir("/tmp", "serverTest")
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -241,6 +241,9 @@ func newServerTestEnv(t *testing.T, serverTLS bool, clientTLS bool) *serverTestE
 					Name:            "leveldb",
 					LedgerDirectory: path.Join(tempDir, "ledger"),
 				},
+				Provenance: config.ProvenanceConf{
+					Disabled: disableProvenance,
+				},
 				Network: config.NetworkConf{
 					Address: "127.0.0.1",
 					Port:    nodePort,
@@ -261,6 +264,7 @@ func newServerTestEnv(t *testing.T, serverTLS bool, clientTLS bool) *serverTestE
 			Replication: config.ReplicationConf{
 				WALDir:  path.Join(tempDir, "raft", "wal"),
 				SnapDir: path.Join(tempDir, "raft", "snap"),
+				AuxDir:  path.Join(tempDir, "aux"),
 				Network: config.NetworkConf{Address: "127.0.0.1", Port: peerPort},
 				TLS:     config.TLSConf{Enabled: false},
 			},
@@ -386,7 +390,7 @@ func (env *serverTestEnv) cleanup(t *testing.T) {
 func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	// Scenario: we instantiate a server, trying to query for key,
 	// making sure key does not exist and then posting it into DB
-	env := newServerTestEnv(t, false, false)
+	env := newServerTestEnv(t, false, false, false)
 	defer env.cleanup(t)
 
 	verifier, err := env.getNodeSigVerifier(t)
@@ -499,8 +503,132 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	require.Equal(t, values.GetResponse().Values[0].GetValue(), []byte("bar"))
 }
 
+func TestServerWithDataRequestAndProvenanceOff(t *testing.T) {
+	// Scenario: we instantiate a server, trying to query for key,
+	// making sure key does not exist and then posting it into DB
+	env := newServerTestEnv(t, false, false, true)
+	defer env.cleanup(t)
+
+	verifier, err := env.getNodeSigVerifier(t)
+	require.NoError(t, err)
+
+	dataQuery := &types.GetDataQuery{
+		DbName: worldstate.DefaultDBName,
+		UserId: "admin",
+		Key:    "foo",
+	}
+	data, err := env.client.GetData(
+		&types.GetDataQueryEnvelope{
+			Payload:   dataQuery,
+			Signature: testutils.SignatureFromQuery(t, env.adminSigner, dataQuery),
+		},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, data)
+	require.NotNil(t, data.Response)
+
+	resp, err := json.Marshal(data.GetResponse())
+	require.NoError(t, err)
+	err = verifier.Verify(resp, data.GetSignature())
+	require.NoError(t, err)
+
+	require.Nil(t, data.GetResponse().GetValue())
+
+	dataTx := &types.DataTx{
+		MustSignUserIds: []string{"admin"},
+		TxId:            uuid.New().String(),
+		DbOperations: []*types.DBOperation{
+			{
+				DbName: worldstate.DefaultDBName,
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   "foo",
+						Value: []byte("bar"),
+					},
+				},
+			},
+		},
+	}
+
+	httpResp, err := env.client.SubmitTransaction(
+		constants.PostDataTx,
+		&types.DataTxEnvelope{
+			Payload: dataTx,
+			Signatures: map[string][]byte{
+				"admin": testutils.SignatureFromTx(t, env.adminSigner, dataTx),
+			},
+		},
+		0, // async, if times out
+	)
+	require.NoError(t, err)
+	require.True(t, httpResp.StatusCode == http.StatusAccepted || httpResp.StatusCode == http.StatusOK)
+	err = httpResp.Body.Close()
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		data, err := env.client.GetData(&types.GetDataQueryEnvelope{
+			Payload: &types.GetDataQuery{
+				DbName: worldstate.DefaultDBName,
+				UserId: "admin",
+				Key:    "foo",
+			},
+			Signature: testutils.SignatureFromQuery(t, env.adminSigner, dataQuery),
+		})
+		if err != nil {
+			return false
+		}
+
+		if data.GetResponse() == nil {
+			return false
+		}
+
+		dataB, err := json.Marshal(data.GetResponse())
+		require.NoError(t, err)
+
+		err = verifier.Verify(dataB, data.GetSignature())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return data.GetResponse().GetValue() != nil &&
+			bytes.Equal(data.GetResponse().GetValue(), []byte("bar"))
+	}, time.Minute, 100*time.Millisecond)
+
+	provenanceQuery := &types.GetHistoricalDataQuery{
+		UserId: "admin",
+		DbName: worldstate.DefaultDBName,
+		Key:    "foo",
+	}
+
+	_, err = env.client.GetHistoricalData(
+		constants.URLForGetHistoricalData(worldstate.DefaultDBName, "foo"),
+		&types.GetHistoricalDataQueryEnvelope{
+			Payload:   provenanceQuery,
+			Signature: testutils.SignatureFromQuery(t, env.adminSigner, provenanceQuery),
+		},
+	)
+	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/bdb/foo' because provenance store is disabled on this server")
+
+	env.serverConfig.LocalConfig.Server.Provenance.Disabled = false
+
+	t.Log("Restarting with provenance enabled")
+	t.Log("Stopping server")
+	err = env.bcdbHTTPServer.Stop()
+	require.NoError(t, err)
+
+	localConfigOnly := &config.Configurations{
+		LocalConfig:  env.serverConfig.LocalConfig,
+		SharedConfig: nil,
+	}
+
+	env.bcdbHTTPServer, err = New(localConfigOnly)
+	require.EqualError(t, err,
+		fmt.Sprintf("error while creating the database object: error while creating the provenance store: provenance store was disabled and cannot be re-enabled: disabled flag exists: %s",
+			path.Join(env.serverConfig.LocalConfig.Server.Database.LedgerDirectory, "provenancestore", "disabled")))
+}
+
 func TestServerWithUserAdminRequest(t *testing.T) {
-	env := newServerTestEnv(t, false, false)
+	env := newServerTestEnv(t, false, false, false)
 	defer env.cleanup(t)
 
 	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
@@ -571,7 +699,7 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 }
 
 func TestServerWithDBAdminRequest(t *testing.T) {
-	env := newServerTestEnv(t, false, false)
+	env := newServerTestEnv(t, false, false, false)
 	defer env.cleanup(t)
 
 	dbTx := &types.DBAdministrationTx{
@@ -677,7 +805,7 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 }
 
 func TestServerWithConfigRequest(t *testing.T) {
-	env := newServerTestEnv(t, false, false)
+	env := newServerTestEnv(t, false, false, false)
 	defer env.cleanup(t)
 
 	configRes := env.getConfigResponse(t)
@@ -763,7 +891,7 @@ func TestServerWithFailureScenarios(t *testing.T) {
 		t.Run(tt.testName, func(t *testing.T) {
 			t.Parallel()
 
-			env := newServerTestEnv(t, false, false)
+			env := newServerTestEnv(t, false, false, false)
 			defer env.cleanup(t)
 
 			envelope := tt.envelopeProvider(env.adminSigner)
@@ -775,7 +903,7 @@ func TestServerWithFailureScenarios(t *testing.T) {
 }
 
 func TestSyncTxWithServerTLS(t *testing.T) {
-	env := newServerTestEnv(t, true, false)
+	env := newServerTestEnv(t, true, false, false)
 	defer env.cleanup(t)
 
 	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
@@ -833,7 +961,7 @@ func TestSyncTxWithServerTLS(t *testing.T) {
 }
 
 func TestSyncTxWithServerHttpsClientHttp(t *testing.T) {
-	env := newServerTestEnv(t, true, false)
+	env := newServerTestEnv(t, true, false, false)
 	defer env.cleanup(t)
 
 	// Convert https to http, should fail
@@ -877,7 +1005,7 @@ func TestSyncTxWithServerHttpsClientHttp(t *testing.T) {
 }
 
 func TestSyncTxWithServerTLSClientHasWrongCA(t *testing.T) {
-	env := newServerTestEnv(t, true, false)
+	env := newServerTestEnv(t, true, false, false)
 	defer env.cleanup(t)
 
 	// Recreating client
@@ -939,7 +1067,7 @@ func TestSyncTxWithServerTLSClientHasWrongCA(t *testing.T) {
 }
 
 func TestSyncTxWithServerAndClientTLS(t *testing.T) {
-	env := newServerTestEnv(t, true, true)
+	env := newServerTestEnv(t, true, true, false)
 	defer env.cleanup(t)
 
 	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)
@@ -997,7 +1125,7 @@ func TestSyncTxWithServerAndClientTLS(t *testing.T) {
 }
 
 func TestServerWithRestart(t *testing.T) {
-	env := newServerTestEnv(t, false, false)
+	env := newServerTestEnv(t, false, false, false)
 	defer env.cleanup(t)
 
 	userCert, _, err := testutils.IssueCertificate("Orion User", "127.0.0.1", env.caKeys)

@@ -119,7 +119,6 @@ func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
 	ledgerProcConfig := &ledgerQueryProcessorConfig{
 		db:              db,
 		blockStore:      blockStore,
-		provenanceStore: provenanceStore,
 		trieStore:       trieStore,
 		identityQuerier: identity.NewQuerier(db),
 		logger:          logger,

@@ -232,11 +232,12 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	provenanceStore, err := provenance.Open(
 		&provenance.Config{
 			StoreDir: constructProvenanceStorePath(ledgerDir),
+			Disabled: conf.LocalConfig.Server.Provenance.Disabled,
 			Logger:   logger,
 		},
 	)
 	if err != nil {
-		return nil, errors.WithMessage(err, "error while creating the block store")
+		return nil, errors.WithMessage(err, "error while creating the provenance store")
 	}
 
 	stateTrieStore, err := mptrieStore.Open(
@@ -270,7 +271,6 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	ledgerQueryProcessorConfig := &ledgerQueryProcessorConfig{
 		db:              levelDB,
 		blockStore:      blockStore,
-		provenanceStore: provenanceStore,
 		trieStore:       stateTrieStore,
 		identityQuerier: querier,
 		logger:          logger,

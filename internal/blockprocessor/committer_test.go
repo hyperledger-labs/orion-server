@@ -1514,6 +1514,7 @@ func TestStateDBCommitterForConfigBlock(t *testing.T) {
 		})
 	}
 }
+
 func TestProvenanceStoreCommitterForDataBlockWithValidTxs(t *testing.T) {
 	t.Parallel()
 
@@ -2552,6 +2553,63 @@ func TestProvenanceStoreCommitterWithInvalidTxs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProvenanceStoreDisabledCommitter(t *testing.T) {
+	t.Parallel()
+
+	env := newCommitterTestEnv(t)
+	defer env.cleanup()
+
+	env.committer.provenanceStore = nil
+
+	block := &types.Block{
+		Header: &types.BlockHeader{
+			BaseHeader: &types.BlockHeaderBase{
+				Number: 2,
+			},
+			ValidationInfo: []*types.ValidationInfo{
+				{
+					Flag: types.Flag_VALID,
+				},
+				{
+					Flag: types.Flag_INVALID_INCORRECT_ENTRIES,
+				},
+			},
+		},
+		Payload: &types.Block_DataTxEnvelopes{
+			DataTxEnvelopes: &types.DataTxEnvelopes{
+				Envelopes: []*types.DataTxEnvelope{
+					{
+						Payload: &types.DataTx{
+							MustSignUserIds: []string{"user1"},
+							TxId:            "tx1",
+							DbOperations: []*types.DBOperation{
+								{
+									DbName: worldstate.DefaultDBName,
+								},
+							},
+						},
+					},
+					{
+						Payload: &types.DataTx{
+							MustSignUserIds: []string{"user1"},
+							TxId:            "tx2",
+							DbOperations: []*types.DBOperation{
+								{
+									DbName: worldstate.DefaultDBName,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	_, provenanceData, err := env.committer.constructDBAndProvenanceEntries(block)
+	require.NoError(t, err)
+	err = env.committer.commitToProvenanceStore(2, provenanceData)
+	require.NoError(t, err)
 }
 
 func TestConstructProvenanceEntriesForDataTx(t *testing.T) {

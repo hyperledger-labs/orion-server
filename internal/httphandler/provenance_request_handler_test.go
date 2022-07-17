@@ -1,5 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package httphandler
 
 import (
@@ -241,6 +242,28 @@ func TestGetHistoricalData(t *testing.T) {
 			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + constants.URLForGetHistoricalData(dbName, key) + "' because no permission: only admin can access historical data",
 		},
+		{
+			name: "disabled store",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetHistoricalData(dbName, key),
+				&types.GetHistoricalDataQuery{
+					UserId: submittingUserName,
+					DbName: dbName,
+					Key:    key,
+				},
+				adminSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetValues", submittingUserName, dbName, key).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + constants.URLForGetHistoricalData(dbName, key) + "' because disabled store",
+		},
 		constructTestCaseForSigVerificationFailure(t, constants.URLForGetHistoricalData(dbName, key), submittingUserName),
 	}
 
@@ -326,6 +349,18 @@ func TestGetDataReaders(t *testing.T) {
 			expectedResponse:   nil,
 			expectedErr:        "error while processing 'GET " + url + "' because no permission: only admin can access historical data",
 		},
+		{
+			name:    "disabled store",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetReaders", submittingUserName, dbName, key).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + url + "' because disabled store",
+		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
 
@@ -406,6 +441,18 @@ func TestGetDataWriters(t *testing.T) {
 			expectedStatusCode: http.StatusForbidden,
 			expectedResponse:   nil,
 			expectedErr:        "error while processing 'GET " + url + "' because no permission: only admin can access historical data",
+		},
+		{
+			name:    "disabled store",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(adminCert, nil)
+				db.On("GetWriters", submittingUserName, dbName, key).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + url + "' because disabled store",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
@@ -492,6 +539,18 @@ func TestGetDataReadBy(t *testing.T) {
 			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
 		},
+		{
+			name:    "disabled store",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesReadByUser", submittingUserName, targetUserID).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + url + "' because disabled store",
+		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
 
@@ -576,6 +635,18 @@ func TestGetDataWrittenBy(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "disabled store",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesWrittenByUser", submittingUserName, targetUserID).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + url + "' because disabled store",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
@@ -662,6 +733,18 @@ func TestGetDataDeletedBy(t *testing.T) {
 			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
 		},
+		{
+			name:    "disabled store",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesDeletedByUser", submittingUserName, targetUserID).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + url + "' because disabled store",
+		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
 
@@ -737,6 +820,18 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "disabled store",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTxIDsSubmittedByUser", submittingUserName, targetUserID).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + url + "' because disabled store",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
 	}
@@ -883,6 +978,29 @@ func TestGetMostRecentNodeOrUser(t *testing.T) {
 			},
 			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + constants.URLForGetMostRecentUserInfo("user1", sampleVer) + "' because no permission: only admin can access historical data",
+		},
+		{
+			name: "disabled store",
+			request: constructRequestForTestCase(
+				t,
+				constants.URLForGetMostRecentUserInfo("user1", sampleVer),
+				&types.GetMostRecentUserOrNodeQuery{
+					Type:    types.GetMostRecentUserOrNodeQuery_USER,
+					UserId:  submittingUserName,
+					Id:      "user1",
+					Version: sampleVer,
+				},
+				aliceSigner,
+				submittingUserName,
+			),
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetMostRecentValueAtOrBelow", submittingUserName, worldstate.UsersDBName, "user1", sampleVer).Return(nil, &ierrors.ServerRestrictionError{ErrMsg: "disabled store"})
+				return db
+			},
+			expectedStatusCode: http.StatusServiceUnavailable,
+			expectedErr:        "error while processing 'GET " + constants.URLForGetMostRecentUserInfo("user1", sampleVer) + "' because disabled store",
 		},
 		constructTestCaseForSigVerificationFailure(t, constants.URLForGetMostRecentUserInfo("user1", sampleVer), submittingUserName),
 	}
