@@ -4,17 +4,19 @@ package provenance
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"testing"
 
-	"github.com/hyperledger-labs/orion-server/internal/fileops"
-	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/cayleygraph/cayley"
 	"github.com/cayleygraph/cayley/graph"
 	"github.com/cayleygraph/quad"
 	"github.com/hidal-go/hidalgo/kv/flat/leveldb"
+	"github.com/hyperledger-labs/orion-server/internal/fileops"
+	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,6 +63,68 @@ func TestOpenStore(t *testing.T) {
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)
+	})
+
+	t.Run("open and reopen a disabled store", func(t *testing.T) {
+		t.Parallel()
+
+		testDir, err := ioutil.TempDir("", "opentest")
+		require.NoError(t, err)
+		defer os.RemoveAll(testDir)
+
+		storeDir := filepath.Join(testDir, "new-store")
+		c := &Config{
+			StoreDir: storeDir,
+			Disabled: true,
+			Logger:   logger,
+		}
+		s, err := Open(c)
+		require.NoError(t, err)
+		require.Nil(t, s)
+		err = s.Close() // close a nil store
+		require.NoError(t, err)
+
+		// reopen a disabled
+		s, err = Open(c)
+		require.NoError(t, err)
+		require.Nil(t, s)
+
+		//cannot re-enable a disabled store
+		c.Disabled = false
+		s, err = Open(c)
+		require.EqualError(t, err, fmt.Sprintf("provenance store was disabled and cannot be re-enabled: disabled flag exists: %s", path.Join(c.StoreDir, disabledFlag)))
+		require.Nil(t, s)
+	})
+
+	t.Run("disable an active store", func(t *testing.T) {
+		t.Parallel()
+
+		testDir, err := ioutil.TempDir("", "opentest")
+		require.NoError(t, err)
+		defer os.RemoveAll(testDir)
+
+		storeDir := filepath.Join(testDir, "new-store")
+		c := &Config{
+			StoreDir: storeDir,
+			Logger:   logger,
+		}
+		s, err := Open(c)
+		require.NoError(t, err)
+
+		assertStore(t, storeDir, s)
+		err = s.Close()
+		require.NoError(t, err)
+
+		c.Disabled = true
+		s, err = Open(c)
+		require.NoError(t, err)
+		require.Nil(t, s)
+
+		//cannot re-enable a disabled store
+		c.Disabled = false
+		s, err = Open(c)
+		require.EqualError(t, err, fmt.Sprintf("provenance store was disabled and cannot be re-enabled: disabled flag exists: %s", path.Join(c.StoreDir, disabledFlag)))
+		require.Nil(t, s)
 	})
 
 	t.Run("open while partial store exist with an empty dir", func(t *testing.T) {

@@ -122,7 +122,6 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 	conf := &ledgerQueryProcessorConfig{
 		db:              db,
 		blockStore:      blockStore,
-		provenanceStore: provenanceStore,
 		trieStore:       trieStore,
 		identityQuerier: identity.NewQuerier(db),
 		logger:          logger,
@@ -234,10 +233,6 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 		block.Header.StateMerkelTreeRootHash, err = trie.Hash()
 		require.NoError(t, err)
 		require.NoError(t, env.p.blockStore.Commit(block))
-
-		pData := createProvenanceDataFromBlock(block)
-		err = env.p.provenanceStore.Commit(block.GetHeader().GetBaseHeader().GetNumber(), pData)
-		require.NoError(t, err)
 
 		err = trie.Commit(block.GetHeader().GetBaseHeader().GetNumber())
 		require.NoError(t, err)
@@ -851,7 +846,7 @@ func TestGetTxReceipt(t *testing.T) {
 			blockNumber: 0,
 			txIndex:     0,
 			user:        "testUser",
-			expectedErr: &interrors.NotFoundErr{Message: "TxID not found: Tx15key20"},
+			expectedErr: &interrors.NotFoundErr{Message: "txID not found: Tx15key20"},
 		},
 		{
 			name:        "Getting receipt for Tx9key7 - no user exist",

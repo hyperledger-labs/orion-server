@@ -398,6 +398,12 @@ func TestTxValidationInfo(t *testing.T) {
 					require.NoError(t, err)
 					require.True(t, exist)
 
+					txInfo, err := env.s.GetTxInfo(txID)
+					require.NoError(t, err)
+					require.Equal(t, uint64(index), txInfo.GetTxIndex())
+					require.Equal(t, uint64(1), txInfo.GetBlockNumber())
+					require.True(t, proto.Equal(tt.block.Header.ValidationInfo[index], txInfo.GetValidation()))
+
 					valInfo, err := env.s.GetValidationInfo(txID)
 					require.NoError(t, err)
 					require.True(t, proto.Equal(tt.block.Header.ValidationInfo[index], valInfo))

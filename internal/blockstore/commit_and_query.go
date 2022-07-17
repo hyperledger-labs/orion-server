@@ -215,9 +215,14 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 
 		for txNum, tx := range dataTxs {
 			key := []byte(tx.Payload.TxId)
-			value, err := proto.Marshal(block.Header.ValidationInfo[txNum])
+			txInfo := &TxInfo{
+				BlockNumber: blockNum,
+				TxIndex:     uint64(txNum),
+				Validation:  block.Header.ValidationInfo[txNum],
+			}
+			value, err := proto.Marshal(txInfo)
 			if err != nil {
-				return errors.Wrapf(err, "error while marshaling validation info of transaction %d in block %d", txNum, blockNum)
+				return errors.Wrapf(err, "error while marshaling TxInfo info of transaction %d in block %d", txNum, blockNum)
 			}
 
 			updateBatch.Put(key, value)
@@ -239,7 +244,12 @@ func (s *Store) storeBlockValidationInfo(block *types.Block) error {
 	}
 
 	key := []byte(txID)
-	value, err := proto.Marshal(block.Header.ValidationInfo[nonDataTxIndex])
+	txInfo := &TxInfo{
+		BlockNumber: blockNum,
+		TxIndex:     uint64(nonDataTxIndex),
+		Validation:  block.Header.ValidationInfo[nonDataTxIndex],
+	}
+	value, err := proto.Marshal(txInfo)
 	if err != nil {
 		return errors.Wrapf(err, "error while marshaling validation info of non-data transaction in block %d", blockNum)
 	}
@@ -475,6 +485,15 @@ func (s *Store) DoesTxIDExist(txID string) (bool, error) {
 
 // GetValidationInfo returns the validation info associated with a given txID
 func (s *Store) GetValidationInfo(txID string) (*types.ValidationInfo, error) {
+	txInfo, err := s.GetTxInfo(txID)
+	if err != nil {
+		return nil, err
+	}
+	return txInfo.GetValidation(), nil
+}
+
+// GetTxInfo returns the TxInfo associated with a given txID
+func (s *Store) GetTxInfo(txID string) (*TxInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -488,7 +507,7 @@ func (s *Store) GetValidationInfo(txID string) (*types.ValidationInfo, error) {
 		return nil, errors.Wrapf(err, "error while fetching validation info of txID [%s] from the block store", txID)
 	}
 
-	valInfo := &types.ValidationInfo{}
+	valInfo := &TxInfo{}
 	if err := proto.Unmarshal(valInfoSerialized, valInfo); err != nil {
 		return nil, errors.Wrapf(err, "error while unmarshalling stored validation info of txID [%s]", txID)
 	}

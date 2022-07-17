@@ -1148,6 +1148,9 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 				Name:            "leveldb",
 				LedgerDirectory: filepath.Join(s.configDir, "ledger"),
 			},
+			Provenance: config.ProvenanceConf{
+				Disabled: false,
+			},
 			QueueLength: config.QueueLengthConf{
 				Transaction:               1000,
 				ReorderedTransactionBatch: 100,

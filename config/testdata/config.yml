@@ -29,6 +29,12 @@ server:
     # database.ledgerDirectory denotes the root path
     # where we store all ledger data
     ledgerDirectory: ./tmp/
+
+  # provenance carries provenance configuration parameters.
+  provenance:
+    # Disables the provenance store on this node.
+    disabled: true
+
   queueLength:
     # queueLength.transaction denotes the maximum
     # queue length of waiting transactions
@@ -125,7 +131,6 @@ replication:
       # The paths to intermediate certificates. Optional. For example:
       #   intermediateCACertsPath: ./testdata/cluster/midcaA.cert, ./testdata/cluster/midcaB.cert
       intermediateCACertsPath: ./testdata/cluster/midca.cert
-
 
 # bootstrap specifies the method of starting a new node with an empty ledger and database.
 bootstrap:

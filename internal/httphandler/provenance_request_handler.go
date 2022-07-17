@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
-	"github.com/hyperledger-labs/orion-server/internal/errors"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
@@ -211,7 +211,9 @@ func handleError(w http.ResponseWriter, r *http.Request, err error) {
 	var status int
 
 	switch err.(type) {
-	case *errors.PermissionErr:
+	case *ierrors.ServerRestrictionError:
+		status = http.StatusServiceUnavailable
+	case *ierrors.PermissionErr:
 		status = http.StatusForbidden
 	default:
 		status = http.StatusInternalServerError
