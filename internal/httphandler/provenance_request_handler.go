@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
+	"github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
@@ -103,7 +104,7 @@ func (p *provenanceRequestHandler) getHistoricalData(w http.ResponseWriter, r *h
 	}
 
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -119,7 +120,7 @@ func (p *provenanceRequestHandler) getDataReaders(w http.ResponseWriter, r *http
 
 	response, err := p.db.GetReaders(query.DbName, query.Key)
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -135,7 +136,7 @@ func (p *provenanceRequestHandler) getDataWriters(w http.ResponseWriter, r *http
 
 	response, err := p.db.GetWriters(query.DbName, query.Key)
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -149,9 +150,9 @@ func (p *provenanceRequestHandler) getDataReadByUser(w http.ResponseWriter, r *h
 	}
 	query := payload.(*types.GetDataReadByQuery)
 
-	response, err := p.db.GetValuesReadByUser(query.TargetUserId)
+	response, err := p.db.GetValuesReadByUser(query.UserId, query.TargetUserId)
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -165,9 +166,9 @@ func (p *provenanceRequestHandler) getDataWrittenByUser(w http.ResponseWriter, r
 	}
 	query := payload.(*types.GetDataWrittenByQuery)
 
-	response, err := p.db.GetValuesWrittenByUser(query.TargetUserId)
+	response, err := p.db.GetValuesWrittenByUser(query.UserId, query.TargetUserId)
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -181,9 +182,9 @@ func (p *provenanceRequestHandler) getDataDeletedByUser(w http.ResponseWriter, r
 	}
 	query := payload.(*types.GetDataDeletedByQuery)
 
-	response, err := p.db.GetValuesDeletedByUser(query.TargetUserId)
+	response, err := p.db.GetValuesDeletedByUser(query.UserId, query.TargetUserId)
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 
@@ -197,19 +198,28 @@ func (p *provenanceRequestHandler) getTxIDsSubmittedBy(w http.ResponseWriter, r 
 	}
 	query := payload.(*types.GetTxIDsSubmittedByQuery)
 
-	response, err := p.db.GetTxIDsSubmittedByUser(query.TargetUserId)
+	response, err := p.db.GetTxIDsSubmittedByUser(query.UserId, query.TargetUserId)
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 
 	utils.SendHTTPResponse(w, http.StatusOK, response)
 }
 
-func processInternalError(w http.ResponseWriter, r *http.Request, err error) {
+func handleError(w http.ResponseWriter, r *http.Request, err error) {
+	var status int
+
+	switch err.(type) {
+	case *errors.PermissionErr:
+		status = http.StatusForbidden
+	default:
+		status = http.StatusInternalServerError
+	}
+
 	utils.SendHTTPResponse(
 		w,
-		http.StatusInternalServerError,
+		status,
 		&types.HttpResponseErr{
 			ErrMsg: "error while processing '" + r.Method + " " + r.URL.String() + "' because " + err.Error(),
 		},
@@ -232,7 +242,7 @@ func (p *provenanceRequestHandler) getMostRecentUserOrNode(w http.ResponseWriter
 
 	response, err := p.db.GetMostRecentValueAtOrBelow(dbName, query.Id, query.Version)
 	if err != nil {
-		processInternalError(w, r, err)
+		handleError(w, r, err)
 		return
 	}
 

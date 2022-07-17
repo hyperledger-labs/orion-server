@@ -492,13 +492,13 @@ func (_m *DB) GetReaders(dbName string, key string) (*types.GetDataReadersRespon
 	return r0, r1
 }
 
-// GetTxIDsSubmittedByUser provides a mock function with given fields: userID
-func (_m *DB) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
-	ret := _m.Called(userID)
+// GetTxIDsSubmittedByUser provides a mock function with given fields: querierUserID, targetUserID
+func (_m *DB) GetTxIDsSubmittedByUser(querierUserID string, targetUserID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
+	ret := _m.Called(querierUserID, targetUserID)
 
 	var r0 *types.GetTxIDsSubmittedByResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string) *types.GetTxIDsSubmittedByResponseEnvelope); ok {
-		r0 = rf(userID)
+	if rf, ok := ret.Get(0).(func(string, string) *types.GetTxIDsSubmittedByResponseEnvelope); ok {
+		r0 = rf(querierUserID, targetUserID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetTxIDsSubmittedByResponseEnvelope)
@@ -506,8 +506,8 @@ func (_m *DB) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedBy
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(userID)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(querierUserID, targetUserID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -630,13 +630,13 @@ func (_m *DB) GetValues(dbName string, key string) (*types.GetHistoricalDataResp
 	return r0, r1
 }
 
-// GetValuesDeletedByUser provides a mock function with given fields: userID
-func (_m *DB) GetValuesDeletedByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
-	ret := _m.Called(userID)
+// GetValuesDeletedByUser provides a mock function with given fields: querierUserID, targetUserID
+func (_m *DB) GetValuesDeletedByUser(querierUserID string, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	ret := _m.Called(querierUserID, targetUserID)
 
 	var r0 *types.GetDataProvenanceResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string) *types.GetDataProvenanceResponseEnvelope); ok {
-		r0 = rf(userID)
+	if rf, ok := ret.Get(0).(func(string, string) *types.GetDataProvenanceResponseEnvelope); ok {
+		r0 = rf(querierUserID, targetUserID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetDataProvenanceResponseEnvelope)
@@ -644,8 +644,8 @@ func (_m *DB) GetValuesDeletedByUser(userID string) (*types.GetDataProvenanceRes
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(userID)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(querierUserID, targetUserID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -653,13 +653,13 @@ func (_m *DB) GetValuesDeletedByUser(userID string) (*types.GetDataProvenanceRes
 	return r0, r1
 }
 
-// GetValuesReadByUser provides a mock function with given fields: userID
-func (_m *DB) GetValuesReadByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
-	ret := _m.Called(userID)
+// GetValuesReadByUser provides a mock function with given fields: querierUserID, targetUserID
+func (_m *DB) GetValuesReadByUser(querierUserID string, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	ret := _m.Called(querierUserID, targetUserID)
 
 	var r0 *types.GetDataProvenanceResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string) *types.GetDataProvenanceResponseEnvelope); ok {
-		r0 = rf(userID)
+	if rf, ok := ret.Get(0).(func(string, string) *types.GetDataProvenanceResponseEnvelope); ok {
+		r0 = rf(querierUserID, targetUserID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetDataProvenanceResponseEnvelope)
@@ -667,8 +667,8 @@ func (_m *DB) GetValuesReadByUser(userID string) (*types.GetDataProvenanceRespon
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(userID)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(querierUserID, targetUserID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -676,13 +676,13 @@ func (_m *DB) GetValuesReadByUser(userID string) (*types.GetDataProvenanceRespon
 	return r0, r1
 }
 
-// GetValuesWrittenByUser provides a mock function with given fields: userID
-func (_m *DB) GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
-	ret := _m.Called(userID)
+// GetValuesWrittenByUser provides a mock function with given fields: querierUserID, targetUserID
+func (_m *DB) GetValuesWrittenByUser(querierUserID string, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	ret := _m.Called(querierUserID, targetUserID)
 
 	var r0 *types.GetDataProvenanceResponseEnvelope
-	if rf, ok := ret.Get(0).(func(string) *types.GetDataProvenanceResponseEnvelope); ok {
-		r0 = rf(userID)
+	if rf, ok := ret.Get(0).(func(string, string) *types.GetDataProvenanceResponseEnvelope); ok {
+		r0 = rf(querierUserID, targetUserID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*types.GetDataProvenanceResponseEnvelope)
@@ -690,8 +690,8 @@ func (_m *DB) GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceRes
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(userID)
+	if rf, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = rf(querierUserID, targetUserID)
 	} else {
 		r1 = ret.Error(1)
 	}

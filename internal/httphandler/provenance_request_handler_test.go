@@ -12,6 +12,7 @@ import (
 
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb/mocks"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
@@ -375,7 +376,7 @@ func TestGetDataReadBy(t *testing.T) {
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
 	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
-	targetUserID := "user1"
+	targetUserID := "alice"
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
 		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
@@ -413,7 +414,7 @@ func TestGetDataReadBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValuesReadByUser", targetUserID).Return(genericResponse, nil)
+				db.On("GetValuesReadByUser", submittingUserName, targetUserID).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -425,10 +426,22 @@ func TestGetDataReadBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValuesReadByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
+				db.On("GetValuesReadByUser", submittingUserName, targetUserID).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "permission error",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesReadByUser", submittingUserName, targetUserID).Return(nil, &ierrors.PermissionErr{ErrMsg: "error in provenance db"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
@@ -448,7 +461,7 @@ func TestGetDataWrittenBy(t *testing.T) {
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
 	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
-	targetUserID := "user1"
+	targetUserID := "alice"
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
 		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
@@ -486,7 +499,7 @@ func TestGetDataWrittenBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValuesWrittenByUser", targetUserID).Return(genericResponse, nil)
+				db.On("GetValuesWrittenByUser", submittingUserName, targetUserID).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -498,10 +511,22 @@ func TestGetDataWrittenBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValuesWrittenByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
+				db.On("GetValuesWrittenByUser", submittingUserName, targetUserID).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "permission error",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesWrittenByUser", submittingUserName, targetUserID).Return(nil, &ierrors.PermissionErr{ErrMsg: "error in provenance db"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
@@ -521,7 +546,7 @@ func TestGetDataDeletedBy(t *testing.T) {
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
 	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
-	targetUserID := "user1"
+	targetUserID := "alice"
 	genericResponse := &types.GetDataProvenanceResponseEnvelope{
 		Response: &types.GetDataProvenanceResponse{
 			Header: &types.ResponseHeader{
@@ -559,7 +584,7 @@ func TestGetDataDeletedBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValuesDeletedByUser", targetUserID).Return(genericResponse, nil)
+				db.On("GetValuesDeletedByUser", submittingUserName, targetUserID).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -571,10 +596,22 @@ func TestGetDataDeletedBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetValuesDeletedByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
+				db.On("GetValuesDeletedByUser", submittingUserName, targetUserID).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "permission error",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetValuesDeletedByUser", submittingUserName, targetUserID).Return(nil, &ierrors.PermissionErr{ErrMsg: "error in provenance db"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),
@@ -594,7 +631,7 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
 	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
 
-	targetUserID := "user1"
+	targetUserID := "alice"
 	genericResponse := &types.GetTxIDsSubmittedByResponseEnvelope{
 		Response: &types.GetTxIDsSubmittedByResponse{
 			Header: &types.ResponseHeader{
@@ -623,7 +660,7 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetTxIDsSubmittedByUser", targetUserID).Return(genericResponse, nil)
+				db.On("GetTxIDsSubmittedByUser", submittingUserName, targetUserID).Return(genericResponse, nil)
 				return db
 			},
 			expectedStatusCode: http.StatusOK,
@@ -635,10 +672,22 @@ func TestGetTxIDsSubmittedBy(t *testing.T) {
 			dbMockFactory: func(response interface{}) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
-				db.On("GetTxIDsSubmittedByUser", targetUserID).Return(nil, errors.New("error in provenance db"))
+				db.On("GetTxIDsSubmittedByUser", submittingUserName, targetUserID).Return(nil, errors.New("error in provenance db"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
+			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
+		},
+		{
+			name:    "permission error",
+			request: req,
+			dbMockFactory: func(response interface{}) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTxIDsSubmittedByUser", submittingUserName, targetUserID).Return(nil, &ierrors.PermissionErr{ErrMsg: "error in provenance db"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
 			expectedErr:        "error while processing 'GET " + url + "' because error in provenance db",
 		},
 		constructTestCaseForSigVerificationFailure(t, url, submittingUserName),

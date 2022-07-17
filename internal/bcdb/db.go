@@ -140,14 +140,14 @@ type DB interface {
 	// by the limit parameters.
 	GetNextValues(dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
 
-	// GetValuesReadByUser returns all values read by a given user
-	GetValuesReadByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error)
+	// GetValuesReadByUser returns all values read by a given targetUserID
+	GetValuesReadByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error)
 
-	// GetValuesWrittenByUser returns all values written by a given user
-	GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error)
+	// GetValuesWrittenByUser returns all values written by a targetUserID
+	GetValuesWrittenByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error)
 
-	// GetValuesDeletedByUser returns all values deleted by a given user
-	GetValuesDeletedByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error)
+	// GetValuesDeletedByUser returns all values deleted by a targetUserID
+	GetValuesDeletedByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error)
 
 	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
 	GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error)
@@ -155,8 +155,8 @@ type DB interface {
 	// GetWriters returns all userIDs who have updated a given key as well as the access frequency
 	GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error)
 
-	// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
-	GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error)
+	// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a targetUserID
+	GetTxIDsSubmittedByUser(querierUserID, targetUserID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error)
 
 	// GetTxReceipt returns transaction receipt - block header of ledger block that contains the transaction
 	// and transaction index inside the block
@@ -280,6 +280,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 	provenanceQueryProcessor := newProvenanceQueryProcessor(
 		&provenanceQueryProcessorConfig{
 			provenanceStore: provenanceStore,
+			identityQuerier: querier,
 			logger:          logger,
 		},
 	)
@@ -818,9 +819,9 @@ func (d *db) GetNextValues(dbName, key string, version *types.Version) (*types.G
 	}, nil
 }
 
-// GetValuesReadByUser returns all values read by a given user
-func (d *db) GetValuesReadByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
-	readByUser, err := d.provenanceQueryProcessor.GetValuesReadByUser(userID)
+// GetValuesReadByUser returns all values read by a given targetUserID
+func (d *db) GetValuesReadByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	readByUser, err := d.provenanceQueryProcessor.GetValuesReadByUser(querierUserID, targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -837,9 +838,9 @@ func (d *db) GetValuesReadByUser(userID string) (*types.GetDataProvenanceRespons
 	}, nil
 }
 
-// GetValuesWrittenByUser returns all values written by a given user
-func (d *db) GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
-	writtenByUser, err := d.provenanceQueryProcessor.GetValuesWrittenByUser(userID)
+// GetValuesWrittenByUser returns all values written by a given targetUserID
+func (d *db) GetValuesWrittenByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	writtenByUser, err := d.provenanceQueryProcessor.GetValuesWrittenByUser(querierUserID, targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -856,9 +857,9 @@ func (d *db) GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceResp
 	}, nil
 }
 
-// GetValuesDeletedByUser returns all values deleted by a given user
-func (d *db) GetValuesDeletedByUser(userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
-	deletedByUser, err := d.provenanceQueryProcessor.GetValuesDeletedByUser(userID)
+// GetValuesDeletedByUser returns all values deleted by a given targetUserID
+func (d *db) GetValuesDeletedByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+	deletedByUser, err := d.provenanceQueryProcessor.GetValuesDeletedByUser(querierUserID, targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -913,9 +914,9 @@ func (d *db) GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelo
 	}, nil
 }
 
-// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
-func (d *db) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
-	submittedByUser, err := d.provenanceQueryProcessor.GetTxIDsSubmittedByUser(userID)
+// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given targetUserID
+func (d *db) GetTxIDsSubmittedByUser(querierUserID, targetUserID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
+	submittedByUser, err := d.provenanceQueryProcessor.GetTxIDsSubmittedByUser(querierUserID, targetUserID)
 	if err != nil {
 		return nil, err
 	}

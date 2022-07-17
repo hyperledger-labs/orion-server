@@ -3,6 +3,8 @@
 package bcdb
 
 import (
+	"github.com/hyperledger-labs/orion-server/internal/errors"
+	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -10,17 +12,20 @@ import (
 
 type provenanceQueryProcessor struct {
 	provenanceStore *provenance.Store
+	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
 }
 
 type provenanceQueryProcessorConfig struct {
 	provenanceStore *provenance.Store
+	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
 }
 
 func newProvenanceQueryProcessor(conf *provenanceQueryProcessorConfig) *provenanceQueryProcessor {
 	return &provenanceQueryProcessor{
 		provenanceStore: conf.provenanceStore,
+		identityQuerier: conf.identityQuerier,
 		logger:          conf.logger,
 	}
 }
@@ -95,8 +100,12 @@ func (p *provenanceQueryProcessor) GetDeletedValues(dbName, key string) (*types.
 }
 
 // GetValuesReadByUser returns all values read by a given user
-func (p *provenanceQueryProcessor) GetValuesReadByUser(userID string) (*types.GetDataProvenanceResponse, error) {
-	kvs, err := p.provenanceStore.GetValuesReadByUser(userID)
+func (p *provenanceQueryProcessor) GetValuesReadByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponse, error) {
+	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
+		return nil, err
+	}
+
+	kvs, err := p.provenanceStore.GetValuesReadByUser(targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +116,12 @@ func (p *provenanceQueryProcessor) GetValuesReadByUser(userID string) (*types.Ge
 }
 
 // GetValuesReadByUser returns all values read by a given user
-func (p *provenanceQueryProcessor) GetValuesWrittenByUser(userID string) (*types.GetDataProvenanceResponse, error) {
-	kvs, err := p.provenanceStore.GetValuesWrittenByUser(userID)
+func (p *provenanceQueryProcessor) GetValuesWrittenByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponse, error) {
+	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
+		return nil, err
+	}
+
+	kvs, err := p.provenanceStore.GetValuesWrittenByUser(targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +131,12 @@ func (p *provenanceQueryProcessor) GetValuesWrittenByUser(userID string) (*types
 	}, nil
 }
 
-func (p *provenanceQueryProcessor) GetValuesDeletedByUser(userID string) (*types.GetDataProvenanceResponse, error) {
-	kvs, err := p.provenanceStore.GetValuesDeletedByUser(userID)
+func (p *provenanceQueryProcessor) GetValuesDeletedByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponse, error) {
+	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
+		return nil, err
+	}
+
+	kvs, err := p.provenanceStore.GetValuesDeletedByUser(targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,8 +179,12 @@ func (p *provenanceQueryProcessor) GetWriters(dbName, key string) (*types.GetDat
 }
 
 // GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
-func (p *provenanceQueryProcessor) GetTxIDsSubmittedByUser(userID string) (*types.GetTxIDsSubmittedByResponse, error) {
-	txIDs, err := p.provenanceStore.GetTxIDsSubmittedByUser(userID)
+func (p *provenanceQueryProcessor) GetTxIDsSubmittedByUser(querierUserID, targetUserID string) (*types.GetTxIDsSubmittedByResponse, error) {
+	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
+		return nil, err
+	}
+
+	txIDs, err := p.provenanceStore.GetTxIDsSubmittedByUser(targetUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +192,21 @@ func (p *provenanceQueryProcessor) GetTxIDsSubmittedByUser(userID string) (*type
 	return &types.GetTxIDsSubmittedByResponse{
 		TxIDs: txIDs,
 	}, nil
+}
+
+func (p *provenanceQueryProcessor) aclCheckForUserOperation(querierUserID, targetUserID string) error {
+	isAdmin, err := p.identityQuerier.HasAdministrationPrivilege(querierUserID)
+	if err != nil {
+		return err
+	}
+
+	if !isAdmin && querierUserID != targetUserID {
+		return &errors.PermissionErr{
+			ErrMsg: "The querier [" + querierUserID + "] is neither an admin nor requesting operations performed by [" + querierUserID + "]. Only an admin can query operations performed by other users.",
+		}
+	}
+
+	return nil
 }
 
 func (p *provenanceQueryProcessor) composeHistoricalDataResponse(values []*types.ValueWithMetadata) (*types.GetHistoricalDataResponse, error) {
