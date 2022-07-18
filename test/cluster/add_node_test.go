@@ -57,7 +57,7 @@ func addServerTx(t *testing.T, c *setup.Cluster, setupConfig *setup.Config, conf
 	require.NotNil(t, newServer)
 	require.NotNil(t, newPeer)
 	require.NotNil(t, newNode)
-	require.NoError(t, newServer.CreateConfigFile())
+	require.NoError(t, newServer.CreateConfigFile(nil))
 
 	newConfig := configEnv.GetResponse().GetConfig()
 	newConfig.ConsensusConfig.Members = append(newConfig.ConsensusConfig.Members, newPeer)
@@ -303,7 +303,7 @@ func TestInvalidAdd(t *testing.T) {
 	require.NotNil(t, server4)
 	require.NotNil(t, peer4)
 	require.NotNil(t, node4)
-	require.NoError(t, server4.CreateConfigFile())
+	require.NoError(t, server4.CreateConfigFile(nil))
 
 	t.Logf("create node-5")
 	server5, peer5, node5, err := createNewServer(c, setupConfig, 4)
@@ -311,7 +311,7 @@ func TestInvalidAdd(t *testing.T) {
 	require.NotNil(t, server5)
 	require.NotNil(t, peer5)
 	require.NotNil(t, node5)
-	require.NoError(t, server5.CreateConfigFile())
+	require.NoError(t, server5.CreateConfigFile(nil))
 
 	t.Logf("add nodes 4-5 in one tx")
 	newConfig := configEnv.GetResponse().GetConfig()

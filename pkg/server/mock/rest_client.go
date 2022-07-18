@@ -193,6 +193,25 @@ func (c *Client) GetLedgerPath(e *types.GetLedgerPathQueryEnvelope) (*types.GetL
 	return res, err
 }
 
+func (c *Client) GetTxReceipt(e *types.GetTxReceiptQueryEnvelope) (*types.TxReceiptResponseEnvelope, error) {
+	path := constants.URLForGetTransactionReceipt(e.Payload.TxId)
+
+	resp, err := c.handleGetRequest(
+		path,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrap(err, "error while issuing "+path)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.TxReceiptResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetBlockHeader(e *types.GetBlockQueryEnvelope, forceParam bool) (*types.GetBlockResponseEnvelope, error) {
 	path := constants.LedgerEndpoint + fmt.Sprintf("block/%d", e.Payload.BlockNumber)
 	if forceParam {
