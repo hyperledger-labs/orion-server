@@ -88,7 +88,6 @@ func addServerTx(t *testing.T, c *setup.Cluster, setupConfig *setup.Config, conf
 	c.AddNewServerToCluster(newServer)
 
 	return newServer
-
 }
 
 // Scenario:
