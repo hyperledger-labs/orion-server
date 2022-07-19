@@ -1028,6 +1028,55 @@ func (s *Server) SetConfigTx(t *testing.T, newConfig *types.ClusterConfig, versi
 	return txID, receipt, nil
 }
 
+func (s *Server) CreateNewCryptoMaterials(rootCAPemCert, caPrivKey []byte) (string, string, string, error) {
+	keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
+	if err != nil {
+		return "", "", "", err
+	}
+	rootCACertPath := path.Join(s.cryptoMaterialsDir, "serverRootCACert.pem")
+	serverRootCACertFile, err := os.Create(rootCACertPath)
+	if err != nil {
+		return "", "", "", err
+	}
+	if _, err = serverRootCACertFile.Write(rootCAPemCert); err != nil {
+		return "", "", "", err
+	}
+	if err = serverRootCACertFile.Close(); err != nil {
+		return "", "", "", err
+	}
+
+	pemCert, privKey, err := testutils.IssueCertificate(s.serverID+" Instance", s.address, keyPair)
+	if err != nil {
+		return "", "", "", err
+	}
+
+	certPath := path.Join(s.cryptoMaterialsDir, "server.pem")
+	pemCertFile, err := os.Create(certPath)
+	if err != nil {
+		return "", "", "", err
+	}
+	if _, err = pemCertFile.Write(pemCert); err != nil {
+		return "", "", "", err
+	}
+	if err = pemCertFile.Close(); err != nil {
+		return "", "", "", err
+	}
+
+	keyPath := path.Join(s.cryptoMaterialsDir, "server.key")
+	pemPrivKeyFile, err := os.Create(keyPath)
+	if err != nil {
+		return "", "", "", err
+	}
+	if _, err = pemPrivKeyFile.Write(privKey); err != nil {
+		return "", "", "", err
+	}
+	if err = pemPrivKeyFile.Close(); err != nil {
+		return "", "", "", err
+	}
+
+	return keyPath, certPath, rootCACertPath, nil
+}
+
 func (s *Server) CreateCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1080,7 +1129,7 @@ func (s *Server) CreateCryptoMaterials(rootCAPemCert, caPrivKey []byte) error {
 	return nil
 }
 
-func (s *Server) CreateConfigFile(blockCreationOverride *config.BlockCreationConf) error {
+func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -1119,7 +1168,15 @@ func (s *Server) CreateConfigFile(blockCreationOverride *config.BlockCreationCon
 				Port:    uint32(s.peerPort),
 			},
 			TLS: config.TLSConf{
-				Enabled: false,
+				Enabled:               conf.Replication.TLS.Enabled,
+				ClientAuthRequired:    false,
+				ServerCertificatePath: s.serverCertPath,
+				ServerKeyPath:         s.serverKeyPath,
+				ClientCertificatePath: s.serverCertPath,
+				ClientKeyPath:         s.serverKeyPath,
+				CaConfig: config.CAConfiguration{
+					RootCACertsPath: []string{s.serverRootCACertPath},
+				},
 			},
 		},
 		Bootstrap: config.BootstrapConf{
@@ -1128,10 +1185,18 @@ func (s *Server) CreateConfigFile(blockCreationOverride *config.BlockCreationCon
 		},
 	}
 
-	if blockCreationOverride != nil {
-		localCofig.BlockCreation = *blockCreationOverride
+	emptyBlockCreationConf := config.BlockCreationConf{}
+	if conf.BlockCreation != emptyBlockCreationConf {
+		localCofig.BlockCreation = conf.BlockCreation
 	}
 
+	if conf.Replication.TLS.ServerCertificatePath != "" && conf.Replication.TLS.ServerKeyPath != "" {
+		localCofig.Replication.TLS.ServerKeyPath = conf.Replication.TLS.ServerKeyPath
+		localCofig.Replication.TLS.ServerCertificatePath = conf.Replication.TLS.ServerCertificatePath
+		localCofig.Replication.TLS.ClientKeyPath = conf.Replication.TLS.ServerKeyPath
+		localCofig.Replication.TLS.ClientCertificatePath = conf.Replication.TLS.ServerCertificatePath
+		localCofig.Replication.TLS.CaConfig = conf.Replication.TLS.CaConfig
+	}
 	if err := WriteLocalConfig(localCofig, s.configFilePath); err != nil {
 		return err
 	}
