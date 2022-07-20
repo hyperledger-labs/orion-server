@@ -1237,3 +1237,38 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 		}
 	}
 }
+
+func TestDisabledStore(t *testing.T) {
+	env := newProvenanceQueryProcessorTestEnv(t)
+	defer env.cleanup(t)
+
+	env.p.provenanceStore = nil
+
+	_, err := env.p.GetReaders("db", "key")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetWriters("db", "key")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+
+	_, err = env.p.GetValues("db", "key")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetDeletedValues("db", "key")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetNextValues("db", "key", &types.Version{BlockNum: 1, TxNum: 1})
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetPreviousValues("db", "key", &types.Version{BlockNum: 1, TxNum: 1})
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetMostRecentValueAtOrBelow("db", "key", &types.Version{BlockNum: 1, TxNum: 1})
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetValueAt("db", "key", &types.Version{BlockNum: 1, TxNum: 1})
+	require.EqualError(t, err, "provenance store is disabled on this server")
+
+	_, err = env.p.GetValuesDeletedByUser("user", "user")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetValuesReadByUser("user", "user")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+	_, err = env.p.GetValuesWrittenByUser("user", "user")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+
+	_, err = env.p.GetTxIDsSubmittedByUser("user", "user")
+	require.EqualError(t, err, "provenance store is disabled on this server")
+}

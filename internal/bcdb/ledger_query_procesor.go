@@ -11,7 +11,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/hyperledger-labs/orion-server/internal/mtree"
-	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/state"
@@ -22,7 +21,6 @@ import (
 type ledgerQueryProcessor struct {
 	db              worldstate.DB
 	blockStore      *blockstore.Store
-	provenanceStore *provenance.Store
 	trieStore       mptrie.Store
 	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
@@ -31,7 +29,6 @@ type ledgerQueryProcessor struct {
 type ledgerQueryProcessorConfig struct {
 	db              worldstate.DB
 	blockStore      *blockstore.Store
-	provenanceStore *provenance.Store
 	trieStore       mptrie.Store
 	identityQuerier *identity.Querier
 	logger          *logger.SugarLogger
@@ -41,7 +38,6 @@ func newLedgerQueryProcessor(conf *ledgerQueryProcessorConfig) *ledgerQueryProce
 	return &ledgerQueryProcessor{
 		db:              conf.db,
 		blockStore:      conf.blockStore,
-		provenanceStore: conf.provenanceStore,
 		trieStore:       conf.trieStore,
 		identityQuerier: conf.identityQuerier,
 		logger:          conf.logger,
@@ -195,12 +191,13 @@ func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.
 	if !hasAccess {
 		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
 	}
-	txLoc, err := p.provenanceStore.GetTxIDLocation(txId)
+
+	txInfo, err := p.blockStore.GetTxInfo(txId)
 	if err != nil {
 		return nil, err
 	}
 
-	blockHeader, err := p.blockStore.GetHeader(txLoc.BlockNum)
+	blockHeader, err := p.blockStore.GetHeader(txInfo.GetBlockNumber())
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +205,7 @@ func (p *ledgerQueryProcessor) getTxReceipt(userId string, txId string) (*types.
 	return &types.TxReceiptResponse{
 		Receipt: &types.TxReceipt{
 			Header:  blockHeader,
-			TxIndex: uint64(txLoc.TxIndex),
+			TxIndex: txInfo.GetTxIndex(),
 		},
 	}, nil
 }

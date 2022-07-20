@@ -1373,52 +1373,6 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 	}
 }
 
-func TestGetTxIDLocation(t *testing.T) {
-	t.Parallel()
-	env := newTestEnv(t)
-	defer env.cleanup()
-
-	setup(t, env.s)
-
-	tests := []struct {
-		txID        string
-		expected    *TxIDLocation
-		expectedErr string
-	}{
-		{
-			txID: "tx2",
-			expected: &TxIDLocation{
-				BlockNum: 1,
-				TxIndex:  1,
-			},
-		},
-		{
-			txID: "tx10",
-			expected: &TxIDLocation{
-				BlockNum: 1,
-				TxIndex:  2,
-			},
-		},
-		{
-			txID:        "tx-not-found",
-			expected:    nil,
-			expectedErr: "TxID not found: tx-not-found",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.txID, func(t *testing.T) {
-			loc, err := env.s.GetTxIDLocation(tt.txID)
-			if tt.expectedErr == "" {
-				require.NoError(t, err)
-				require.Equal(t, tt.expected, loc)
-			} else {
-				require.EqualError(t, err, tt.expectedErr)
-			}
-		})
-	}
-}
-
 func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 	t.Parallel()
 	env := newTestEnv(t)

@@ -1148,6 +1148,9 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 				Name:            "leveldb",
 				LedgerDirectory: filepath.Join(s.configDir, "ledger"),
 			},
+			Provenance: config.ProvenanceConf{
+				Disabled: conf.Server.Provenance.Disabled,
+			},
 			QueueLength: config.QueueLengthConf{
 				Transaction:               1000,
 				ReorderedTransactionBatch: 100,
@@ -1189,7 +1192,6 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 	if conf.BlockCreation != emptyBlockCreationConf {
 		localCofig.BlockCreation = conf.BlockCreation
 	}
-
 	if conf.Replication.TLS.ServerCertificatePath != "" && conf.Replication.TLS.ServerKeyPath != "" {
 		localCofig.Replication.TLS.ServerKeyPath = conf.Replication.TLS.ServerKeyPath
 		localCofig.Replication.TLS.ServerCertificatePath = conf.Replication.TLS.ServerCertificatePath

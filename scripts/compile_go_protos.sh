@@ -13,3 +13,11 @@ for protos in $(find . -name '*.proto' -exec dirname {} \; | sort -u); do
     $protos/*.proto
 done
 
+cd ../internal/blockstore
+protoc  \
+   --proto_path . \
+   --proto_path ../../protos \
+   --go_out=. \
+   --go_opt=paths=source_relative \
+   *.proto
+
