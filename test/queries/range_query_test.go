@@ -50,7 +50,7 @@ func TestRangeQueriesWithUserLimit(t *testing.T) {
 
 	s := c.Servers[0]
 
-	insertData(t, s)
+	insertDataAlphabet(t, s)
 
 	// query without limit (limit=0)
 	res, err := s.QueryDataRange(t, "admin", worldstate.DefaultDBName, "key-a", "key-z", 0)
@@ -137,7 +137,7 @@ func TestRangeQueriesWithServerLimit(t *testing.T) {
 
 	s := c.Servers[0]
 
-	insertData(t, s)
+	insertDataAlphabet(t, s)
 
 	res, err := s.QueryDataRange(t, "admin", worldstate.DefaultDBName, "key-a", "key-z", 0)
 	require.NoError(t, err)
@@ -208,7 +208,7 @@ func TestInvalidRangeQuery(t *testing.T) {
 
 	s := c.Servers[0]
 
-	insertData(t, s)
+	insertDataAlphabet(t, s)
 
 	res, err := s.QueryDataRange(t, "admin", worldstate.DefaultDBName, "key-a", "key-z", 100)
 	require.EqualError(t, err, "error while issuing /data/bdb?startkey=\"key-a\"&endkey=\"key-z\"&limit=100: "+
@@ -218,7 +218,7 @@ func TestInvalidRangeQuery(t *testing.T) {
 	require.Nil(t, res)
 }
 
-func insertData(t *testing.T, s *setup.Server) {
+func insertDataAlphabet(t *testing.T, s *setup.Server) {
 	for r := 'a'; r < 'z'; r++ {
 		txID, rcpt, _, err := s.WriteDataTx(t, worldstate.DefaultDBName, fmt.Sprintf("key-%c", r), []byte{uint8(r)})
 		require.NoError(t, err)

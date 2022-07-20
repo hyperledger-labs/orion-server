@@ -38,16 +38,17 @@ type Cluster struct {
 
 // Config holds configuration detail needed to instantiate a cluster
 type Config struct {
-	NumberOfServers       int
-	TestDirAbsolutePath   string
-	BDBBinaryPath         string
-	CmdTimeout            time.Duration
-	BaseNodePort          uint32
-	BasePeerPort          uint32
-	CheckRedirectFunc     func(req *http.Request, via []*http.Request) error // rest client checks redirects
-	ClusterTLSEnabled     bool
-	BlockCreationOverride *config.BlockCreationConf
-	ServersQueryLimit     uint64
+	NumberOfServers          int
+	TestDirAbsolutePath      string
+	BDBBinaryPath            string
+	CmdTimeout               time.Duration
+	BaseNodePort             uint32
+	BasePeerPort             uint32
+	CheckRedirectFunc        func(req *http.Request, via []*http.Request) error // rest client checks redirects
+	ClusterTLSEnabled        bool
+	BlockCreationOverride    *config.BlockCreationConf
+	ServersQueryLimit        uint64
+	DisableProvenanceServers []int
 }
 
 // NewCluster creates a new cluster environment for the blockchain database
@@ -116,7 +117,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 		localConf.BlockCreation = *conf.BlockCreationOverride
 	}
 
-	if err := cluster.createConfigFile(localConf); err != nil {
+	if err := cluster.createConfigFile(localConf, conf.DisableProvenanceServers); err != nil {
 		return nil, err
 	}
 
@@ -505,9 +506,22 @@ func (c *Cluster) GetLogger() *logger.SugarLogger {
 	return c.logger
 }
 
-func (c *Cluster) createConfigFile(conf *config.LocalConfiguration) error {
-	for _, s := range c.Servers {
-		if err := s.CreateConfigFile(conf); err != nil {
+func contain(arr []int, s int) bool {
+	for _, v := range arr {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Cluster) createConfigFile(conf *config.LocalConfiguration, DisableProvenanceServers []int) error {
+	for i, s := range c.Servers {
+		newConf := conf
+		if contain(DisableProvenanceServers, i) {
+			newConf.Server.Provenance.Disabled = true
+		}
+		if err := s.CreateConfigFile(newConf); err != nil {
 			return err
 		}
 	}
