@@ -880,6 +880,37 @@ func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string
 	return txID, receipt, txEnv, nil
 }
 
+func (s *Server) WriteDataTxAsync(t *testing.T, db, key string, value []byte) (string, *types.DataTxEnvelope, error) {
+	txID := uuid.New().String()
+	dataTx := &types.DataTx{
+		MustSignUserIds: []string{"admin"},
+		TxId:            txID,
+		DbOperations: []*types.DBOperation{
+			{
+				DbName: db,
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   key,
+						Value: value,
+					},
+				},
+			},
+		},
+	}
+
+	// Post transaction into new database
+	txEnv := &types.DataTxEnvelope{
+		Payload:    dataTx,
+		Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
+	}
+	err := s.SubmitTransactionAsync(t, constants.PostDataTx, txEnv)
+	if err != nil {
+		return txID, nil, err
+	}
+
+	return txID, txEnv, nil
+}
+
 func (s *Server) CreateUsers(t *testing.T, users []*types.UserWrite) (*types.TxReceipt, error) {
 	userTx := &types.UserAdministrationTx{
 		UserId:     "admin",
