@@ -47,6 +47,7 @@ type Config struct {
 	CheckRedirectFunc     func(req *http.Request, via []*http.Request) error // rest client checks redirects
 	ClusterTLSEnabled     bool
 	BlockCreationOverride *config.BlockCreationConf
+	ServersQueryLimit     uint64
 }
 
 // NewCluster creates a new cluster environment for the blockchain database
@@ -94,7 +95,7 @@ func NewCluster(conf *Config) (*Cluster, error) {
 	}
 
 	for i := 0; i < conf.NumberOfServers; i++ {
-		cluster.Servers[i], err = NewServer(uint64(i), conf.TestDirAbsolutePath, conf.BaseNodePort, conf.BasePeerPort, conf.CheckRedirectFunc, l, "genesis")
+		cluster.Servers[i], err = NewServer(uint64(i), conf.TestDirAbsolutePath, conf.BaseNodePort, conf.BasePeerPort, conf.CheckRedirectFunc, l, "genesis", conf.ServersQueryLimit)
 		if err != nil {
 			return nil, err
 		}
