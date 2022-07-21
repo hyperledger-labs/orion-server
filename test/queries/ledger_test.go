@@ -8,12 +8,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/google/uuid"
+	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
+	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/pkg/errors"
@@ -452,6 +457,136 @@ func TestLedgerTxProof(t *testing.T) {
 	t.Run("invalid: block out of range", func(t *testing.T) {
 		respEnv, err := s.GetTxProof(t, "admin", 200, 0)
 		require.EqualError(t, err, "error while issuing /ledger/proof/tx/200?idx=0: error while processing 'GET /ledger/proof/tx/200?idx=0' because requested block number [200] cannot be greater than the last committed block number [11]")
+		require.Nil(t, respEnv)
+
+		respEnv, err = s.GetTxProof(t, "admin", 0, 0)
+		require.EqualError(t, err, "error while issuing /ledger/proof/tx/0?idx=0: error while processing 'GET /ledger/proof/tx/0?idx=0' because block not found: 0")
+		require.Nil(t, respEnv)
+	})
+}
+
+// Scenario:
+// HTTP GET "/ledger/tx/receipt/{txId}" gets transaction receipt
+// HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" gets proof for tx with index idx inside block blockId
+// HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" with invalid query params
+func TestLedgerAsyncTxProof(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(1)
+	setupConfig := &setup.Config{
+		NumberOfServers:     1,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		BlockCreationOverride: &config.BlockCreationConf{
+			MaxBlockSize:                1024 * 1024,
+			MaxTransactionCountPerBlock: 100,
+			BlockTimeout:                1 * time.Second,
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	s := c.Servers[leaderIndex]
+
+	// add at least 10 data blocks, maximum 100 txs per block
+	var txEnvs []*types.DataTxEnvelope
+	for i := 1; i <= 1000; i++ {
+		dataTx := &types.DataTx{
+			MustSignUserIds: []string{"admin"},
+			TxId:            uuid.New().String(),
+			DbOperations: []*types.DBOperation{
+				{
+					DbName: worldstate.DefaultDBName,
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   fmt.Sprintf("key-%d", i),
+							Value: []byte{uint8(i), uint8(i)},
+						},
+					},
+				},
+			},
+		}
+
+		txEnv := &types.DataTxEnvelope{
+			Payload:    dataTx,
+			Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
+		}
+		txEnvs = append(txEnvs, txEnv)
+	}
+
+	//post txs
+	for _, txEnv := range txEnvs {
+		err = s.SubmitTransactionAsync(t, constants.PostDataTx, txEnv)
+		require.NoError(t, err)
+	}
+
+	rcptEnvMap := make(map[*types.TxReceipt]*types.DataTxEnvelope)
+	lastCommittedBlockNum := uint64(0)
+	txsNumInBlocks := map[uint64]int{}
+	allIn := func() bool {
+		for _, txEnv := range txEnvs {
+			resp, err := s.QueryTxReceipt(t, txEnv.GetPayload().GetTxId(), "admin")
+			if err != nil {
+				return false
+			}
+			rcpt := resp.GetResponse().GetReceipt()
+			if rcpt == nil {
+				return false
+			}
+			rcptEnvMap[rcpt] = txEnv
+			blockNum := rcpt.GetHeader().GetBaseHeader().GetNumber()
+			if blockNum > lastCommittedBlockNum {
+				lastCommittedBlockNum = blockNum
+			}
+			v, found := txsNumInBlocks[blockNum]
+			if found {
+				txsNumInBlocks[blockNum] = v + 1
+			} else {
+				txsNumInBlocks[blockNum] = 0
+			}
+		}
+		return true
+	}
+	require.Eventually(t, allIn, 30*time.Second, 100*time.Millisecond)
+
+	t.Run("valid", func(t *testing.T) {
+		for rcpt, env := range rcptEnvMap {
+			blockNum := rcpt.GetHeader().GetBaseHeader().GetNumber()
+			txIndex := rcpt.GetTxIndex()
+			respEnv, err := s.GetTxProof(t, "admin", blockNum, txIndex)
+			require.NoError(t, err)
+			require.NotNil(t, respEnv)
+			ok, err := verifyTxProof(respEnv.GetResponse().GetHashes(), rcpt, env)
+			require.NoError(t, err)
+			require.True(t, ok)
+		}
+	})
+
+	t.Run("invalid: index out of range", func(t *testing.T) {
+		for i := uint64(2); i <= lastCommittedBlockNum; i++ {
+			respEnv, err := s.GetTxProof(t, "admin", i, 101)
+			require.EqualError(t, err, "error while issuing /ledger/proof/tx/"+strconv.FormatUint(i, 10)+"?idx=101: error while processing 'GET /ledger/proof/tx/"+strconv.FormatUint(i, 10)+"?idx=101' "+
+				"because node with index 101 is not part of merkle tree (0, "+strconv.Itoa(txsNumInBlocks[i])+")")
+			require.Nil(t, respEnv)
+		}
+	})
+
+	t.Run("invalid: block out of range", func(t *testing.T) {
+		respEnv, err := s.GetTxProof(t, "admin", 200, 0)
+		require.EqualError(t, err, "error while issuing /ledger/proof/tx/200?idx=0: error while processing 'GET /ledger/proof/tx/200?idx=0' "+
+			"because requested block number [200] cannot be greater than the last committed block number ["+strconv.FormatUint(lastCommittedBlockNum, 10)+"]")
 		require.Nil(t, respEnv)
 
 		respEnv, err = s.GetTxProof(t, "admin", 0, 0)
