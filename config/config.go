@@ -76,6 +76,8 @@ type ServerConf struct {
 	Network NetworkConf
 	// The database configuration of the local node.
 	Database DatabaseConf
+	// The provenance store configuration of the local node.
+	Provenance    ProvenanceConf
 	// The lengths of various queues that buffer between internal components.
 	QueueLength QueueLengthConf
 	// QueryProcessing holds limits associated with query responses
@@ -120,7 +122,7 @@ type QueueLengthConf struct {
 	Block                     uint32
 }
 
-// QueueProcessingConf holds the configuration associated with rich and range query processing
+// QueryProcessingConf holds the configuration associated with rich and range query processing.
 type QueryProcessingConf struct {
 	ResponseSizeLimitInBytes uint64
 }
@@ -131,6 +133,18 @@ type BlockCreationConf struct {
 	MaxBlockSize                uint64
 	MaxTransactionCountPerBlock uint32
 	BlockTimeout                time.Duration
+}
+
+// ProvenanceConf holds the provenance configuration parameters.
+type ProvenanceConf struct {
+	// Disabled disable the provenance store at this node.When disabled:
+	// - No data is committed to the provenance store.
+	// - Provenance queries return 503 (Service Unavailable).
+	// Provenance can be disabled on one server but disabled on another.
+	// Restarting a server with provenance switched from on to off will leave the provenance store intact, but no more
+	// data will be committed to it, and queries will return 503 (Service Unavailable).
+	// Restarting a server with provenance switched from off to on is not supported and will result in an error.
+	Disabled bool
 }
 
 // BootstrapConf specifies the method of starting a new node with an empty ledger and database.

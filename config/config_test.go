@@ -24,6 +24,9 @@ var expectedLocalConfig = &LocalConfiguration{
 			Name:            "leveldb",
 			LedgerDirectory: "./tmp/",
 		},
+		Provenance: ProvenanceConf{
+			Disabled: true,
+		},
 		QueueLength: QueueLengthConf{
 			Transaction:               1000,
 			ReorderedTransactionBatch: 100,

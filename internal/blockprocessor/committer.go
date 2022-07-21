@@ -4,7 +4,6 @@ package blockprocessor
 
 import (
 	"encoding/json"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
@@ -98,6 +97,10 @@ func (c *committer) commitToDBs(dbsUpdates map[string]*worldstate.DBUpdates, pro
 }
 
 func (c *committer) commitToProvenanceStore(blockNum uint64, provenanceData []*provenance.TxDataForProvenance) error {
+	if c.provenanceStore == nil {
+		return nil
+	}
+
 	if err := c.provenanceStore.Commit(blockNum, provenanceData); err != nil {
 		return errors.WithMessagef(err, "failed to commit block %d to provenance store", blockNum)
 	}

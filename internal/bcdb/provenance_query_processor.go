@@ -1,9 +1,10 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package bcdb
 
 import (
-	"github.com/hyperledger-labs/orion-server/internal/errors"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -32,6 +33,10 @@ func newProvenanceQueryProcessor(conf *provenanceQueryProcessorConfig) *provenan
 
 // GetValues returns all values associated with a given key
 func (p *provenanceQueryProcessor) GetValues(userID, dbName, key string) (*types.GetHistoricalDataResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -46,6 +51,10 @@ func (p *provenanceQueryProcessor) GetValues(userID, dbName, key string) (*types
 
 // GetValueAt returns the value of a given key at a particular version
 func (p *provenanceQueryProcessor) GetValueAt(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -64,6 +73,10 @@ func (p *provenanceQueryProcessor) GetValueAt(userID, dbName, key string, versio
 
 // GetMostRecentValueAtOrBelow returns the most recent value of a given key at or below the given version
 func (p *provenanceQueryProcessor) GetMostRecentValueAtOrBelow(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -83,6 +96,10 @@ func (p *provenanceQueryProcessor) GetMostRecentValueAtOrBelow(userID, dbName, k
 // GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
 func (p *provenanceQueryProcessor) GetPreviousValues(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -98,6 +115,10 @@ func (p *provenanceQueryProcessor) GetPreviousValues(userID, dbName, key string,
 // GetNextValues returns next values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
 func (p *provenanceQueryProcessor) GetNextValues(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -111,6 +132,10 @@ func (p *provenanceQueryProcessor) GetNextValues(userID, dbName, key string, ver
 }
 
 func (p *provenanceQueryProcessor) GetDeletedValues(userID, dbName, key string) (*types.GetHistoricalDataResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -125,6 +150,10 @@ func (p *provenanceQueryProcessor) GetDeletedValues(userID, dbName, key string) 
 
 // GetValuesReadByUser returns all values read by a given user
 func (p *provenanceQueryProcessor) GetValuesReadByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
 		return nil, err
 	}
@@ -141,6 +170,10 @@ func (p *provenanceQueryProcessor) GetValuesReadByUser(querierUserID, targetUser
 
 // GetValuesReadByUser returns all values read by a given user
 func (p *provenanceQueryProcessor) GetValuesWrittenByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
 		return nil, err
 	}
@@ -156,6 +189,10 @@ func (p *provenanceQueryProcessor) GetValuesWrittenByUser(querierUserID, targetU
 }
 
 func (p *provenanceQueryProcessor) GetValuesDeletedByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
 		return nil, err
 	}
@@ -172,6 +209,10 @@ func (p *provenanceQueryProcessor) GetValuesDeletedByUser(querierUserID, targetU
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
 func (p *provenanceQueryProcessor) GetReaders(userID, dbName, key string) (*types.GetDataReadersResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -192,6 +233,10 @@ func (p *provenanceQueryProcessor) GetReaders(userID, dbName, key string) (*type
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
 func (p *provenanceQueryProcessor) GetWriters(userID, dbName, key string) (*types.GetDataWritersResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForData(userID); err != nil {
 		return nil, err
 	}
@@ -212,6 +257,10 @@ func (p *provenanceQueryProcessor) GetWriters(userID, dbName, key string) (*type
 
 // GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a given user
 func (p *provenanceQueryProcessor) GetTxIDsSubmittedByUser(querierUserID, targetUserID string) (*types.GetTxIDsSubmittedByResponse, error) {
+	if p.provenanceStore == nil {
+		return nil, &ierrors.ServerRestrictionError{ErrMsg: "provenance store is disabled on this server"}
+	}
+
 	if err := p.aclCheckForUserOperation(querierUserID, targetUserID); err != nil {
 		return nil, err
 	}
@@ -233,7 +282,7 @@ func (p *provenanceQueryProcessor) aclCheckForUserOperation(querierUserID, targe
 	}
 
 	if !isAdmin && querierUserID != targetUserID {
-		return &errors.PermissionErr{
+		return &ierrors.PermissionErr{
 			ErrMsg: "The querier [" + querierUserID + "] is neither an admin nor requesting operations performed by [" + querierUserID + "]. Only an admin can query operations performed by other users.",
 		}
 	}
@@ -248,7 +297,7 @@ func (p *provenanceQueryProcessor) aclCheckForData(querierUserID string) error {
 	}
 
 	if !isAdmin {
-		return &errors.PermissionErr{
+		return &ierrors.PermissionErr{
 			ErrMsg: "The querier [" + querierUserID + "] is not an admin. Only an admin can query historical data",
 		}
 	}
