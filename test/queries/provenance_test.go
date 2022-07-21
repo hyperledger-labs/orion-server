@@ -106,7 +106,7 @@ func TestProvenanceQueries(t *testing.T) {
 				},
 			},
 		}
-		resp, err := s.GetAllValues(t, "db1", "key1", "alice")
+		resp, err := s.GetAllValues(t, "db1", "key1", "admin")
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey1Values, resp.GetResponse().GetValues())
 
@@ -142,7 +142,7 @@ func TestProvenanceQueries(t *testing.T) {
 				},
 			},
 		}
-		resp, err = s.GetAllValues(t, "db1", "key2", "alice")
+		resp, err = s.GetAllValues(t, "db1", "key2", "admin")
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
 	})
@@ -164,7 +164,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 6,
 			TxNum:    0,
 		}
-		resp, err := s.GetValueAt(t, "db1", "key2", "alice", ver)
+		resp, err := s.GetValueAt(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
 	})
@@ -186,7 +186,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 6,
 			TxNum:    0,
 		}
-		resp, err := s.GetNextValues(t, "db1", "key2", "alice", ver)
+		resp, err := s.GetNextValues(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
 
@@ -194,7 +194,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 7,
 			TxNum:    0,
 		}
-		resp, err = s.GetNextValues(t, "db1", "key2", "alice", ver)
+		resp, err = s.GetNextValues(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
 		require.Nil(t, resp.GetResponse().GetValues())
 	})
@@ -225,7 +225,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 4,
 			TxNum:    0,
 		}
-		resp, err := s.GetNextValues(t, "db1", "key1", "alice", ver)
+		resp, err := s.GetNextValues(t, "db1", "key1", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
 	})
@@ -259,7 +259,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 7,
 			TxNum:    0,
 		}
-		resp, err := s.GetPreviousValues(t, "db1", "key2", "alice", ver)
+		resp, err := s.GetPreviousValues(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
 
@@ -267,7 +267,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 4,
 			TxNum:    0,
 		}
-		resp, err = s.GetPreviousValues(t, "db1", "key2", "alice", ver)
+		resp, err = s.GetPreviousValues(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
 		require.Nil(t, resp.GetResponse().GetValues())
 	})
@@ -298,7 +298,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 8,
 			TxNum:    0,
 		}
-		resp, err := s.GetPreviousValues(t, "db1", "key1", "alice", ver)
+		resp, err := s.GetPreviousValues(t, "db1", "key1", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
 	})
@@ -326,7 +326,7 @@ func TestProvenanceQueries(t *testing.T) {
 		// Note that only alice has the read and write permission on the key3 but
 		// bob is able to read key3 from the provenance store because we have not
 		// implemented ACL in the provenance store
-		resp, err := s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "bob", ver)
+		resp, err := s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
 
@@ -334,7 +334,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 7,
 			TxNum:    0,
 		}
-		resp, err = s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "bob", ver)
+		resp, err = s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
 
@@ -354,7 +354,7 @@ func TestProvenanceQueries(t *testing.T) {
 			BlockNum: 6,
 			TxNum:    0,
 		}
-		resp, err = s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "bob", ver)
+		resp, err = s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "admin", ver)
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
 	})
@@ -372,7 +372,7 @@ func TestProvenanceQueries(t *testing.T) {
 			},
 		}
 
-		resp, err := s.GetDeletedValues(t, "db1", "key1", "alice")
+		resp, err := s.GetDeletedValues(t, "db1", "key1", "admin")
 		require.NoError(t, err)
 		require.ElementsMatch(t, expectedKey1Values, resp.GetResponse().GetValues())
 	})
@@ -592,7 +592,7 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 
 		for _, tt := range testCases {
-			resp, err := s.GetReaders(t, tt.dbName, tt.key, "bob")
+			resp, err := s.GetReaders(t, tt.dbName, tt.key, "admin")
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedReaders, resp.GetResponse().GetReadBy())
 		}
@@ -622,7 +622,7 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 
 		for _, tt := range testCases {
-			resp, err := s.GetWriters(t, tt.dbName, tt.key, "bob")
+			resp, err := s.GetWriters(t, tt.dbName, tt.key, "admin")
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedWriters, resp.GetResponse().GetWrittenBy())
 		}

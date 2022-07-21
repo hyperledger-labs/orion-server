@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
@@ -376,71 +377,53 @@ func TestGetValues(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name            string
 		dbName          string
 		key             string
+		user            string
 		expectedPayload *types.GetHistoricalDataResponse
+		expectedError   error
 	}{
 		{
-			name:   "fetch all values of key1",
-			dbName: "db1",
-			key:    "key1",
-			expectedPayload: &types.GetHistoricalDataResponse{
-				Values: []*types.ValueWithMetadata{
-					{
-						Value: []byte("value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 1,
-								TxNum:    0,
-							},
-						},
-					},
-					{
-						Value: []byte("value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 2,
-								TxNum:    0,
-							},
-						},
-					},
-					{
-						Value: []byte("value4"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 3,
-								TxNum:    0,
-							},
-						},
-					},
-					{
-						Value: []byte("value5"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 5,
-								TxNum:    0,
-							},
-						},
-					},
-				},
-			},
+			name:            "fetch all values of key1",
+			dbName:          "db1",
+			key:             "key1",
+			user:            "admin1",
+			expectedPayload: &types.GetHistoricalDataResponse{Values: []*types.ValueWithMetadata{{Value: []byte("value1"), Metadata: &types.Metadata{Version: &types.Version{BlockNum: 1, TxNum: 0}}}, {Value: []byte("value2"), Metadata: &types.Metadata{Version: &types.Version{BlockNum: 2, TxNum: 0}}}, {Value: []byte("value4"), Metadata: &types.Metadata{Version: &types.Version{BlockNum: 3, TxNum: 0}}}, {Value: []byte("value5"), Metadata: &types.Metadata{Version: &types.Version{BlockNum: 5, TxNum: 0}}}}},
+			expectedError:   nil,
 		},
 		{
 			name:   "fetch all values of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			expectedPayload: &types.GetHistoricalDataResponse{
 				Values: nil,
 			},
 		},
+		{
+			name:            "fetching all values of key1 with non-admin user will result in an error",
+			dbName:          "db1",
+			key:             "key1",
+			user:            "user1",
+			expectedPayload: nil,
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user1] is not an admin. Only an admin can query historical data"},
+		},
 	}
 
 	for _, tt := range tests {
-		payload, err := env.p.GetValues(tt.dbName, tt.key)
-		require.NoError(t, err)
+		payload, err := env.p.GetValues(tt.user, tt.dbName, tt.key)
+		if tt.expectedError != nil {
+			require.Equal(t, err, tt.expectedError)
+			require.Nil(t, payload)
+			continue
+		}
 
+		require.NoError(t, err)
 		require.NotNil(t, payload)
 		require.ElementsMatch(t, tt.expectedPayload.GetValues(), payload.GetValues())
 	}
@@ -452,16 +435,22 @@ func TestGetDeletedValues(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name             string
 		dbName           string
 		key              string
+		user             string
 		expectedEnvelope *types.GetHistoricalDataResponse
+		expectedError    error
 	}{
 		{
 			name:   "fetch all deleted values of key1",
 			dbName: "db1",
 			key:    "key1",
+			user:   "admin1",
 			expectedEnvelope: &types.GetHistoricalDataResponse{
 				Values: []*types.ValueWithMetadata{
 					{
@@ -489,16 +478,30 @@ func TestGetDeletedValues(t *testing.T) {
 			name:   "fetch all deleted values of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			expectedEnvelope: &types.GetHistoricalDataResponse{
 				Values: nil,
 			},
 		},
+		{
+			name:             "fetching all deleted values key1 with non-admin user will result in an error",
+			dbName:           "db1",
+			key:              "key1",
+			user:             "user1",
+			expectedEnvelope: nil,
+			expectedError:    &ierrors.PermissionErr{ErrMsg: "The querier [user1] is not an admin. Only an admin can query historical data"},
+		},
 	}
 
 	for _, tt := range tests {
-		payload, err := env.p.GetDeletedValues(tt.dbName, tt.key)
-		require.NoError(t, err)
+		payload, err := env.p.GetDeletedValues(tt.user, tt.dbName, tt.key)
+		if tt.expectedError != nil {
+			require.Equal(t, err, tt.expectedError)
+			require.Nil(t, payload)
+			continue
+		}
 
+		require.NoError(t, err)
 		require.NotNil(t, payload)
 		require.ElementsMatch(t, tt.expectedEnvelope.GetValues(), payload.GetValues())
 	}
@@ -510,17 +513,23 @@ func TestGetPreviousValues(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name            string
 		dbName          string
 		key             string
+		user            string
 		version         *types.Version
 		expectedPayload *types.GetHistoricalDataResponse
+		expectedError   error
 	}{
 		{
 			name:   "fetch the previous value of key1 at version{Blk 3, txNum 0}",
 			dbName: "db1",
 			key:    "key1",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 3,
 				TxNum:    0,
@@ -552,18 +561,36 @@ func TestGetPreviousValues(t *testing.T) {
 			name:   "fetch the previous value of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 1,
 				TxNum:    1,
 			},
 			expectedPayload: &types.GetHistoricalDataResponse{},
 		},
+		{
+			name:   "fetching the previous value of key1 at version{Blk 3, txNum 0} by an non-admin user will result in an error",
+			dbName: "db1",
+			key:    "key1",
+			user:   "user1",
+			version: &types.Version{
+				BlockNum: 3,
+				TxNum:    0,
+			},
+			expectedPayload: nil,
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user1] is not an admin. Only an admin can query historical data"},
+		},
 	}
 
 	for _, tt := range tests {
-		payload, err := env.p.GetPreviousValues(tt.dbName, tt.key, tt.version)
-		require.NoError(t, err)
+		payload, err := env.p.GetPreviousValues(tt.user, tt.dbName, tt.key, tt.version)
+		if tt.expectedError != nil {
+			require.Equal(t, err, tt.expectedError)
+			require.Nil(t, payload)
+			continue
+		}
 
+		require.NoError(t, err)
 		require.NotNil(t, payload)
 		require.Equal(t, tt.expectedPayload, payload)
 	}
@@ -575,17 +602,23 @@ func TestGetNextValues(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name            string
 		dbName          string
 		key             string
+		user            string
 		version         *types.Version
 		expectedPayload *types.GetHistoricalDataResponse
+		expectedError   error
 	}{
 		{
 			name:   "fetch next value of key1 at version {Blk 2, txNum 0}",
 			dbName: "db1",
 			key:    "key1",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 2,
 				TxNum:    0,
@@ -617,6 +650,7 @@ func TestGetNextValues(t *testing.T) {
 			name:   "fetch next value of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 2,
 				TxNum:    1,
@@ -625,12 +659,29 @@ func TestGetNextValues(t *testing.T) {
 				Values: nil,
 			},
 		},
+		{
+			name:   "fetching next value of key1 at version {Blk 2, txNum 0} by an non-admin user will result in an error",
+			dbName: "db1",
+			key:    "key1",
+			user:   "user1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    0,
+			},
+			expectedPayload: nil,
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user1] is not an admin. Only an admin can query historical data"},
+		},
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetNextValues(tt.dbName, tt.key, tt.version)
-		require.NoError(t, err)
+		envelope, err := env.p.GetNextValues(tt.user, tt.dbName, tt.key, tt.version)
+		if tt.expectedError != nil {
+			require.Equal(t, err, tt.expectedError)
+			require.Nil(t, envelope)
+			continue
+		}
 
+		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.Equal(t, tt.expectedPayload, envelope)
 	}
@@ -642,17 +693,23 @@ func TestGetValueAt(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name            string
 		dbName          string
 		key             string
+		user            string
 		version         *types.Version
 		expectedPayload *types.GetHistoricalDataResponse
+		expectedError   error
 	}{
 		{
 			name:   "fetch value of key1 at a particular version",
 			dbName: "db1",
 			key:    "key1",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 3,
 				TxNum:    0,
@@ -675,6 +732,7 @@ func TestGetValueAt(t *testing.T) {
 			name:   "fetch value of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 2,
 				TxNum:    1,
@@ -683,12 +741,29 @@ func TestGetValueAt(t *testing.T) {
 				Values: nil,
 			},
 		},
+		{
+			name:   "fetching value of key1 at a particular version by an non-admin user will result in an error",
+			dbName: "db1",
+			key:    "key1",
+			user:   "user1",
+			version: &types.Version{
+				BlockNum: 3,
+				TxNum:    0,
+			},
+			expectedPayload: nil,
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user1] is not an admin. Only an admin can query historical data"},
+		},
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetValueAt(tt.dbName, tt.key, tt.version)
-		require.NoError(t, err)
+		envelope, err := env.p.GetValueAt(tt.user, tt.dbName, tt.key, tt.version)
+		if tt.expectedError != nil {
+			require.Equal(t, err, tt.expectedError)
+			require.Nil(t, envelope)
+			continue
+		}
 
+		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.Equal(t, tt.expectedPayload, envelope)
 	}
@@ -700,17 +775,23 @@ func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name            string
 		dbName          string
 		key             string
+		user            string
 		version         *types.Version
 		expectedPayload *types.GetHistoricalDataResponse
+		expectedError   error
 	}{
 		{
 			name:   "fetch most recent value of key1 at or below a particular version",
 			dbName: "db1",
 			key:    "key1",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 2,
 				TxNum:    5,
@@ -733,6 +814,7 @@ func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 			name:   "fetch value of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			version: &types.Version{
 				BlockNum: 2,
 				TxNum:    1,
@@ -741,12 +823,29 @@ func TestGetMostRecentValueAtOrBelow(t *testing.T) {
 				Values: nil,
 			},
 		},
+		{
+			name:   "fetching most recent value of key1 at or below a particular version by an non-admin user will result in an error",
+			dbName: "db1",
+			key:    "key1",
+			user:   "user1",
+			version: &types.Version{
+				BlockNum: 2,
+				TxNum:    5,
+			},
+			expectedPayload: nil,
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user1] is not an admin. Only an admin can query historical data"},
+		},
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetMostRecentValueAtOrBelow(tt.dbName, tt.key, tt.version)
-		require.NoError(t, err)
+		envelope, err := env.p.GetMostRecentValueAtOrBelow(tt.user, tt.dbName, tt.key, tt.version)
+		if tt.expectedError != nil {
+			require.Equal(t, err, tt.expectedError)
+			require.Nil(t, envelope)
+			continue
+		}
 
+		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.Equal(t, tt.expectedPayload, envelope)
 	}
@@ -758,16 +857,22 @@ func TestGetReaders(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name            string
 		dbName          string
 		key             string
+		user            string
 		expectedPayload *types.GetDataReadersResponse
+		expectedError   error
 	}{
 		{
 			name:   "fetch readers of key1",
 			dbName: "db1",
 			key:    "key1",
+			user:   "admin1",
 			expectedPayload: &types.GetDataReadersResponse{
 				ReadBy: map[string]uint32{
 					"user1": 1,
@@ -779,16 +884,30 @@ func TestGetReaders(t *testing.T) {
 			name:   "fetch readers of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			expectedPayload: &types.GetDataReadersResponse{
 				ReadBy: nil,
 			},
 		},
+		{
+			name:            "fetching readers of key1 by an non-admin user will result in an error",
+			dbName:          "db1",
+			key:             "key1",
+			user:            "user1",
+			expectedPayload: nil,
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user1] is not an admin. Only an admin can query historical data"},
+		},
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetReaders(tt.dbName, tt.key)
-		require.NoError(t, err)
+		envelope, err := env.p.GetReaders(tt.user, tt.dbName, tt.key)
+		if tt.expectedError != nil {
+			require.Equal(t, err, tt.expectedError)
+			require.Nil(t, envelope)
+			continue
+		}
 
+		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.Equal(t, tt.expectedPayload, envelope)
 	}
@@ -800,16 +919,22 @@ func TestGetWriters(t *testing.T) {
 
 	setupProvenanceStore(t, env.p.provenanceStore)
 
+	setupUserForTest(t, "user1", false, env.db)
+	setupUserForTest(t, "admin1", true, env.db)
+
 	tests := []struct {
 		name            string
 		dbName          string
 		key             string
+		user            string
 		expectedPayload *types.GetDataWritersResponse
+		expectedError   string
 	}{
 		{
 			name:   "fetch readers of key1",
 			dbName: "db1",
 			key:    "key1",
+			user:   "admin1",
 			expectedPayload: &types.GetDataWritersResponse{
 				WrittenBy: map[string]uint32{
 					"user1": 2,
@@ -821,14 +946,29 @@ func TestGetWriters(t *testing.T) {
 			name:   "fetch readers of non-existing key",
 			dbName: "db1",
 			key:    "key5",
+			user:   "admin1",
 			expectedPayload: &types.GetDataWritersResponse{
 				WrittenBy: nil,
 			},
 		},
+		{
+			name:            "fetching readers of key1 by an non-admin user will result in an error",
+			dbName:          "db1",
+			key:             "key1",
+			user:            "user1",
+			expectedPayload: nil,
+			expectedError:   "The querier [user1] is not an admin. Only an admin can query historical data",
+		},
 	}
 
 	for _, tt := range tests {
-		envelope, err := env.p.GetWriters(tt.dbName, tt.key)
+		envelope, err := env.p.GetWriters(tt.user, tt.dbName, tt.key)
+		if tt.expectedError != "" {
+			require.EqualError(t, err, tt.expectedError)
+			require.Nil(t, envelope)
+			continue
+		}
+
 		require.NoError(t, err)
 		require.NotNil(t, envelope)
 		require.Equal(t, tt.expectedPayload, envelope)
@@ -880,7 +1020,7 @@ func TestGetValuesReadByUser(t *testing.T) {
 		targetUser      string
 		querierUsers    []string
 		expectedPayload *types.GetDataProvenanceResponse
-		expectedError   string
+		expectedError   error
 	}{
 		{
 			name:         "fetch values read by user1",
@@ -932,15 +1072,15 @@ func TestGetValuesReadByUser(t *testing.T) {
 			targetUser:      "user5",
 			querierUsers:    []string{"user1"},
 			expectedPayload: nil,
-			expectedError:   "The querier [user1] is neither an admin nor requesting operations performed by [user1]. Only an admin can query operations performed by other users.",
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user1] is neither an admin nor requesting operations performed by [user1]. Only an admin can query operations performed by other users."},
 		},
 	}
 
 	for _, tt := range tests {
 		for _, querier := range tt.querierUsers {
 			envelope, err := env.p.GetValuesReadByUser(querier, tt.targetUser)
-			if tt.expectedError != "" {
-				require.EqualError(t, err, tt.expectedError)
+			if tt.expectedError != nil {
+				require.Equal(t, err, tt.expectedError)
 				require.Nil(t, envelope)
 				continue
 			}
@@ -970,7 +1110,7 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 		targetUser      string
 		querierUsers    []string
 		expectedPayload *types.GetDataProvenanceResponse
-		expectedError   string
+		expectedError   error
 	}{
 		{
 			name:         "fetch values written by user1",
@@ -1057,15 +1197,15 @@ func TestGetValuesWrittenByUser(t *testing.T) {
 			targetUser:      "user1",
 			querierUsers:    []string{"user5"},
 			expectedPayload: nil,
-			expectedError:   "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users.",
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users."},
 		},
 	}
 
 	for _, tt := range tests {
 		for _, querierUser := range tt.querierUsers {
 			payload, err := env.p.GetValuesWrittenByUser(querierUser, tt.targetUser)
-			if tt.expectedError != "" {
-				require.EqualError(t, err, tt.expectedError)
+			if tt.expectedError != nil {
+				require.Equal(t, err, tt.expectedError)
 				require.Nil(t, payload)
 				continue
 			}
@@ -1095,7 +1235,7 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 		targetUser      string
 		querierUsers    []string
 		expectedPayload *types.GetDataProvenanceResponse
-		expectedError   string
+		expectedError   error
 	}{
 		{
 			name:         "fetch values deleted by user1",
@@ -1157,15 +1297,15 @@ func TestGetValuesDeletedByUser(t *testing.T) {
 			targetUser:      "user2",
 			querierUsers:    []string{"user5"},
 			expectedPayload: nil,
-			expectedError:   "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users.",
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users."},
 		},
 	}
 
 	for _, tt := range tests {
 		for _, querierUser := range tt.querierUsers {
 			payload, err := env.p.GetValuesDeletedByUser(querierUser, tt.targetUser)
-			if tt.expectedError != "" {
-				require.EqualError(t, err, tt.expectedError)
+			if tt.expectedError != nil {
+				require.Equal(t, err, tt.expectedError)
 				require.Nil(t, payload)
 				continue
 			}
@@ -1195,7 +1335,7 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 		targetUser      string
 		querierUsers    []string
 		expectedPayload *types.GetTxIDsSubmittedByResponse
-		expectedError   string
+		expectedError   error
 	}{
 		{
 			name:         "fetch tx submitted by user",
@@ -1218,15 +1358,15 @@ func TestGetTxSubmittedByUser(t *testing.T) {
 			targetUser:      "user2",
 			querierUsers:    []string{"user5"},
 			expectedPayload: nil,
-			expectedError:   "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users.",
+			expectedError:   &ierrors.PermissionErr{ErrMsg: "The querier [user5] is neither an admin nor requesting operations performed by [user5]. Only an admin can query operations performed by other users."},
 		},
 	}
 
 	for _, tt := range tests {
 		for _, querierUser := range tt.querierUsers {
 			payload, err := env.p.GetTxIDsSubmittedByUser(querierUser, tt.targetUser)
-			if tt.expectedError != "" {
-				require.EqualError(t, err, tt.expectedError)
+			if tt.expectedError != nil {
+				require.Equal(t, err, tt.expectedError)
 				require.Nil(t, payload)
 				continue
 			}

@@ -121,24 +121,24 @@ type DB interface {
 	GetLedgerPath(userID string, start, end uint64) (*types.GetLedgerPathResponseEnvelope, error)
 
 	// GetValues returns all values associated with a given key
-	GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetValues(userID, dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error)
 
 	// GetDeletedValues returns all deleted values associated with a given key
-	GetDeletedValues(dbname, key string) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetDeletedValues(userID, dbname, key string) (*types.GetHistoricalDataResponseEnvelope, error)
 
 	// GetValueAt returns the value of a given key at a particular version
-	GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetValueAt(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
 
 	// GetMostRecentValueAtOrBelow returns the most recent value of a given key at or below the given version
-	GetMostRecentValueAtOrBelow(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetMostRecentValueAtOrBelow(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
 
 	// GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 	// by the limit parameters.
-	GetPreviousValues(dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetPreviousValues(userID, dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
 
 	// GetNextValues returns next values of a given key and a version. The number of records returned would be limited
 	// by the limit parameters.
-	GetNextValues(dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
+	GetNextValues(userID, dbname, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error)
 
 	// GetValuesReadByUser returns all values read by a given targetUserID
 	GetValuesReadByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error)
@@ -150,10 +150,10 @@ type DB interface {
 	GetValuesDeletedByUser(querierUserID, targetUserID string) (*types.GetDataProvenanceResponseEnvelope, error)
 
 	// GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-	GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error)
+	GetReaders(userID, dbName, key string) (*types.GetDataReadersResponseEnvelope, error)
 
 	// GetWriters returns all userIDs who have updated a given key as well as the access frequency
-	GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error)
+	GetWriters(userID, dbName, key string) (*types.GetDataWritersResponseEnvelope, error)
 
 	// GetTxIDsSubmittedByUser returns all ids of all transactions submitted by a targetUserID
 	GetTxIDsSubmittedByUser(querierUserID, targetUserID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error)
@@ -704,8 +704,8 @@ func (d *db) GetTxReceipt(userId string, txID string) (*types.TxReceiptResponseE
 }
 
 // GetValues returns all values associated with a given key
-func (d *db) GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
-	values, err := d.provenanceQueryProcessor.GetValues(dbName, key)
+func (d *db) GetValues(userID, dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	values, err := d.provenanceQueryProcessor.GetValues(userID, dbName, key)
 	if err != nil {
 		return nil, err
 	}
@@ -723,8 +723,8 @@ func (d *db) GetValues(dbName, key string) (*types.GetHistoricalDataResponseEnve
 }
 
 // GetDeletedValues returns all deleted values associated with a given key
-func (d *db) GetDeletedValues(dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
-	deletedValues, err := d.provenanceQueryProcessor.GetDeletedValues(dbName, key)
+func (d *db) GetDeletedValues(userID, dbName, key string) (*types.GetHistoricalDataResponseEnvelope, error) {
+	deletedValues, err := d.provenanceQueryProcessor.GetDeletedValues(userID, dbName, key)
 	if err != nil {
 		return nil, err
 	}
@@ -742,8 +742,8 @@ func (d *db) GetDeletedValues(dbName, key string) (*types.GetHistoricalDataRespo
 }
 
 // GetValueAt returns the value of a given key at a particular version
-func (d *db) GetValueAt(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	valueAt, err := d.provenanceQueryProcessor.GetValueAt(dbName, key, version)
+func (d *db) GetValueAt(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	valueAt, err := d.provenanceQueryProcessor.GetValueAt(userID, dbName, key, version)
 	if err != nil {
 		return nil, err
 	}
@@ -761,8 +761,8 @@ func (d *db) GetValueAt(dbName, key string, version *types.Version) (*types.GetH
 }
 
 // GetMostRecentValueAtOrBelow returns the most recent value of a given key at or below the given version
-func (d *db) GetMostRecentValueAtOrBelow(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	valueAt, err := d.provenanceQueryProcessor.GetMostRecentValueAtOrBelow(dbName, key, version)
+func (d *db) GetMostRecentValueAtOrBelow(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	valueAt, err := d.provenanceQueryProcessor.GetMostRecentValueAtOrBelow(userID, dbName, key, version)
 	if err != nil {
 		return nil, err
 	}
@@ -781,8 +781,8 @@ func (d *db) GetMostRecentValueAtOrBelow(dbName, key string, version *types.Vers
 
 // GetPreviousValues returns previous values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
-func (d *db) GetPreviousValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	previousValues, err := d.provenanceQueryProcessor.GetPreviousValues(dbName, key, version)
+func (d *db) GetPreviousValues(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	previousValues, err := d.provenanceQueryProcessor.GetPreviousValues(userID, dbName, key, version)
 	if err != nil {
 		return nil, err
 	}
@@ -801,8 +801,8 @@ func (d *db) GetPreviousValues(dbName, key string, version *types.Version) (*typ
 
 // GetNextValues returns next values of a given key and a version. The number of records returned would be limited
 // by the limit parameters.
-func (d *db) GetNextValues(dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
-	nextValues, err := d.provenanceQueryProcessor.GetNextValues(dbName, key, version)
+func (d *db) GetNextValues(userID, dbName, key string, version *types.Version) (*types.GetHistoricalDataResponseEnvelope, error) {
+	nextValues, err := d.provenanceQueryProcessor.GetNextValues(userID, dbName, key, version)
 	if err != nil {
 		return nil, err
 	}
@@ -877,8 +877,8 @@ func (d *db) GetValuesDeletedByUser(querierUserID, targetUserID string) (*types.
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-func (d *db) GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelope, error) {
-	readers, err := d.provenanceQueryProcessor.GetReaders(dbName, key)
+func (d *db) GetReaders(userID, dbName, key string) (*types.GetDataReadersResponseEnvelope, error) {
+	readers, err := d.provenanceQueryProcessor.GetReaders(userID, dbName, key)
 	if err != nil {
 		return nil, err
 	}
@@ -896,8 +896,8 @@ func (d *db) GetReaders(dbName, key string) (*types.GetDataReadersResponseEnvelo
 }
 
 // GetReaders returns all userIDs who have accessed a given key as well as the access frequency
-func (d *db) GetWriters(dbName, key string) (*types.GetDataWritersResponseEnvelope, error) {
-	writers, err := d.provenanceQueryProcessor.GetWriters(dbName, key)
+func (d *db) GetWriters(userID, dbName, key string) (*types.GetDataWritersResponseEnvelope, error) {
+	writers, err := d.provenanceQueryProcessor.GetWriters(userID, dbName, key)
 	if err != nil {
 		return nil, err
 	}
