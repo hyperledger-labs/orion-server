@@ -158,6 +158,24 @@ func (c *Client) GetDataRange(e *types.GetDataQueryEnvelope, startKey, endKey st
 	return res, err
 }
 
+func (c *Client) GetDataProof(e *types.GetDataProofQueryEnvelope) (*types.GetDataProofResponseEnvelope, error) {
+	path := constants.URLDataProof(e.Payload.BlockNumber, e.Payload.DbName, e.Payload.Key, e.Payload.IsDeleted)
+	resp, err := c.handleGetRequest(
+		path,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while issuing %s", path)
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetDataProofResponseEnvelope{}
+	err = json.NewDecoder(resp.Body).Decode(res)
+	return res, err
+}
+
 func (c *Client) GetLastConfigBlockStatus(e *types.GeConfigBlockQueryEnvelope) (*types.GetConfigBlockResponseEnvelope, error) {
 	resp, err := c.handleGetRequest(
 		constants.GetLastConfigBlock,

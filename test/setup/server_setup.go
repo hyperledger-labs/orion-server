@@ -231,6 +231,33 @@ func (s *Server) QueryDataRange(t *testing.T, userID, dbName, startKey, endKey s
 			Payload:   dataQuery,
 			Signature: testutils.SignatureFromQuery(t, signer, dataRangeQuery),
 		}, startKey, endKey, limit)
+	return response, err
+}
+
+func (s *Server) GetDataProof(t *testing.T, db, key, userID string, blockNumber uint64, isDeleted bool) (*types.GetDataProofResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := &types.GetDataProofQuery{
+		UserId:      userID,
+		BlockNumber: blockNumber,
+		DbName:      db,
+		Key:         key,
+		IsDeleted:   isDeleted,
+	}
+
+	response, err := client.GetDataProof(
+		&types.GetDataProofQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, signer, query),
+		})
 
 	return response, err
 }
@@ -847,6 +874,36 @@ func (s *Server) GetDBIndex(t *testing.T, dbName string, userID string) (*types.
 	)
 
 	return response, err
+}
+
+func (s *Server) DeleteDataTx(t *testing.T, db, key string) (string, *types.TxReceipt, *types.DataTxEnvelope, error) {
+	txID := uuid.New().String()
+	dataTx := &types.DataTx{
+		MustSignUserIds: []string{"admin"},
+		TxId:            txID,
+		DbOperations: []*types.DBOperation{
+			{
+				DbName: db,
+				DataDeletes: []*types.DataDelete{
+					{
+						Key: key,
+					},
+				},
+			},
+		},
+	}
+
+	// Post transaction into new database
+	txEnv := &types.DataTxEnvelope{
+		Payload:    dataTx,
+		Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
+	}
+	receipt, err := s.SubmitTransaction(t, constants.PostDataTx, txEnv)
+	if err != nil {
+		return txID, nil, nil, err
+	}
+
+	return txID, receipt, txEnv, nil
 }
 
 func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string, *types.TxReceipt, *types.DataTxEnvelope, error) {

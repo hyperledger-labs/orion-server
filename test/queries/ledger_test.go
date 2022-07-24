@@ -19,6 +19,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/pkg/errors"
@@ -632,4 +633,319 @@ func verifyTxProof(intermediateHashes [][]byte, receipt *types.TxReceipt, tx pro
 	}
 
 	return bytes.Equal(receipt.GetHeader().GetTxMerkelTreeRootHash(), currHash), nil
+}
+
+// Scenario:
+// HTTP GET "/ledger/proof/data/{blockId}/{dbname}/{key}?deleted={true|false}" gets proof for value associated with (dbname, key) in block blockId,
+// HTTP GET "/ledger/proof/data/{blockId}/{dbname}/{key}" gets proof for value associated with (dbname, key) in block blockId
+func TestLedgerDataProof(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(1)
+	setupConfig := &setup.Config{
+		NumberOfServers:     1,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	s := c.Servers[leaderIndex]
+
+	for i := 0; i < 5; i++ {
+		txID, rcpt, _, err := s.WriteDataTx(t, worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), []byte{uint8(i)})
+		require.NoError(t, err)
+		require.NotNil(t, rcpt)
+		require.True(t, txID != "")
+		require.True(t, len(rcpt.GetHeader().GetValidationInfo()) > 0)
+		require.Equal(t, types.Flag_VALID, rcpt.Header.ValidationInfo[rcpt.TxIndex].Flag)
+		t.Logf("tx submitted: %s, %+v", txID, rcpt)
+
+		//get data proof
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), "admin", rcpt.GetHeader().GetBaseHeader().GetNumber(), false)
+		require.NoError(t, err)
+		require.NotNil(t, respEnv)
+
+		//verify data proof
+		valHash, err := calculateValueHash(worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), []byte{uint8(i)})
+		require.NoError(t, err)
+		require.NotNil(t, valHash)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt.GetHeader().GetStateMerkelTreeRootHash(), false)
+		require.NoError(t, err)
+		require.True(t, ok)
+	}
+
+	//change "key1" data
+	txID, rcpt2, _, err := s.WriteDataTx(t, worldstate.DefaultDBName, "key1", []byte{uint8(2)})
+	require.NoError(t, err)
+	require.NotNil(t, rcpt2)
+	require.True(t, txID != "")
+	require.True(t, len(rcpt2.GetHeader().GetValidationInfo()) > 0)
+	require.Equal(t, types.Flag_VALID, rcpt2.Header.ValidationInfo[rcpt2.TxIndex].Flag)
+	t.Logf("tx submitted: %s, %+v", txID, rcpt2)
+
+	t.Run("valid: 'key1' exists with value 2", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", rcpt2.GetHeader().GetBaseHeader().GetNumber(), false)
+		require.NoError(t, err)
+		require.NotNil(t, respEnv)
+
+		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
+		require.NoError(t, err)
+		require.NotNil(t, valHash)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt2.GetHeader().GetStateMerkelTreeRootHash(), false)
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+
+	t.Run("invalid: non-existing key", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key8", "admin", 3, false)
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key8?block=3: error while processing 'GET /ledger/proof/data/bdb/key8?block=3' because no proof for block 3, db bdb, key key8, isDeleted false found")
+		require.Nil(t, respEnv)
+	})
+
+	t.Run("invalid: block out of range", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", 10, false)
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key1?block=10: error while processing 'GET /ledger/proof/data/bdb/key1?block=10' because block not found: 10")
+		require.Nil(t, respEnv)
+	})
+
+	t.Run("invalid: isDeleted true but key still exists in the db", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", rcpt2.GetHeader().GetBaseHeader().GetNumber(), true)
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key1?block=7&deleted=true: error while processing 'GET /ledger/proof/data/bdb/key1?block=7&deleted=true' because no proof for block 7, db bdb, key key1, isDeleted true found")
+		require.Nil(t, respEnv)
+	})
+
+	t.Run("invalid: key is in the db but in a different block", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key3", "admin", 1, true)
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key3?block=1&deleted=true: error while processing 'GET /ledger/proof/data/bdb/key3?block=1&deleted=true' because no proof for block 1, db bdb, key key3, isDeleted true found")
+		require.Nil(t, respEnv)
+	})
+
+	// delete key1
+	txID, rcpt3, _, err := s.DeleteDataTx(t, worldstate.DefaultDBName, "key1")
+	require.NoError(t, err)
+	require.NotNil(t, rcpt3)
+
+	t.Run("valid: 'key1' deleted", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", rcpt3.GetHeader().GetBaseHeader().GetNumber(), true)
+		require.NoError(t, err)
+		require.NotNil(t, respEnv)
+
+		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
+		require.NoError(t, err)
+		require.NotNil(t, valHash)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt3.GetHeader().GetStateMerkelTreeRootHash(), true)
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+}
+
+func TestLedgerAsyncDataProof(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(1)
+	setupConfig := &setup.Config{
+		NumberOfServers:     1,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		BlockCreationOverride: &config.BlockCreationConf{
+			MaxBlockSize:                1024 * 1024,
+			MaxTransactionCountPerBlock: 10,
+			BlockTimeout:                1 * time.Second,
+		},
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	s := c.Servers[leaderIndex]
+
+	// add at least 10 data blocks, maximum 10 txs per block
+	var txEnvs []*types.DataTxEnvelope
+	for i := 1; i <= 100; i++ {
+		dataTx := &types.DataTx{
+			MustSignUserIds: []string{"admin"},
+			TxId:            uuid.New().String(),
+			DbOperations: []*types.DBOperation{
+				{
+					DbName: worldstate.DefaultDBName,
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   fmt.Sprintf("key-%d", i),
+							Value: []byte{uint8(i), uint8(i)},
+						},
+					},
+				},
+			},
+		}
+
+		txEnv := &types.DataTxEnvelope{
+			Payload:    dataTx,
+			Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
+		}
+		txEnvs = append(txEnvs, txEnv)
+	}
+
+	//post txs
+	for _, txEnv := range txEnvs {
+		err = s.SubmitTransactionAsync(t, constants.PostDataTx, txEnv)
+		require.NoError(t, err)
+	}
+
+	keyRcptMap := make(map[int]*types.TxReceipt)
+	allIn := func() bool {
+		for i, txEnv := range txEnvs {
+			resp, err := s.QueryTxReceipt(t, txEnv.GetPayload().GetTxId(), "admin")
+			if err != nil {
+				return false
+			}
+			rcpt := resp.GetResponse().GetReceipt()
+			if rcpt == nil {
+				return false
+			}
+			keyRcptMap[i+1] = rcpt
+		}
+		return true
+	}
+	require.Eventually(t, allIn, 30*time.Second, 100*time.Millisecond)
+
+	t.Run("valid", func(t *testing.T) {
+		for i, rcpt := range keyRcptMap {
+			respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), "admin", rcpt.GetHeader().GetBaseHeader().GetNumber(), false)
+			require.NoError(t, err)
+			require.NotNil(t, respEnv)
+
+			valHash, err := calculateValueHash(worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), []byte{uint8(i), uint8(i)})
+			require.NoError(t, err)
+			require.NotNil(t, valHash)
+			ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt.GetHeader().GetStateMerkelTreeRootHash(), false)
+			require.NoError(t, err)
+			require.True(t, ok)
+		}
+	})
+
+	// change key1 value
+	txID, rcpt2, _, err := s.WriteDataTx(t, worldstate.DefaultDBName, "key1", []byte{uint8(2)})
+	require.NoError(t, err)
+	require.NotNil(t, rcpt2)
+	require.True(t, txID != "")
+	require.True(t, len(rcpt2.GetHeader().GetValidationInfo()) > 0)
+	require.Equal(t, types.Flag_VALID, rcpt2.Header.ValidationInfo[rcpt2.TxIndex].Flag)
+	t.Logf("tx submitted: %s, %+v", txID, rcpt2)
+
+	t.Run("valid: 'key1' exists with value 2", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", rcpt2.GetHeader().GetBaseHeader().GetNumber(), false)
+		require.NoError(t, err)
+		require.NotNil(t, respEnv)
+
+		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
+		require.NoError(t, err)
+		require.NotNil(t, valHash)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt2.GetHeader().GetStateMerkelTreeRootHash(), false)
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+
+	// delete key1
+	txID, rcpt3, _, err := s.DeleteDataTx(t, worldstate.DefaultDBName, "key1")
+	require.NoError(t, err)
+	require.NotNil(t, rcpt3)
+
+	t.Run("valid: 'key1' deleted", func(t *testing.T) {
+		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", rcpt3.GetHeader().GetBaseHeader().GetNumber(), true)
+		require.NoError(t, err)
+		require.NotNil(t, respEnv)
+
+		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
+		require.NoError(t, err)
+		require.NotNil(t, valHash)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt3.GetHeader().GetStateMerkelTreeRootHash(), true)
+		require.NoError(t, err)
+		require.True(t, ok)
+	})
+
+}
+
+// Verify validates correctness of path and checks is path first element contains valueHash
+// and last element is trie root
+func verifyDataProof(path []*types.MPTrieProofElement, valueHash, rootHash []byte, isDeleted bool) (bool, error) {
+	pathLen := len(path)
+	if pathLen == 0 {
+		return false, errors.New("proof can't be empty")
+	}
+
+	// In case deleted value, node that contains it should contain []byte{1} between its hashes/bytes
+	if isDeleted {
+		isDeleteFound := false
+		for _, hash := range path[0].GetHashes() {
+			if bytes.Equal(hash, []byte{1}) {
+				isDeleteFound = true
+				break
+			}
+		}
+		if !isDeleteFound {
+			return false, nil
+		}
+	}
+
+	hashToFind := valueHash
+
+	// Validation algorithm just checks is hashToFind (current node/value hash) is part of hashes/bytes
+	// list in node above. We start from value hash (valueHash) and continue to root stored in block
+	for i := 0; i < pathLen; i++ {
+		isHashFound := false
+		for _, hash := range path[i].GetHashes() {
+			if bytes.Equal(hash, hashToFind) {
+				isHashFound = true
+				break
+			}
+		}
+		if !isHashFound {
+			return false, nil
+		}
+
+		var err error
+		// hash here calculated same way as node hash calculated
+		hashToFind, err = state.CalcHash(path[i].GetHashes())
+		if err != nil {
+			return false, err
+		}
+	}
+	// Check if calculated root hash if equal to supplied (stored in block)
+	return bytes.Equal(rootHash, hashToFind), nil
+}
+
+func calculateValueHash(dbName, key string, value []byte) ([]byte, error) {
+	stateTrieKey, err := state.ConstructCompositeKey(dbName, key)
+	if err != nil {
+		return nil, err
+	}
+	valueHash, err := state.CalculateKeyValueHash(stateTrieKey, value)
+	if err != nil {
+		return nil, err
+	}
+	return valueHash, nil
 }
