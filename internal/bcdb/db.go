@@ -5,7 +5,6 @@ package bcdb
 import (
 	"context"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
 	"time"
@@ -22,8 +21,10 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 //go:generate mockery --dir . --name DB --case underscore --output mocks/
@@ -966,7 +967,7 @@ func (d *db) responseHeader() *types.ResponseHeader {
 }
 
 func (d *db) signature(response interface{}) ([]byte, error) {
-	responseBytes, err := json.Marshal(response)
+	responseBytes, err := marshal.DefaultMarshaler().Marshal(response.(proto.Message))
 	if err != nil {
 		return nil, err
 	}

@@ -5,7 +5,6 @@ package httphandler
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -16,7 +15,9 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"google.golang.org/protobuf/proto"
 )
 
 func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryType string, signVerifier *cryptoservice.SignatureVerifier) (interface{}, bool) {
@@ -287,9 +288,13 @@ func VerifyRequestSignature(
 	signature []byte,
 	requestPayload interface{},
 ) (error, int) {
-	requestBytes, err := json.Marshal(requestPayload)
+	if _, ok := requestPayload.(proto.Message); !ok {
+		return &types.HttpResponseErr{ErrMsg: "payload is not a protoreflect message"}, http.StatusInternalServerError
+	}
+
+	requestBytes, err := marshal.DefaultMarshaler().Marshal(requestPayload.(proto.Message))
 	if err != nil {
-		return &types.HttpResponseErr{ErrMsg: "failure during json.Marshal: " + err.Error()}, http.StatusInternalServerError
+		return &types.HttpResponseErr{ErrMsg: "failure during Marshal: " + err.Error()}, http.StatusInternalServerError
 	}
 
 	err = sigVerifier.Verify(user, signature, requestBytes)

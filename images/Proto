@@ -1,0 +1,13 @@
+FROM golang
+
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.28.1
+RUN apt-get update && apt-get install -y unzip
+
+ENV PROTOC_ZIP=protoc-3.15.8-linux-x86_64.zip
+RUN curl -OL https://github.com/google/protobuf/releases/download/v3.15.8/${PROTOC_ZIP}
+RUN unzip -o ${PROTOC_ZIP} -d ./proto
+RUN chmod 755 -R ./proto/bin
+ENV BASE=/usr/local
+# Copy into path
+RUN cp ./proto/bin/protoc ${BASE}/bin
+RUN cp -R ./proto/include/* ${BASE}/include

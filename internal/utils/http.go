@@ -11,14 +11,21 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"google.golang.org/protobuf/proto"
 )
 
 const MultiPartFormData = "multipart/form-data"
 
 // SendHTTPResponse writes HTTP response back including HTTP code number and encode payload
 func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
-	response, _ := json.Marshal(payload)
+	var response []byte
+	if p, ok := payload.(proto.Message); ok {
+		response, _ = marshal.DefaultMarshaler().Marshal(p)
+	} else {
+		response, _ = json.Marshal(payload)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if _, err := w.Write(response); err != nil {

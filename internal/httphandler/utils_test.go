@@ -62,7 +62,7 @@ func TestVerifyRequestSignature(t *testing.T) {
 		verifier := cryptoservice.NewVerifier(db, lg)
 		payload := make(chan struct{})
 		err, code := VerifyRequestSignature(verifier, "alice", []byte("something"), payload)
-		require.EqualError(t, err, "failure during json.Marshal: json: unsupported type: chan struct {}")
+		require.EqualError(t, err, "payload is not a protoreflect message")
 		require.Equal(t, http.StatusInternalServerError, code)
 	})
 }

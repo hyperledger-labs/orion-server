@@ -3,11 +3,11 @@
 package cryptoservice
 
 import (
-	"encoding/json"
-
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 func SignQuery(querySigner crypto.Signer, query interface{}) ([]byte, error) {
@@ -59,7 +59,7 @@ func SignTx(txSigner crypto.Signer, tx interface{}) ([]byte, error) {
 }
 
 func SignPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
-	payloadBytes, err := json.Marshal(payload)
+	payloadBytes, err := marshal.DefaultMarshaler().Marshal(payload.(proto.Message))
 	if err != nil {
 		return nil, err
 	}

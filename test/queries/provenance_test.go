@@ -5,6 +5,7 @@ package queries
 
 import (
 	"io/ioutil"
+	"sort"
 	"testing"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestProvenanceQueries(t *testing.T) {
@@ -28,6 +30,7 @@ func TestProvenanceQueries(t *testing.T) {
 		BaseNodePort:        nPort,
 		BasePeerPort:        pPort,
 	}
+	// defer os.RemoveAll(dir)
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
 	defer c.ShutdownAndCleanup()
@@ -77,84 +80,105 @@ func TestProvenanceQueries(t *testing.T) {
 	prepareDataForProvenanceQueries(t, s)
 
 	t.Run("Get all values", func(t *testing.T) {
-		expectedKey1Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key1value1"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
+		expectedKey1Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key1value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
 					},
 				},
-			},
-			{
-				Value: []byte("key1value2"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 5,
-						TxNum:    0,
+				{
+					Value: []byte("key1value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 5,
+							TxNum:    0,
+						},
 					},
 				},
-			},
-			{
-				Value: []byte("key1value3"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 8,
-						TxNum:    0,
+				{
+					Value: []byte("key1value3"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 8,
+							TxNum:    0,
+						},
 					},
 				},
 			},
 		}
 		resp, err := s.GetAllValues(t, "db1", "key1", "admin")
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey1Values, resp.GetResponse().GetValues())
+		sort.Slice(resp.GetResponse().GetValues(), func(i, j int) bool {
+			return resp.GetResponse().GetValues()[i].Metadata.Version.BlockNum < resp.GetResponse().GetValues()[j].Metadata.Version.BlockNum
+		})
+		require.True(t, proto.Equal(expectedKey1Values, resp.GetResponse()))
 
-		expectedKey2Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key2value1"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadWriteUsers: map[string]bool{"alice": true},
+		expectedKey2Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key2value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{"alice": true},
+						},
 					},
 				},
-			},
-			{
-				Value: []byte("key2value2"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 6,
-						TxNum:    0,
+				{
+					Value: []byte("key2value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 6,
+							TxNum:    0,
+						},
 					},
 				},
-			},
-			{
-				Value: []byte("key2value3"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 7,
-						TxNum:    0,
+				{
+					Value: []byte("key2value3"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 7,
+							TxNum:    0,
+						},
 					},
 				},
 			},
 		}
 		resp, err = s.GetAllValues(t, "db1", "key2", "admin")
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
+		sort.Slice(resp.GetResponse().GetValues(), func(i, j int) bool {
+			return resp.GetResponse().GetValues()[i].Metadata.Version.BlockNum < resp.GetResponse().GetValues()[j].Metadata.Version.BlockNum
+		})
+		require.True(t, proto.Equal(expectedKey2Values, resp.GetResponse()))
 	})
 
 	t.Run("Get value at", func(t *testing.T) {
-		expectedKey2Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key2value2"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 6,
-						TxNum:    0,
+		expectedKey2Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key2value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 6,
+							TxNum:    0,
+						},
 					},
 				},
 			},
@@ -166,17 +190,22 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 		resp, err := s.GetValueAt(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
+		require.True(t, proto.Equal(expectedKey2Values, resp.GetResponse()))
 	})
 
 	t.Run("Get next values", func(t *testing.T) {
-		expectedKey2Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key2value3"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 7,
-						TxNum:    0,
+		expectedKey2Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key2value3"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 7,
+							TxNum:    0,
+						},
 					},
 				},
 			},
@@ -188,7 +217,7 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 		resp, err := s.GetNextValues(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
+		require.True(t, proto.Equal(expectedKey2Values, resp.GetResponse()))
 
 		ver = &types.Version{
 			BlockNum: 7,
@@ -200,22 +229,27 @@ func TestProvenanceQueries(t *testing.T) {
 	})
 
 	t.Run("Get next values with gap due to deletes", func(t *testing.T) {
-		expectedKey2Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key1value2"), // deleted
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 5,
-						TxNum:    0,
+		expectedKey2Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key1value2"), // deleted
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 5,
+							TxNum:    0,
+						},
 					},
 				},
-			},
-			{
-				Value: []byte("key1value3"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 8,
-						TxNum:    0,
+				{
+					Value: []byte("key1value3"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 8,
+							TxNum:    0,
+						},
 					},
 				},
 			},
@@ -227,29 +261,37 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 		resp, err := s.GetNextValues(t, "db1", "key1", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
+		sort.Slice(resp.GetResponse().GetValues(), func(i, j int) bool {
+			return resp.GetResponse().GetValues()[i].Metadata.Version.BlockNum < resp.GetResponse().GetValues()[j].Metadata.Version.BlockNum
+		})
+		require.True(t, proto.Equal(expectedKey2Values, resp.GetResponse()))
 	})
 
 	t.Run("Get previous values", func(t *testing.T) {
-		expectedKey2Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key2value1"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadWriteUsers: map[string]bool{"alice": true},
+		expectedKey2Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key2value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{"alice": true},
+						},
 					},
 				},
-			},
-			{
-				Value: []byte("key2value2"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 6,
-						TxNum:    0,
+				{
+					Value: []byte("key2value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 6,
+							TxNum:    0,
+						},
 					},
 				},
 			},
@@ -261,7 +303,10 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 		resp, err := s.GetPreviousValues(t, "db1", "key2", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
+		sort.Slice(resp.GetResponse().GetValues(), func(i, j int) bool {
+			return resp.GetResponse().GetValues()[i].Metadata.Version.BlockNum < resp.GetResponse().GetValues()[j].Metadata.Version.BlockNum
+		})
+		require.True(t, proto.Equal(expectedKey2Values, resp.GetResponse()))
 
 		ver = &types.Version{
 			BlockNum: 4,
@@ -273,22 +318,27 @@ func TestProvenanceQueries(t *testing.T) {
 	})
 
 	t.Run("Get previous values with gap due to deletes", func(t *testing.T) {
-		expectedKey2Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key1value1"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
+		expectedKey2Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key1value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
 					},
 				},
-			},
-			{
-				Value: []byte("key1value2"), // deleted
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 5,
-						TxNum:    0,
+				{
+					Value: []byte("key1value2"), // deleted
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 5,
+							TxNum:    0,
+						},
 					},
 				},
 			},
@@ -300,20 +350,28 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 		resp, err := s.GetPreviousValues(t, "db1", "key1", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey2Values, resp.GetResponse().GetValues())
+		sort.Slice(resp.GetResponse().GetValues(), func(i, j int) bool {
+			return resp.GetResponse().GetValues()[i].Metadata.Version.BlockNum < resp.GetResponse().GetValues()[j].Metadata.Version.BlockNum
+		})
+		require.True(t, proto.Equal(expectedKey2Values, resp.GetResponse()))
 	})
 
 	t.Run("Get Most Recent Value at or Below", func(t *testing.T) {
-		expectedKey3Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key3value2"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 7,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadWriteUsers: map[string]bool{"alice": true},
+		expectedKey3Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key3value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 7,
+							TxNum:    0,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{"alice": true},
+						},
 					},
 				},
 			},
@@ -328,7 +386,8 @@ func TestProvenanceQueries(t *testing.T) {
 		// implemented ACL in the provenance store
 		resp, err := s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
+		require.True(t, proto.Equal(expectedKey3Values, resp.GetResponse()))
+		// require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
 
 		ver = &types.Version{
 			BlockNum: 7,
@@ -336,15 +395,20 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 		resp, err = s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
+		require.True(t, proto.Equal(expectedKey3Values, resp.GetResponse()))
 
-		expectedKey3Values = []*types.ValueWithMetadata{
-			{
-				Value: []byte("key3value1"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
+		expectedKey3Values = &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key3value1"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
 					},
 				},
 			},
@@ -356,17 +420,22 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 		resp, err = s.GetMostRecentValueAtOrBelow(t, "db2", "key3", "admin", ver)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey3Values, resp.GetResponse().GetValues())
+		require.True(t, proto.Equal(expectedKey3Values, resp.GetResponse()))
 	})
 
 	t.Run("Get Deleted Values", func(t *testing.T) {
-		expectedKey1Values := []*types.ValueWithMetadata{
-			{
-				Value: []byte("key1value2"),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 5,
-						TxNum:    0,
+		expectedKey1Values := &types.GetHistoricalDataResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			Values: []*types.ValueWithMetadata{
+				{
+					Value: []byte("key1value2"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 5,
+							TxNum:    0,
+						},
 					},
 				},
 			},
@@ -374,57 +443,62 @@ func TestProvenanceQueries(t *testing.T) {
 
 		resp, err := s.GetDeletedValues(t, "db1", "key1", "admin")
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKey1Values, resp.GetResponse().GetValues())
+		require.True(t, proto.Equal(expectedKey1Values, resp.GetResponse()))
 	})
 
 	t.Run("Get Values Read By", func(t *testing.T) {
-		expectedAliceReads := map[string]*types.KVsWithMetadata{
-			"db1": {
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("key1value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 5,
-								TxNum:    0,
+		expectedAliceReads := &types.GetDataProvenanceResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			DBKeyValues: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("key1value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 5,
+									TxNum:    0,
+								},
 							},
 						},
-					},
-					{
-						Key:   "key2",
-						Value: []byte("key2value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 4,
-								TxNum:    0,
-							},
-							AccessControl: &types.AccessControl{
-								ReadWriteUsers: map[string]bool{"alice": true},
+						{
+							Key:   "key2",
+							Value: []byte("key2value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
+								AccessControl: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{"alice": true},
+								},
 							},
 						},
-					},
-					{
-						Key:   "key2",
-						Value: []byte("key2value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 6,
-								TxNum:    0,
+						{
+							Key:   "key2",
+							Value: []byte("key2value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 6,
+									TxNum:    0,
+								},
 							},
 						},
 					},
 				},
-			},
-			"db2": {
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key3",
-						Value: []byte("key3value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 4,
-								TxNum:    0,
+				"db2": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key3",
+							Value: []byte("key3value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
 							},
 						},
 					},
@@ -436,84 +510,89 @@ func TestProvenanceQueries(t *testing.T) {
 		require.NoError(t, err)
 		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
 		require.NotNil(t, actualDBsKVs)
-		require.Len(t, actualDBsKVs, len(expectedAliceReads))
+		require.Len(t, actualDBsKVs, len(expectedAliceReads.DBKeyValues))
 
-		for dbName, expectedKVs := range expectedAliceReads {
-			require.ElementsMatch(t, expectedKVs.KVs, actualDBsKVs[dbName].KVs)
+		for dbName, expectedKVs := range expectedAliceReads.DBKeyValues {
+			require.True(t, proto.Equal(expectedKVs, resp.GetResponse().GetDBKeyValues()[dbName]))
 		}
 	})
 
 	t.Run("Get Values Written By", func(t *testing.T) {
-		expectedAliceWrites := map[string]*types.KVsWithMetadata{
-			"db1": {
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("key1value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 4,
-								TxNum:    0,
+		expectedAliceWrites := &types.GetDataProvenanceResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			DBKeyValues: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("key1value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
 							},
 						},
-					},
-					{
-						Key:   "key2",
-						Value: []byte("key2value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 4,
-								TxNum:    0,
-							},
-							AccessControl: &types.AccessControl{
-								ReadWriteUsers: map[string]bool{"alice": true},
-							},
-						},
-					},
-					{
-						Key:   "key2",
-						Value: []byte("key2value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 6,
-								TxNum:    0,
+						{
+							Key:   "key2",
+							Value: []byte("key2value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
+								AccessControl: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{"alice": true},
+								},
 							},
 						},
-					},
-					{
-						Key:   "key2",
-						Value: []byte("key2value3"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 7,
-								TxNum:    0,
+						{
+							Key:   "key2",
+							Value: []byte("key2value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 6,
+									TxNum:    0,
+								},
+							},
+						},
+						{
+							Key:   "key2",
+							Value: []byte("key2value3"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 7,
+									TxNum:    0,
+								},
 							},
 						},
 					},
 				},
-			},
-			"db2": {
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key3",
-						Value: []byte("key3value1"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 4,
-								TxNum:    0,
+				"db2": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key3",
+							Value: []byte("key3value1"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 4,
+									TxNum:    0,
+								},
 							},
 						},
-					},
-					{
-						Key:   "key3",
-						Value: []byte("key3value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 7,
-								TxNum:    0,
-							},
-							AccessControl: &types.AccessControl{
-								ReadWriteUsers: map[string]bool{"alice": true},
+						{
+							Key:   "key3",
+							Value: []byte("key3value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 7,
+									TxNum:    0,
+								},
+								AccessControl: &types.AccessControl{
+									ReadWriteUsers: map[string]bool{"alice": true},
+								},
 							},
 						},
 					},
@@ -525,24 +604,29 @@ func TestProvenanceQueries(t *testing.T) {
 		require.NoError(t, err)
 		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
 		require.NotNil(t, actualDBsKVs)
-		require.Len(t, actualDBsKVs, len(expectedAliceWrites))
+		require.Len(t, actualDBsKVs, len(expectedAliceWrites.DBKeyValues))
 
-		for dbName, expectedKVs := range expectedAliceWrites {
-			require.ElementsMatch(t, expectedKVs.KVs, actualDBsKVs[dbName].KVs)
+		for dbName, expectedKVs := range expectedAliceWrites.DBKeyValues {
+			require.True(t, proto.Equal(expectedKVs, resp.GetResponse().GetDBKeyValues()[dbName]))
 		}
 	})
 
 	t.Run("Get Values Deleted By", func(t *testing.T) {
-		expectedAliceDeletes := map[string]*types.KVsWithMetadata{
-			"db1": {
-				KVs: []*types.KVWithMetadata{
-					{
-						Key:   "key1",
-						Value: []byte("key1value2"),
-						Metadata: &types.Metadata{
-							Version: &types.Version{
-								BlockNum: 5,
-								TxNum:    0,
+		expectedAliceDeletes := &types.GetDataProvenanceResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			DBKeyValues: map[string]*types.KVsWithMetadata{
+				"db1": {
+					KVs: []*types.KVWithMetadata{
+						{
+							Key:   "key1",
+							Value: []byte("key1value2"),
+							Metadata: &types.Metadata{
+								Version: &types.Version{
+									BlockNum: 5,
+									TxNum:    0,
+								},
 							},
 						},
 					},
@@ -554,10 +638,10 @@ func TestProvenanceQueries(t *testing.T) {
 		require.NoError(t, err)
 		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
 		require.NotNil(t, actualDBsKVs)
-		require.Len(t, actualDBsKVs, len(expectedAliceDeletes))
+		require.Len(t, actualDBsKVs, len(expectedAliceDeletes.DBKeyValues))
 
-		for dbName, expectedKVs := range expectedAliceDeletes {
-			require.ElementsMatch(t, expectedKVs.KVs, actualDBsKVs[dbName].KVs)
+		for dbName, expectedKVs := range expectedAliceDeletes.DBKeyValues {
+			require.True(t, proto.Equal(expectedKVs, resp.GetResponse().GetDBKeyValues()[dbName]))
 		}
 	})
 

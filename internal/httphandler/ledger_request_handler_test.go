@@ -6,12 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"path"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb/mocks"
@@ -87,7 +89,7 @@ func TestBlockQuery(t *testing.T) {
 				},
 			},
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint + fmt.Sprintf("block/%d?augmented=%t", 1, false), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.LedgerEndpoint+fmt.Sprintf("block/%d?augmented=%t", 1, false), nil)
 				if err != nil {
 					return nil, err
 				}
@@ -288,8 +290,9 @@ func TestBlockQuery(t *testing.T) {
 					res = &types.GetBlockResponseEnvelope{}
 				}
 
-				err = json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 				//TODO verify signature on response
 			}
@@ -504,10 +507,10 @@ func TestPathQuery(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetLedgerPathResponseEnvelope{}
-				rr.Body.Bytes()
-				err = json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.GetLedgerPathResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 			}
 		})
@@ -709,10 +712,10 @@ func TestTxProofQuery(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetTxProofResponseEnvelope{}
-				rr.Body.Bytes()
-				err = json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.GetTxProofResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 			}
 		})
@@ -1008,10 +1011,10 @@ func TestDataProofQuery(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetDataProofResponseEnvelope{}
-				rr.Body.Bytes()
-				err = json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.GetDataProofResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 			}
 		})
@@ -1146,10 +1149,10 @@ func TestTxReceiptQuery(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.TxReceiptResponseEnvelope{}
-				rr.Body.Bytes()
-				err = json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.TxReceiptResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 			}
 		})

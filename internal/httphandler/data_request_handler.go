@@ -4,8 +4,8 @@ package httphandler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
@@ -18,6 +18,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // dataRequestHandler handles query and transaction associated
@@ -141,11 +142,17 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		return
 	}
 
-	requestData := json.NewDecoder(request.Body)
-	requestData.DisallowUnknownFields()
+	// requestData := json.NewDecoder(request.Body)
+	// requestData.DisallowUnknownFields()
+
+	requestBody, err := ioutil.ReadAll(request.Body)
+	if err != nil {
+		utils.SendHTTPResponse(response, http.StatusBadRequest,
+			&types.HttpResponseErr{ErrMsg: err.Error()})
+	}
 
 	txEnv := &types.DataTxEnvelope{}
-	if err := requestData.Decode(txEnv); err != nil {
+	if err := protojson.Unmarshal(requestBody, txEnv); err != nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}

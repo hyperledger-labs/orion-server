@@ -27,4 +27,3 @@ func getPorts(num uint32) (node uint32, peer uint32) {
 
 	return
 }
-

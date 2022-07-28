@@ -3,6 +3,8 @@ GO      = go
 DOCKER  = docker
 DOCKER_IMAGE = orionbcdb/orion-server
 DOCKERFILE = images/Dockerfile
+PROTO_COMPILER_IMAGE = orionbcdb/protobuf
+PROTO_COMPILER_DOCKERFILE = images/Proto
 PKGS     = $(or $(PKG),$(shell env GO111MODULE=on $(GO) list ./...))
 TESTPKGS = $(shell env GO111MODULE=on $(GO) list -f \
 		   '{{ if or .TestGoFiles .XTestGoFiles }}{{ .ImportPath }}{{ end }}' \
@@ -69,7 +71,8 @@ docker-clean:
 
 .PHONY: protos
 protos:
-	docker run -it -v `pwd`:`pwd` -w `pwd` sykesm/fabric-protos:0.2 scripts/compile_go_protos.sh
+	$(DOCKER) build -t $(PROTO_COMPILER_IMAGE) --no-cache -f $(PROTO_COMPILER_DOCKERFILE) .
+	docker run -it -v `pwd`:`pwd` -w `pwd` $(PROTO_COMPILER_IMAGE) scripts/compile_go_protos.sh
 
 TEST_TARGETS := test-default test-bench test-short test-verbose test-race
 test-bench:   ARGS=-run=__absolutelynothing__ -bench=.
