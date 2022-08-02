@@ -191,7 +191,7 @@ func createUsers(t *testing.T, s *setup.Server, users []*types.UserWrite) {
 	require.NotNil(t, receipt)
 
 	for _, user := range users {
-		respEnv, err := s.QueryUser(t, user.GetUser().GetId())
+		respEnv, err := s.QueryUser(t, "admin", user.GetUser().GetId())
 		require.NoError(t, err)
 		require.Equal(t, user.User, respEnv.GetResponse().User)
 	}
