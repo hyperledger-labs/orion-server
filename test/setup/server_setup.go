@@ -628,7 +628,7 @@ func (s *Server) GetDeletedValues(t *testing.T, db, key, userID string) (*types.
 	return response, err
 }
 
-func (s *Server) GetValuesReadByUser(t *testing.T, userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+func (s *Server) GetValuesReadByUser(t *testing.T, userID, targetUserId string) (*types.GetDataProvenanceResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
@@ -641,10 +641,10 @@ func (s *Server) GetValuesReadByUser(t *testing.T, userID string) (*types.GetDat
 
 	query := &types.GetDataReadByQuery{
 		UserId:       userID,
-		TargetUserId: userID,
+		TargetUserId: targetUserId,
 	}
 	response, err := client.GetDataReadByUser(
-		constants.URLForGetDataReadBy(userID),
+		constants.URLForGetDataReadBy(targetUserId),
 		&types.GetDataReadByQueryEnvelope{
 			Payload:   query,
 			Signature: testutils.SignatureFromQuery(t, signer, query),
@@ -654,7 +654,7 @@ func (s *Server) GetValuesReadByUser(t *testing.T, userID string) (*types.GetDat
 	return response, err
 }
 
-func (s *Server) GetValuesWrittenByUser(t *testing.T, userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+func (s *Server) GetValuesWrittenByUser(t *testing.T, userID string, targetUserId string) (*types.GetDataProvenanceResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
@@ -667,10 +667,10 @@ func (s *Server) GetValuesWrittenByUser(t *testing.T, userID string) (*types.Get
 
 	query := &types.GetDataWrittenByQuery{
 		UserId:       userID,
-		TargetUserId: userID,
+		TargetUserId: targetUserId,
 	}
 	response, err := client.GetDataWrittenByUser(
-		constants.URLForGetDataWrittenBy(userID),
+		constants.URLForGetDataWrittenBy(targetUserId),
 		&types.GetDataWrittenByQueryEnvelope{
 			Payload:   query,
 			Signature: testutils.SignatureFromQuery(t, signer, query),
@@ -680,7 +680,7 @@ func (s *Server) GetValuesWrittenByUser(t *testing.T, userID string) (*types.Get
 	return response, err
 }
 
-func (s *Server) GetValuesDeletedByUser(t *testing.T, userID string) (*types.GetDataProvenanceResponseEnvelope, error) {
+func (s *Server) GetValuesDeletedByUser(t *testing.T, userID string, targetUserId string) (*types.GetDataProvenanceResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
@@ -693,10 +693,10 @@ func (s *Server) GetValuesDeletedByUser(t *testing.T, userID string) (*types.Get
 
 	query := &types.GetDataDeletedByQuery{
 		UserId:       userID,
-		TargetUserId: userID,
+		TargetUserId: targetUserId,
 	}
 	response, err := client.GetDataDeletedByUser(
-		constants.URLForGetDataDeletedBy(userID),
+		constants.URLForGetDataDeletedBy(targetUserId),
 		&types.GetDataDeletedByQueryEnvelope{
 			Payload:   query,
 			Signature: testutils.SignatureFromQuery(t, signer, query),
@@ -760,7 +760,7 @@ func (s *Server) GetWriters(t *testing.T, dbName, key, userID string) (*types.Ge
 	return response, err
 }
 
-func (s *Server) GetTxIDsSubmittedBy(t *testing.T, userID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
+func (s *Server) GetTxIDsSubmittedBy(t *testing.T, userID, targetUserId string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
@@ -773,10 +773,10 @@ func (s *Server) GetTxIDsSubmittedBy(t *testing.T, userID string) (*types.GetTxI
 
 	query := &types.GetTxIDsSubmittedByQuery{
 		UserId:       userID,
-		TargetUserId: userID,
+		TargetUserId: targetUserId,
 	}
 	response, err := client.GetTxIDsSubmitedBy(
-		constants.URLForGetTxIDsSubmittedBy(userID),
+		constants.URLForGetTxIDsSubmittedBy(targetUserId),
 		&types.GetTxIDsSubmittedByQueryEnvelope{
 			Payload:   query,
 			Signature: testutils.SignatureFromQuery(t, signer, query),
@@ -928,6 +928,41 @@ func (s *Server) WriteDataTx(t *testing.T, db, key string, value []byte) (string
 	txEnv := &types.DataTxEnvelope{
 		Payload:    dataTx,
 		Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
+	}
+	receipt, err := s.SubmitTransaction(t, constants.PostDataTx, txEnv)
+	if err != nil {
+		return txID, nil, nil, err
+	}
+
+	return txID, receipt, txEnv, nil
+}
+
+func (s *Server) UserWriteDataTx(t *testing.T, db, key string, value []byte, user string) (string, *types.TxReceipt, *types.DataTxEnvelope, error) {
+	txID := uuid.New().String()
+	dataTx := &types.DataTx{
+		MustSignUserIds: []string{user},
+		TxId:            txID,
+		DbOperations: []*types.DBOperation{
+			{
+				DbName: db,
+				DataWrites: []*types.DataWrite{
+					{
+						Key:   key,
+						Value: value,
+					},
+				},
+			},
+		},
+	}
+
+	signer, err := s.Signer(user)
+	if err != nil {
+		return txID, nil, nil, err
+	}
+	// Post transaction into new database
+	txEnv := &types.DataTxEnvelope{
+		Payload:    dataTx,
+		Signatures: map[string][]byte{user: testutils.SignatureFromTx(t, signer, dataTx)},
 	}
 	receipt, err := s.SubmitTransaction(t, constants.PostDataTx, txEnv)
 	if err != nil {

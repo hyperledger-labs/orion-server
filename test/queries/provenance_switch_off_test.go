@@ -59,7 +59,7 @@ func TestProvenanceSwitchOff(t *testing.T) {
 	_, err = s2.GetAllValues(t, worldstate.DefaultDBName, "key-1", "admin")
 	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/bdb/key-1' because provenance store is disabled on this server")
 
-	_, err = s2.GetValuesReadByUser(t, "admin")
+	_, err = s2.GetValuesReadByUser(t, "admin", "admin")
 	require.EqualError(t, err, "error while processing 'GET /provenance/data/read/admin' because provenance store is disabled on this server")
 
 	// provenance queries to other servers work

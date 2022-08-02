@@ -432,7 +432,7 @@ func TestProvenanceQueries(t *testing.T) {
 			},
 		}
 
-		resp, err := s.GetValuesReadByUser(t, "alice")
+		resp, err := s.GetValuesReadByUser(t, "alice", "alice")
 		require.NoError(t, err)
 		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
 		require.NotNil(t, actualDBsKVs)
@@ -521,7 +521,7 @@ func TestProvenanceQueries(t *testing.T) {
 			},
 		}
 
-		resp, err := s.GetValuesWrittenByUser(t, "alice")
+		resp, err := s.GetValuesWrittenByUser(t, "alice", "alice")
 		require.NoError(t, err)
 		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
 		require.NotNil(t, actualDBsKVs)
@@ -550,7 +550,7 @@ func TestProvenanceQueries(t *testing.T) {
 			},
 		}
 
-		resp, err := s.GetValuesDeletedByUser(t, "alice")
+		resp, err := s.GetValuesDeletedByUser(t, "alice", "alice")
 		require.NoError(t, err)
 		actualDBsKVs := resp.GetResponse().GetDBKeyValues()
 		require.NotNil(t, actualDBsKVs)
@@ -644,7 +644,7 @@ func TestProvenanceQueries(t *testing.T) {
 		}
 
 		for _, tt := range testCases {
-			resp, err := s.GetTxIDsSubmittedBy(t, tt.userId)
+			resp, err := s.GetTxIDsSubmittedBy(t, tt.userId, tt.userId)
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedTxIDs, resp.GetResponse().GetTxIDs())
 		}
