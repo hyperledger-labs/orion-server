@@ -183,7 +183,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	}
 	if len(notSigned) > 0 {
 		sort.Strings(notSigned)
-		utils.SendHTTPResponse(response, http.StatusBadRequest,
+		utils.SendHTTPResponse(response, http.StatusUnauthorized,
 			&types.HttpResponseErr{ErrMsg: "users [" + strings.Join(notSigned, ",") + "] in the must sign list have not signed the transaction"})
 		return
 	}
