@@ -1118,7 +1118,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 				db := &mocks.DB{}
 				return db
 			},
-			expectedCode: http.StatusBadRequest,
+			expectedCode: http.StatusUnauthorized,
 			expectedErr:  "users [bob,charlie] in the must sign list have not signed the transaction",
 		},
 		{
@@ -1324,6 +1324,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			handler := NewDataRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
+			require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode == http.StatusOK {
 				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
