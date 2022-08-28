@@ -421,7 +421,7 @@ func TestGetClusterStatus(t *testing.T) {
 		require.Equal(t, "node2", status.Response.Nodes[1].Id)
 		require.NotNil(t, status.Response.Nodes[1].Certificate)
 
-		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.True(t, proto.Equal(&types.Version{BlockNum: 10}, status.Response.Version))
 		require.Equal(t, "node1", status.Response.Leader)
 		require.Equal(t, []string{"node1", "node2"}, status.Response.Active)
 	})
@@ -445,7 +445,7 @@ func TestGetClusterStatus(t *testing.T) {
 		require.Equal(t, "node2", status.Response.Nodes[1].Id)
 		require.NotNil(t, status.Response.Nodes[1].Certificate)
 
-		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.True(t, proto.Equal(&types.Version{BlockNum: 10}, status.Response.Version))
 		require.Equal(t, "", status.Response.Leader)
 		require.Equal(t, []string{"node1"}, status.Response.Active)
 	})
@@ -469,7 +469,7 @@ func TestGetClusterStatus(t *testing.T) {
 		require.Equal(t, "node2", status.Response.Nodes[1].Id)
 		require.Nil(t, status.Response.Nodes[1].Certificate)
 
-		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.True(t, proto.Equal(&types.Version{BlockNum: 10}, status.Response.Version))
 		require.Equal(t, "node1", status.Response.Leader)
 		require.Equal(t, []string{"node1", "node2"}, status.Response.Active)
 	})
@@ -494,7 +494,7 @@ func TestGetClusterStatus(t *testing.T) {
 		require.Equal(t, "node2", status.Response.Nodes[1].Id)
 		require.NotNil(t, "node2", status.Response.Nodes[1].Certificate)
 
-		require.Equal(t, &types.Version{BlockNum: 10}, status.Response.Version)
+		require.True(t, proto.Equal(&types.Version{BlockNum: 10}, status.Response.Version))
 		require.Equal(t, "", status.Response.Leader)
 		require.Equal(t, []string{"node1", "node2"}, status.Response.Active)
 	})

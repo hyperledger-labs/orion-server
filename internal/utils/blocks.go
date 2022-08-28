@@ -23,7 +23,7 @@ func BlockPayloadToTxIDs(blockPayload interface{}) ([]string, error) {
 			}
 			id := p.GetTxId()
 			if id == "" {
-				return nil, errors.Errorf("missing TxId in index [%d]: %+v", i, env)
+				return nil, errors.Errorf("missing TxId in index [%d]: %+v", i, env.DataTxEnvelopes.GetEnvelopes()[i])
 			}
 			txIDs = append(txIDs, id)
 		}

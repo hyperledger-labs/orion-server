@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,6 +21,8 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type testCase struct {
@@ -1031,8 +1034,9 @@ func assertTestCase(t *testing.T, tt testCase, responseType interface{}) {
 	}
 
 	if tt.expectedResponse != nil {
-		err = json.NewDecoder(rr.Body).Decode(responseType)
+		requestBody, err := ioutil.ReadAll(rr.Body)
 		require.NoError(t, err)
+		require.NoError(t, protojson.Unmarshal(requestBody, responseType.(proto.Message)))
 		require.Equal(t, tt.expectedResponse, responseType)
 	}
 }

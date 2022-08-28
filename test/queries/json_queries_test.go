@@ -5,6 +5,8 @@ package queries
 
 import (
 	"io/ioutil"
+	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestJSONQueries(t *testing.T) {
@@ -28,6 +31,7 @@ func TestJSONQueries(t *testing.T) {
 		BaseNodePort:        nPort,
 		BasePeerPort:        pPort,
 	}
+	defer os.RemoveAll(dir)
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
 	defer c.ShutdownAndCleanup()
@@ -108,62 +112,78 @@ func TestJSONQueries(t *testing.T) {
 			}
 		}
 		`
-		expectedKVsForAlice := []*types.KVWithMetadata{
-			{
-				Key:      "key1",
-				Value:    []byte(v1JSON),
-				Metadata: defaultMetadata,
+		expectedKVsForAlice := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
 			},
-			{
-				Key:      "key3",
-				Value:    []byte(v3JSON),
-				Metadata: defaultMetadata,
-			},
-			{
-				Key:      "key6",
-				Value:    []byte(v6JSON),
-				Metadata: defaultMetadata,
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:      "key1",
+					Value:    []byte(v1JSON),
+					Metadata: defaultMetadata,
+				},
+				{
+					Key:      "key3",
+					Value:    []byte(v3JSON),
+					Metadata: defaultMetadata,
+				},
+				{
+					Key:      "key6",
+					Value:    []byte(v6JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
-		expectedKVsForBob := []*types.KVWithMetadata{
-			{
-				Key:      "key1",
-				Value:    []byte(v1JSON),
-				Metadata: defaultMetadata,
+		expectedKVsForBob := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
 			},
-			{
-				Key:      "key3",
-				Value:    []byte(v3JSON),
-				Metadata: defaultMetadata,
-			},
-			{
-				Key:   "key5",
-				Value: []byte(v5JSON),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadWriteUsers: map[string]bool{"bob": true},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:      "key1",
+					Value:    []byte(v1JSON),
+					Metadata: defaultMetadata,
+				},
+				{
+					Key:      "key3",
+					Value:    []byte(v3JSON),
+					Metadata: defaultMetadata,
+				},
+				{
+					Key:   "key5",
+					Value: []byte(v5JSON),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{"bob": true},
+						},
 					},
 				},
-			},
-			{
-				Key:      "key6",
-				Value:    []byte(v6JSON),
-				Metadata: defaultMetadata,
+				{
+					Key:      "key6",
+					Value:    []byte(v6JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
 		resp, err := s.ExecuteJSONQuery(t, "alice", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVsForAlice, resp.GetResponse().KVs)
+		sort.Slice(resp.GetResponse().KVs, func(i, j int) bool {
+			return resp.GetResponse().KVs[i].GetKey() < resp.GetResponse().KVs[j].GetKey()
+		})
+		require.True(t, proto.Equal(expectedKVsForAlice, resp.GetResponse()))
 
 		resp, err = s.ExecuteJSONQuery(t, "bob", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVsForBob, resp.GetResponse().KVs)
+		sort.Slice(resp.GetResponse().KVs, func(i, j int) bool {
+			return resp.GetResponse().KVs[i].GetKey() < resp.GetResponse().KVs[j].GetKey()
+		})
+		require.True(t, proto.Equal(expectedKVsForBob, resp.GetResponse()))
 	})
 
 	t.Run("equal on string", func(t *testing.T) {
@@ -174,17 +194,22 @@ func TestJSONQueries(t *testing.T) {
 			}
 		}
 		`
-		expectedKVs := []*types.KVWithMetadata{
-			{
-				Key:      "key3",
-				Value:    []byte(v3JSON),
-				Metadata: defaultMetadata,
+		expectedKVs := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:      "key3",
+					Value:    []byte(v3JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
 		resp, err := s.ExecuteJSONQuery(t, "alice", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVs, resp.GetResponse().KVs)
+		require.True(t, proto.Equal(expectedKVs, resp.GetResponse()))
 	})
 
 	t.Run("equal on number", func(t *testing.T) {
@@ -195,17 +220,22 @@ func TestJSONQueries(t *testing.T) {
 			}
 		}
 		`
-		expectedKVs := []*types.KVWithMetadata{
-			{
-				Key:      "key6",
-				Value:    []byte(v6JSON),
-				Metadata: defaultMetadata,
+		expectedKVs := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:      "key6",
+					Value:    []byte(v6JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
 		resp, err := s.ExecuteJSONQuery(t, "alice", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVs, resp.GetResponse().KVs)
+		require.True(t, proto.Equal(expectedKVs, resp.GetResponse()))
 	})
 
 	t.Run("not equal on number", func(t *testing.T) {
@@ -218,52 +248,69 @@ func TestJSONQueries(t *testing.T) {
 			}
 		}
 		`
-		expectedKVsForAlice := []*types.KVWithMetadata{
-			{
-				Key:      "key1",
-				Value:    []byte(v1JSON),
-				Metadata: defaultMetadata,
+
+		expectedKVsForAlice := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
 			},
-			{
-				Key:   "key2",
-				Value: []byte(v2JSON),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadWriteUsers: map[string]bool{"alice": true},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:      "key1",
+					Value:    []byte(v1JSON),
+					Metadata: defaultMetadata,
+				},
+				{
+					Key:   "key2",
+					Value: []byte(v2JSON),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{"alice": true},
+						},
 					},
 				},
-			},
-			{
-				Key:      "key3",
-				Value:    []byte(v3JSON),
-				Metadata: defaultMetadata,
+				{
+					Key:      "key3",
+					Value:    []byte(v3JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
-		expectedKVsForBob := []*types.KVWithMetadata{
-			{
-				Key:      "key1",
-				Value:    []byte(v1JSON),
-				Metadata: defaultMetadata,
+		expectedKVsForBob := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
 			},
-			{
-				Key:      "key3",
-				Value:    []byte(v3JSON),
-				Metadata: defaultMetadata,
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:      "key1",
+					Value:    []byte(v1JSON),
+					Metadata: defaultMetadata,
+				},
+				{
+					Key:      "key3",
+					Value:    []byte(v3JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
 		resp, err := s.ExecuteJSONQuery(t, "alice", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVsForAlice, resp.GetResponse().KVs)
+		sort.Slice(resp.GetResponse().KVs, func(i, j int) bool {
+			return resp.GetResponse().KVs[i].GetKey() < resp.GetResponse().KVs[j].GetKey()
+		})
+		require.True(t, proto.Equal(expectedKVsForAlice, resp.GetResponse()))
 
 		resp, err = s.ExecuteJSONQuery(t, "bob", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVsForBob, resp.GetResponse().KVs)
+		sort.Slice(resp.GetResponse().KVs, func(i, j int) bool {
+			return resp.GetResponse().KVs[i].GetKey() < resp.GetResponse().KVs[j].GetKey()
+		})
+		require.True(t, proto.Equal(expectedKVsForBob, resp.GetResponse()))
 	})
 
 	t.Run("multiple conditions with and", func(t *testing.T) {
@@ -286,22 +333,30 @@ func TestJSONQueries(t *testing.T) {
 			}
 		}
 		`
-		expectedKVs := []*types.KVWithMetadata{
-			{
-				Key:      "key3",
-				Value:    []byte(v3JSON),
-				Metadata: defaultMetadata,
+		expectedKVs := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
 			},
-			{
-				Key:      "key6",
-				Value:    []byte(v6JSON),
-				Metadata: defaultMetadata,
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:      "key3",
+					Value:    []byte(v3JSON),
+					Metadata: defaultMetadata,
+				},
+				{
+					Key:      "key6",
+					Value:    []byte(v6JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
 		resp, err := s.ExecuteJSONQuery(t, "alice", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVs, resp.GetResponse().KVs)
+		sort.Slice(resp.GetResponse().KVs, func(i, j int) bool {
+			return resp.GetResponse().KVs[i].GetKey() < resp.GetResponse().KVs[j].GetKey()
+		})
+		require.True(t, proto.Equal(expectedKVs, resp.GetResponse()))
 	})
 
 	t.Run("multiple conditions with or", func(t *testing.T) {
@@ -324,30 +379,38 @@ func TestJSONQueries(t *testing.T) {
 			}
 		}
 		`
-		expectedKVs := []*types.KVWithMetadata{
-			{
-				Key:   "key2",
-				Value: []byte(v2JSON),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadWriteUsers: map[string]bool{"alice": true},
+		expectedKVs := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:   "key2",
+					Value: []byte(v2JSON),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{"alice": true},
+						},
 					},
 				},
-			},
-			{
-				Key:      "key4",
-				Value:    []byte(v4JSON),
-				Metadata: defaultMetadata,
+				{
+					Key:      "key4",
+					Value:    []byte(v4JSON),
+					Metadata: defaultMetadata,
+				},
 			},
 		}
 
 		resp, err := s.ExecuteJSONQuery(t, "alice", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVs, resp.GetResponse().KVs)
+		sort.Slice(resp.GetResponse().KVs, func(i, j int) bool {
+			return resp.GetResponse().KVs[i].GetKey() < resp.GetResponse().KVs[j].GetKey()
+		})
+		require.True(t, proto.Equal(expectedKVs, resp.GetResponse()))
 	})
 
 	t.Run("multiple conditions with or and neq", func(t *testing.T) {
@@ -369,17 +432,22 @@ func TestJSONQueries(t *testing.T) {
 			}
 		}
 		`
-		expectedKVs := []*types.KVWithMetadata{
-			{
-				Key:   "key5",
-				Value: []byte(v5JSON),
-				Metadata: &types.Metadata{
-					Version: &types.Version{
-						BlockNum: 4,
-						TxNum:    0,
-					},
-					AccessControl: &types.AccessControl{
-						ReadWriteUsers: map[string]bool{"bob": true},
+		expectedKVs := &types.DataQueryResponse{
+			Header: &types.ResponseHeader{
+				NodeId: s.ID(),
+			},
+			KVs: []*types.KVWithMetadata{
+				{
+					Key:   "key5",
+					Value: []byte(v5JSON),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 4,
+							TxNum:    0,
+						},
+						AccessControl: &types.AccessControl{
+							ReadWriteUsers: map[string]bool{"bob": true},
+						},
 					},
 				},
 			},
@@ -387,7 +455,7 @@ func TestJSONQueries(t *testing.T) {
 
 		resp, err := s.ExecuteJSONQuery(t, "bob", "db1", query)
 		require.NoError(t, err)
-		require.ElementsMatch(t, expectedKVs, resp.GetResponse().KVs)
+		require.True(t, proto.Equal(expectedKVs, resp.GetResponse()))
 	})
 
 	t.Run("bad selector", func(t *testing.T) {

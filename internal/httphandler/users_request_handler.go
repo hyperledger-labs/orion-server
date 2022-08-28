@@ -3,8 +3,8 @@
 package httphandler
 
 import (
-	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -15,6 +15,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // usersRequestHandler handles query and transaction associated
@@ -88,12 +89,14 @@ func (u *usersRequestHandler) userTransaction(response http.ResponseWriter, requ
 		return
 	}
 
-	d := json.NewDecoder(request.Body)
-	d.DisallowUnknownFields()
+	requestBytes, err := ioutil.ReadAll(request.Body)
+	if err != nil {
+		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+		return
+	}
 
 	txEnv := &types.UserAdministrationTxEnvelope{}
-	if err := d.Decode(txEnv); err != nil {
-		u.logger.Errorf(err.Error())
+	if err := protojson.Unmarshal(requestBytes, txEnv); err != nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}

@@ -10,14 +10,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 type Client struct {
@@ -67,7 +71,7 @@ func (c *Client) GetDBStatus(e *types.GetDBStatusQueryEnvelope) (*types.GetDBSta
 	defer resp.Body.Close()
 
 	res := &types.GetDBStatusResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -84,7 +88,7 @@ func (c *Client) GetDBIndex(e *types.GetDBIndexQueryEnvelope) (*types.GetDBIndex
 	defer resp.Body.Close()
 
 	res := &types.GetDBIndexResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -101,7 +105,7 @@ func (c *Client) GetData(e *types.GetDataQueryEnvelope) (*types.GetDataResponseE
 	defer resp.Body.Close()
 
 	res := &types.GetDataResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -118,7 +122,7 @@ func (c *Client) GetUser(e *types.GetUserQueryEnvelope) (*types.GetUserResponseE
 	defer resp.Body.Close()
 
 	res := &types.GetUserResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -136,7 +140,7 @@ func (c *Client) GetTxProof(e *types.GetTxProofQueryEnvelope) (*types.GetTxProof
 	defer resp.Body.Close()
 
 	res := &types.GetTxProofResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -154,7 +158,7 @@ func (c *Client) GetDataRange(e *types.GetDataQueryEnvelope, startKey, endKey st
 	defer resp.Body.Close()
 
 	res := &types.GetDataRangeResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -172,7 +176,7 @@ func (c *Client) GetDataProof(e *types.GetDataProofQueryEnvelope) (*types.GetDat
 	defer resp.Body.Close()
 
 	res := &types.GetDataProofResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -189,7 +193,7 @@ func (c *Client) GetLastConfigBlockStatus(e *types.GeConfigBlockQueryEnvelope) (
 	defer resp.Body.Close()
 
 	res := &types.GetConfigBlockResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -206,7 +210,7 @@ func (c *Client) GetLastBlock(e *types.GetLastBlockQueryEnvelope) (*types.GetBlo
 	defer resp.Body.Close()
 
 	res := &types.GetBlockResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -225,7 +229,7 @@ func (c *Client) GetLedgerPath(e *types.GetLedgerPathQueryEnvelope) (*types.GetL
 	defer resp.Body.Close()
 
 	res := &types.GetLedgerPathResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -244,7 +248,7 @@ func (c *Client) GetTxReceipt(e *types.GetTxReceiptQueryEnvelope) (*types.TxRece
 	defer resp.Body.Close()
 
 	res := &types.TxReceiptResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -266,7 +270,7 @@ func (c *Client) GetBlockHeader(e *types.GetBlockQueryEnvelope, forceParam bool)
 	defer resp.Body.Close()
 
 	res := &types.GetBlockResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -284,7 +288,7 @@ func (c *Client) GetAugmentedBlockHeader(e *types.GetBlockQueryEnvelope) (*types
 	defer resp.Body.Close()
 
 	res := &types.GetAugmentedBlockHeaderResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -301,7 +305,7 @@ func (c *Client) GetClusterStatus(e *types.GetClusterStatusQueryEnvelope) (*type
 	defer resp.Body.Close()
 
 	res := &types.GetClusterStatusResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -318,7 +322,7 @@ func (c *Client) GetConfig(e *types.GetConfigQueryEnvelope) (*types.GetConfigRes
 	defer resp.Body.Close()
 
 	res := &types.GetConfigResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -335,7 +339,7 @@ func (c *Client) GetNodeConfig(e *types.GetNodeConfigQueryEnvelope) (*types.GetN
 	defer resp.Body.Close()
 
 	res := &types.GetNodeConfigResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -352,7 +356,7 @@ func (c *Client) GetHistoricalData(urlPath string, e *types.GetHistoricalDataQue
 	defer resp.Body.Close()
 
 	res := &types.GetHistoricalDataResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -369,7 +373,7 @@ func (c *Client) GetDataReadByUser(urlPath string, e *types.GetDataReadByQueryEn
 	defer resp.Body.Close()
 
 	res := &types.GetDataProvenanceResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -386,7 +390,7 @@ func (c *Client) GetDataWrittenByUser(urlPath string, e *types.GetDataWrittenByQ
 	defer resp.Body.Close()
 
 	res := &types.GetDataProvenanceResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -403,7 +407,7 @@ func (c *Client) GetDataDeletedByUser(urlPath string, e *types.GetDataDeletedByQ
 	defer resp.Body.Close()
 
 	res := &types.GetDataProvenanceResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -420,7 +424,7 @@ func (c *Client) GetDataReaders(urlPath string, e *types.GetDataReadersQueryEnve
 	defer resp.Body.Close()
 
 	res := &types.GetDataReadersResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -437,7 +441,7 @@ func (c *Client) GetDataWriters(urlPath string, e *types.GetDataWritersQueryEnve
 	defer resp.Body.Close()
 
 	res := &types.GetDataWritersResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -454,7 +458,7 @@ func (c *Client) GetTxIDsSubmitedBy(urlPath string, e *types.GetTxIDsSubmittedBy
 	defer resp.Body.Close()
 
 	res := &types.GetTxIDsSubmittedByResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
 }
 
@@ -477,8 +481,17 @@ func (c *Client) ExecuteJSONQuery(urlPath string, e *types.DataJSONQuery, signat
 	defer resp.Body.Close()
 
 	res := &types.DataQueryResponseEnvelope{}
-	err = json.NewDecoder(resp.Body).Decode(res)
+	err = unMarshalResponse(resp, res)
 	return res, err
+}
+
+func unMarshalResponse(httpResp *http.Response, resp proto.Message) error {
+	responseBytes, err := ioutil.ReadAll(httpResp.Body)
+	if err != nil {
+		return err
+	}
+
+	return protojson.Unmarshal(responseBytes, resp)
 }
 
 func (c *Client) handlePostRequest(urlPath string, userID string, postData, signature []byte) (*http.Response, error) {
@@ -554,8 +567,8 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}, serverTimeout
 		},
 	)
 
-	buf := &bytes.Buffer{}
-	if err := json.NewEncoder(buf).Encode(tx); err != nil {
+	txBytes, err := marshal.DefaultMarshaler().Marshal(tx.(proto.Message))
+	if err != nil {
 		return nil, err
 	}
 
@@ -567,7 +580,7 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}, serverTimeout
 		defer cancelFnc()
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), buf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(txBytes))
 	if err != nil {
 		return nil, err
 	}

@@ -442,11 +442,8 @@ func TestDataTx(t *testing.T) {
 		}
 
 		_, err = s.SubmitTransaction(t, constants.PostDataTx, &types.DataTxEnvelope{
-			Payload:              dataTx,
-			Signatures:           map[string][]byte{"alice": testutils.SignatureFromTx(t, aliceSigner, dataTx), "bob": testutils.SignatureFromTx(t, bobSigner, dataTx)},
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     []byte{},
-			XXX_sizecache:        0,
+			Payload:    dataTx,
+			Signatures: map[string][]byte{"alice": testutils.SignatureFromTx(t, aliceSigner, dataTx), "bob": testutils.SignatureFromTx(t, bobSigner, dataTx)},
 		})
 		require.NoError(t, err)
 

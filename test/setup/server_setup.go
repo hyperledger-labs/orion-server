@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -33,6 +34,7 @@ import (
 	"github.com/onsi/gomega/gbytes"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // Server holds parameters related to the server
@@ -1052,9 +1054,14 @@ func (s *Server) SubmitTransaction(t *testing.T, urlPath string, tx interface{})
 		return nil, errors.Errorf("failed to submit transaction, server returned: status: %s, message: %s", response.Status, errMsg)
 	}
 
-	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
-	err = json.NewDecoder(response.Body).Decode(txResponseEnvelope)
+	requestBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
+		t.Errorf("error: %s", err)
+		return nil, err
+	}
+
+	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
+	if err := protojson.Unmarshal(requestBody, txResponseEnvelope); err != nil {
 		t.Errorf("error: %s", err)
 		return nil, err
 	}
@@ -1108,7 +1115,13 @@ func (s *Server) SubmitTransactionAsync(t *testing.T, urlPath string, tx interfa
 	}
 
 	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
-	err = json.NewDecoder(response.Body).Decode(txResponseEnvelope)
+	responseBytes, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		t.Errorf("error: %s", err)
+		return err
+	}
+
+	err = protojson.Unmarshal(responseBytes, txResponseEnvelope)
 	if err != nil {
 		t.Errorf("error: %s", err)
 		return err
@@ -1161,11 +1174,16 @@ func (s *Server) SetConfigTx(t *testing.T, newConfig *types.ClusterConfig, versi
 		return txID, nil, errors.Errorf("failed to submit transaction, server returned: status: %s, message: %s", response.Status, errMsg)
 	}
 
-	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
-	err = json.NewDecoder(response.Body).Decode(txResponseEnvelope)
+	requestBody, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		t.Errorf("error: %s", err)
-		return txID, nil, err
+		return "", nil, err
+	}
+
+	txResponseEnvelope := &types.TxReceiptResponseEnvelope{}
+	if err := protojson.Unmarshal(requestBody, txResponseEnvelope); err != nil {
+		t.Errorf("error: %s", err)
+		return "", nil, err
 	}
 
 	receipt := txResponseEnvelope.GetResponse().GetReceipt()

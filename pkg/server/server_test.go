@@ -5,7 +5,6 @@ package server
 import (
 	"bytes"
 	"crypto/tls"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io/ioutil"
@@ -26,6 +25,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/server/mock"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -411,7 +411,7 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	require.NotNil(t, data)
 	require.NotNil(t, data.Response)
 
-	resp, err := json.Marshal(data.GetResponse())
+	resp, err := marshal.DefaultMarshaler().Marshal(data.GetResponse())
 	require.NoError(t, err)
 	err = verifier.Verify(resp, data.GetSignature())
 	require.NoError(t, err)
@@ -466,7 +466,7 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 			return false
 		}
 
-		dataB, err := json.Marshal(data.GetResponse())
+		dataB, err := marshal.DefaultMarshaler().Marshal(data.GetResponse())
 		require.NoError(t, err)
 
 		err = verifier.Verify(dataB, data.GetSignature())
@@ -493,7 +493,7 @@ func TestServerWithDataRequestAndProvenanceQueries(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	valuesB, err := json.Marshal(values.GetResponse())
+	valuesB, err := marshal.DefaultMarshaler().Marshal(values.GetResponse())
 	require.NoError(t, err)
 
 	err = verifier.Verify(valuesB, values.GetSignature())
@@ -527,7 +527,7 @@ func TestServerWithDataRequestAndProvenanceOff(t *testing.T) {
 	require.NotNil(t, data)
 	require.NotNil(t, data.Response)
 
-	resp, err := json.Marshal(data.GetResponse())
+	resp, err := marshal.DefaultMarshaler().Marshal(data.GetResponse())
 	require.NoError(t, err)
 	err = verifier.Verify(resp, data.GetSignature())
 	require.NoError(t, err)
@@ -582,7 +582,7 @@ func TestServerWithDataRequestAndProvenanceOff(t *testing.T) {
 			return false
 		}
 
-		dataB, err := json.Marshal(data.GetResponse())
+		dataB, err := marshal.DefaultMarshaler().Marshal(data.GetResponse())
 		require.NoError(t, err)
 
 		err = verifier.Verify(dataB, data.GetSignature())
@@ -681,7 +681,7 @@ func TestServerWithUserAdminRequest(t *testing.T) {
 			return false
 		}
 
-		userB, err := json.Marshal(user.GetResponse())
+		userB, err := marshal.DefaultMarshaler().Marshal(user.GetResponse())
 		require.NoError(t, err)
 
 		err = verifier.Verify(userB, user.GetSignature())
@@ -734,7 +734,7 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 			return false
 		}
 
-		dbB, err := json.Marshal(db.GetResponse())
+		dbB, err := marshal.DefaultMarshaler().Marshal(db.GetResponse())
 		require.NoError(t, err)
 
 		err = verifier.Verify(dbB, db.GetSignature())
@@ -791,7 +791,7 @@ func TestServerWithDBAdminRequest(t *testing.T) {
 			return false
 		}
 
-		dataB, err := json.Marshal(data.GetResponse())
+		dataB, err := marshal.DefaultMarshaler().Marshal(data.GetResponse())
 		require.NoError(t, err)
 
 		err = verifier.Verify(dataB, data.GetSignature())
@@ -950,7 +950,7 @@ func TestSyncTxWithServerTLS(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, user.GetResponse())
 
-	userBytes, err := json.Marshal(user.GetResponse())
+	userBytes, err := marshal.DefaultMarshaler().Marshal(user.GetResponse())
 	require.NoError(t, err)
 
 	err = verifier.Verify(userBytes, user.GetSignature())
@@ -1114,7 +1114,7 @@ func TestSyncTxWithServerAndClientTLS(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, user.GetResponse())
 
-	userBytes, err := json.Marshal(user.GetResponse())
+	userBytes, err := marshal.DefaultMarshaler().Marshal(user.GetResponse())
 	require.NoError(t, err)
 
 	err = verifier.Verify(userBytes, user.GetSignature())
@@ -1178,7 +1178,7 @@ func TestServerWithRestart(t *testing.T) {
 			return false
 		}
 
-		userB, err := json.Marshal(user.GetResponse())
+		userB, err := marshal.DefaultMarshaler().Marshal(user.GetResponse())
 		require.NoError(t, err)
 
 		err = verifier.Verify(userB, user.GetSignature())
@@ -1212,7 +1212,7 @@ func TestServerWithRestart(t *testing.T) {
 			return false
 		}
 
-		userB, err := json.Marshal(user.GetResponse())
+		userB, err := marshal.DefaultMarshaler().Marshal(user.GetResponse())
 		require.NoError(t, err)
 
 		err = verifier.Verify(userB, user.GetSignature())

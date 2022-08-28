@@ -9,7 +9,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"io/ioutil"
 	"math/big"
@@ -21,8 +20,10 @@ import (
 
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 const RootCAFileName = "rootCA"
@@ -305,7 +306,7 @@ func SignedDBAdministrationTxEnvelope(t *testing.T, signer crypto.Signer, tx *ty
 func VerifyPayloadSignature(t *testing.T, rawCert []byte, payload interface{}, sig []byte) {
 	ver, err := crypto.NewVerifier(rawCert)
 	require.NoError(t, err)
-	payloadBytes, err := json.Marshal(payload)
+	payloadBytes, err := marshal.DefaultMarshaler().Marshal(payload.(proto.Message))
 	require.NoError(t, err)
 	err = ver.Verify(payloadBytes, sig)
 	require.NoError(t, err)

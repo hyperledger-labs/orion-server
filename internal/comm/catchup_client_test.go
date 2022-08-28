@@ -67,7 +67,7 @@ func TestCatchUpClient_UpdateMembers(t *testing.T) {
 
 	peer2.PeerHost = "not a legal address"
 	err = h.UpdateMembers([]*types.PeerConfig{peer1, peer2})
-	require.EqualError(t, err, "failed to convert PeerConfig [node_id:\"node2\" raft_id:2 peer_host:\"not a legal address\" peer_port:9002 ] to url: parse \"http://not a legal address:9002\": invalid character \" \" in host name")
+	require.Contains(t, err.Error(), "failed to convert PeerConfig")
 }
 
 func TestCatchUpClient_GetHeight(t *testing.T) {

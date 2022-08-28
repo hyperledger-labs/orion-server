@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,10 +18,12 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/bcdb/mocks"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func TestDBRequestHandler_DBStatus(t *testing.T) {
@@ -202,10 +205,10 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetDBStatusResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
-
+				res := &types.GetDBStatusResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 			}
 		})
@@ -408,10 +411,10 @@ func TestDBRequestHandler_DBIndex(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetDBIndexResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
-
+				res := &types.GetDBIndexResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 			}
 		})
@@ -675,13 +678,14 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			txEnv := tt.txEnvFactory()
-			txBytes, err := json.Marshal(txEnv)
-			txResp := tt.txRespFactory()
+			txBytes, err := marshal.DefaultMarshaler().Marshal(txEnv)
 			require.NoError(t, err)
 			require.NotNil(t, txBytes)
 
 			txReader := bytes.NewReader(txBytes)
 			require.NotNil(t, txReader)
+
+			txResp := tt.txRespFactory()
 
 			reqUrl := &url.URL{
 				Scheme: "http",
@@ -713,9 +717,10 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 
 			require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode == http.StatusOK {
-				resp := &types.TxReceiptResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(resp)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				resp := &types.TxReceiptResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, resp))
 				require.Equal(t, txResp, resp)
 			} else if tt.expectedCode == http.StatusTemporaryRedirect {
 				locationUrl := rr.Header().Get("Location")

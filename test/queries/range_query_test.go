@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"os"
 	"testing"
 	"time"
 
@@ -37,6 +38,7 @@ func TestRangeQueriesWithUserLimit(t *testing.T) {
 		BasePeerPort:        pPort,
 		ServersQueryLimit:   math.MaxInt64,
 	}
+	defer os.RemoveAll(dir)
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
 	defer c.ShutdownAndCleanup()

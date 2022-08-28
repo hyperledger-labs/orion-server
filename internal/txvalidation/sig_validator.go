@@ -4,13 +4,14 @@
 package txvalidation
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 type txSigValidator struct {
@@ -23,10 +24,10 @@ func (s *txSigValidator) validate(
 	signature []byte,
 	txPayload interface{},
 ) (*types.ValidationInfo, error) {
-	requestBytes, err := json.Marshal(txPayload)
+	requestBytes, err := marshal.DefaultMarshaler().Marshal(txPayload.(proto.Message))
 	if err != nil {
-		s.logger.Errorf("Error during json.Marshal Tx: %s, error: %s", txPayload, err)
-		return nil, errors.Wrapf(err, "failed to json.Marshal Tx: %s", txPayload)
+		s.logger.Errorf("Error during Marshal Tx: %s, error: %s", txPayload, err)
+		return nil, errors.Wrapf(err, "failed to Marshal Tx: %s", txPayload)
 	}
 
 	err = s.sigVerifier.Verify(user, signature, requestBytes)

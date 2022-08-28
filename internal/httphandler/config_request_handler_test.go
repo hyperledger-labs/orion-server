@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,10 +21,12 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func createLogger(logLevel string) (*logger.SugarLogger, error) {
@@ -204,9 +207,10 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetConfigResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.GetConfigResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 				// TODO verify signature on responses
 			}
@@ -491,7 +495,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			txEnv := tt.txEnvFactory()
 			txResp := tt.txRespFactory()
-			txBytes, err := json.Marshal(txEnv)
+			txBytes, err := marshal.DefaultMarshaler().Marshal(txEnv)
 			require.NoError(t, err)
 
 			txReader := bytes.NewReader(txBytes)
@@ -527,9 +531,10 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 
 			require.Equal(t, tt.expectedCode, rr.Code)
 			if tt.expectedCode == http.StatusOK {
-				resp := &types.TxReceiptResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(resp)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				resp := &types.TxReceiptResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, resp))
 				require.Equal(t, txResp, resp)
 			} else if tt.expectedCode == http.StatusTemporaryRedirect {
 				locationUrl := rr.Header().Get("Location")
@@ -709,9 +714,10 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetNodeConfigResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.GetNodeConfigResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 				// TODO verify signature on responses
 			}
@@ -884,9 +890,10 @@ func TestConfigRequestHandler_GetLastConfigBlock(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetConfigBlockResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.GetConfigBlockResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 				// TODO verify signature on responses
 			}
@@ -1212,9 +1219,10 @@ func TestConfigRequestHandler_GetClusterStatus(t *testing.T) {
 			}
 
 			if tt.expectedResponse != nil {
-				res := &types.GetClusterStatusResponseEnvelope{}
-				err := json.NewDecoder(rr.Body).Decode(res)
+				requestBody, err := ioutil.ReadAll(rr.Body)
 				require.NoError(t, err)
+				res := &types.GetClusterStatusResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(requestBody, res))
 				require.Equal(t, tt.expectedResponse, res)
 				// TODO verify signature on responses
 			}

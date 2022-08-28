@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -84,7 +84,10 @@ func TestBlockFileStream(t *testing.T) {
 						blockEndOffset:   location.Offset + location.Length,
 					}
 
-					require.Equal(t, expectedBlockWithLocation, blockWithLocation)
+					require.True(t, proto.Equal(expectedBlockWithLocation.block, blockWithLocation.block))
+					require.Equal(t, expectedBlockWithLocation.fileChunkNum, blockWithLocation.fileChunkNum)
+					require.Equal(t, expectedBlockWithLocation.blockStartOffset, blockWithLocation.blockStartOffset)
+					require.Equal(t, expectedBlockWithLocation.blockEndOffset, blockWithLocation.blockEndOffset)
 					i++
 				}
 				blockWithLocation, err := stream.nextBlockWithLocation()
@@ -164,7 +167,10 @@ func TestBlockFileStream(t *testing.T) {
 						blockEndOffset:   location.Offset + location.Length,
 					}
 
-					require.Equal(t, expectedBlockWithLocation, blockWithLocation)
+					require.True(t, proto.Equal(expectedBlockWithLocation.block, blockWithLocation.block))
+					require.Equal(t, expectedBlockWithLocation.fileChunkNum, blockWithLocation.fileChunkNum)
+					require.Equal(t, expectedBlockWithLocation.blockStartOffset, blockWithLocation.blockStartOffset)
+					require.Equal(t, expectedBlockWithLocation.blockEndOffset, blockWithLocation.blockEndOffset)
 				}
 				blockWithLocation, err := stream.nextBlockWithLocation()
 				require.Nil(t, blockWithLocation)

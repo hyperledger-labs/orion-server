@@ -92,7 +92,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 		}
 
 		txIDs, err = utils.BlockPayloadToTxIDs(userAdmin)
-		require.EqualError(t, err, "missing TxId in: &{UserAdministrationTxEnvelope:payload:<> }")
+		require.EqualError(t, err, "missing TxId in: &{UserAdministrationTxEnvelope:payload:{}}")
 		require.Nil(t, txIDs)
 	})
 
@@ -118,7 +118,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 		}
 
 		txIDs, err = utils.BlockPayloadToTxIDs(dbAdmin)
-		require.EqualError(t, err, "missing TxId in: &{DbAdministrationTxEnvelope:payload:<> }")
+		require.EqualError(t, err, "missing TxId in: &{DbAdministrationTxEnvelope:payload:{}}")
 		require.Nil(t, txIDs)
 	})
 
@@ -144,7 +144,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 		}
 
 		txIDs, err = utils.BlockPayloadToTxIDs(config)
-		require.EqualError(t, err, "missing TxId in: &{ConfigTxEnvelope:payload:<> }")
+		require.EqualError(t, err, "missing TxId in: &{ConfigTxEnvelope:payload:{}}")
 		require.Nil(t, txIDs)
 	})
 
@@ -182,7 +182,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			},
 		}
 		txIDs, err = utils.BlockPayloadToTxIDs(data)
-		require.EqualError(t, err, "empty payload in index [0]: &{DataTxEnvelopes:envelopes:<> }")
+		require.EqualError(t, err, "empty payload in index [0]: &{DataTxEnvelopes:envelopes:{}}")
 		require.Nil(t, txIDs)
 
 		data = &types.Block_DataTxEnvelopes{
@@ -203,7 +203,7 @@ func TestBlockPayloadToTxIDs_Errors(t *testing.T) {
 			},
 		}
 		txIDs, err = utils.BlockPayloadToTxIDs(data)
-		require.EqualError(t, err, "missing TxId in index [1]: &{DataTxEnvelopes:envelopes:<payload:<must_sign_user_ids:\"alice\" tx_id:\"txid:1\" > > envelopes:<payload:<must_sign_user_ids:\"bob\" > > }")
+		require.EqualError(t, err, "missing TxId in index [1]: payload:{must_sign_user_ids:\"bob\"}")
 		require.Nil(t, txIDs)
 	})
 }

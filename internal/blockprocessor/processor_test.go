@@ -164,12 +164,10 @@ func newTestEnv(t *testing.T) *testEnv {
 			Algorithm: "raft",
 			Members: []*types.PeerConfig{
 				{
-					NodeId:           "node1",
-					RaftId:           1,
-					PeerHost:         "127.0.0.1",
-					PeerPort:         7090,
-					XXX_unrecognized: nil,
-					XXX_sizecache:    0,
+					NodeId:   "node1",
+					RaftId:   1,
+					PeerHost: "127.0.0.1",
+					PeerPort: 7090,
 				},
 			},
 			RaftConfig: &types.RaftConfig{
@@ -177,9 +175,6 @@ func newTestEnv(t *testing.T) *testEnv {
 				ElectionTicks:  100,
 				HeartbeatTicks: 10,
 			},
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     nil,
-			XXX_sizecache:        0,
 		},
 	}
 	genesisBlock := &types.Block{
@@ -626,7 +621,6 @@ func TestBlockCommitListener(t *testing.T) {
 		},
 	}
 	expectedBlock := proto.Clone(block2).(*types.Block)
-	expectedBlock.XXX_sizecache = 0
 	genesisHash, err := env.blockStore.GetHash(uint64(1))
 	expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, []*types.Block{block2}, 2)
 	root, err := mtree.BuildTreeForBlockTx(block2)
