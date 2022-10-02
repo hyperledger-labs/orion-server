@@ -34,12 +34,12 @@ type SignatureVerifier struct {
 func (sv *SignatureVerifier) Verify(userID string, signature, body []byte) error {
 	cert, err := sv.userDBQuerier.GetCertificate(userID)
 	if err != nil {
-		sv.logger.Info("Error during GetCertificate: userID: %s, error: %s", userID, err)
+		sv.logger.Infof("Error during GetCertificate: userID: %s, error: %s", userID, err)
 		return err
 	}
 	verifier := crypto.Verifier{Certificate: cert}
 	if err = verifier.Verify(body, signature); err != nil {
-		sv.logger.Info("Failed to verify signature: userID: %s, error: %s", userID, err)
+		sv.logger.Infof("Failed to verify signature: userID: %s, error: %s", userID, err)
 		return err
 	}
 	return err
