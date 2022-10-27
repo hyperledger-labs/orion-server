@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"testing"
@@ -42,9 +43,17 @@ func IssueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certifica
 	pubKey := privKey.Public()
 
 	ip := net.ParseIP(host)
-	template, err := CertTemplate(subjectCN, []net.IP{ip})
-	if err != nil {
-		return nil, nil, err
+	var template *x509.Certificate
+	if ip != nil {
+		template, err = CertTemplate(subjectCN, []net.IP{ip})
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		template, err = CertTemplateURI(subjectCN, []*url.URL{{Host: host}})
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, ca, pubKey, rootCAKeyPair.PrivateKey)
@@ -146,6 +155,25 @@ func CertTemplate(subjectCN string, ips []net.IP) (*x509.Certificate, error) {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           ips,
+	}, nil
+}
+
+func CertTemplateURI(subjectCN string, uris []*url.URL) (*x509.Certificate, error) {
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	SN, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	return &x509.Certificate{
+		Subject:               pkix.Name{CommonName: subjectCN},
+		SerialNumber:          SN,
+		NotBefore:             time.Now().Add(-5 * time.Minute),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		URIs:                  uris,
 	}, nil
 }
 
