@@ -540,10 +540,14 @@ func TestLedgerAsyncTxProof(t *testing.T) {
 		for _, txEnv := range txEnvs {
 			resp, err := s.QueryTxReceipt(t, txEnv.GetPayload().GetTxId(), "admin")
 			if err != nil {
+				rcptEnvMap = make(map[*types.TxReceipt]*types.DataTxEnvelope)
+				txsNumInBlocks = map[uint64]int{}
 				return false
 			}
 			rcpt := resp.GetResponse().GetReceipt()
 			if rcpt == nil {
+				rcptEnvMap = make(map[*types.TxReceipt]*types.DataTxEnvelope)
+				txsNumInBlocks = map[uint64]int{}
 				return false
 			}
 			rcptEnvMap[rcpt] = txEnv
