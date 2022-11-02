@@ -622,6 +622,10 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 			Replication: config.ReplicationConf{
 				WALDir:  path.Join(ledgerDir, "raft", "wal"),
 				SnapDir: path.Join(ledgerDir, "raft", "snap"),
+				Network: config.NetworkConf{
+					Address: "127.0.0.1",
+					Port:    0,
+				},
 			},
 		},
 		SharedConfig: &config.SharedConfiguration{
@@ -760,6 +764,10 @@ func testJoinConfiguration(t *testing.T) (string, *config.Configurations) {
 			Replication: config.ReplicationConf{
 				WALDir:  path.Join(ledgerDir, "raft", "wal"),
 				SnapDir: path.Join(ledgerDir, "raft", "snap"),
+				Network: config.NetworkConf{
+					Address: "127.0.0.1",
+					Port:    0,
+				},
 			},
 		},
 		SharedConfig: nil,
