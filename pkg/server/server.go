@@ -18,6 +18,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // BCDBHTTPServer holds the database and http server objects
@@ -112,6 +113,9 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		}
 		server.TLSConfig = tlsServerConfig
 	}
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":8001", nil)
 
 	return &BCDBHTTPServer{
 		db:      db,
