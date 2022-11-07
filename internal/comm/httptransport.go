@@ -21,6 +21,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.etcd.io/etcd/etcdserver/api/rafthttp"
 	stats "go.etcd.io/etcd/etcdserver/api/v2stats"
 	"go.etcd.io/etcd/pkg/transport"
@@ -274,6 +275,8 @@ func (p *HTTPTransport) Start() error {
 
 	go p.servePeers(netListener)
 
+	go p.servePrometheus()
+
 	return nil
 }
 
@@ -346,6 +349,14 @@ func (p *HTTPTransport) servePeers(l net.Listener) {
 		p.logger.Errorf("http transport failed to serve peers (%v)", err)
 	}
 	close(p.doneCh)
+}
+
+func (p *HTTPTransport) servePrometheus() {
+	http.Handle("/metrics", promhttp.Handler())
+	err := http.ListenAndServe(fmt.Sprintf("%s:%d", p.localConf.Prometheus.Address, p.localConf.Prometheus.Port), nil)
+	if err != nil {
+		p.logger.Errorf("failed to start prometheus: %v", err)
+	}
 }
 
 func (p *HTTPTransport) Close() {
