@@ -114,13 +114,6 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		server.TLSConfig = tlsServerConfig
 	}
 
-	http.Handle("/metrics", promhttp.Handler())
-	err = http.ListenAndServe(fmt.Sprintf("%s:%d",
-		conf.LocalConfig.Prometheus.Address, conf.LocalConfig.Prometheus.Port), nil)
-	if err != nil {
-		lg.Errorf("failed to start prometheus server: %v", err)
-	}
-
 	return &BCDBHTTPServer{
 		db:      db,
 		handler: mux,
@@ -148,6 +141,7 @@ func (s *BCDBHTTPServer) Start() error {
 	}
 
 	go s.serveRequests(s.listen)
+	go s.servePrometheus()
 
 	return nil
 }
@@ -169,6 +163,15 @@ func (s *BCDBHTTPServer) serveRequests(l net.Listener) {
 	}
 
 	s.logger.Infof("Finished serving requests on: %s", s.listen.Addr().String())
+}
+
+func (s *BCDBHTTPServer) servePrometheus() {
+	http.Handle("/metrics", promhttp.Handler())
+	err := http.ListenAndServe(fmt.Sprintf("%s:%d",
+		s.conf.LocalConfig.Prometheus.Address, s.conf.LocalConfig.Prometheus.Port), nil)
+	if err != nil {
+		s.logger.Errorf("failed to start prometheus server: %v", err)
+	}
 }
 
 // Stop stops the server
