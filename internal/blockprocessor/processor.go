@@ -5,6 +5,7 @@ package blockprocessor
 
 import (
 	"sync"
+	"time"
 
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
@@ -19,6 +20,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+var stats = newBlockProcessorStats()
+
 // BlockProcessor holds block Validator and committer
 type BlockProcessor struct {
 	blockOneQueueBarrier *queue.OneQueueBarrier
@@ -29,6 +32,7 @@ type BlockProcessor struct {
 	started              chan struct{}
 	stop                 chan struct{}
 	stopped              chan struct{}
+	stats                *blockProcessorStats
 	logger               *logger.SugarLogger
 }
 
@@ -55,6 +59,7 @@ func New(conf *Config) *BlockProcessor {
 		started:              make(chan struct{}),
 		stop:                 make(chan struct{}),
 		stopped:              make(chan struct{}),
+		stats:                stats,
 		logger:               conf.Logger,
 	}
 }
@@ -133,7 +138,10 @@ func (b *BlockProcessor) Start() {
 }
 
 func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
+	blockProcessingStart := time.Now()
 	b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
+
+	start := time.Now()
 	validationInfo, err := b.validator.ValidateBlock(block)
 	if err != nil {
 		if block.GetHeader().GetBaseHeader().GetNumber() > 1 {
@@ -141,24 +149,32 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 		}
 		return err
 	}
+	b.stats.updateValidationTime(time.Since(start))
 
 	block.Header.ValidationInfo = validationInfo
 
+	start = time.Now()
 	if err = b.blockStore.AddSkipListLinks(block); err != nil {
 		panic(err)
 	}
+	b.stats.updateSkipListConstructionTime(time.Since(start))
 
+	start = time.Now()
 	root, err := mtree.BuildTreeForBlockTx(block)
 	if err != nil {
 		panic(err)
 	}
 	block.Header.TxMerkelTreeRootHash = root.Hash()
+	b.stats.updateMerkelTreeBuildTimeTime(time.Since(start))
 
+	start = time.Now()
 	if err = b.committer.commitBlock(block); err != nil {
 		panic(err)
 	}
+	b.stats.updateCommitTime(time.Since(start))
 
 	b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
+	b.stats.updateProcessingTime(time.Since(blockProcessingStart))
 	return err
 }
 
