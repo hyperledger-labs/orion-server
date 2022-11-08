@@ -1,12 +1,18 @@
 package blockprocessor
 
 import (
+	"math"
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
+
+var buckets = []float64{
+	math.Inf(-1), 0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1,
+	1, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, math.Inf(1),
+}
 
 type blockProcessorStats struct {
 	processingTime                prometheus.Histogram
@@ -30,6 +36,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "processing_time",
 				Help:      "The time taken in seconds to process a block",
+				Buckets:   buckets,
 			},
 		),
 		validationTime: promauto.NewHistogram(
@@ -37,6 +44,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "validation_time",
 				Help:      "The time taken in seconds to validate a block",
+				Buckets:   buckets,
 			},
 		),
 		skipListConstructionTime: promauto.NewHistogram(
@@ -44,6 +52,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "skiplist_construction_time",
 				Help:      "The time taken in seconds to construct skip list for a block",
+				Buckets:   buckets,
 			},
 		),
 		txMerkelTreeBuildTime: promauto.NewHistogram(
@@ -51,15 +60,15 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "merkle_tree_build_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
+				Buckets:   buckets,
 			},
 		),
 		commitTime: promauto.NewHistogram(
 			prometheus.HistogramOpts{
-				Namespace:   "block",
-				Name:        "commit_time",
-				Help:        "The time taken in seconds to commit a block",
-				ConstLabels: map[string]string{},
-				Buckets:     []float64{},
+				Namespace: "block",
+				Name:      "commit_time",
+				Help:      "The time taken in seconds to commit a block",
+				Buckets:   buckets,
 			},
 		),
 		commitEntriesConstructionTime: promauto.NewHistogram(
@@ -67,6 +76,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "commit_entries_construction_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
+				Buckets:   buckets,
 			},
 		),
 		stateTrieUpdateTime: promauto.NewHistogram(
@@ -74,6 +84,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "state_trie_update_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
+				Buckets:   buckets,
 			},
 		),
 		blockStoreCommitTime: promauto.NewHistogram(
@@ -81,6 +92,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "store_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
+				Buckets:   buckets,
 			},
 		),
 		provenanceStoreCommitTime: promauto.NewHistogram(
@@ -88,6 +100,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "provenance_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
+				Buckets:   buckets,
 			},
 		),
 		worldstateCommitTime: promauto.NewHistogram(
@@ -95,6 +108,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "worldstate_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
+				Buckets:   buckets,
 			},
 		),
 		stateTrieCommitTime: promauto.NewHistogram(
@@ -102,12 +116,14 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "state_trie_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
+				Buckets:   buckets,
 			},
 		),
 		transactionCount: promauto.NewCounterVec(
 			prometheus.CounterOpts{
-				Name: "transaction_count",
-				Help: "Number of transactions processed.",
+				Namespace: "transaction",
+				Name:      "count",
+				Help:      "Number of transactions processed.",
 			},
 			[]string{"validation_code", "transaction_type"},
 		),
@@ -158,6 +174,6 @@ func (s *blockProcessorStats) updateStateTrieCommitTime(t time.Duration) {
 	s.stateTrieCommitTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) incrementTransactionCount(flag types.Flag, tx_type string) {
-	s.transactionCount.WithLabelValues(flag.String(), tx_type).Inc()
+func (s *blockProcessorStats) incrementTransactionCount(flag types.Flag, txType string) {
+	s.transactionCount.WithLabelValues(flag.String(), txType).Inc()
 }
