@@ -114,9 +114,6 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		server.TLSConfig = tlsServerConfig
 	}
 
-	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":8001", nil)
-
 	return &BCDBHTTPServer{
 		db:      db,
 		handler: mux,
