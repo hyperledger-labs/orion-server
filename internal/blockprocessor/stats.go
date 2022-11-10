@@ -20,8 +20,15 @@ var timeBuckets = []float64{
 	1e2, 1e3, 1e4, 1e5, 1e6, math.Inf(1),
 }
 
-var sizeBuckets = []float64{
-	0, 1, 10, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 1e5, 1e6, 1e7, math.Inf(1),
+var sizeBase10Buckets = []float64{
+	0, 1, 10, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 1e5, 1e6, 1e7, 1e8, math.Inf(1),
+}
+
+var sizeBase2Buckets = []float64{
+	0, 1 << 6, 1 << 8,
+	1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 18,
+	1 << 20, 1 << 22, 1 << 24, 1 << 26, 1 << 28,
+	1 << 30, math.Inf(1),
 }
 
 type blockProcessorStats struct {
@@ -136,7 +143,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "tx_count",
 				Help:      "The number of transactions per block",
-				Buckets:   sizeBuckets,
+				Buckets:   sizeBase10Buckets,
 			},
 		),
 		blockSizeBytes: promauto.NewHistogram(
@@ -144,7 +151,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "size_bytes",
 				Help:      "Total block size in bytes",
-				Buckets:   sizeBuckets,
+				Buckets:   sizeBase2Buckets,
 			},
 		),
 		transactionCount: promauto.NewCounterVec(
