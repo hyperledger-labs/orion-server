@@ -151,6 +151,7 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 	}
 	b.stats.updateValidationTime(time.Since(start))
 
+	b.stats.updateBlockSize(len(validationInfo))
 	block.Header.ValidationInfo = validationInfo
 
 	start = time.Now()
@@ -165,7 +166,7 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 		panic(err)
 	}
 	block.Header.TxMerkelTreeRootHash = root.Hash()
-	b.stats.updateMerkelTreeBuildTimeTime(time.Since(start))
+	b.stats.updateMerkelTreeBuildTime(time.Since(start))
 
 	start = time.Now()
 	if err = b.committer.commitBlock(block); err != nil {

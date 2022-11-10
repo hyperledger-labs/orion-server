@@ -37,6 +37,7 @@ type blockProcessorStats struct {
 	worldstateCommitTime          prometheus.Histogram
 	stateTrieCommitTime           prometheus.Histogram
 	transactionPerBlock           prometheus.Histogram
+	blockSize                     prometheus.Histogram
 	transactionCount              *prometheus.CounterVec
 }
 
@@ -138,6 +139,14 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Buckets:   sizeBuckets,
 			},
 		),
+		blockSize: promauto.NewHistogram(
+			prometheus.HistogramOpts{
+				Namespace: "block",
+				Name:      "size",
+				Help:      "Total block size in bytes",
+				Buckets:   sizeBuckets,
+			},
+		),
 		transactionCount: promauto.NewCounterVec(
 			prometheus.CounterOpts{
 				Namespace: "transaction",
@@ -161,7 +170,7 @@ func (s *blockProcessorStats) updateSkipListConstructionTime(t time.Duration) {
 	s.skipListConstructionTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateMerkelTreeBuildTimeTime(t time.Duration) {
+func (s *blockProcessorStats) updateMerkelTreeBuildTime(t time.Duration) {
 	s.txMerkelTreeBuildTime.Observe(t.Seconds())
 }
 
@@ -197,6 +206,10 @@ func (s *blockProcessorStats) updateTransactionsPerBlock(size int) {
 	s.transactionPerBlock.Observe(float64(size))
 }
 
-func (s *blockProcessorStats) incrementTransactionCount(flag types.Flag, txType string) {
-	s.transactionCount.WithLabelValues(flag.String(), txType).Inc()
+func (s *blockProcessorStats) updateBlockSize(size int) {
+	s.blockSize.Observe(float64(size))
+}
+
+func (s *blockProcessorStats) incrementTransactionCount(flag types.Flag, tx_type string) {
+	s.transactionCount.WithLabelValues(flag.String(), tx_type).Inc()
 }
