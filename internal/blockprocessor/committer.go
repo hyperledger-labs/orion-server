@@ -91,6 +91,8 @@ func (c *committer) commitBlock(block *types.Block) error {
 	}
 	c.stats.updateStateTrieCommitTime(time.Since(start))
 
+	c.stats.updateTransactionsPerBlock(len(block.GetDataTxEnvelopes().GetEnvelopes()))
+
 	return nil
 }
 

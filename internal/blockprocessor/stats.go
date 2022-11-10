@@ -9,9 +9,19 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-var buckets = []float64{
-	math.Inf(-1), 0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1,
-	1, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, math.Inf(1),
+var timeBuckets = []float64{
+	math.Inf(-1), 0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5,
+	1e-4, 2.5e-4, 5e-4, 7.5e-4,
+	1e-3, 2.5e-3, 5e-3, 7.5e-3,
+	1e-2, 2.5e-2, 5e-2, 7.5e-2,
+	1e-1, 2.5e-1, 5e-1, 7.5e-1,
+	1, 2.5, 5, 7.5,
+	10, 25, 50, 75,
+	1e2, 1e3, 1e4, 1e5, 1e6, math.Inf(1),
+}
+
+var sizeBuckets = []float64{
+	0, 1, 10, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 1e5, 1e6, 1e7, math.Inf(1),
 }
 
 type blockProcessorStats struct {
@@ -26,6 +36,7 @@ type blockProcessorStats struct {
 	provenanceStoreCommitTime     prometheus.Histogram
 	worldstateCommitTime          prometheus.Histogram
 	stateTrieCommitTime           prometheus.Histogram
+	transactionPerBlock           prometheus.Histogram
 	transactionCount              *prometheus.CounterVec
 }
 
@@ -36,7 +47,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "processing_time",
 				Help:      "The time taken in seconds to process a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		validationTime: promauto.NewHistogram(
@@ -44,7 +55,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "validation_time",
 				Help:      "The time taken in seconds to validate a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		skipListConstructionTime: promauto.NewHistogram(
@@ -52,7 +63,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "skiplist_construction_time",
 				Help:      "The time taken in seconds to construct skip list for a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		txMerkelTreeBuildTime: promauto.NewHistogram(
@@ -60,7 +71,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "merkle_tree_build_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		commitTime: promauto.NewHistogram(
@@ -68,7 +79,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "commit_time",
 				Help:      "The time taken in seconds to commit a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		commitEntriesConstructionTime: promauto.NewHistogram(
@@ -76,7 +87,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "commit_entries_construction_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		stateTrieUpdateTime: promauto.NewHistogram(
@@ -84,7 +95,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "state_trie_update_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		blockStoreCommitTime: promauto.NewHistogram(
@@ -92,7 +103,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "store_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		provenanceStoreCommitTime: promauto.NewHistogram(
@@ -100,7 +111,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "provenance_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		worldstateCommitTime: promauto.NewHistogram(
@@ -108,7 +119,7 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "worldstate_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
 			},
 		),
 		stateTrieCommitTime: promauto.NewHistogram(
@@ -116,7 +127,15 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "state_trie_commit_time",
 				Help:      "The time taken in seconds to build a merkle tree of transactions in a block",
-				Buckets:   buckets,
+				Buckets:   timeBuckets,
+			},
+		),
+		transactionPerBlock: promauto.NewHistogram(
+			prometheus.HistogramOpts{
+				Namespace: "block",
+				Name:      "tx_count",
+				Help:      "The number of transactions per block",
+				Buckets:   sizeBuckets,
 			},
 		),
 		transactionCount: promauto.NewCounterVec(
@@ -172,6 +191,10 @@ func (s *blockProcessorStats) updateWorldStateCommitTime(t time.Duration) {
 
 func (s *blockProcessorStats) updateStateTrieCommitTime(t time.Duration) {
 	s.stateTrieCommitTime.Observe(t.Seconds())
+}
+
+func (s *blockProcessorStats) updateTransactionsPerBlock(size int) {
+	s.transactionPerBlock.Observe(float64(size))
 }
 
 func (s *blockProcessorStats) incrementTransactionCount(flag types.Flag, txType string) {
