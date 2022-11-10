@@ -75,6 +75,9 @@ var expectedSharedConfig = &SharedConfiguration{
 		ID:              "admin",
 		CertificatePath: "./testdata/admin.cert",
 	},
+	Ledger: LedgerConf{
+		StateMerklePatriciaTrieDisabled: false,
+	},
 }
 
 func TestSharedConfig(t *testing.T) {
@@ -82,6 +85,14 @@ func TestSharedConfig(t *testing.T) {
 		config, err := readSharedConfig("./testdata/3node-shared-config-bootstrap.yml")
 		require.NoError(t, err)
 		require.Equal(t, expectedSharedConfig, config)
+	})
+
+	t.Run("successful: mp-trie disabled", func(t *testing.T) {
+		config, err := readSharedConfig("./testdata/3node-shared-config-bootstrap-mptrie-disabled.yml")
+		require.NoError(t, err)
+		expectedSharedConfig.Ledger.StateMerklePatriciaTrieDisabled = true
+		require.Equal(t, expectedSharedConfig, config)
+		expectedSharedConfig.Ledger.StateMerklePatriciaTrieDisabled = false
 	})
 
 	t.Run("empty-config-path", func(t *testing.T) {

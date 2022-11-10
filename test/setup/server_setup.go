@@ -1344,6 +1344,7 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 		Replication: config.ReplicationConf{
 			WALDir:  filepath.Join(s.configDir, "etcdraft", "wal"),
 			SnapDir: filepath.Join(s.configDir, "etcdraft", "snap"),
+			AuxDir:  filepath.Join(s.configDir, "etcdraft", "aux"),
 			Network: config.NetworkConf{
 				Address: s.address,
 				Port:    uint32(s.peerPort),

@@ -26,14 +26,14 @@ message ClusterConfig {
   CAConfig cert_auth_config = 3;
   // The consensus configuration.
   ConsensusConfig consensus_config = 4;
+
+  LedgerConfig ledger_config = 5;
 }
 
 // NodeConfig holds the information about a database node in the cluster.
 // This information is exposed to the clients.
 // The address and port (see below) define the HTTP/REST endpoint that clients connect to,
 // and must be reachable by clients that submit requests to the database.
-//
-// TODO: change the name NodeConfig to Node once the existing message Node is renamed to something else.
 message NodeConfig {
   // A unique identifier for the node within the cluster.
   // TODO define and enforce the characters that can be used for this field. Should be something that complies with file names.
@@ -68,6 +68,16 @@ message ConsensusConfig {
   repeated PeerConfig observers = 3;
   // Raft protocol parameters.
   RaftConfig raft_config = 4;
+}
+
+// Configuration parameters on the distributed ledger capabilities and algorithms that must be defined uniformly across
+// all servers.
+message LedgerConfig {
+  // Disables the state Merkle-Patricia-Trie construction. With MP-Trie construction disabled, the block's
+  // BlockHeadr.state_merkel_tree_root_hash field will be nil.
+  // This flag takes effect on deployment (bootstrap) only, from the first (genesis) block.
+  // The value of this flag cannot be changed during run-time.
+  bool state_merkel_patricia_trie_disabled = 1;
 }
 
 // PeerConfig defines a server that takes part in consensus, or an observer.
