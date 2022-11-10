@@ -151,7 +151,7 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 	}
 	b.stats.updateValidationTime(time.Since(start))
 
-	b.stats.updateBlockSize(len(validationInfo))
+	b.stats.updateTransactionsPerBlock(len(validationInfo))
 	block.Header.ValidationInfo = validationInfo
 
 	start = time.Now()

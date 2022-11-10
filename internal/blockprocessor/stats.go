@@ -37,7 +37,7 @@ type blockProcessorStats struct {
 	worldstateCommitTime          prometheus.Histogram
 	stateTrieCommitTime           prometheus.Histogram
 	transactionPerBlock           prometheus.Histogram
-	blockSize                     prometheus.Histogram
+	blockSizeBytes                prometheus.Histogram
 	transactionCount              *prometheus.CounterVec
 }
 
@@ -139,10 +139,10 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Buckets:   sizeBuckets,
 			},
 		),
-		blockSize: promauto.NewHistogram(
+		blockSizeBytes: promauto.NewHistogram(
 			prometheus.HistogramOpts{
 				Namespace: "block",
-				Name:      "size",
+				Name:      "size_bytes",
 				Help:      "Total block size in bytes",
 				Buckets:   sizeBuckets,
 			},
@@ -206,8 +206,8 @@ func (s *blockProcessorStats) updateTransactionsPerBlock(size int) {
 	s.transactionPerBlock.Observe(float64(size))
 }
 
-func (s *blockProcessorStats) updateBlockSize(size int) {
-	s.blockSize.Observe(float64(size))
+func (s *blockProcessorStats) updateBlockSizeBytes(size int64) {
+	s.blockSizeBytes.Observe(float64(size))
 }
 
 func (s *blockProcessorStats) incrementTransactionCount(flag types.Flag, tx_type string) {

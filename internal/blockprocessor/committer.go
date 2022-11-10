@@ -69,6 +69,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 	c.stats.updateStateTrieUpdateTime(time.Since(start))
 
 	start = time.Now()
+	offsetBeforeWrite := c.blockStore.GetCurrentOffset()
 	// Commit block to block store
 	if err := c.commitToBlockStore(block); err != nil {
 		return errors.WithMessagef(
@@ -78,6 +79,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 		)
 	}
 	c.stats.updateBlockStoreCommitTime(time.Since(start))
+	c.stats.updateBlockSizeBytes(c.blockStore.GetCurrentOffset() - offsetBeforeWrite)
 
 	// Commit block to world state db and provenance db
 	if err = c.commitToDBs(dbsUpdates, provenanceData, block); err != nil {
@@ -90,8 +92,6 @@ func (c *committer) commitBlock(block *types.Block) error {
 		return err
 	}
 	c.stats.updateStateTrieCommitTime(time.Since(start))
-
-	c.stats.updateTransactionsPerBlock(len(block.GetDataTxEnvelopes().GetEnvelopes()))
 
 	return nil
 }
