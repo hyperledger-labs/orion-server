@@ -85,6 +85,7 @@ func TestSharedConfig(t *testing.T) {
 		config, err := readSharedConfig("./testdata/3node-shared-config-bootstrap.yml")
 		require.NoError(t, err)
 		require.Equal(t, expectedSharedConfig, config)
+		require.False(t, config.Ledger.StateMerklePatriciaTrieDisabled)
 	})
 
 	t.Run("successful: mp-trie disabled", func(t *testing.T) {

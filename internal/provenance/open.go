@@ -59,7 +59,7 @@ type Config struct {
 // Open opens a provenance store to maintain historical values of each state.
 //
 // If the provenance store is Config.Disabled is set, the disabled-flag file is created and nil is returned. If the
-// disabled-flag file is exists, the store cannot be re-enabled, and passing Config.Disabled=false results in an error.
+// disabled-flag file exists, the store cannot be re-enabled, and passing Config.Disabled=false results in an error.
 func Open(conf *Config) (*Store, error) {
 	exist, err := fileops.Exists(conf.StoreDir)
 	if err != nil {

@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"fmt"
 	"io/ioutil"
 	"strings"
 
@@ -18,6 +19,8 @@ func WriteLocalConfig(localConfig *config.LocalConfiguration, localConfigYamlFil
 // WriteSharedConfig writes the shared config object to a YAML file.
 // Provide full path with .yml suffix.
 func WriteSharedConfig(sharedConfig *config.SharedConfiguration, sharedConfigYamlFile string) error {
+	fmt.Printf(">>> shared config\n %+v \n", sharedConfig)
+
 	return WriteConfigAsYaml(sharedConfig, sharedConfigYamlFile)
 }
 

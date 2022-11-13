@@ -22,18 +22,19 @@ import (
 
 // Cluster holds bcdb servers present in a blockchainDB cluster
 type Cluster struct {
-	Servers        []*Server
-	Users          []string
-	testDirAbsPath string
-	bdbBinaryPath  string
-	cmdTimeout     time.Duration
-	baseNodePort   uint32
-	basePeerPort   uint32
-	logger         *logger.SugarLogger
-	rootCAPath     string
-	rootCAPemCert  []byte
-	caPrivKey      []byte
-	mu             sync.Mutex
+	Servers            []*Server
+	Users              []string
+	testDirAbsPath     string
+	bdbBinaryPath      string
+	cmdTimeout         time.Duration
+	baseNodePort       uint32
+	basePeerPort       uint32
+	logger             *logger.SugarLogger
+	rootCAPath         string
+	rootCAPemCert      []byte
+	caPrivKey          []byte
+	disableStateMPTrie bool
+	mu                 sync.Mutex
 }
 
 // Config holds configuration detail needed to instantiate a cluster
@@ -49,6 +50,7 @@ type Config struct {
 	BlockCreationOverride    *config.BlockCreationConf
 	ServersQueryLimit        uint64
 	DisableProvenanceServers []int
+	DisableStateMPTrie       bool
 }
 
 // NewCluster creates a new cluster environment for the blockchain database
@@ -80,15 +82,16 @@ func NewCluster(conf *Config) (*Cluster, error) {
 	}
 
 	cluster := &Cluster{
-		Servers:        make([]*Server, conf.NumberOfServers),
-		Users:          []string{"admin", "alice", "bob", "charlie"},
-		logger:         l,
-		testDirAbsPath: conf.TestDirAbsolutePath,
-		bdbBinaryPath:  conf.BDBBinaryPath,
-		cmdTimeout:     conf.CmdTimeout,
-		rootCAPath:     path.Join(conf.TestDirAbsolutePath, "ca"),
-		baseNodePort:   conf.BaseNodePort,
-		basePeerPort:   conf.BasePeerPort,
+		Servers:            make([]*Server, conf.NumberOfServers),
+		Users:              []string{"admin", "alice", "bob", "charlie"},
+		logger:             l,
+		testDirAbsPath:     conf.TestDirAbsolutePath,
+		bdbBinaryPath:      conf.BDBBinaryPath,
+		cmdTimeout:         conf.CmdTimeout,
+		rootCAPath:         path.Join(conf.TestDirAbsolutePath, "ca"),
+		baseNodePort:       conf.BaseNodePort,
+		basePeerPort:       conf.BasePeerPort,
+		disableStateMPTrie: conf.DisableStateMPTrie,
 	}
 
 	if err = cluster.createRootCA(); err != nil {
@@ -551,6 +554,9 @@ func (c *Cluster) createBootstrapFile() error {
 		Admin: config.AdminConf{
 			ID:              "admin",
 			CertificatePath: path.Join(c.testDirAbsPath, "users", "admin.pem"),
+		},
+		Ledger: config.LedgerConf{
+			StateMerklePatriciaTrieDisabled: c.disableStateMPTrie,
 		},
 	}
 

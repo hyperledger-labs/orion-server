@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/golang/protobuf/proto"
+	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -190,4 +190,18 @@ func (s *Store) RollbackChanges() error {
 	s.inMemoryNodes = make(map[string][]byte)
 	s.inMemoryValues = make(map[string][]byte)
 	return nil
+}
+
+func (s *Store) IsDisabled() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.disabled
+}
+
+func (s *Store) SetDisabled(disabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.disabled = disabled
 }

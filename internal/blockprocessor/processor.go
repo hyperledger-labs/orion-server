@@ -4,6 +4,7 @@
 package blockprocessor
 
 import (
+	"github.com/hyperledger-labs/orion-server/config"
 	"sync"
 
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
@@ -61,9 +62,14 @@ func New(conf *Config) *BlockProcessor {
 
 // Bootstrap initializes the ledger and database with the first block, which contains a config transaction.
 // This block is a.k.a. the "genesis block".
-func (b *BlockProcessor) Bootstrap(configBlock *types.Block) error {
-	if err := b.initAndRecoverStateTrieIfNeeded(); err != nil {
-		return errors.WithMessage(err, "error while recovering node state trie")
+func (b *BlockProcessor) Bootstrap(configBlock *types.Block, ledgerConfig config.LedgerConf) error {
+	if !ledgerConfig.StateMerklePatriciaTrieDisabled {
+		if err := b.initAndRecoverStateTrieIfNeeded(); err != nil {
+			return errors.WithMessage(err, "error while recovering node state trie")
+		}
+	} else {
+		b.logger.Warning("State Merkle Patricia Trie is disabled! not initializing the state trie")
+		b.committer.stateTrieStore.SetDisabled(true)
 	}
 
 	return b.validateAndCommit(configBlock)
@@ -78,8 +84,10 @@ func (b *BlockProcessor) Start() {
 		panic(errors.WithMessage(err, "error while recovering node"))
 	}
 
-	if err := b.initAndRecoverStateTrieIfNeeded(); err != nil {
-		panic(errors.WithMessage(err, "error while recovering node state trie"))
+	if !b.committer.stateTrieStore.IsDisabled() {
+		if err := b.initAndRecoverStateTrieIfNeeded(); err != nil {
+			panic(errors.WithMessage(err, "error while recovering node state trie"))
+		}
 	}
 
 	b.logger.Debug("block processor has been started successfully")
