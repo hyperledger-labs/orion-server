@@ -1,5 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package mptrie
 
 import (
@@ -7,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/hyperledger-labs/orion-server/pkg/state"
-
 	"github.com/pkg/errors"
 )
 
@@ -36,9 +36,13 @@ type Store interface {
 	// underlying database. Operation can cause to current MPTrie become invalid, so always reload trie
 	// after the call
 	RollbackChanges() error
+	// IsDisabled is true when the MP-Trie is disabled.
+	IsDisabled() bool
+	// SetDisabled disabled the MPTrie
+	SetDisabled(disabled bool)
 }
 
-// Merkle-Patricia Trie implementation. No node/value data stored inside trie, but in associated TrieStore
+// MPTrie is a Merkle-Patricia Trie implementation. No node/value data stored inside trie, but in associated TrieStore
 type MPTrie struct {
 	root  TrieNode
 	store Store
@@ -72,6 +76,10 @@ func NewTrie(rootHash []byte, store Store) (*MPTrie, error) {
 }
 
 func (t *MPTrie) Hash() ([]byte, error) {
+	if t == nil { // may be nil when MPTrie disabled
+		return nil, nil
+	}
+
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	return t.root.hash()

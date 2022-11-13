@@ -1,5 +1,6 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package store
 
 import (
@@ -36,6 +37,7 @@ var (
 
 // Store maintains MPTrie nodes and values in backend store
 type Store struct {
+	disabled        bool
 	trieDataDB      *leveldb.DB
 	inMemoryNodes   map[string][]byte
 	inMemoryValues  map[string][]byte
@@ -48,6 +50,7 @@ type Store struct {
 // Config holds the configuration of a trie store
 type Config struct {
 	StoreDir string
+	Disabled bool
 	Logger   *logger.SugarLogger
 }
 
@@ -93,6 +96,10 @@ func isExistingStoreCreatedPartially(storeDir string) (bool, error) {
 }
 
 func openNewStore(c *Config) (*Store, error) {
+	if c.Disabled {
+		return &Store{disabled: c.Disabled}, nil
+	}
+
 	if err := fileops.CreateDir(c.StoreDir); err != nil {
 		return nil, errors.WithMessagef(err, "error while creating directory [%s]", c.StoreDir)
 	}
@@ -120,11 +127,14 @@ func openNewStore(c *Config) (*Store, error) {
 		nodesToPersist:  make(map[string][]byte),
 		valuesToPersist: make(map[string][]byte),
 		logger:          c.Logger,
-		mu:              sync.RWMutex{},
 	}, nil
 }
 
 func openExistingStore(c *Config) (*Store, error) {
+	if c.Disabled {
+		return &Store{disabled: c.Disabled}, nil
+	}
+
 	trieDataDBPath := filepath.Join(c.StoreDir, trieDataDBName)
 
 	trieDataDB, err := leveldb.OpenFile(trieDataDBPath, &opt.Options{ErrorIfMissing: true})
@@ -139,7 +149,6 @@ func openExistingStore(c *Config) (*Store, error) {
 		nodesToPersist:  make(map[string][]byte),
 		valuesToPersist: make(map[string][]byte),
 		logger:          c.Logger,
-		mu:              sync.RWMutex{},
 	}
 	return s, nil
 }
@@ -148,6 +157,11 @@ func openExistingStore(c *Config) (*Store, error) {
 func (s *Store) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.disabled {
+		return nil
+	}
+
 	if err := s.trieDataDB.Close(); err != nil {
 		return errors.WithMessage(err, "error while closing the trie data database")
 	}

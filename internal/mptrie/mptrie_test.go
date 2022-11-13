@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -34,6 +35,11 @@ func TestNewTrie(t *testing.T) {
 	require.Len(t, trie.store.(*trieStoreMock).inMemoryNodes, 0)
 	require.Len(t, trie.store.(*trieStoreMock).persistNodes, 1)
 	require.Equal(t, uint64(1), trie.store.(*trieStoreMock).lastBlock)
+
+	trie = nil
+	hash, err := trie.Hash()
+	assert.Nil(t, hash)
+	assert.NoError(t, err)
 }
 
 func TestUpdateTrieStructure(t *testing.T) {
@@ -863,6 +869,13 @@ func newMockStore() Store {
 		persistNodes:   make(map[string][]byte),
 		persistValues:  make(map[string][]byte),
 	}
+}
+
+func (s *trieStoreMock) IsDisabled() bool {
+	return false
+}
+
+func (s *trieStoreMock) SetDisabled(bool) {
 }
 
 func (s *trieStoreMock) GetNode(nodePtr []byte) (TrieNode, error) {

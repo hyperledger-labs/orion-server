@@ -226,6 +226,8 @@ func (p *ledgerRequestHandler) dataProof(response http.ResponseWriter, request *
 			status = http.StatusForbidden
 		case *errors.NotFoundErr:
 			status = http.StatusNotFound
+		case *errors.ServerRestrictionError:
+			status = http.StatusServiceUnavailable
 		default:
 			status = http.StatusInternalServerError
 		}
