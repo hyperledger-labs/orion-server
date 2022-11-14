@@ -82,19 +82,27 @@ func TestUserUpdateACL(t *testing.T) {
 	}
 	setup.CreateUsers(t, s, users)
 
-	_, err = s.QueryUser(t, "alice", "charlie")
-	require.NoError(t, err)
-	_, err = s.QueryUser(t, "bob", "charlie")
+	// Test 1: check admin permissions - admin has the permission to read info of all users,
+	// hence it should return no error
+	_, err = s.QueryUser(t, "admin", "alice")
 	require.NoError(t, err)
 
-	// update charlie acl to include bob as a read user
-	users[2].Acl = &types.AccessControl{
-		ReadUsers: map[string]bool{
-			"bob": true,
-		},
-	}
-	_, err = s.QueryUser(t, "alice", "charlie")
+	_, err = s.QueryUser(t, "admin", "bob")
 	require.NoError(t, err)
+
+	_, err = s.QueryUser(t, "admin", "charlie")
+	require.NoError(t, err)
+
+	// Test 2: check user permissions to access other user records
+	// charlie has no permission to read info of user alice, hence it should return an error
+	_, err = s.QueryUser(t, "charlie", "alice")
+	require.Error(t, err)
+
+	// bob has no permission to read info of user charlie, hence it should return with an error
 	_, err = s.QueryUser(t, "bob", "charlie")
-	require.NoError(t, err)
+	require.Error(t, err)
+
+	// alice has no permission to read info of user bob, hence it should return an error
+	_, err = s.QueryUser(t, "alice", "bob")
+	require.Error(t, err)
 }

@@ -6,7 +6,6 @@ package bcdb
 import (
 	"context"
 	"fmt"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
@@ -216,12 +215,22 @@ func (q *worldstateQueryProcessor) getUser(querierUserID, targetUserID string) (
 	if err != nil {
 		if _, ok := err.(*identity.NotFoundErr); !ok {
 			return nil, err
+		} else {
+			return &types.GetUserResponse{
+				User:     nil,
+				Metadata: nil,
+			}, nil
 		}
 	}
 
-	acl := metadata.GetAccessControl()
-	if acl != nil {
-		if !acl.ReadUsers[querierUserID] && !acl.ReadWriteUsers[querierUserID] {
+	isAdmin, err := q.identityQuerier.HasAdministrationPrivilege(querierUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !isAdmin {
+		acl := metadata.GetAccessControl()
+		if (acl != nil && !acl.ReadUsers[querierUserID]) || acl == nil {
 			return nil, &errors.PermissionErr{
 				ErrMsg: "the user [" + querierUserID + "] has no permission to read info of user [" + targetUserID + "]",
 			}
