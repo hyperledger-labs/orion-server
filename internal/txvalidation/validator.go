@@ -5,11 +5,14 @@ package txvalidation
 
 import (
 	"sync"
+	"time"
 
 	"github.com/hyperledger-labs/orion-server/internal/identity"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 )
@@ -37,6 +40,7 @@ func NewValidator(conf *Config) *Validator {
 	txSigValidator := &txSigValidator{
 		sigVerifier: cryptoservice.NewVerifier(idQuerier, conf.Logger),
 		logger:      conf.Logger,
+		marshaler:   marshal.DefaultMarshaler(),
 	}
 
 	return &Validator{
@@ -86,7 +90,9 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	switch block.Payload.(type) {
 	case *types.Block_DataTxEnvelopes:
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
+		start := time.Now()
 		valInfoArray, usersWithValidSigPerTX, err := v.parallelSigValidation(dataTxEnvs)
+		utils.Stats.UpdateSigValidationTime(time.Since(start))
 		if err != nil {
 			return nil, err
 		}

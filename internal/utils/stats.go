@@ -1,4 +1,4 @@
-package blockprocessor
+package utils
 
 import (
 	"math"
@@ -10,18 +10,23 @@ import (
 )
 
 var timeBuckets = []float64{
-	math.Inf(-1), 0, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5,
+	math.Inf(-1), 0,
+	1e-9, 1e-8, 1e-7, 1e-6, 1e-5,
 	1e-4, 2.5e-4, 5e-4, 7.5e-4,
 	1e-3, 2.5e-3, 5e-3, 7.5e-3,
 	1e-2, 2.5e-2, 5e-2, 7.5e-2,
 	1e-1, 2.5e-1, 5e-1, 7.5e-1,
 	1, 2.5, 5, 7.5,
 	10, 25, 50, 75,
-	1e2, 1e3, 1e4, 1e5, 1e6, math.Inf(1),
+	1e2, 1e3, 1e4, 1e5, 1e6,
+	math.Inf(1),
 }
 
 var sizeBase10Buckets = []float64{
-	0, 1, 10, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 1e5, 1e6, 1e7, 1e8, math.Inf(1),
+	math.Inf(-1), 0,
+	1, 1e1, 2.5e1, 5e1, 1e2, 2.5e2, 5e2, 1e3, 2.5e3, 5e3,
+	1e4, 2.5e4, 5e4, 1e5, 2.5e5, 5e5, 1e6, 2.5e6, 5e6, 1e7, 1e8,
+	math.Inf(1),
 }
 
 var sizeBase2Buckets = []float64{
@@ -31,9 +36,10 @@ var sizeBase2Buckets = []float64{
 	1 << 30, math.Inf(1),
 }
 
-type blockProcessorStats struct {
+type BlockProcessorStats struct {
 	processingTime                prometheus.Histogram
 	validationTime                prometheus.Histogram
+	sigValidationTime             prometheus.Histogram
 	skipListConstructionTime      prometheus.Histogram
 	txMerkelTreeBuildTime         prometheus.Histogram
 	commitTime                    prometheus.Histogram
@@ -48,8 +54,8 @@ type blockProcessorStats struct {
 	transactionCount              *prometheus.CounterVec
 }
 
-func newBlockProcessorStats() *blockProcessorStats {
-	return &blockProcessorStats{
+func newBlockProcessorStats() *BlockProcessorStats {
+	return &BlockProcessorStats{
 		processingTime: promauto.NewHistogram(
 			prometheus.HistogramOpts{
 				Namespace: "block",
@@ -63,6 +69,14 @@ func newBlockProcessorStats() *blockProcessorStats {
 				Namespace: "block",
 				Name:      "validation_time",
 				Help:      "The time taken in seconds to validate a block",
+				Buckets:   timeBuckets,
+			},
+		),
+		sigValidationTime: promauto.NewHistogram(
+			prometheus.HistogramOpts{
+				Namespace: "block",
+				Name:      "sig_validation_time",
+				Help:      "The time taken in seconds to validate a block's signatures",
 				Buckets:   timeBuckets,
 			},
 		),
@@ -165,58 +179,64 @@ func newBlockProcessorStats() *blockProcessorStats {
 	}
 }
 
-func (s *blockProcessorStats) updateProcessingTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateProcessingTime(t time.Duration) {
 	s.processingTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateValidationTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateValidationTime(t time.Duration) {
 	s.validationTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateSkipListConstructionTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateSigValidationTime(t time.Duration) {
+	s.sigValidationTime.Observe(t.Seconds())
+}
+
+func (s *BlockProcessorStats) UpdateSkipListConstructionTime(t time.Duration) {
 	s.skipListConstructionTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateMerkelTreeBuildTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateMerkelTreeBuildTime(t time.Duration) {
 	s.txMerkelTreeBuildTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateCommitTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateCommitTime(t time.Duration) {
 	s.commitTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateCommitEntriesConstructionTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateCommitEntriesConstructionTime(t time.Duration) {
 	s.commitEntriesConstructionTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateStateTrieUpdateTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateStateTrieUpdateTime(t time.Duration) {
 	s.stateTrieUpdateTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateBlockStoreCommitTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateBlockStoreCommitTime(t time.Duration) {
 	s.blockStoreCommitTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateProvenanceStoreCommitTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateProvenanceStoreCommitTime(t time.Duration) {
 	s.provenanceStoreCommitTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateWorldStateCommitTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateWorldStateCommitTime(t time.Duration) {
 	s.worldstateCommitTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateStateTrieCommitTime(t time.Duration) {
+func (s *BlockProcessorStats) UpdateStateTrieCommitTime(t time.Duration) {
 	s.stateTrieCommitTime.Observe(t.Seconds())
 }
 
-func (s *blockProcessorStats) updateTransactionsPerBlock(size int) {
+func (s *BlockProcessorStats) UpdateTransactionsPerBlock(size int) {
 	s.transactionPerBlock.Observe(float64(size))
 }
 
-func (s *blockProcessorStats) updateBlockSizeBytes(size int64) {
+func (s *BlockProcessorStats) UpdateBlockSizeBytes(size int64) {
 	s.blockSizeBytes.Observe(float64(size))
 }
 
-func (s *blockProcessorStats) incrementTransactionCount(flag types.Flag, tx_type string) {
+func (s *BlockProcessorStats) IncrementTransactionCount(flag types.Flag, tx_type string) {
 	s.transactionCount.WithLabelValues(flag.String(), tx_type).Inc()
 }
+
+var Stats = newBlockProcessorStats()

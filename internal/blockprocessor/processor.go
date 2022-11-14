@@ -13,14 +13,13 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 )
-
-var stats = newBlockProcessorStats()
 
 // BlockProcessor holds block Validator and committer
 type BlockProcessor struct {
@@ -32,7 +31,6 @@ type BlockProcessor struct {
 	started              chan struct{}
 	stop                 chan struct{}
 	stopped              chan struct{}
-	stats                *blockProcessorStats
 	logger               *logger.SugarLogger
 }
 
@@ -59,7 +57,6 @@ func New(conf *Config) *BlockProcessor {
 		started:              make(chan struct{}),
 		stop:                 make(chan struct{}),
 		stopped:              make(chan struct{}),
-		stats:                stats,
 		logger:               conf.Logger,
 	}
 }
@@ -149,16 +146,16 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 		}
 		return err
 	}
-	b.stats.updateValidationTime(time.Since(start))
+	utils.Stats.UpdateValidationTime(time.Since(start))
 
-	b.stats.updateTransactionsPerBlock(len(validationInfo))
+	utils.Stats.UpdateTransactionsPerBlock(len(validationInfo))
 	block.Header.ValidationInfo = validationInfo
 
 	start = time.Now()
 	if err = b.blockStore.AddSkipListLinks(block); err != nil {
 		panic(err)
 	}
-	b.stats.updateSkipListConstructionTime(time.Since(start))
+	utils.Stats.UpdateSkipListConstructionTime(time.Since(start))
 
 	start = time.Now()
 	root, err := mtree.BuildTreeForBlockTx(block)
@@ -166,16 +163,16 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 		panic(err)
 	}
 	block.Header.TxMerkelTreeRootHash = root.Hash()
-	b.stats.updateMerkelTreeBuildTime(time.Since(start))
+	utils.Stats.UpdateMerkelTreeBuildTime(time.Since(start))
 
 	start = time.Now()
 	if err = b.committer.commitBlock(block); err != nil {
 		panic(err)
 	}
-	b.stats.updateCommitTime(time.Since(start))
+	utils.Stats.UpdateCommitTime(time.Since(start))
 
 	b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
-	b.stats.updateProcessingTime(time.Since(blockProcessingStart))
+	utils.Stats.UpdateProcessingTime(time.Since(blockProcessingStart))
 	return err
 }
 

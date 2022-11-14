@@ -80,7 +80,7 @@ func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, userIDsWithValid
 }
 
 func (v *dataTxValidator) validateSignatures(txEnv *types.DataTxEnvelope) ([]string, *types.ValidationInfo, error) {
-	var userIDsWithValidSign []string
+	userIDsWithValidSign := make([]string, 0, len(txEnv.Signatures))
 	for userID, signature := range txEnv.Signatures {
 		valRes, err := v.sigValidator.validate(userID, signature, txEnv.Payload)
 		if err != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/state"
@@ -31,7 +32,6 @@ type committer struct {
 	provenanceStore *provenance.Store
 	stateTrieStore  mptrie.Store
 	stateTrie       *mptrie.MPTrie
-	stats           *blockProcessorStats
 	logger          *logger.SugarLogger
 }
 
@@ -41,7 +41,6 @@ func newCommitter(conf *Config) *committer {
 		blockStore:      conf.BlockStore,
 		provenanceStore: conf.ProvenanceStore,
 		stateTrieStore:  conf.StateTrieStore,
-		stats:           stats,
 		logger:          conf.Logger,
 	}
 }
@@ -53,7 +52,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 	if err != nil {
 		return errors.WithMessagef(err, "error while constructing database and provenance entries for block %d", block.GetHeader().GetBaseHeader().GetNumber())
 	}
-	c.stats.updateCommitEntriesConstructionTime(time.Since(start))
+	utils.Stats.UpdateCommitEntriesConstructionTime(time.Since(start))
 
 	start = time.Now()
 	// Update state trie with expected world state db changes
@@ -66,7 +65,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 	}
 	// Update block with state trie root
 	block.Header.StateMerkelTreeRootHash = stateTrieRootHash
-	c.stats.updateStateTrieUpdateTime(time.Since(start))
+	utils.Stats.UpdateStateTrieUpdateTime(time.Since(start))
 
 	start = time.Now()
 	offsetBeforeWrite := c.blockStore.GetCurrentOffset()
@@ -78,8 +77,8 @@ func (c *committer) commitBlock(block *types.Block) error {
 			block.GetHeader().GetBaseHeader().GetNumber(),
 		)
 	}
-	c.stats.updateBlockStoreCommitTime(time.Since(start))
-	c.stats.updateBlockSizeBytes(c.blockStore.GetCurrentOffset() - offsetBeforeWrite)
+	utils.Stats.UpdateBlockStoreCommitTime(time.Since(start))
+	utils.Stats.UpdateBlockSizeBytes(c.blockStore.GetCurrentOffset() - offsetBeforeWrite)
 
 	// Commit block to world state db and provenance db
 	if err = c.commitToDBs(dbsUpdates, provenanceData, block); err != nil {
@@ -91,7 +90,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 	if err = c.commitTrie(block.GetHeader().GetBaseHeader().GetNumber()); err != nil {
 		return err
 	}
-	c.stats.updateStateTrieCommitTime(time.Since(start))
+	utils.Stats.UpdateStateTrieCommitTime(time.Since(start))
 
 	return nil
 }
@@ -111,13 +110,13 @@ func (c *committer) commitToDBs(dbsUpdates map[string]*worldstate.DBUpdates, pro
 	if err := c.commitToProvenanceStore(blockNum, provenanceData); err != nil {
 		return errors.WithMessagef(err, "error while committing block %d to the block store", blockNum)
 	}
-	c.stats.updateProvenanceStoreCommitTime(time.Since(start))
+	utils.Stats.UpdateProvenanceStoreCommitTime(time.Since(start))
 
 	start = time.Now()
 	if err := c.commitToStateDB(blockNum, dbsUpdates); err != nil {
 		return err
 	}
-	c.stats.updateWorldStateCommitTime(time.Since(start))
+	utils.Stats.UpdateWorldStateCommitTime(time.Since(start))
 
 	return nil
 }
@@ -163,7 +162,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 		txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
 
 		for txNum, txValidationInfo := range blockValidationInfo {
-			c.stats.incrementTransactionCount(txValidationInfo.Flag, "data_tx")
+			utils.Stats.IncrementTransactionCount(txValidationInfo.Flag, "data_tx")
 			if txValidationInfo.Flag != types.Flag_VALID {
 				provenanceData = append(
 					provenanceData,
@@ -196,7 +195,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 
 	case *types.Block_UserAdministrationTxEnvelope:
 		flag := blockValidationInfo[userAdminTxIndex].Flag
-		c.stats.incrementTransactionCount(flag, "user_tx")
+		utils.Stats.IncrementTransactionCount(flag, "user_tx")
 		if flag != types.Flag_VALID {
 			return nil, []*provenance.TxDataForProvenance{
 				{
@@ -229,7 +228,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 
 	case *types.Block_DbAdministrationTxEnvelope:
 		flag := blockValidationInfo[dbAdminTxIndex].Flag
-		c.stats.incrementTransactionCount(flag, "db_tx")
+		utils.Stats.IncrementTransactionCount(flag, "db_tx")
 		if flag != types.Flag_VALID {
 			return nil, nil, nil
 		}
@@ -250,7 +249,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 
 	case *types.Block_ConfigTxEnvelope:
 		flag := blockValidationInfo[configTxIndex].Flag
-		c.stats.incrementTransactionCount(flag, "config_tx")
+		utils.Stats.IncrementTransactionCount(flag, "config_tx")
 		if flag != types.Flag_VALID {
 			return nil, []*provenance.TxDataForProvenance{
 				{

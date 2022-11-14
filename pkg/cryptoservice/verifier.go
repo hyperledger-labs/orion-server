@@ -4,6 +4,7 @@ package cryptoservice
 
 import (
 	"crypto/x509"
+	"sync"
 
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 
@@ -29,10 +30,25 @@ func NewVerifier(userQuerier UserDBQuerier, logger *logger.SugarLogger) *Signatu
 type SignatureVerifier struct {
 	userDBQuerier UserDBQuerier
 	logger        *logger.SugarLogger
+	certCache     sync.Map
+}
+
+func (sv *SignatureVerifier) GetCert(userID string) (*x509.Certificate, error) {
+	cert, ok := sv.certCache.Load(userID)
+	if ok {
+		return cert.(*x509.Certificate), nil
+	}
+
+	newCert, err := sv.userDBQuerier.GetCertificate(userID)
+	if err != nil {
+		return nil, err
+	}
+	sv.certCache.Store(userID, newCert)
+	return newCert, nil
 }
 
 func (sv *SignatureVerifier) Verify(userID string, signature, body []byte) error {
-	cert, err := sv.userDBQuerier.GetCertificate(userID)
+	cert, err := sv.GetCert(userID)
 	if err != nil {
 		sv.logger.Infof("Error during GetCertificate: userID: %s, error: %s", userID, err)
 		return err

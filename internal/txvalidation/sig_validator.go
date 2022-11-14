@@ -17,6 +17,7 @@ import (
 type txSigValidator struct {
 	sigVerifier *cryptoservice.SignatureVerifier
 	logger      *logger.SugarLogger
+	marshaler   *marshal.DefaultMarshal
 }
 
 func (s *txSigValidator) validate(
@@ -24,7 +25,7 @@ func (s *txSigValidator) validate(
 	signature []byte,
 	txPayload interface{},
 ) (*types.ValidationInfo, error) {
-	requestBytes, err := marshal.DefaultMarshaler().Marshal(txPayload.(proto.Message))
+	requestBytes, err := s.marshaler.Marshal(txPayload.(proto.Message))
 	if err != nil {
 		s.logger.Errorf("Error during Marshal Tx: %s, error: %s", txPayload, err)
 		return nil, errors.Wrapf(err, "failed to Marshal Tx: %s", txPayload)
