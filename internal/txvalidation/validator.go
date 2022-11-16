@@ -91,20 +91,57 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 			return nil, err
 		}
 
+		if err = v.dataTxValidator.parallelValidation(dataTxEnvs, usersWithValidSigPerTX, valInfoArray); err != nil {
+			return nil, errors.WithMessage(err, "error while validating data transaction")
+		}
+
 		pendingOps := newPendingOperations()
 		for txNum, txEnv := range dataTxEnvs {
 			if valInfoArray[txNum].Flag != types.Flag_VALID {
 				continue
 			}
 
-			valRes, err := v.dataTxValidator.validate(txEnv, usersWithValidSigPerTX[txNum], pendingOps)
-			if err != nil {
-				return nil, errors.WithMessage(err, "error while validating data transaction")
-			}
+			invalid := false
+			for _, txOps := range txEnv.Payload.DbOperations {
+				var deleteFieldValResult, mvccValResult *types.ValidationInfo
+				var deleteFieldValError, mvccValError error
 
-			valInfoArray[txNum] = valRes
-			if valRes.Flag != types.Flag_VALID {
-				v.logger.Debugf("data transaction [%v] is invalid due to [%s]", txEnv.Payload, valRes.ReasonIfInvalid)
+				var wg sync.WaitGroup
+				wg.Add(2)
+
+				go func() {
+					defer wg.Done()
+					deleteFieldValResult, deleteFieldValError = v.dataTxValidator.validateFieldsInDataDeletes(txOps.DbName, txOps.DataDeletes, pendingOps)
+				}()
+
+				go func() {
+					defer wg.Done()
+					mvccValResult, mvccValError = v.dataTxValidator.mvccValidation(txOps.DbName, txOps, pendingOps)
+				}()
+
+				wg.Wait()
+
+				if deleteFieldValError != nil {
+					return nil, deleteFieldValError
+				}
+
+				if mvccValError != nil {
+					return nil, mvccValError
+				}
+
+				if deleteFieldValResult.Flag != types.Flag_VALID {
+					valInfoArray[txNum] = deleteFieldValResult
+					invalid = true
+					break
+				}
+
+				if mvccValResult.Flag != types.Flag_VALID {
+					valInfoArray[txNum] = mvccValResult
+					invalid = true
+					break
+				}
+			}
+			if invalid {
 				continue
 			}
 
