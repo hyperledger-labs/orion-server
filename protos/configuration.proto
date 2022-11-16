@@ -74,10 +74,10 @@ message ConsensusConfig {
 // all servers.
 message LedgerConfig {
   // Disables the state Merkle-Patricia-Trie construction. With MP-Trie construction disabled, the block's
-  // BlockHeadr.state_merkel_tree_root_hash field will be nil.
+  // BlockHeadr.state_merkle_tree_root_hash field will be nil.
   // This flag takes effect on deployment (bootstrap) only, from the first (genesis) block.
   // The value of this flag cannot be changed during run-time.
-  bool state_merkel_patricia_trie_disabled = 1;
+  bool state_merkle_patricia_trie_disabled = 1;
 }
 
 // PeerConfig defines a server that takes part in consensus, or an observer.
