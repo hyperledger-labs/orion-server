@@ -4,6 +4,7 @@ package blockprocessor
 
 import (
 	"encoding/json"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
@@ -138,13 +139,15 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 
 		for txNum, txValidationInfo := range blockValidationInfo {
 			if txValidationInfo.Flag != types.Flag_VALID {
-				provenanceData = append(
-					provenanceData,
-					&provenance.TxDataForProvenance{
-						IsValid: false,
-						TxID:    txsEnvelopes[txNum].Payload.TxId,
-					},
-				)
+				if c.provenanceStore != nil {
+					provenanceData = append(
+						provenanceData,
+						&provenance.TxDataForProvenance{
+							IsValid: false,
+							TxID:    txsEnvelopes[txNum].Payload.TxId,
+						},
+					)
+				}
 				continue
 			}
 
@@ -155,11 +158,13 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 
 			tx := txsEnvelopes[txNum].Payload
 
-			pData, err := constructProvenanceEntriesForDataTx(c.db, tx, version)
-			if err != nil {
-				return nil, nil, err
+			if c.provenanceStore != nil {
+				pData, err := constructProvenanceEntriesForDataTx(c.db, tx, version)
+				if err != nil {
+					return nil, nil, err
+				}
+				provenanceData = append(provenanceData, pData...)
 			}
-			provenanceData = append(provenanceData, pData...)
 
 			AddDBEntriesForDataTx(tx, version, dbsUpdates)
 		}
@@ -169,12 +174,17 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 
 	case *types.Block_UserAdministrationTxEnvelope:
 		if blockValidationInfo[userAdminTxIndex].Flag != types.Flag_VALID {
-			return nil, []*provenance.TxDataForProvenance{
-				{
-					IsValid: false,
-					TxID:    block.GetUserAdministrationTxEnvelope().GetPayload().GetTxId(),
-				},
-			}, nil
+			var pData []*provenance.TxDataForProvenance
+			if c.provenanceStore != nil {
+				pData = []*provenance.TxDataForProvenance{
+					{
+						IsValid: false,
+						TxID:    block.GetUserAdministrationTxEnvelope().GetPayload().GetTxId(),
+					},
+				}
+			}
+
+			return nil, pData, nil
 		}
 
 		version := &types.Version{
@@ -189,11 +199,13 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 		}
 		dbsUpdates[worldstate.UsersDBName] = entries
 
-		pData, err := identity.ConstructProvenanceEntriesForUserAdminTx(tx, version, c.db)
-		if err != nil {
-			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the user admin transaction")
+		if c.provenanceStore != nil {
+			pData, err := identity.ConstructProvenanceEntriesForUserAdminTx(tx, version, c.db)
+			if err != nil {
+				return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the user admin transaction")
+			}
+			provenanceData = append(provenanceData, pData)
 		}
-		provenanceData = append(provenanceData, pData)
 
 		c.logger.Debugf("constructed user admin update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
@@ -251,11 +263,13 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 			dbsUpdates[worldstate.ConfigDBName].Deletes = append(dbsUpdates[worldstate.ConfigDBName].Deletes, entries.nodeUpdates.Deletes...)
 		}
 
-		pData, err := constructProvenanceEntriesForConfigTx(tx, version, entries, c.db)
-		if err != nil {
-			return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the config transaction")
+		if c.provenanceStore != nil {
+			pData, err := constructProvenanceEntriesForConfigTx(tx, version, entries, c.db)
+			if err != nil {
+				return nil, nil, errors.WithMessage(err, "error while creating provenance entries for the config transaction")
+			}
+			provenanceData = append(provenanceData, pData...)
 		}
-		provenanceData = append(provenanceData, pData...)
 
 		c.logger.Debugf("constructed configuration update, block number %d",
 			block.GetHeader().GetBaseHeader().GetNumber())
