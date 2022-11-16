@@ -900,7 +900,7 @@ Propose_Loop:
 				}
 
 				newClusterConfig := configTxEnv.GetPayload().GetNewConfig()
-				_, consensus, _, _ := ClassifyClusterReConfig(br.clusterConfig, newClusterConfig)
+				_, consensus, _, _, _ := ClassifyClusterReConfig(br.clusterConfig, newClusterConfig)
 				if consensus {
 					var errDetect error
 					addedPeers, removedPeers, _, errDetect = detectPeerConfigChanges(br.clusterConfig.ConsensusConfig, newClusterConfig.ConsensusConfig)

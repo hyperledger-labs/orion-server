@@ -298,6 +298,57 @@ func TestValidateConfigTx(t *testing.T) {
 			},
 		},
 		{
+			name: "invalid: ledger config: trie disabled changed",
+			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
+				UserId: "adminUser",
+				ReadOldConfigVersion: &types.Version{
+					BlockNum: 1,
+					TxNum:    1,
+				},
+				NewConfig: &types.ClusterConfig{
+					Nodes: []*types.NodeConfig{
+						{
+							Id:          "node1",
+							Address:     "127.0.0.1",
+							Port:        6090,
+							Certificate: nodeCert.Raw,
+						},
+					},
+					Admins: []*types.Admin{
+						{
+							Id:          "admin1",
+							Certificate: adminCert.Raw,
+						},
+					},
+					CertAuthConfig: &types.CAConfig{
+						Roots: [][]byte{caCert.Raw},
+					},
+					ConsensusConfig: &types.ConsensusConfig{
+						Algorithm: "raft",
+						Members: []*types.PeerConfig{
+							{
+								NodeId:   "node1",
+								RaftId:   1,
+								PeerHost: "127.0.0.1",
+								PeerPort: 7090,
+							},
+						},
+						Observers: nil,
+						RaftConfig: &types.RaftConfig{
+							TickInterval:   "100ms",
+							ElectionTicks:  100,
+							HeartbeatTicks: 10,
+						},
+					},
+					LedgerConfig: &types.LedgerConfig{StateMerkelPatriciaTrieDisabled: true},
+				},
+			}),
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "LedgerConfig.StateMerkelPatriciaTrieDisabled cannot be changed",
+			},
+		},
+		{
 			name: "invalid: too many consensus peer membership changes",
 			txEnv: testutils.SignedConfigTxEnvelope(t, adminSigner, &types.ConfigTx{
 				UserId: "adminUser",
