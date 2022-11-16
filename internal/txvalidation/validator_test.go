@@ -605,6 +605,19 @@ func TestValidateDataBlock(t *testing.T) {
 									},
 								},
 							}),
+							testutils.SignedDataTxEnvelope(t, []crypto.Signer{userSigner}, &types.DataTx{
+								MustSignUserIds: []string{"operatingUser"},
+								DbOperations: []*types.DBOperation{
+									{
+										DbName: "db1",
+										DataDeletes: []*types.DataDelete{
+											{
+												Key: "key5",
+											},
+										},
+									},
+								},
+							}),
 						},
 					},
 				},
@@ -632,6 +645,10 @@ func TestValidateDataBlock(t *testing.T) {
 				{
 					Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITHIN_BLOCK,
 					ReasonIfInvalid: "mvcc conflict has occurred within the block for the key [key1] in database [db1]. Within a block, a key can be modified only once",
+				},
+				{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: "the key [key5] does not exist in the database and hence, it cannot be deleted",
 				},
 			},
 		},

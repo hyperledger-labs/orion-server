@@ -6,6 +6,7 @@ package txvalidation
 import (
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
@@ -22,62 +23,151 @@ type dataTxValidator struct {
 	logger          *logger.SugarLogger
 }
 
-func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, userIDsWithValidSign []string, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
-	dbs := make(map[string]bool)
-	for _, ops := range txEnv.Payload.DbOperations {
-		if !dbs[ops.DbName] {
-			dbs[ops.DbName] = true
+func (v *dataTxValidator) parallelValidation(txsEnv []*types.DataTxEnvelope, userIDsWithValidSign [][]string, valInfoPerTx []*types.ValidationInfo) error {
+	errorPerTx := make([]error, len(txsEnv))
+
+	var wg sync.WaitGroup
+	wg.Add(len(txsEnv))
+
+	for txNum, txEnv := range txsEnv {
+		if valInfoPerTx[txNum].Flag != types.Flag_VALID {
+			wg.Done()
 			continue
 		}
 
-		return &types.ValidationInfo{
-			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-			ReasonIfInvalid: "the database [" + ops.DbName + "] occurs more than once in the operations. The database present in the operations should be unique",
-		}, nil
+		go func(txEnv *types.DataTxEnvelope, txNum int) {
+			defer wg.Done()
+
+			dbs := make(map[string]bool)
+			for _, ops := range txEnv.Payload.DbOperations {
+				if !dbs[ops.DbName] {
+					dbs[ops.DbName] = true
+					continue
+				}
+
+				valInfoPerTx[txNum] = &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: "the database [" + ops.DbName + "] occurs more than once in the operations. The database present in the operations should be unique",
+				}
+				return
+			}
+
+			for _, ops := range txEnv.Payload.DbOperations {
+				valRes, err := v.validateDBName(ops.DbName)
+				if err != nil {
+					errorPerTx[txNum] = err
+					return
+				}
+				if valRes.Flag != types.Flag_VALID {
+					valInfoPerTx[txNum] = valRes
+					return
+				}
+
+				var usersWithDBAccess []string
+				txUserIDsWithValidSign := userIDsWithValidSign[txNum]
+				sort.Strings(txUserIDsWithValidSign)
+
+				for _, userID := range txUserIDsWithValidSign {
+					// note that the transaction could have been signed by many users and a data tx can manipulate
+					// multiple databases. Not all users in the transaction might have read-write access on all databases
+					// manipulated by the transaction. Hence, while validating operations associated with a given database,
+					// we need to consider only users who have read-write access to it. If none of the user has a
+					// read-write permission on a given database, the transaction would be marked invalid.
+					hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, ops.DbName)
+					if err != nil {
+						errorPerTx[txNum] = err
+						return
+					}
+					if hasPerm {
+						usersWithDBAccess = append(usersWithDBAccess, userID)
+					}
+				}
+
+				if len(usersWithDBAccess) == 0 {
+					valInfoPerTx[txNum] = &types.ValidationInfo{
+						Flag:            types.Flag_INVALID_NO_PERMISSION,
+						ReasonIfInvalid: "none of the user in [" + strings.Join(txUserIDsWithValidSign, ", ") + "] has read-write permission on the database [" + ops.DbName + "]",
+					}
+					return
+				}
+
+				valRes, err = v.validateOpsOnly(usersWithDBAccess, ops)
+				if err != nil || valRes.Flag != types.Flag_VALID {
+					valInfoPerTx[txNum] = valRes
+					return
+				}
+			}
+		}(txEnv, txNum)
 	}
 
-	for _, ops := range txEnv.Payload.DbOperations {
-		valRes, err := v.validateDBName(ops.DbName)
+	wg.Wait()
+
+	for txNum, err := range errorPerTx {
 		if err != nil {
-			return nil, err
-		}
-		if valRes.Flag != types.Flag_VALID {
-			return valRes, nil
-		}
-
-		var usersWithDBAccess []string
-		sort.Strings(userIDsWithValidSign)
-
-		for _, userID := range userIDsWithValidSign {
-			// note that the transaction could have been signed by many users and a data tx can manipulate
-			// multiple databases. Not all users in the transaction might have read-write access on all databases
-			// manipulated by the transaction. Hence, while validating operations associated with a given database,
-			// we need to consider only users who have read-write access to it. If none of the user has a
-			// read-write permission on a given database, the transaction would be marked invalid.
-			hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, ops.DbName)
-			if err != nil {
-				return nil, err
-			}
-			if hasPerm {
-				usersWithDBAccess = append(usersWithDBAccess, userID)
-			}
-		}
-
-		if len(usersWithDBAccess) == 0 {
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "none of the user in [" + strings.Join(userIDsWithValidSign, ", ") + "] has read-write permission on the database [" + ops.DbName + "]",
-			}, nil
-		}
-
-		valRes, err = v.validateOps(usersWithDBAccess, ops, pendingOps)
-		if err != nil || valRes.Flag != types.Flag_VALID {
-			return valRes, err
+			v.logger.Errorf("error validating signatures in tx number %d, error: %s", txNum, err)
+			return err
 		}
 	}
 
-	return &types.ValidationInfo{Flag: types.Flag_VALID}, nil
+	return nil
 }
+
+// func (v *dataTxValidator) validate(txEnv *types.DataTxEnvelope, userIDsWithValidSign []string, pendingOps *pendingOperations) (*types.ValidationInfo, error) {
+// 	dbs := make(map[string]bool)
+// 	for _, ops := range txEnv.Payload.DbOperations {
+// 		if !dbs[ops.DbName] {
+// 			dbs[ops.DbName] = true
+// 			continue
+// 		}
+
+// 		return &types.ValidationInfo{
+// 			Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+// 			ReasonIfInvalid: "the database [" + ops.DbName + "] occurs more than once in the operations. The database present in the operations should be unique",
+// 		}, nil
+// 	}
+
+// 	for _, ops := range txEnv.Payload.DbOperations {
+// 		valRes, err := v.validateDBName(ops.DbName)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		if valRes.Flag != types.Flag_VALID {
+// 			return valRes, nil
+// 		}
+
+// 		var usersWithDBAccess []string
+// 		sort.Strings(userIDsWithValidSign)
+
+// 		for _, userID := range userIDsWithValidSign {
+// 			// note that the transaction could have been signed by many users and a data tx can manipulate
+// 			// multiple databases. Not all users in the transaction might have read-write access on all databases
+// 			// manipulated by the transaction. Hence, while validating operations associated with a given database,
+// 			// we need to consider only users who have read-write access to it. If none of the user has a
+// 			// read-write permission on a given database, the transaction would be marked invalid.
+// 			hasPerm, err := v.identityQuerier.HasReadWriteAccess(userID, ops.DbName)
+// 			if err != nil {
+// 				return nil, err
+// 			}
+// 			if hasPerm {
+// 				usersWithDBAccess = append(usersWithDBAccess, userID)
+// 			}
+// 		}
+
+// 		if len(usersWithDBAccess) == 0 {
+// 			return &types.ValidationInfo{
+// 				Flag:            types.Flag_INVALID_NO_PERMISSION,
+// 				ReasonIfInvalid: "none of the user in [" + strings.Join(userIDsWithValidSign, ", ") + "] has read-write permission on the database [" + ops.DbName + "]",
+// 			}, nil
+// 		}
+
+// 		valRes, err = v.validateOps(usersWithDBAccess, ops, pendingOps)
+// 		if err != nil || valRes.Flag != types.Flag_VALID {
+// 			return valRes, err
+// 		}
+// 	}
+
+// 	return &types.ValidationInfo{Flag: types.Flag_VALID}, nil
+// }
 
 func (v *dataTxValidator) validateSignatures(txEnv *types.DataTxEnvelope) ([]string, *types.ValidationInfo, error) {
 	var userIDsWithValidSign []string
@@ -132,10 +222,9 @@ func (v *dataTxValidator) validateDBName(dbName string) (*types.ValidationInfo, 
 	}, nil
 }
 
-func (v *dataTxValidator) validateOps(
+func (v *dataTxValidator) validateOpsOnly(
 	userIDs []string,
 	txOps *types.DBOperation,
-	pendingOps *pendingOperations,
 ) (*types.ValidationInfo, error) {
 	dbName := txOps.DbName
 
@@ -147,13 +236,13 @@ func (v *dataTxValidator) validateOps(
 		return r, nil
 	}
 
-	r, err = v.validateFieldsInDataDeletes(txOps.DbName, txOps.DataDeletes, pendingOps)
-	if err != nil {
-		return nil, err
-	}
-	if r.Flag != types.Flag_VALID {
-		return r, nil
-	}
+	// r, err = v.validateFieldsInDataDeletes(txOps.DbName, txOps.DataDeletes, pendingOps)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// if r.Flag != types.Flag_VALID {
+	// 	return r, nil
+	// }
 
 	r = validateUniquenessInDataWritesAndDeletes(txOps.DataWrites, txOps.DataDeletes)
 	if r.Flag != types.Flag_VALID {
@@ -184,8 +273,63 @@ func (v *dataTxValidator) validateOps(
 		return r, nil
 	}
 
-	return v.mvccValidation(dbName, txOps, pendingOps)
+	return &types.ValidationInfo{}, nil
 }
+
+// func (v *dataTxValidator) validateOps(
+// 	userIDs []string,
+// 	txOps *types.DBOperation,
+// 	pendingOps *pendingOperations,
+// ) (*types.ValidationInfo, error) {
+// 	dbName := txOps.DbName
+
+// 	r, err := v.validateFieldsInDataWrites(txOps.DataWrites)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if r.Flag != types.Flag_VALID {
+// 		return r, nil
+// 	}
+
+// 	r, err = v.validateFieldsInDataDeletes(txOps.DbName, txOps.DataDeletes, pendingOps)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if r.Flag != types.Flag_VALID {
+// 		return r, nil
+// 	}
+
+// 	r = validateUniquenessInDataWritesAndDeletes(txOps.DataWrites, txOps.DataDeletes)
+// 	if r.Flag != types.Flag_VALID {
+// 		return r, nil
+// 	}
+
+// 	r, err = v.validateACLOnDataReads(userIDs, dbName, txOps.DataReads)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if r.Flag != types.Flag_VALID {
+// 		return r, nil
+// 	}
+
+// 	r, err = v.validateACLOnDataWrites(userIDs, dbName, txOps.DataWrites)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if r.Flag != types.Flag_VALID {
+// 		return r, nil
+// 	}
+
+// 	r, err = v.validateACLOnDataDeletes(userIDs, dbName, txOps.DataDeletes)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	if r.Flag != types.Flag_VALID {
+// 		return r, nil
+// 	}
+
+// 	return v.mvccValidation(dbName, txOps, pendingOps)
+// }
 
 func (v *dataTxValidator) validateFieldsInDataWrites(DataWrites []*types.DataWrite) (*types.ValidationInfo, error) {
 	existingUser := make(map[string]bool)
