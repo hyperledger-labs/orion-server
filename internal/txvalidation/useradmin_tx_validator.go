@@ -135,6 +135,13 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 				}
 			}
 
+			if w.Acl != nil {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: "acl's are not supported",
+				}, nil
+			}
+
 			err = caCertCollection.VerifyLeafCert(w.User.Certificate)
 			if err != nil {
 				return &types.ValidationInfo{
