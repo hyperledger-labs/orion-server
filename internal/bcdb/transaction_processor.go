@@ -118,7 +118,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			if err != nil {
 				return nil, err
 			}
-			if err = p.blockProcessor.Bootstrap(bootBlock); err != nil {
+			if err = p.blockProcessor.Bootstrap(bootBlock, conf.config.SharedConfig.Ledger); err != nil {
 				return nil, err
 			}
 			ledgerHeight = 1 // genesis block generated
@@ -179,6 +179,11 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 
 	default:
 		return nil, errors.New("programming error, one of: 'normalStart || completedJoinStart || joinStart' must be true!")
+	}
+
+	// We disable the MPTrie after we know what the cluster config is. It is enabled by default.
+	if clusterConfig.LedgerConfig != nil && clusterConfig.LedgerConfig.StateMerkelPatriciaTrieDisabled {
+		conf.stateTrieStore.SetDisabled(true)
 	}
 
 	if err = p.peerTransport.SetClusterConfig(clusterConfig); err != nil {
@@ -442,6 +447,9 @@ func PrepareBootstrapConfigTx(conf *config.Configurations) (*types.ConfigTxEnvel
 				SnapshotIntervalSize: conf.SharedConfig.Consensus.RaftConfig.SnapshotIntervalSize,
 				MaxRaftId:            maxRaftID,
 			},
+		},
+		LedgerConfig: &types.LedgerConfig{
+			StateMerkelPatriciaTrieDisabled: conf.SharedConfig.Ledger.StateMerklePatriciaTrieDisabled,
 		},
 	}
 

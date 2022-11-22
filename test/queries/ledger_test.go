@@ -953,3 +953,93 @@ func calculateValueHash(dbName, key string, value []byte) ([]byte, error) {
 	}
 	return valueHash, nil
 }
+
+func TestLedgerAsyncDataMPTrieDisabled(t *testing.T) {
+	dir, err := ioutil.TempDir("", "int-test")
+	require.NoError(t, err)
+
+	nPort, pPort := getPorts(1)
+	setupConfig := &setup.Config{
+		NumberOfServers:     1,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+		BlockCreationOverride: &config.BlockCreationConf{
+			MaxBlockSize:                1024 * 1024,
+			MaxTransactionCountPerBlock: 10,
+			BlockTimeout:                1 * time.Second,
+		},
+		DisableStateMPTrie: true,
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	s := c.Servers[leaderIndex]
+
+	// add at least 10 data blocks, maximum 10 txs per block
+	var txEnvs []*types.DataTxEnvelope
+	for i := 1; i <= 100; i++ {
+		dataTx := &types.DataTx{
+			MustSignUserIds: []string{"admin"},
+			TxId:            uuid.New().String(),
+			DbOperations: []*types.DBOperation{
+				{
+					DbName: worldstate.DefaultDBName,
+					DataWrites: []*types.DataWrite{
+						{
+							Key:   fmt.Sprintf("key-%d", i),
+							Value: []byte{uint8(i), uint8(i)},
+						},
+					},
+				},
+			},
+		}
+
+		txEnv := &types.DataTxEnvelope{
+			Payload:    dataTx,
+			Signatures: map[string][]byte{"admin": testutils.SignatureFromTx(t, s.AdminSigner(), dataTx)},
+		}
+		txEnvs = append(txEnvs, txEnv)
+	}
+
+	//post txs
+	for _, txEnv := range txEnvs {
+		err = s.SubmitTransactionAsync(t, constants.PostDataTx, txEnv)
+		require.NoError(t, err)
+	}
+
+	keyRcptMap := make(map[int]*types.TxReceipt)
+	allIn := func() bool {
+		for i, txEnv := range txEnvs {
+			resp, err := s.QueryTxReceipt(t, txEnv.GetPayload().GetTxId(), "admin")
+			if err != nil {
+				return false
+			}
+			rcpt := resp.GetResponse().GetReceipt()
+			if rcpt == nil {
+				return false
+			}
+			keyRcptMap[i+1] = rcpt
+		}
+		return true
+	}
+	require.Eventually(t, allIn, 30*time.Second, 100*time.Millisecond)
+
+	t.Run("service unavailable", func(t *testing.T) {
+		for i, rcpt := range keyRcptMap {
+			respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), "admin", rcpt.GetHeader().GetBaseHeader().GetNumber(), false)
+			require.Error(t, err)
+			require.Nil(t, respEnv)
+		}
+	})
+}

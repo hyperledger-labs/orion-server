@@ -152,6 +152,11 @@ func (p *ledgerQueryProcessor) getDataProof(userId string, blockNum uint64, dbna
 	if !hasAccess {
 		return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the ledger", userId)}
 	}
+
+	if p.trieStore.IsDisabled() {
+		return nil, &interrors.ServerRestrictionError{ErrMsg: "State Merkle Patricia Trie is disabled"}
+	}
+
 	blockHeader, err := p.blockStore.GetHeader(blockNum)
 	if err != nil {
 		return nil, err

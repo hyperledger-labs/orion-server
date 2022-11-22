@@ -24,7 +24,7 @@ func TestOpen(t *testing.T) {
 	t.Run("open a new store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "open_test")
+		testDir, err := ioutil.TempDir("", "open_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -42,7 +42,7 @@ func TestOpen(t *testing.T) {
 	t.Run("open while partial store exist with an empty dir", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "open_test")
+		testDir, err := ioutil.TempDir("", "open_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -65,7 +65,7 @@ func TestOpen(t *testing.T) {
 	t.Run("open while partial store exist with a creation flag", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "open_test")
+		testDir, err := ioutil.TempDir("", "open_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -91,7 +91,7 @@ func TestOpen(t *testing.T) {
 	t.Run("reopen an empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "open_test")
+		testDir, err := ioutil.TempDir("", "open_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -118,7 +118,7 @@ func TestOpen(t *testing.T) {
 	t.Run("reopen non-empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "open_test")
+		testDir, err := ioutil.TempDir("", "open_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -147,6 +147,34 @@ func TestOpen(t *testing.T) {
 		lastBlock, err := s.Height()
 		require.NoError(t, err)
 		require.Equal(t, uint64(999), lastBlock)
+	})
+
+
+	t.Run("open a disabled store", func(t *testing.T) {
+		t.Parallel()
+
+		testDir, err := ioutil.TempDir("", "open_test")
+		require.NoError(t, err)
+		defer os.RemoveAll(testDir)
+
+		storeDir := filepath.Join(testDir, "reopen-non-empty-store")
+		defer os.RemoveAll(storeDir)
+		require.NoError(t, fileops.CreateDir(storeDir))
+
+		c := &Config{
+			Disabled: true,
+			StoreDir: storeDir,
+			Logger:   logger,
+		}
+		s, err := Open(c)
+		defer os.RemoveAll(storeDir)
+		require.NoError(t, err)
+
+		// close and reopen the store
+		require.NoError(t, s.Close())
+		s, err = Open(c)
+		require.NoError(t, err)
+		require.NoError(t, s.Close())
 	})
 }
 

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,7 +27,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("only put", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "update_and_query_test")
+		testDir, err := ioutil.TempDir("", "update_and_query_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -51,7 +51,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("put and persist", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "update_and_query_test")
+		testDir, err := ioutil.TempDir("", "update_and_query_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -75,7 +75,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("put partial persist and clean memory", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "update_and_query_test")
+		testDir, err := ioutil.TempDir("", "update_and_query_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
@@ -126,7 +126,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("put and persist - reopen store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir(".", "update_and_query_test")
+		testDir, err := ioutil.TempDir("", "update_and_query_test")
 		require.NoError(t, err)
 		defer os.RemoveAll(testDir)
 
