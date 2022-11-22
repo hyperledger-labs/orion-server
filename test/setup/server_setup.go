@@ -813,20 +813,25 @@ func (s *Server) ExecuteJSONQuery(t *testing.T, userID, dbName, query string) (*
 	return response, err
 }
 
-func (s *Server) QueryUser(t *testing.T, userID string) (*types.GetUserResponseEnvelope, error) {
+func (s *Server) QueryUser(t *testing.T, userID, targetUserId string) (*types.GetUserResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {
 		return nil, err
 	}
 
+	signer, err := s.Signer(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	query := &types.GetUserQuery{
-		UserId:       s.AdminID(),
-		TargetUserId: userID,
+		UserId:       userID,
+		TargetUserId: targetUserId,
 	}
 	response, err := client.GetUser(
 		&types.GetUserQueryEnvelope{
 			Payload:   query,
-			Signature: testutils.SignatureFromQuery(t, s.AdminSigner(), query),
+			Signature: testutils.SignatureFromQuery(t, signer, query),
 		},
 	)
 
@@ -1526,7 +1531,7 @@ func CreateUsers(t *testing.T, s *Server, users []*types.UserWrite) {
 	require.NotNil(t, receipt)
 
 	for _, user := range users {
-		respEnv, err := s.QueryUser(t, user.GetUser().GetId())
+		respEnv, err := s.QueryUser(t, "admin", user.GetUser().GetId())
 		require.NoError(t, err)
 		require.Equal(t, user.User, respEnv.GetResponse().User)
 	}

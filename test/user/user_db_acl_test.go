@@ -344,7 +344,7 @@ func createUsers(t *testing.T, s *setup.Server, users []*types.UserWrite) {
 	require.NotNil(t, receipt)
 
 	for _, user := range users {
-		respEnv, err := s.QueryUser(t, user.GetUser().GetId())
+		respEnv, err := s.QueryUser(t, "admin", user.GetUser().GetId())
 		require.NoError(t, err)
 		require.Equal(t, user.User, respEnv.GetResponse().User)
 	}
@@ -365,14 +365,14 @@ func deleteUsers(t *testing.T, s *setup.Server, users []*types.UserDelete) {
 	require.NotNil(t, receipt)
 
 	for _, user := range users {
-		respEnv, err := s.QueryUser(t, user.GetUserId())
+		respEnv, err := s.QueryUser(t, "admin", user.GetUserId())
 		require.NoError(t, err)
 		require.Nil(t, respEnv.GetResponse().GetUser())
 	}
 }
 
 func updateUser(t *testing.T, s *setup.Server, userID string, newCert []byte, newPrivilege *types.Privilege) {
-	respEnv, err := s.QueryUser(t, userID)
+	respEnv, err := s.QueryUser(t, "admin", userID)
 	require.NoError(t, err)
 	user := respEnv.GetResponse().GetUser()
 	require.NotNil(t, user)
@@ -402,7 +402,7 @@ func updateUser(t *testing.T, s *setup.Server, userID string, newCert []byte, ne
 	require.NoError(t, err)
 	require.NotNil(t, receipt)
 
-	respEnv, err = s.QueryUser(t, user.GetId())
+	respEnv, err = s.QueryUser(t, "admin", user.GetId())
 	require.NoError(t, err)
 	require.Equal(t, user, respEnv.GetResponse().User)
 }
