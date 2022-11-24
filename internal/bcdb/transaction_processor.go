@@ -367,9 +367,6 @@ func (t *transactionProcessor) Close() error {
 }
 
 func (t *transactionProcessor) IsLeader() *internalerror.NotLeaderError {
-	t.Lock()
-	defer t.Unlock()
-
 	return t.blockReplicator.IsLeader()
 }
 
