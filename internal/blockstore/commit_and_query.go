@@ -477,9 +477,6 @@ func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
 // DoesTxIDExist returns true if any of the committed block has a transaction with
 // the given txID. Otherwise, it returns false
 func (s *Store) DoesTxIDExist(txID string) (bool, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
 	return s.txValidationInfoDB.Has([]byte(txID), &opt.ReadOptions{})
 }
 

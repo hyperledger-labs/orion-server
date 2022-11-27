@@ -24,7 +24,6 @@ func NewPendingTxs(logger *logger.SugarLogger) *PendingTxs {
 // Add returns true if the txId was already taken
 func (p *PendingTxs) Add(txID string, promise *CompletionPromise) bool {
 	_, loaded := p.txs.LoadOrStore(txID, promise)
-	p.txs.Store(txID, promise)
 	return loaded
 }
 
