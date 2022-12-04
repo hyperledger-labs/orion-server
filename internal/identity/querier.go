@@ -6,9 +6,9 @@ import (
 	"crypto/x509"
 	"fmt"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -120,29 +120,6 @@ func (q *Querier) HasAdministrationPrivilege(userID string) (bool, error) {
 	}
 
 	return user.GetPrivilege().GetAdmin(), nil
-}
-
-// HasReadAccessOnTargetUser returns true if the srcUser can read the targetUser
-func (q *Querier) HasReadAccessOnTargetUser(srcUser, targetUser string) (bool, error) {
-	acl, err := q.GetAccessControl(targetUser)
-	if err != nil {
-		return false, err
-	}
-
-	return acl == nil ||
-		acl.ReadUsers[srcUser] ||
-		acl.ReadWriteUsers[srcUser], nil
-}
-
-// HasReadWriteAccessOnTargetUser returns true if the srcUser can read & write the targetUser
-func (q *Querier) HasReadWriteAccessOnTargetUser(srcUser, targetUser string) (bool, error) {
-	acl, err := q.GetAccessControl(targetUser)
-	if err != nil {
-		return false, err
-	}
-
-	return acl == nil ||
-		acl.ReadWriteUsers[srcUser], nil
 }
 
 // HasLedgerAccess check is user has access to ledger data

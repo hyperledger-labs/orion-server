@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -247,24 +247,6 @@ func TestQuerier(t *testing.T) {
 				require.True(t, proto.Equal(sampleMetadata.Version, ver))
 			})
 
-			t.Run("Read and Write Access on the User", func(t *testing.T) {
-				canRead, err := env.q.HasReadAccessOnTargetUser("user1", tt.userID)
-				require.NoError(t, err)
-				require.True(t, canRead)
-
-				canRead, err = env.q.HasReadWriteAccessOnTargetUser("user1", tt.userID)
-				require.NoError(t, err)
-				require.False(t, canRead)
-
-				canRead, err = env.q.HasReadAccessOnTargetUser("user2", tt.userID)
-				require.NoError(t, err)
-				require.True(t, canRead)
-
-				canRead, err = env.q.HasReadWriteAccessOnTargetUser("user2", tt.userID)
-				require.NoError(t, err)
-				require.True(t, canRead)
-			})
-
 			t.Run("GetCertificate()", func(t *testing.T) {
 				cert, err := env.q.GetCertificate(tt.userID)
 				require.NoError(t, err)
@@ -350,15 +332,4 @@ func TestQuerierNonExistingUser(t *testing.T) {
 		require.False(t, perm)
 	})
 
-	t.Run("HasReadAccessOnTargetUser returns UserNotFoundErr", func(t *testing.T) {
-		perm, err := env.q.HasReadAccessOnTargetUser("user1", "nouser")
-		require.EqualError(t, err, "the user [nouser] does not exist")
-		require.False(t, perm)
-	})
-
-	t.Run("HasReadWriteAccessOnTargetUser returns UserNotFoundErr", func(t *testing.T) {
-		perm, err := env.q.HasReadWriteAccessOnTargetUser("user1", "nouser")
-		require.EqualError(t, err, "the user [nouser] does not exist")
-		require.False(t, perm)
-	})
 }

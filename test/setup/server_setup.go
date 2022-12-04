@@ -1536,3 +1536,41 @@ func CreateUsers(t *testing.T, s *Server, users []*types.UserWrite) {
 		require.Equal(t, user.User, respEnv.GetResponse().User)
 	}
 }
+
+func UpdateUser(t *testing.T, s *Server, operatingUserId string, userRead *types.UserRead, userWrite *types.UserWrite, userDelete *types.UserDelete) error {
+	var userReadParam []*types.UserRead
+	var userWriteParam []*types.UserWrite
+	var userDeleteParam []*types.UserDelete
+
+	if userRead != nil {
+		userReadParam = []*types.UserRead{userRead}
+	}
+
+	if userWrite != nil {
+		userWriteParam = []*types.UserWrite{userWrite}
+	}
+
+	if userDelete != nil {
+		userDeleteParam = []*types.UserDelete{userDelete}
+	}
+
+	userTx := &types.UserAdministrationTx{
+		UserId:      operatingUserId,
+		TxId:        uuid.New().String(),
+		UserReads:   userReadParam,
+		UserWrites:  userWriteParam,
+		UserDeletes: userDeleteParam,
+	}
+
+	signer, _ := s.Signer(operatingUserId)
+	_, err := s.SubmitTransaction(t, constants.PostUserTx, &types.UserAdministrationTxEnvelope{
+		Payload:   userTx,
+		Signature: testutils.SignatureFromTx(t, signer, userTx),
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
