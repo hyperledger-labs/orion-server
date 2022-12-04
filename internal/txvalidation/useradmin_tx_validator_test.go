@@ -21,7 +21,6 @@ func TestValidateUsedAdminTx(t *testing.T) {
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"adminUser", "nonAdminUser", "user1"})
 	adminCert, adminSigner := testutils.LoadTestCrypto(t, cryptoDir, "adminUser")
 	nonAdminCert, nonAdminSigner := testutils.LoadTestCrypto(t, cryptoDir, "nonAdminUser")
-	user1Cert, _ := testutils.LoadTestCrypto(t, cryptoDir, "nonAdminUser")
 	caCert, _ := testutils.LoadTestCA(t, cryptoDir, testutils.RootCAFileName)
 
 	nonAdminUser := &types.User{
@@ -205,114 +204,6 @@ func TestValidateUsedAdminTx(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: acl on reads does not pass",
-			setup: func(db worldstate.DB) {
-				newUsers := map[string]*worldstate.DBUpdates{
-					worldstate.UsersDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							{
-								Key:   string(identity.UserNamespace) + "adminUser",
-								Value: adminUserSerialized,
-							},
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
-								ReadUsers: map[string]bool{
-									"user2": true,
-								},
-							}),
-						},
-					},
-				}
-
-				require.NoError(t, db.Commit(newUsers, 1))
-			},
-			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
-				&types.UserAdministrationTx{
-					UserId: "adminUser",
-					UserReads: []*types.UserRead{
-						{
-							UserId: "user1",
-						},
-					},
-				}),
-			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [adminUser] has no read permission on the user [user1]",
-			},
-		},
-		{
-			name: "invalid: acl on write does not pass",
-			setup: func(db worldstate.DB) {
-				newUsers := map[string]*worldstate.DBUpdates{
-					worldstate.UsersDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							{
-								Key:   string(identity.UserNamespace) + "adminUser",
-								Value: adminUserSerialized,
-							},
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"user2": true,
-								},
-							}),
-						},
-					},
-				}
-
-				require.NoError(t, db.Commit(newUsers, 1))
-			},
-			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
-				&types.UserAdministrationTx{
-					UserId: "adminUser",
-					UserWrites: []*types.UserWrite{
-						{
-							User: &types.User{
-								Id:          "user1",
-								Certificate: user1Cert.Raw,
-							},
-						},
-					},
-				}),
-			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [adminUser] has no write permission on the user [user1]",
-			},
-		},
-		{
-			name: "invalid: acl on deletes does not pass",
-			setup: func(db worldstate.DB) {
-				newUsers := map[string]*worldstate.DBUpdates{
-					worldstate.UsersDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							{
-								Key:   string(identity.UserNamespace) + "adminUser",
-								Value: adminUserSerialized,
-							},
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"user2": true,
-								},
-							}),
-						},
-					},
-				}
-
-				require.NoError(t, db.Commit(newUsers, 1))
-			},
-			txEnv: testutils.SignedUserAdministrationTxEnvelope(t, adminSigner,
-				&types.UserAdministrationTx{
-					UserId: "adminUser",
-					UserDeletes: []*types.UserDelete{
-						{
-							UserId: "user1",
-						},
-					},
-				}),
-			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [adminUser] has no write permission on the user [user1]. Hence, the delete operation cannot be performed",
-			},
-		},
-		{
 			name: "invalid: mvcc validation does not pass",
 			setup: func(db worldstate.DB) {
 				newUsers := map[string]*worldstate.DBUpdates{
@@ -469,7 +360,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid: db present in the premission list does not exist",
+			name: "invalid: db present in the permission list does not exist",
 			userWrites: []*types.UserWrite{
 				{
 					User: &types.User{
@@ -485,6 +376,27 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_DATABASE_DOES_NOT_EXIST,
 				ReasonIfInvalid: "the database [db1] present in the db permission list does not exist in the cluster",
+			},
+		},
+		{
+			name: "invalid: target user record allow read write access ",
+			userWrites: []*types.UserWrite{
+				{
+					User: &types.User{
+						Id:          userID,
+						Certificate: aliceCert.Raw,
+					},
+
+					Acl: &types.AccessControl{
+						ReadWriteUsers: map[string]bool{
+							"user1": true,
+						},
+					},
+				},
+			},
+			expectedResult: &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "adding users to Acl.ReadWriteUsers is not supported",
 			},
 		},
 		{
@@ -740,127 +652,6 @@ func TestValidateUniquenessInEntries(t *testing.T) {
 	}
 }
 
-func TestValidateACLOnUserReads(t *testing.T) {
-	t.Parallel()
-
-	sampleVersion := &types.Version{
-		BlockNum: 2,
-		TxNum:    1,
-	}
-
-	tests := []struct {
-		name           string
-		operatingUser  string
-		setup          func(db worldstate.DB)
-		userReads      []*types.UserRead
-		expectedResult *types.ValidationInfo
-	}{
-		{
-			name:          "invalid: operatingUser does not have read permission on user2",
-			operatingUser: "operatingUser",
-			setup: func(db worldstate.DB) {
-				newUsers := map[string]*worldstate.DBUpdates{
-					worldstate.UsersDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"operatingUser": true,
-								},
-							}),
-							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"user1": true,
-								},
-							}),
-						},
-					},
-				}
-				require.NoError(t, db.Commit(newUsers, 1))
-			},
-			userReads: []*types.UserRead{
-				{
-					UserId: "user1",
-				},
-				{
-					UserId: "user2",
-				},
-			},
-			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no read permission on the user [user2]",
-			},
-		},
-		{
-			name:          "valid: acl check passes",
-			operatingUser: "operatingUser",
-			setup: func(db worldstate.DB) {
-				newUsers := map[string]*worldstate.DBUpdates{
-					worldstate.UsersDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"operatingUser": true,
-								},
-							}),
-							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"operatingUser": true,
-								},
-							}),
-							constructUserForTest(t, "user3", nil, nil, sampleVersion, nil),
-						},
-					},
-				}
-				require.NoError(t, db.Commit(newUsers, 1))
-			},
-			userReads: []*types.UserRead{
-				{
-					UserId: "user1",
-				},
-				{
-					UserId: "user2",
-				},
-				{
-					UserId: "user3",
-				},
-				{
-					UserId: "user4",
-				},
-			},
-			expectedResult: &types.ValidationInfo{
-				Flag: types.Flag_VALID,
-			},
-		},
-		{
-			name:          "valid: empty reads",
-			operatingUser: "operatingUser",
-			setup:         func(db worldstate.DB) {},
-			userReads:     nil,
-			expectedResult: &types.ValidationInfo{
-				Flag: types.Flag_VALID,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			env := newValidatorTestEnv(t)
-			defer env.cleanup()
-
-			tt.setup(env.db)
-
-			result, err := env.validator.userAdminTxValidator.validateACLOnUserReads(tt.operatingUser, tt.userReads)
-			require.NoError(t, err)
-			require.Equal(t, tt.expectedResult, result)
-		})
-	}
-}
-
 func TestValidateACLOnUserWrites(t *testing.T) {
 	t.Parallel()
 
@@ -909,46 +700,6 @@ func TestValidateACLOnUserWrites(t *testing.T) {
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [admin] is an admin user. Only via a cluster configuration transaction, the [admin] can be modified",
-			},
-		},
-		{
-			name:          "invalid: operatingUser does not have write permission on user2",
-			operatingUser: "operatingUser",
-			setup: func(db worldstate.DB) {
-				newUsers := map[string]*worldstate.DBUpdates{
-					worldstate.UsersDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"operatingUser": true,
-								},
-							}),
-							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"user1": true,
-								},
-							}),
-						},
-					},
-				}
-				require.NoError(t, db.Commit(newUsers, 1))
-			},
-			userWrites: []*types.UserWrite{
-				{
-					User: &types.User{
-						Id: "user1",
-					},
-				},
-				{
-					User: &types.User{
-						Id: "user2",
-					},
-				},
-			},
-			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no write permission on the user [user2]",
 			},
 		},
 		{
@@ -1075,42 +826,6 @@ func TestValidateACLOnUserDeletes(t *testing.T) {
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [admin] is an admin user. Only via a cluster configuration transaction, the [admin] can be deleted",
-			},
-		},
-		{
-			name:          "invalid: operatingUser does not have write permission on user2",
-			operatingUser: "operatingUser",
-			setup: func(db worldstate.DB) {
-				newUsers := map[string]*worldstate.DBUpdates{
-					worldstate.UsersDBName: {
-						Writes: []*worldstate.KVWithMetadata{
-							constructUserForTest(t, "operatingUser", nil, nil, sampleVersion, nil),
-							constructUserForTest(t, "user1", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"operatingUser": true,
-								},
-							}),
-							constructUserForTest(t, "user2", nil, nil, sampleVersion, &types.AccessControl{
-								ReadWriteUsers: map[string]bool{
-									"user1": true,
-								},
-							}),
-						},
-					},
-				}
-				require.NoError(t, db.Commit(newUsers, 1))
-			},
-			userDeletes: []*types.UserDelete{
-				{
-					UserId: "user1",
-				},
-				{
-					UserId: "user2",
-				},
-			},
-			expectedResult: &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [operatingUser] has no write permission on the user [user2]. Hence, the delete operation cannot be performed",
 			},
 		},
 		{

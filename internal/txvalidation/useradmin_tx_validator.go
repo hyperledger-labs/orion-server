@@ -54,14 +54,6 @@ func (v *userAdminTxValidator) validate(txEnv *types.UserAdministrationTxEnvelop
 		return r, nil
 	}
 
-	r, err = v.validateACLOnUserReads(tx.UserId, tx.UserReads)
-	if err != nil {
-		return nil, errors.WithMessage(err, "error while validating ACL on reads")
-	}
-	if r.Flag != types.Flag_VALID {
-		return r, nil
-	}
-
 	r, err = v.validateACLOnUserWrites(tx.UserId, tx.UserWrites)
 	if err != nil {
 		return nil, errors.WithMessage(err, "error while validating ACL on writes")
@@ -133,6 +125,13 @@ func (v *userAdminTxValidator) validateFieldsInUserWrites(userWrites []*types.Us
 						ReasonIfInvalid: "the database [" + dbName + "] present in the db permission list does not exist in the cluster",
 					}, nil
 				}
+			}
+
+			if w.Acl != nil && w.Acl.ReadWriteUsers != nil {
+				return &types.ValidationInfo{
+					Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+					ReasonIfInvalid: "adding users to Acl.ReadWriteUsers is not supported",
+				}, nil
 			}
 
 			err = caCertCollection.VerifyLeafCert(w.User.Certificate)
@@ -210,32 +209,6 @@ func validateUniquenessInUserWritesAndDeletes(userWrites []*types.UserWrite, use
 	}
 }
 
-func (v *userAdminTxValidator) validateACLOnUserReads(operatingUser string, reads []*types.UserRead) (*types.ValidationInfo, error) {
-	for _, r := range reads {
-		targetUser := r.UserId
-
-		hasPerm, err := v.identityQuerier.HasReadAccessOnTargetUser(operatingUser, targetUser)
-		if err != nil {
-			if _, ok := err.(*identity.NotFoundErr); !ok {
-				return nil, err
-			}
-
-			continue
-		}
-
-		if !hasPerm {
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + operatingUser + "] has no read permission on the user [" + targetUser + "]",
-			}, nil
-		}
-	}
-
-	return &types.ValidationInfo{
-		Flag: types.Flag_VALID,
-	}, nil
-}
-
 func (v *userAdminTxValidator) validateACLOnUserWrites(operatingUser string, writes []*types.UserWrite) (*types.ValidationInfo, error) {
 	for _, w := range writes {
 		targetUser := w.User.Id
@@ -252,18 +225,6 @@ func (v *userAdminTxValidator) validateACLOnUserWrites(operatingUser string, wri
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [" + targetUser + "] is an admin user. Only via a cluster configuration transaction, the [" + targetUser + "] can be modified",
-			}, nil
-		}
-
-		hasPerm, err := v.identityQuerier.HasReadWriteAccessOnTargetUser(operatingUser, targetUser)
-		if err != nil {
-			return nil, err
-		}
-
-		if !hasPerm {
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + operatingUser + "] has no write permission on the user [" + targetUser + "]",
 			}, nil
 		}
 	}
@@ -293,18 +254,6 @@ func (v *userAdminTxValidator) validateACLOnUserDeletes(operatingUser string, de
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_NO_PERMISSION,
 				ReasonIfInvalid: "the user [" + targetUser + "] is an admin user. Only via a cluster configuration transaction, the [" + targetUser + "] can be deleted",
-			}, nil
-		}
-
-		hasPerm, err := v.identityQuerier.HasReadWriteAccessOnTargetUser(operatingUser, targetUser)
-		if err != nil {
-			return nil, err
-		}
-
-		if !hasPerm {
-			return &types.ValidationInfo{
-				Flag:            types.Flag_INVALID_NO_PERMISSION,
-				ReasonIfInvalid: "the user [" + operatingUser + "] has no write permission on the user [" + targetUser + "]. Hence, the delete operation cannot be performed",
 			}, nil
 		}
 	}
