@@ -106,7 +106,7 @@ func detectPeerConfigChanges(currentConfig, updatedConfig *types.ConsensusConfig
 // ClassifyClusterReConfig detects the kind of changes that happened in the ClusterConfig.
 // We assume that both the current and updated config are internally consistent (valid), but not necessarily with
 // respect to each other.
-func ClassifyClusterReConfig(currentConfig, updatedConfig *types.ClusterConfig) (nodes bool, consensus bool, ca bool, admins bool) {
+func ClassifyClusterReConfig(currentConfig, updatedConfig *types.ClusterConfig) (nodes, consensus, ca, admins, ledger bool) {
 	nodes = changedNodes(currentConfig.GetNodes(), updatedConfig.GetNodes())
 
 	curConsensus := currentConfig.GetConsensusConfig()
@@ -119,7 +119,11 @@ func ClassifyClusterReConfig(currentConfig, updatedConfig *types.ClusterConfig) 
 
 	admins = changedAdmins(currentConfig.GetAdmins(), updatedConfig.GetAdmins())
 
-	return nodes, consensus, ca, admins
+	curLedger := currentConfig.GetLedgerConfig()
+	updLedger := updatedConfig.GetLedgerConfig()
+	ledger = !proto.Equal(curLedger, updLedger)
+
+	return nodes, consensus, ca, admins, ledger
 }
 
 func changedAdmins(curAdmins []*types.Admin, updAdmins []*types.Admin) bool {

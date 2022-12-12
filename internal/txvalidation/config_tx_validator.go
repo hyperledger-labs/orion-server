@@ -508,7 +508,7 @@ func validateHostPort(host string, port uint32) error {
 
 // validate whether the transition from currentConfig to updatedConfig is valid and safe.
 func (v *ConfigTxValidator) validateConfigTransitionRules(currentConfig, updatedConfig *types.ClusterConfig) (*types.ValidationInfo, error) {
-	nodes, consensus, ca, admins := replication.ClassifyClusterReConfig(currentConfig, updatedConfig)
+	nodes, consensus, ca, admins, ledger := replication.ClassifyClusterReConfig(currentConfig, updatedConfig)
 
 	if nodes {
 		v.logger.Debugf("ClusterConfig Nodes changed: current: %s; updated: %s", nodeConfigSliceToString(currentConfig.Nodes), nodeConfigSliceToString(updatedConfig.Nodes))
@@ -535,6 +535,16 @@ func (v *ConfigTxValidator) validateConfigTransitionRules(currentConfig, updated
 			}, nil
 		}
 		v.logger.Infof("ClusterConfig ConsensusConfig changed: current: %v; updated: %v", currentConfig.ConsensusConfig, updatedConfig.ConsensusConfig)
+	}
+
+	if ledger {
+		v.logger.Debugf("ClusterConfig Ledger config changed: current: %+v; updated: %+v", currentConfig.LedgerConfig, updatedConfig.LedgerConfig)
+		if currentConfig.GetLedgerConfig().GetStateMerklePatriciaTrieDisabled() != updatedConfig.GetLedgerConfig().GetStateMerklePatriciaTrieDisabled() {
+			return &types.ValidationInfo{
+				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
+				ReasonIfInvalid: "LedgerConfig.StateMerkelPatriciaTrieDisabled cannot be changed",
+			}, nil
+		}
 	}
 
 	return &types.ValidationInfo{

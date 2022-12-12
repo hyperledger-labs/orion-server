@@ -20,7 +20,7 @@ func TestClassifyClusterReConfig(t *testing.T) {
 		updatedConfig := proto.Clone(clusterConfig).(*types.ClusterConfig)
 		updatedConfig.Nodes[0].Port++
 
-		nodes, consensus, ca, admins := ClassifyClusterReConfig(clusterConfig, updatedConfig)
+		nodes, consensus, ca, admins, _ := ClassifyClusterReConfig(clusterConfig, updatedConfig)
 		require.True(t, nodes)
 		require.False(t, consensus)
 		require.False(t, ca)
@@ -31,7 +31,7 @@ func TestClassifyClusterReConfig(t *testing.T) {
 		updatedConfig := proto.Clone(clusterConfig).(*types.ClusterConfig)
 		updatedConfig.ConsensusConfig.RaftConfig.SnapshotIntervalSize++
 
-		nodes, consensus, ca, admins := ClassifyClusterReConfig(clusterConfig, updatedConfig)
+		nodes, consensus, ca, admins, _ := ClassifyClusterReConfig(clusterConfig, updatedConfig)
 		require.False(t, nodes)
 		require.True(t, consensus)
 		require.False(t, ca)
@@ -42,7 +42,7 @@ func TestClassifyClusterReConfig(t *testing.T) {
 		updatedConfig := proto.Clone(clusterConfig).(*types.ClusterConfig)
 		updatedConfig.CertAuthConfig.Roots = append(updatedConfig.CertAuthConfig.Roots, []byte("root-certificate-2"))
 
-		nodes, consensus, ca, admins := ClassifyClusterReConfig(clusterConfig, updatedConfig)
+		nodes, consensus, ca, admins, _ := ClassifyClusterReConfig(clusterConfig, updatedConfig)
 		require.False(t, nodes)
 		require.False(t, consensus)
 		require.True(t, ca)
@@ -56,7 +56,7 @@ func TestClassifyClusterReConfig(t *testing.T) {
 			Certificate: []byte("admin2-certificate"),
 		})
 
-		nodes, consensus, ca, admins := ClassifyClusterReConfig(clusterConfig, updatedConfig)
+		nodes, consensus, ca, admins, _ := ClassifyClusterReConfig(clusterConfig, updatedConfig)
 		require.False(t, nodes)
 		require.False(t, consensus)
 		require.False(t, ca)
