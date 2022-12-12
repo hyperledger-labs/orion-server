@@ -186,5 +186,6 @@ func deleteForSnapshotTest(t *testing.T, l *LevelDB) {
 
 	l.dbsList.RLock()
 	l.dbs[worldstate.DatabasesDBName].file.Delete([]byte("db1"), &opt.WriteOptions{Sync: true})
+	l.cache.delState(worldstate.DatabasesDBName, "db1")
 	l.dbsList.RUnlock()
 }
