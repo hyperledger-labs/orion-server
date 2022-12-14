@@ -542,7 +542,7 @@ func (v *ConfigTxValidator) validateConfigTransitionRules(currentConfig, updated
 		if currentConfig.GetLedgerConfig().GetStateMerklePatriciaTrieDisabled() != updatedConfig.GetLedgerConfig().GetStateMerklePatriciaTrieDisabled() {
 			return &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "LedgerConfig.StateMerkelPatriciaTrieDisabled cannot be changed",
+				ReasonIfInvalid: "LedgerConfig.StateMerklePatriciaTrieDisabled cannot be changed",
 			}, nil
 		}
 	}

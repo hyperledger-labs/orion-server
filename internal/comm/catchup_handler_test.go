@@ -266,7 +266,7 @@ func TestCatchupHandler_ServeHTTP_LargeResponse(t *testing.T) {
 		block := &types.Block{
 			Header: &types.BlockHeader{
 				BaseHeader:           &types.BlockHeaderBase{Number: n},
-				TxMerkelTreeRootHash: make([]byte, 1024), //just for size
+				TxMerkleTreeRootHash: make([]byte, 1024), //just for size
 			},
 		}
 		ledger1.Append(block)

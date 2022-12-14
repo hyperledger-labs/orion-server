@@ -485,8 +485,8 @@ func createSampleUserTxBlock(blockNumber uint64, prevBlockBaseHash []byte, prevB
 				LastCommittedBlockHash: prevBlockHash,
 				LastCommittedBlockNum:  blockNumber - 1,
 			},
-			TxMerkelTreeRootHash:    []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
-			StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
+			TxMerkleTreeRootHash:    []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
+			StateMerkleTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
 			ValidationInfo: []*types.ValidationInfo{
 				{
 					Flag: types.Flag_VALID,
@@ -519,8 +519,8 @@ func createSampleDataTxBlock(blockNumber uint64, prevBlockBaseHash []byte, prevB
 				LastCommittedBlockHash: prevBlockHash,
 				LastCommittedBlockNum:  blockNumber - 1,
 			},
-			TxMerkelTreeRootHash:    []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
-			StateMerkelTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
+			TxMerkleTreeRootHash:    []byte(fmt.Sprintf("treehash-%d", blockNumber-1)),
+			StateMerkleTreeRootHash: []byte(fmt.Sprintf("statehash-%d", blockNumber-1)),
 			ValidationInfo:          []*types.ValidationInfo{},
 		},
 	}

@@ -309,11 +309,11 @@ func TestTransactionProcessor(t *testing.T) {
 
 		root, err := mtree.BuildTreeForBlockTx(expectedBlock)
 		require.NoError(t, err)
-		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+		expectedBlock.Header.TxMerkleTreeRootHash = root.Hash()
 
-		stateTrie, err := mptrie.NewTrie(genesisHeader.StateMerkelTreeRootHash, env.stateTrieStore)
+		stateTrie, err := mptrie.NewTrie(genesisHeader.StateMerkleTreeRootHash, env.stateTrieStore)
 		require.NoError(t, err)
-		expectedBlock.Header.StateMerkelTreeRootHash = applyTxsOnTrie(t, env, expectedBlock.Payload.(*types.Block_DataTxEnvelopes).DataTxEnvelopes, stateTrie)
+		expectedBlock.Header.StateMerkleTreeRootHash = applyTxsOnTrie(t, env, expectedBlock.Payload.(*types.Block_DataTxEnvelopes).DataTxEnvelopes, stateTrie)
 
 		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
@@ -399,13 +399,13 @@ func TestTransactionProcessor(t *testing.T) {
 			},
 		}
 
-		stateTrie, err := mptrie.NewTrie(genesisHeader.StateMerkelTreeRootHash, env.stateTrieStore)
+		stateTrie, err := mptrie.NewTrie(genesisHeader.StateMerkleTreeRootHash, env.stateTrieStore)
 		require.NoError(t, err)
-		expectedBlock.Header.StateMerkelTreeRootHash = applyTxsOnTrie(t, env, expectedBlock.Payload.(*types.Block_DataTxEnvelopes).DataTxEnvelopes, stateTrie)
+		expectedBlock.Header.StateMerkleTreeRootHash = applyTxsOnTrie(t, env, expectedBlock.Payload.(*types.Block_DataTxEnvelopes).DataTxEnvelopes, stateTrie)
 
 		root, err := mtree.BuildTreeForBlockTx(expectedBlock)
 		require.NoError(t, err)
-		expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+		expectedBlock.Header.TxMerkleTreeRootHash = root.Hash()
 		block, err := env.blockStore.Get(2)
 		require.NoError(t, err)
 		require.True(t, block.GetConsensusMetadata().GetRaftTerm() > 0)

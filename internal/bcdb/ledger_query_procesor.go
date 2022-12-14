@@ -162,7 +162,7 @@ func (p *ledgerQueryProcessor) getDataProof(userId string, blockNum uint64, dbna
 		return nil, err
 	}
 
-	trie, err := mptrie.NewTrie(blockHeader.StateMerkelTreeRootHash, p.trieStore)
+	trie, err := mptrie.NewTrie(blockHeader.StateMerkleTreeRootHash, p.trieStore)
 	if err != nil {
 		return nil, err
 	}

@@ -409,17 +409,17 @@ func TestValidatorAndCommitter(t *testing.T) {
 			stateTrieRootOrg, err := env.blockProcessor.committer.stateTrie.Hash()
 			require.NoError(t, err)
 			for _, block := range tt.expectedBlocks {
-				// Because we update SkipchainHashes, TxMerkelTreeRootHash and StateMerkelTreeRootHash during process, we want to precalculate them
+				// Because we update SkipchainHashes, TxMerkleTreeRootHash and StatemerkleTreeRootHash during process, we want to precalculate them
 				// for the expected blocks
 				block.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, tt.expectedBlocks, block.Header.BaseHeader.Number)
 				root, err := mtree.BuildTreeForBlockTx(block)
 				require.NoError(t, err)
-				block.Header.TxMerkelTreeRootHash = root.Hash()
+				block.Header.TxMerkleTreeRootHash = root.Hash()
 
 				dbsUpdates, err := ConstructDBUpdatesForBlock(block, env.blockProcessor)
 				require.NoError(t, err)
 				require.NoError(t, env.blockProcessor.committer.applyBlockOnStateTrie(dbsUpdates))
-				block.Header.StateMerkelTreeRootHash, err = env.blockProcessor.committer.stateTrie.Hash()
+				block.Header.StateMerkleTreeRootHash, err = env.blockProcessor.committer.stateTrie.Hash()
 				require.NoError(t, err)
 			}
 			env.blockProcessor.committer.stateTrie, err = mptrie.NewTrie(stateTrieRootOrg, env.blockProcessor.committer.stateTrieStore)
@@ -445,7 +445,7 @@ func TestValidatorAndCommitter(t *testing.T) {
 				if err != nil {
 					return false
 				}
-				valid, err := proof.Verify(kvHash, tt.expectedBlocks[tt.expectedBlockHeight-2].Header.StateMerkelTreeRootHash, false)
+				valid, err := proof.Verify(kvHash, tt.expectedBlocks[tt.expectedBlockHeight-2].Header.StateMerkleTreeRootHash, false)
 				if err != nil || !valid {
 					return false
 				}
@@ -475,8 +475,8 @@ func TestValidatorAndCommitter(t *testing.T) {
 				require.Equal(t, precalculatedSkipListBlock.Header.SkipchainHashes, block.Header.SkipchainHashes, "Expected\t %s\nBlock\t\t %s\n", precalculatedSkipListBlockJSON, blockJSON)
 				root, err := mtree.BuildTreeForBlockTx(expectedBlock)
 				require.NoError(t, err)
-				require.Equal(t, root.Hash(), block.Header.TxMerkelTreeRootHash)
-				require.Equal(t, expectedBlock.Header.StateMerkelTreeRootHash, block.Header.StateMerkelTreeRootHash)
+				require.Equal(t, root.Hash(), block.Header.TxMerkleTreeRootHash)
+				require.Equal(t, expectedBlock.Header.StateMerkleTreeRootHash, block.Header.StateMerkleTreeRootHash)
 			}
 		}
 	})
@@ -625,13 +625,13 @@ func TestBlockCommitListener(t *testing.T) {
 	expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, genesisHash, []*types.Block{block2}, 2)
 	root, err := mtree.BuildTreeForBlockTx(block2)
 	require.NoError(t, err)
-	expectedBlock.Header.TxMerkelTreeRootHash = root.Hash()
+	expectedBlock.Header.TxMerkleTreeRootHash = root.Hash()
 	stateTrieRootOrg, err := env.blockProcessor.committer.stateTrie.Hash()
 
 	dbsUpdates, err := ConstructDBUpdatesForBlock(block2, env.blockProcessor)
 	require.NoError(t, err)
 	require.NoError(t, env.blockProcessor.committer.applyBlockOnStateTrie(dbsUpdates))
-	expectedBlock.Header.StateMerkelTreeRootHash, err = env.blockProcessor.committer.stateTrie.Hash()
+	expectedBlock.Header.StateMerkleTreeRootHash, err = env.blockProcessor.committer.stateTrie.Hash()
 	require.NoError(t, err)
 	env.blockProcessor.committer.stateTrie, err = mptrie.NewTrie(stateTrieRootOrg, env.blockProcessor.committer.stateTrieStore)
 

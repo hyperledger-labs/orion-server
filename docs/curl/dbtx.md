@@ -83,8 +83,8 @@ The receipt for the above transaction would look something like the following:
         "skipchain_hashes": [
           "WgR2lRdea8rt6O8UBzSdhtu/LXcAFDAPyYRVGfasHeI="
         ],
-        "tx_merkel_tree_root_hash": "CzIEbygWXNneRauTgFvxjSa5JvX1FWC3KN51jJDLxT0=",
-        "state_merkel_tree_root_hash": "QPUvUPUpCL/P31VtV0CuRs5OWhDJZeh2psL1XHOyID8=",
+        "tx_merkle_tree_root_hash": "CzIEbygWXNneRauTgFvxjSa5JvX1FWC3KN51jJDLxT0=",
+        "state_merkle_tree_root_hash": "QPUvUPUpCL/P31VtV0CuRs5OWhDJZeh2psL1XHOyID8=",
         "validation_info": [
           {}
         ]
@@ -350,8 +350,8 @@ The exact output would be
           "4Km4QTQDIZ+u7GmFJOqG8HXgmWEMkedJRcczp6xweo4=",
           "JAS8SOSIZqBQMQs9PUkgrCjAF4I//lzjcYshgAtMvzs="
         ],
-        "tx_merkel_tree_root_hash": "tgsHvDvjWbO8P/BIvtvRHuIBZUnptfpiHN9RyBSu9Lw=",
-        "state_merkel_tree_root_hash": "qmolWEmx9D8BtWPRUEE0tz4/bvzhxLpZUJR1gA7AT4Q=",
+        "tx_merkle_tree_root_hash": "tgsHvDvjWbO8P/BIvtvRHuIBZUnptfpiHN9RyBSu9Lw=",
+        "state_merkle_tree_root_hash": "qmolWEmx9D8BtWPRUEE0tz4/bvzhxLpZUJR1gA7AT4Q=",
         "validation_info": [
           {
             "flag": 5,
@@ -418,8 +418,8 @@ The following would be the transaction receipt that holds the reason for the inv
         "skipchain_hashes": [
           "XltNBYrr8XF6L8TSc9QcJmoGYchzqmbeCbpR/BjXTrE="
         ],
-        "tx_merkel_tree_root_hash": "UIG89/PfrT79WGZJHZINST+qSHXGaVSt0CwcuL0V0kQ=",
-        "state_merkel_tree_root_hash": "qmolWEmx9D8BtWPRUEE0tz4/bvzhxLpZUJR1gA7AT4Q=",
+        "tx_merkle_tree_root_hash": "UIG89/PfrT79WGZJHZINST+qSHXGaVSt0CwcuL0V0kQ=",
+        "state_merkle_tree_root_hash": "qmolWEmx9D8BtWPRUEE0tz4/bvzhxLpZUJR1gA7AT4Q=",
         "validation_info": [
           {
             "flag": 5,
@@ -480,8 +480,8 @@ The following is the transaction receipt:
           "JAS8SOSIZqBQMQs9PUkgrCjAF4I//lzjcYshgAtMvzs=",
           "fCjyJMJc/xLMdW7uRH22w7ps2QbGeLiLIfIJPMntitI="
         ],
-        "tx_merkel_tree_root_hash": "xEgj6T0djExEdGvWxwCrgD9nXj26VTyQYgYGTEcLscs=",
-        "state_merkel_tree_root_hash": "qmolWEmx9D8BtWPRUEE0tz4/bvzhxLpZUJR1gA7AT4Q=",
+        "tx_merkle_tree_root_hash": "xEgj6T0djExEdGvWxwCrgD9nXj26VTyQYgYGTEcLscs=",
+        "state_merkle_tree_root_hash": "qmolWEmx9D8BtWPRUEE0tz4/bvzhxLpZUJR1gA7AT4Q=",
         "validation_info": [
           {
             "flag": 5,

@@ -242,7 +242,7 @@ func TestCommitter(t *testing.T) {
 		}
 		stateTrieHash, err := env.committer.stateTrie.Hash()
 		require.NoError(t, err)
-		require.Equal(t, block.GetHeader().GetStateMerkelTreeRootHash(), stateTrieHash)
+		require.Equal(t, block.GetHeader().GetStateMerkleTreeRootHash(), stateTrieHash)
 	})
 }
 

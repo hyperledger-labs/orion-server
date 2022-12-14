@@ -345,7 +345,7 @@ func TestValidateConfigTx(t *testing.T) {
 			}),
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "LedgerConfig.StateMerkelPatriciaTrieDisabled cannot be changed",
+				ReasonIfInvalid: "LedgerConfig.StateMerklePatriciaTrieDisabled cannot be changed",
 			},
 		},
 		{
