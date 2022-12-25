@@ -40,6 +40,19 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 		Key:    "foo",
 	})
 
+	sigAbc := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataQuery{
+		UserId: submittingUserName,
+		DbName: dbName,
+		Key:    "abc/def",
+	})
+
+	sigKey1 := testutils.SignatureFromQuery(t, aliceSigner, &types.GetDataQuery{
+		UserId: submittingUserName,
+		DbName: dbName,
+		Key:    "key1",
+	})
+
+
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
@@ -84,6 +97,41 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 			expectedStatusCode: http.StatusOK,
 		},
 		{
+			name: "valid get data request - non URL",
+			expectedResponse: &types.GetDataResponseEnvelope{
+				Response: &types.GetDataResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					Value: []byte("bar"),
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							TxNum:    1,
+							BlockNum: 1,
+						},
+					},
+				},
+				Signature: []byte{0, 0, 0},
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "abc/def"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigAbc))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetData", dbName, submittingUserName, "abc/def").Return(response, nil)
+				db.On("IsDBExists", dbName).Return(true)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
 			name: "submitting user is not eligible to update the key",
 			requestFactory: func() (*http.Request, error) {
 				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "foo"), nil)
@@ -102,29 +150,29 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusForbidden,
-			expectedErr:        "error while processing 'GET /data/test_database/foo' because access forbidden",
+			expectedErr:        "error while processing 'GET /data/test_database/Zm9v' because access forbidden", // "Zm9v" is base64url of "foo"
 		},
 		{
 			name: "failed to get data",
 			requestFactory: func() (*http.Request, error) {
-				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "foo"), nil)
+				req, err := http.NewRequest(http.MethodGet, constants.URLForGetData(dbName, "key1"), nil)
 				if err != nil {
 					return nil, err
 				}
 				req.Header.Set(constants.UserHeader, submittingUserName)
-				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigFoo))
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sigKey1))
 				return req, nil
 			},
 			dbMockFactory: func(response *types.GetDataResponseEnvelope) bcdb.DB {
 				db := &mocks.DB{}
 				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
 				db.On("IsDBExists", dbName).Return(true)
-				db.On("GetData", dbName, submittingUserName, "foo").
+				db.On("GetData", dbName, submittingUserName, "key1").
 					Return(nil, errors.New("failed to get data"))
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
-			expectedErr:        "error while processing 'GET /data/test_database/foo' because failed to get data",
+			expectedErr:        "error while processing 'GET /data/test_database/a2V5MQ' because failed to get data", // "a2V5MQ" is base64url of "key1"
 		},
 		{
 			name:             "user doesn't exist",
@@ -488,7 +536,7 @@ func TestDataRequestHandler_DataRangeQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusForbidden,
-			expectedErr:        "error while processing 'GET /data/test_database?startkey=\"key1\"&endkey=\"key10\"&limit=10' because access forbidden",
+			expectedErr:        "error while processing 'GET /data/test_database?startkey=a2V5MQ&endkey=a2V5MTA&limit=10' because access forbidden", // "a2V5MQ" and "a2V5MTA" are the base64 url of "key1" and "key10", resp.
 		},
 		{
 			name: "failed to get data",
@@ -510,7 +558,7 @@ func TestDataRequestHandler_DataRangeQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusInternalServerError,
-			expectedErr:        "error while processing 'GET /data/test_database?startkey=\"key1\"&endkey=\"key10\"&limit=10' because failed to get data",
+			expectedErr:        "error while processing 'GET /data/test_database?startkey=a2V5MQ&endkey=a2V5MTA&limit=10' because failed to get data", // "a2V5MQ" and "a2V5MTA" are the base64 url of "key1" and "key10", resp.
 		},
 		{
 			name:             "user doesn't exist",

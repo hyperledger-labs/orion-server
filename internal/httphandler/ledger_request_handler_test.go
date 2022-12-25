@@ -879,7 +879,7 @@ func TestDataProofQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusNotFound,
-			expectedErr:        "error while processing 'GET /ledger/proof/data/bdb/key1?block=2' because no proof for block 2, db bdb, key key1, isDeleted false found",
+			expectedErr:        "error while processing 'GET /ledger/proof/data/bdb/a2V5MQ?block=2' because no proof for block 2, db bdb, key key1, isDeleted false found", // "a2V5MQ" is base 64 url of "key1"
 		},
 		{
 			name:             "no key exist, deleted is true",
@@ -907,7 +907,7 @@ func TestDataProofQuery(t *testing.T) {
 				return db
 			},
 			expectedStatusCode: http.StatusNotFound,
-			expectedErr:        "error while processing 'GET /ledger/proof/data/bdb/key1?block=2&deleted=true' because no proof for block 2, db bdb, key key1, isDeleted true found",
+			expectedErr:        "error while processing 'GET /ledger/proof/data/bdb/a2V5MQ?block=2&deleted=true' because no proof for block 2, db bdb, key key1, isDeleted true found", // "a2V5MQ" is base 64 url of "key1"
 		},
 		{
 			name:             "wrong url, block param missing",

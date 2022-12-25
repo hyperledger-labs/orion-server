@@ -25,14 +25,14 @@ func TestURLConstruction(t *testing.T) {
 			execute: func() string {
 				return URLForGetData("db1", "key1")
 			},
-			expectedURL: "/data/db1/key1",
+			expectedURL: "/data/db1/a2V5MQ",
 		},
 		{
 			name: "GetDataRange",
 			execute: func() string {
 				return URLForGetDataRange("db1", "key1", "key10", 10)
 			},
-			expectedURL: "/data/db1?startkey=\"key1\"&endkey=\"key10\"&limit=10",
+			expectedURL: "/data/db1?startkey=a2V5MQ&endkey=a2V5MTA&limit=10",
 		},
 		{
 			name: "JSONQuery",
@@ -116,28 +116,28 @@ func TestURLConstruction(t *testing.T) {
 			execute: func() string {
 				return URLDataProof(1, "db1", "key", false)
 			},
-			expectedURL: "/ledger/proof/data/db1/key?block=1",
+			expectedURL: "/ledger/proof/data/db1/a2V5?block=1",
 		},
 		{
 			name: "URLDataProof deleted true",
 			execute: func() string {
 				return URLDataProof(1, "db1", "key", true)
 			},
-			expectedURL: "/ledger/proof/data/db1/key?block=1&deleted=true",
+			expectedURL: "/ledger/proof/data/db1/a2V5?block=1&deleted=true",
 		},
 		{
 			name: "URLForGetHistoricalData",
 			execute: func() string {
 				return URLForGetHistoricalData("db1", "key1")
 			},
-			expectedURL: "/provenance/data/history/db1/key1",
+			expectedURL: "/provenance/data/history/db1/a2V5MQ",
 		},
 		{
 			name: "URLForGetHistoricalDeletedData",
 			execute: func() string {
 				return URLForGetHistoricalDeletedData("db1", "key1")
 			},
-			expectedURL: "/provenance/data/history/db1/key1?onlydeletes=true",
+			expectedURL: "/provenance/data/history/db1/a2V5MQ?onlydeletes=true",
 		},
 		{
 			name: "URLForGetHistoricalDataAt",
@@ -147,7 +147,7 @@ func TestURLConstruction(t *testing.T) {
 					TxNum:    5,
 				})
 			},
-			expectedURL: "/provenance/data/history/db2/key2?blocknumber=10&transactionnumber=5",
+			expectedURL: "/provenance/data/history/db2/a2V5Mg?blocknumber=10&transactionnumber=5",
 		},
 		{
 			name: "URLForGetHistoricalDataAtOrBelow",
@@ -157,7 +157,7 @@ func TestURLConstruction(t *testing.T) {
 					TxNum:    5,
 				})
 			},
-			expectedURL: "/provenance/data/history/db2/key2?blocknumber=10&transactionnumber=5&mostrecent=true",
+			expectedURL: "/provenance/data/history/db2/a2V5Mg?blocknumber=10&transactionnumber=5&mostrecent=true",
 		},
 		{
 			name: "URLForPreviousGetHistoricalData",
@@ -167,7 +167,7 @@ func TestURLConstruction(t *testing.T) {
 					TxNum:    6,
 				})
 			},
-			expectedURL: "/provenance/data/history/db3/key3?blocknumber=12&transactionnumber=6&direction=previous",
+			expectedURL: "/provenance/data/history/db3/a2V5Mw?blocknumber=12&transactionnumber=6&direction=previous",
 		},
 		{
 			name: "URLForNextGetHistoricalData",
@@ -177,21 +177,21 @@ func TestURLConstruction(t *testing.T) {
 					TxNum:    16,
 				})
 			},
-			expectedURL: "/provenance/data/history/db4/key4?blocknumber=22&transactionnumber=16&direction=next",
+			expectedURL: "/provenance/data/history/db4/a2V5NA?blocknumber=22&transactionnumber=16&direction=next",
 		},
 		{
 			name: "URLForGetDataReaders",
 			execute: func() string {
 				return URLForGetDataReaders("db5", "key5")
 			},
-			expectedURL: "/provenance/data/readers/db5/key5",
+			expectedURL: "/provenance/data/readers/db5/a2V5NQ",
 		},
 		{
 			name: "URLForGetDataWriters",
 			execute: func() string {
 				return URLForGetDataWriters("db6", "key6")
 			},
-			expectedURL: "/provenance/data/writers/db6/key6",
+			expectedURL: "/provenance/data/writers/db6/a2V5Ng",
 		},
 		{
 			name: "URLForGetDataReadBy",
