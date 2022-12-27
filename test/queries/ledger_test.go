@@ -636,7 +636,7 @@ func verifyTxProof(intermediateHashes [][]byte, receipt *types.TxReceipt, tx pro
 		}
 	}
 
-	return bytes.Equal(receipt.GetHeader().GetTxMerkelTreeRootHash(), currHash), nil
+	return bytes.Equal(receipt.GetHeader().GetTxMerkleTreeRootHash(), currHash), nil
 }
 
 // Scenario:
@@ -686,7 +686,7 @@ func TestLedgerDataProof(t *testing.T) {
 		valHash, err := calculateValueHash(worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), []byte{uint8(i)})
 		require.NoError(t, err)
 		require.NotNil(t, valHash)
-		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt.GetHeader().GetStateMerkelTreeRootHash(), false)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt.GetHeader().GetStateMerkleTreeRootHash(), false)
 		require.NoError(t, err)
 		require.True(t, ok)
 	}
@@ -708,7 +708,7 @@ func TestLedgerDataProof(t *testing.T) {
 		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
 		require.NoError(t, err)
 		require.NotNil(t, valHash)
-		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt2.GetHeader().GetStateMerkelTreeRootHash(), false)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt2.GetHeader().GetStateMerkleTreeRootHash(), false)
 		require.NoError(t, err)
 		require.True(t, ok)
 	})
@@ -750,7 +750,7 @@ func TestLedgerDataProof(t *testing.T) {
 		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
 		require.NoError(t, err)
 		require.NotNil(t, valHash)
-		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt3.GetHeader().GetStateMerkelTreeRootHash(), true)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt3.GetHeader().GetStateMerkleTreeRootHash(), true)
 		require.NoError(t, err)
 		require.True(t, ok)
 	})
@@ -845,7 +845,7 @@ func TestLedgerAsyncDataProof(t *testing.T) {
 			valHash, err := calculateValueHash(worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), []byte{uint8(i), uint8(i)})
 			require.NoError(t, err)
 			require.NotNil(t, valHash)
-			ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt.GetHeader().GetStateMerkelTreeRootHash(), false)
+			ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt.GetHeader().GetStateMerkleTreeRootHash(), false)
 			require.NoError(t, err)
 			require.True(t, ok)
 		}
@@ -868,7 +868,7 @@ func TestLedgerAsyncDataProof(t *testing.T) {
 		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
 		require.NoError(t, err)
 		require.NotNil(t, valHash)
-		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt2.GetHeader().GetStateMerkelTreeRootHash(), false)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt2.GetHeader().GetStateMerkleTreeRootHash(), false)
 		require.NoError(t, err)
 		require.True(t, ok)
 	})
@@ -886,7 +886,7 @@ func TestLedgerAsyncDataProof(t *testing.T) {
 		valHash, err := calculateValueHash(worldstate.DefaultDBName, "key1", []byte{uint8(2)})
 		require.NoError(t, err)
 		require.NotNil(t, valHash)
-		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt3.GetHeader().GetStateMerkelTreeRootHash(), true)
+		ok, err := verifyDataProof(respEnv.GetResponse().GetPath(), valHash, rcpt3.GetHeader().GetStateMerkleTreeRootHash(), true)
 		require.NoError(t, err)
 		require.True(t, ok)
 	})

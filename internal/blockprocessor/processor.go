@@ -160,7 +160,7 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 	if err != nil {
 		panic(err)
 	}
-	block.Header.TxMerkelTreeRootHash = root.Hash()
+	block.Header.TxMerkleTreeRootHash = root.Hash()
 
 	if err = b.committer.commitBlock(block); err != nil {
 		panic(err)
@@ -348,6 +348,6 @@ func loadStateTrie(mpTrieStore mptrie.Store, blockStore *blockstore.Store) (uint
 		return 0, blockStoreHeight, nil, err
 	}
 
-	trie, err := mptrie.NewTrie(lastTrieBlockHeader.GetStateMerkelTreeRootHash(), mpTrieStore)
+	trie, err := mptrie.NewTrie(lastTrieBlockHeader.GetStateMerkleTreeRootHash(), mpTrieStore)
 	return height, blockStoreHeight, trie, err
 }

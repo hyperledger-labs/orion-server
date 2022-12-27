@@ -268,8 +268,8 @@ The above command results in the following output:
       "base_header": {
         "number": 1
       },
-      "tx_merkel_tree_root_hash": "5ebw3HNhBF14XFKXwYOAvUwaiX05cj6F2oTsZBPdL4E=",
-      "state_merkel_tree_root_hash": "ut1aKeqCNbfXJad7kUUAwGaqZT5brjZVsPzt74t2/QU=",
+      "tx_merkle_tree_root_hash": "5ebw3HNhBF14XFKXwYOAvUwaiX05cj6F2oTsZBPdL4E=",
+      "state_merkle_tree_root_hash": "ut1aKeqCNbfXJad7kUUAwGaqZT5brjZVsPzt74t2/QU=",
       "validation_info": [
         {}
       ]

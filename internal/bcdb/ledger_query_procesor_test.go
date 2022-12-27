@@ -177,7 +177,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 	require.NoError(t, env.p.blockStore.AddSkipListLinks(configBlock))
 	root, err := mtree.BuildTreeForBlockTx(configBlock)
 	require.NoError(t, err)
-	configBlock.Header.TxMerkelTreeRootHash = root.Hash()
+	configBlock.Header.TxMerkleTreeRootHash = root.Hash()
 	require.NoError(t, env.p.blockStore.Commit(configBlock))
 	env.blocks = []*types.BlockHeader{configBlock.GetHeader()}
 	env.blockTx = []*types.DataTxEnvelopes{{}}
@@ -227,10 +227,10 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 		require.NoError(t, env.p.blockStore.AddSkipListLinks(block))
 		root, err := mtree.BuildTreeForBlockTx(block)
 		require.NoError(t, err)
-		block.Header.TxMerkelTreeRootHash = root.Hash()
+		block.Header.TxMerkleTreeRootHash = root.Hash()
 		dataUpdates := createDataUpdatesFromBlock(block)
 		blockprocessor.ApplyBlockOnStateTrie(trie, dataUpdates)
-		block.Header.StateMerkelTreeRootHash, err = trie.Hash()
+		block.Header.StateMerkleTreeRootHash, err = trie.Hash()
 		require.NoError(t, err)
 		require.NoError(t, env.p.blockStore.Commit(block))
 
@@ -609,7 +609,7 @@ func TestGetTxProof(t *testing.T) {
 			name:         "Getting block 5, tx 2 - correct",
 			blockNumber:  5,
 			txIndex:      2,
-			expectedRoot: env.blocks[4].TxMerkelTreeRootHash,
+			expectedRoot: env.blocks[4].TxMerkleTreeRootHash,
 			expectedTx:   env.blockTx[4].Envelopes[2],
 			user:         "testUser",
 		},
@@ -617,7 +617,7 @@ func TestGetTxProof(t *testing.T) {
 			name:         "Getting block 17, tx 5 - correct",
 			blockNumber:  17,
 			txIndex:      5,
-			expectedRoot: env.blocks[16].TxMerkelTreeRootHash,
+			expectedRoot: env.blocks[16].TxMerkleTreeRootHash,
 			expectedTx:   env.blockTx[16].Envelopes[5],
 			user:         "testUser",
 		},
@@ -625,7 +625,7 @@ func TestGetTxProof(t *testing.T) {
 			name:         "Getting block 45, tx 0 - correct",
 			blockNumber:  45,
 			txIndex:      0,
-			expectedRoot: env.blocks[44].TxMerkelTreeRootHash,
+			expectedRoot: env.blocks[44].TxMerkleTreeRootHash,
 			expectedTx:   env.blockTx[44].Envelopes[0],
 			user:         "testUser",
 		},
@@ -633,7 +633,7 @@ func TestGetTxProof(t *testing.T) {
 			name:         "Getting block 98, tx 90 - correct",
 			blockNumber:  98,
 			txIndex:      90,
-			expectedRoot: env.blocks[97].TxMerkelTreeRootHash,
+			expectedRoot: env.blocks[97].TxMerkleTreeRootHash,
 			expectedTx:   env.blockTx[97].Envelopes[90],
 			user:         "testUser",
 		},
@@ -785,7 +785,7 @@ func TestGetDataProof(t *testing.T) {
 				trieKey, err := state.ConstructCompositeKey(worldstate.DefaultDBName, testCase.key)
 				require.NoError(t, err)
 				kvHash, err := state.CalculateKeyValueHash(trieKey, testCase.value)
-				rootHash := env.blocks[testCase.blockNumber-1].StateMerkelTreeRootHash
+				rootHash := env.blocks[testCase.blockNumber-1].StateMerkleTreeRootHash
 				require.NoError(t, err)
 				isValid, err := mpTrieProof.Verify(kvHash, rootHash, testCase.isDeleted)
 				require.NoError(t, err)

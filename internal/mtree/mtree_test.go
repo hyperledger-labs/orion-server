@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -83,8 +83,8 @@ func TestBuildBlockTree(t *testing.T) {
 				require.Nil(t, root)
 				return
 			}
-			require.NotNil(t, tt.block.Header.TxMerkelTreeRootHash)
-			require.Equal(t, tt.block.Header.TxMerkelTreeRootHash, root.Hash())
+			require.NotNil(t, tt.block.Header.TxMerkleTreeRootHash)
+			require.Equal(t, tt.block.Header.TxMerkleTreeRootHash, root.Hash())
 			validateTreeRoot(t, root, tt.leftIdx, tt.rightIdx)
 		})
 	}
@@ -112,7 +112,7 @@ func generateDataBlock(t *testing.T, txNum int) *types.Block {
 	block := &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader:           &types.BlockHeaderBase{},
-			TxMerkelTreeRootHash: nil,
+			TxMerkleTreeRootHash: nil,
 			ValidationInfo:       []*types.ValidationInfo{},
 		},
 		Payload: &types.Block_DataTxEnvelopes{
@@ -157,7 +157,7 @@ func generateDataBlock(t *testing.T, txNum int) *types.Block {
 		require.NoError(t, err)
 		hashes = append(hashes, hash)
 	}
-	block.Header.TxMerkelTreeRootHash = prepareAndBuildTree(hashes).Hash()
+	block.Header.TxMerkleTreeRootHash = prepareAndBuildTree(hashes).Hash()
 	block.Payload.(*types.Block_DataTxEnvelopes).DataTxEnvelopes.Envelopes = txEnvelopes
 	return block
 }
@@ -205,7 +205,7 @@ func generateConfigBlock(t *testing.T) *types.Block {
 	hash, err := crypto.ComputeSHA256Hash(append(txBytes, vBytes...))
 	require.NoError(t, err)
 
-	block.Header.TxMerkelTreeRootHash = hash
+	block.Header.TxMerkleTreeRootHash = hash
 	return block
 }
 
@@ -239,7 +239,7 @@ func generateUserAdminBlock(t *testing.T) *types.Block {
 	hash, err := crypto.ComputeSHA256Hash(append(txBytes, vBytes...))
 	require.NoError(t, err)
 
-	block.Header.TxMerkelTreeRootHash = hash
+	block.Header.TxMerkleTreeRootHash = hash
 	return block
 }
 
@@ -273,7 +273,7 @@ func generateDBAdminBlock(t *testing.T) *types.Block {
 	require.NoError(t, err)
 	hashes := [][]byte{hash}
 
-	block.Header.TxMerkelTreeRootHash = prepareAndBuildTree(hashes).hash
+	block.Header.TxMerkleTreeRootHash = prepareAndBuildTree(hashes).hash
 	return block
 }
 

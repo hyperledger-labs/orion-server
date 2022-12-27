@@ -63,7 +63,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 		panic(err)
 	}
 	// Update block with state trie root
-	block.Header.StateMerkelTreeRootHash = stateTrieRootHash
+	block.Header.StateMerkleTreeRootHash = stateTrieRootHash
 
 	// Commit block to block store
 	if err := c.commitToBlockStore(block); err != nil {

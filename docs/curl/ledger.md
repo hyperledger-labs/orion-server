@@ -49,8 +49,8 @@ curl \
         "wZmtCr8rJp/NGsEDjySSfHhi7Omr2Yw/d8rUaetrzLE=",
         "tl3PgPL/E52yhCWG1vLGk/bJXRqhw3rDxSXZzvMcuWo="
       ],
-      "tx_merkel_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
-      "state_merkel_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
+      "tx_merkle_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
+      "state_merkle_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
       "validation_info": [
         {}
       ]
@@ -59,7 +59,7 @@ curl \
   "signature": "MEUCIQDMER7sTBmOQNHRV6/GON4OjrsKhE6Di5ok181JpwLFvgIgIQA+DHIr6x+GJe8dnF0FLgzXJ+29H9sZHZE46fVg5HQ="
 }
 ```
-As you can see, BlockHeader contains 3 hashes in `skipchain_hashes` section (blocks 4, 3, 1), previous block hash `previous_base_header_hash` (block 4), roots of tx merkle tree `tx_merkel_tree_root_hash` and state merkle-patricia trie `state_merkel_tree_root_hash`. 
+As you can see, BlockHeader contains 3 hashes in `skipchain_hashes` section (blocks 4, 3, 1), previous block hash `previous_base_header_hash` (block 4), roots of tx merkle tree `tx_merkle_tree_root_hash` and state merkle-patricia trie `state_merkle_tree_root_hash`. 
 
 ## Transaction receipt query
 Transaction commit can be done in synchronous or asynchronous way. In case of synchronous call, `TxReceipt` is part of result. In case of asynchronous call, no `TxReceipt` exist yet, and we have to access ledger to for it.
@@ -105,8 +105,8 @@ curl \
           "wZmtCr8rJp/NGsEDjySSfHhi7Omr2Yw/d8rUaetrzLE=",
           "tl3PgPL/E52yhCWG1vLGk/bJXRqhw3rDxSXZzvMcuWo="
         ],
-        "tx_merkel_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
-        "state_merkel_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
+        "tx_merkle_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
+        "state_merkle_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
         "validation_info": [
           {}
         ]
@@ -163,8 +163,8 @@ curl \
         "skipchain_hashes": [
           "r57EtiB2XO1XlVAxBwFtn7cHP7YsfUBFi69y0UY0tw0="
         ],
-        "tx_merkel_tree_root_hash": "dSc42JVp36bfORFO8QehzQFypEtBQfUzluT6ixhjeo4=",
-        "state_merkel_tree_root_hash": "YRsFw5PcG1XzYO5o5nJa3lVfknijRqu6cCaDF1zpPA8=",
+        "tx_merkle_tree_root_hash": "dSc42JVp36bfORFO8QehzQFypEtBQfUzluT6ixhjeo4=",
+        "state_merkle_tree_root_hash": "YRsFw5PcG1XzYO5o5nJa3lVfknijRqu6cCaDF1zpPA8=",
         "validation_info": [
           {}
         ]
@@ -181,8 +181,8 @@ curl \
           "wZmtCr8rJp/NGsEDjySSfHhi7Omr2Yw/d8rUaetrzLE=",
           "tl3PgPL/E52yhCWG1vLGk/bJXRqhw3rDxSXZzvMcuWo="
         ],
-        "tx_merkel_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
-        "state_merkel_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
+        "tx_merkle_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
+        "state_merkle_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
         "validation_info": [
           {}
         ]
@@ -191,8 +191,8 @@ curl \
         "base_header": {
           "number": 1
         },
-        "tx_merkel_tree_root_hash": "1XYyyOxBKRKw/vHgGGClrbko+wjkHmgzkWIjWEqoGaU=",
-        "state_merkel_tree_root_hash": "Gxq3k91oLlxknN9VJCBEnc9IFnJU7YKGbiKtbQLMDF0=",
+        "tx_merkle_tree_root_hash": "1XYyyOxBKRKw/vHgGGClrbko+wjkHmgzkWIjWEqoGaU=",
+        "state_merkle_tree_root_hash": "Gxq3k91oLlxknN9VJCBEnc9IFnJU7YKGbiKtbQLMDF0=",
         "validation_info": [
           {}
         ]
@@ -256,7 +256,7 @@ As it mentioned in BCDB description [here](../../README.md), BCDB maintains sepa
 As complimentary to provenance, BCDB uses Ethereum style Merkle-Particia Trie to provide cryptographically verifiable proofs of all state transitions. 
 Although it provides only one  single type of proof - that specific key was associated with specific value while specific block was committed to ledger.
 
-For each block, root of Merkle-Particia Trie stored inside block header - `state_merkel_tree_root_hash` and because tamper-prove nature on ledger, trie root is enough to prove existence of specific value at time block was committed. 
+For each block, root of Merkle-Particia Trie stored inside block header - `state_merkle_tree_root_hash` and because tamper-prove nature on ledger, trie root is enough to prove existence of specific value at time block was committed. 
 
 
 **Sign json serialized query**

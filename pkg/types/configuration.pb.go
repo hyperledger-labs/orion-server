@@ -439,7 +439,7 @@ type LedgerConfig struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Disables the state Merkle-Patricia-Trie construction. With MP-Trie construction disabled, the block's
-	// BlockHeadr.state_merkel_tree_root_hash field will be nil.
+	// BlockHeadr.state_merkle_tree_root_hash field will be nil.
 	// This flag takes effect on deployment (bootstrap) only, from the first (genesis) block.
 	// The value of this flag cannot be changed during run-time.
 	StateMerklePatriciaTrieDisabled bool `protobuf:"varint,1,opt,name=state_merkle_patricia_trie_disabled,json=stateMerklePatriciaTrieDisabled,proto3" json:"state_merkle_patricia_trie_disabled,omitempty"`

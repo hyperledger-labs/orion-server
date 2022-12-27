@@ -82,8 +82,8 @@ Once the above transaction gets committed, the submitter of the transaction woul
           "PAFz7foMQVLrK0q1bO9TYxW9ZwUMl7rb6G3DZoSD1FY=",
           "xz3tsHvNxVNsB709SBOJ3s2fuUXo2GciBGThc70aaTM="
         ],
-        "tx_merkel_tree_root_hash": "UTf7CV8x9/QC9luiVwe5QzHVg9hvCHNLxWAC2iD/5Zw=",
-        "state_merkel_tree_root_hash": "+kBbsknNLNuDVKxDTktcgcJMsR9gRAHHW03plIjrTg0=",
+        "tx_merkle_tree_root_hash": "UTf7CV8x9/QC9luiVwe5QzHVg9hvCHNLxWAC2iD/5Zw=",
+        "state_merkle_tree_root_hash": "+kBbsknNLNuDVKxDTktcgcJMsR9gRAHHW03plIjrTg0=",
         "validation_info": [
           {}
         ]
@@ -229,8 +229,8 @@ Once the above transaction gets committed, the submitter of the transaction woul
         "skipchain_hashes": [
           "xrRU2Hy5curlSi/YafvCCeKaAb8bF9vUNGhr5usK4fc="
         ],
-        "tx_merkel_tree_root_hash": "bSgG1t1yZhOGVOrqT4LR+wXdtB/LTXvYy2De1ouaq+U=",
-        "state_merkel_tree_root_hash": "TueFaZX9xju1WimSV0g7wxuekIJ7nq6Bf+o+WNWSnkc=",
+        "tx_merkle_tree_root_hash": "bSgG1t1yZhOGVOrqT4LR+wXdtB/LTXvYy2De1ouaq+U=",
+        "state_merkle_tree_root_hash": "TueFaZX9xju1WimSV0g7wxuekIJ7nq6Bf+o+WNWSnkc=",
         "validation_info": [
           {}
         ]
@@ -366,8 +366,8 @@ Once the above transaction gets committed, the submitting user would get the fol
           "WwuMQlvM05Kd/jh+6iD0Kt8ZxMXEdC1wEOk0wzxCBfc=",
           "xrRU2Hy5curlSi/YafvCCeKaAb8bF9vUNGhr5usK4fc="
         ],
-        "tx_merkel_tree_root_hash": "vobaBbri1K+lJv+rXYXRofWuQ0D+SDMGKaBwkTtXQQ0=",
-        "state_merkel_tree_root_hash": "jYpTKUQBA7dJZYlzz7gEZWqX503EqGC+z+9pOKJsDKQ=",
+        "tx_merkle_tree_root_hash": "vobaBbri1K+lJv+rXYXRofWuQ0D+SDMGKaBwkTtXQQ0=",
+        "state_merkle_tree_root_hash": "jYpTKUQBA7dJZYlzz7gEZWqX503EqGC+z+9pOKJsDKQ=",
         "validation_info": [
           {}
         ]
