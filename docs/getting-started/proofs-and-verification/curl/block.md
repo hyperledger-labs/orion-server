@@ -46,8 +46,8 @@ curl \
         "skipchain_hashes": [
           "r57EtiB2XO1XlVAxBwFtn7cHP7YsfUBFi69y0UY0tw0="
         ],
-        "tx_merkel_tree_root_hash": "dSc42JVp36bfORFO8QehzQFypEtBQfUzluT6ixhjeo4=",
-        "state_merkel_tree_root_hash": "YRsFw5PcG1XzYO5o5nJa3lVfknijRqu6cCaDF1zpPA8=",
+        "tx_merkle_tree_root_hash": "dSc42JVp36bfORFO8QehzQFypEtBQfUzluT6ixhjeo4=",
+        "state_merkle_tree_root_hash": "YRsFw5PcG1XzYO5o5nJa3lVfknijRqu6cCaDF1zpPA8=",
         "validation_info": [
           {}
         ]
@@ -64,8 +64,8 @@ curl \
           "wZmtCr8rJp/NGsEDjySSfHhi7Omr2Yw/d8rUaetrzLE=",
           "tl3PgPL/E52yhCWG1vLGk/bJXRqhw3rDxSXZzvMcuWo="
         ],
-        "tx_merkel_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
-        "state_merkel_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
+        "tx_merkle_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
+        "state_merkle_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
         "validation_info": [
           {}
         ]
@@ -74,8 +74,8 @@ curl \
         "base_header": {
           "number": 1
         },
-        "tx_merkel_tree_root_hash": "1XYyyOxBKRKw/vHgGGClrbko+wjkHmgzkWIjWEqoGaU=",
-        "state_merkel_tree_root_hash": "Gxq3k91oLlxknN9VJCBEnc9IFnJU7YKGbiKtbQLMDF0=",
+        "tx_merkle_tree_root_hash": "1XYyyOxBKRKw/vHgGGClrbko+wjkHmgzkWIjWEqoGaU=",
+        "state_merkle_tree_root_hash": "Gxq3k91oLlxknN9VJCBEnc9IFnJU7YKGbiKtbQLMDF0=",
         "validation_info": [
           {}
         ]

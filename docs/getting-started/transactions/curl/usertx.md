@@ -110,8 +110,8 @@ Upon a successful commit of the above transaction, the submitter of the transact
         "skipchain_hashes": [
           "eUxPHg5TFfTU3CRmYISAHDPI6DRHxbiQccaeytl4WBk="
         ],
-        "tx_merkel_tree_root_hash": "5nu+kdyEzZOIcy6qDDCls+GSRKK0aRdp6lbZJBUnZJQ=",
-        "state_merkel_tree_root_hash": "milzir+V4vvodu+e2BPv/j5XKlh6SfJmy3cRsBlJttw=",
+        "tx_merkle_tree_root_hash": "5nu+kdyEzZOIcy6qDDCls+GSRKK0aRdp6lbZJBUnZJQ=",
+        "state_merkle_tree_root_hash": "milzir+V4vvodu+e2BPv/j5XKlh6SfJmy3cRsBlJttw=",
         "validation_info": [
           {}
         ]
@@ -401,8 +401,8 @@ Once the transaction is validated and committed, the submitter of the transactio
           "7nEaUCRBiGvmrhbhl7tzupb0K/KjGdS/SSJtCLjvsjA=",
           "IHP38VOoGoVHAHROXPZJ8ZWG3pZ6rmqQYovVzm5i7rw="
         ],
-        "tx_merkel_tree_root_hash": "iz84iY89BolcBkVD8okAAqg5duGT/+eivcTO4OcpnNM=",
-        "state_merkel_tree_root_hash": "tAb0KTsd9JgCQ1YZMwYLs2O3wpo0ynA7h22B8pKzBC0=",
+        "tx_merkle_tree_root_hash": "iz84iY89BolcBkVD8okAAqg5duGT/+eivcTO4OcpnNM=",
+        "state_merkle_tree_root_hash": "tAb0KTsd9JgCQ1YZMwYLs2O3wpo0ynA7h22B8pKzBC0=",
         "validation_info": [
           {}
         ]
