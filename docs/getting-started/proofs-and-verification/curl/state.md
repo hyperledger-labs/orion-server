@@ -10,7 +10,7 @@ As mentioned in the Orion description [here](../../../introduction) and detailed
 In addition to the provenance graph store, Orion uses an Ethereum-style Merkle-Patricia Trie to provide cryptographically verifiable proofs of all state transitions.
 It provides only one single type of proof: that a specific key was associated with a specific value when a specific block was committed to the ledger.
 
-For each block, a root of the Merkle-Particia Trie is stored inside the block header - `state_merkel_tree_root_hash`. And because of the tamper-proof nature of the ledger, the trie root is enough to prove the existence of a specific value at the time the block was committed. 
+For each block, a root of the Merkle-Particia Trie is stored inside the block header - `state_merkle_tree_root_hash`. And because of the tamper-proof nature of the ledger, the trie root is enough to prove the existence of a specific value at the time the block was committed. 
 
 
 **Sign json serialized query**

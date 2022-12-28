@@ -51,8 +51,8 @@ curl \
         "wZmtCr8rJp/NGsEDjySSfHhi7Omr2Yw/d8rUaetrzLE=",
         "tl3PgPL/E52yhCWG1vLGk/bJXRqhw3rDxSXZzvMcuWo="
       ],
-      "tx_merkel_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
-      "state_merkel_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
+      "tx_merkle_tree_root_hash": "UXXqKu/I2Vr0Ma5cV9Hfun4Xo5285ZwdV9jcKspTnJo=",
+      "state_merkle_tree_root_hash": "ksPp+NOrYLi909AYgrmrmGN1DKuez8ItpRJeLFpWy9g=",
       "validation_info": [
         {}
       ]
@@ -61,4 +61,4 @@ curl \
   "signature": "MEUCIQDMER7sTBmOQNHRV6/GON4OjrsKhE6Di5ok181JpwLFvgIgIQA+DHIr6x+GJe8dnF0FLgzXJ+29H9sZHZE46fVg5HQ="
 }
 ```
-As you can see, the block header contains 3 hashes in the `skipchain_hashes` section (blocks 4, 3, 1), the previous block hash `previous_base_header_hash` (block 4), the roots of the tx Merkle tree `tx_merkel_tree_root_hash` and the state Merkle-Patricia trie `state_merkel_tree_root_hash`.
+As you can see, the block header contains 3 hashes in the `skipchain_hashes` section (blocks 4, 3, 1), the previous block hash `previous_base_header_hash` (block 4), the roots of the tx Merkle tree `tx_merkle_tree_root_hash` and the state Merkle-Patricia trie `state_merkle_tree_root_hash`.

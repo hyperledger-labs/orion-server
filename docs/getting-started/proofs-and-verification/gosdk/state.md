@@ -23,7 +23,7 @@ Ledger connectivity proof is eliminated here as well. For details and an example
 	compositeKey, err := state.ConstructCompositeKey(db, key)
 	kvHash, err := state.CalculateKeyValueHash(compositeKey, []byte(value))
 	// Validation proof
-	res, err := dataProof.Verify(kvHash, blockHeader.GetStateMerkelTreeRootHash(), false)
+	res, err := dataProof.Verify(kvHash, blockHeader.GetStateMerkleTreeRootHash(), false)
 
     if !res {
         fmt.Printf("DB-Key-Value tuple (%s, %s, %s) at time of block %d is not part of ledger\n", db, key, value, txReceipt.Header.BaseHeader.Number)
