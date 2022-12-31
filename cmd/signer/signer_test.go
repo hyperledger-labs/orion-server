@@ -34,13 +34,7 @@ func TestSigner(t *testing.T) {
 	})
 
 	t.Run("correct args", func(t *testing.T) {
-		tempDir, err := ioutil.TempDir("/tmp", "crypto")
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			if err := os.RemoveAll(tempDir); err != nil {
-				t.Errorf("error while removing test directory: %v", err)
-			}
-		})
+		tempDir := t.TempDir()
 
 		adminCert, adminKey := createAdminCreds(t, tempDir)
 		data := "'{\"user_id\":\"admin\"}'"

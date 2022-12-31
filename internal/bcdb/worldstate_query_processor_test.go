@@ -5,8 +5,6 @@ package bcdb
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -29,8 +27,7 @@ type worldstateQueryProcessorTestEnv struct {
 func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorTestEnv {
 	nodeID := "test-node-id1"
 
-	path, err := ioutil.TempDir("/tmp", "queryProcessor")
-	require.NoError(t, err)
+	path := t.TempDir()
 
 	c := &logger.Config{
 		Level:         "info",
@@ -48,19 +45,12 @@ func newWorldstateQueryProcessorTestEnv(t *testing.T) *worldstateQueryProcessorT
 		},
 	)
 	if err != nil {
-		if err := os.RemoveAll(path); err != nil {
-			t.Errorf("failed to remove %s due to %v", path, err)
-		}
-
 		t.Fatalf("failed to create a new leveldb instance, %v", err)
 	}
 
 	cleanup := func(t *testing.T) {
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close leveldb: %v", err)
-		}
-		if err := os.RemoveAll(path); err != nil {
-			t.Fatalf("failed to remove %s due to %v", path, err)
 		}
 	}
 

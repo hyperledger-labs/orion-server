@@ -2,8 +2,6 @@ package store
 
 import (
 	"encoding/binary"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -27,9 +25,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("only put", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "update_and_query_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "test-store1")
 		c := &Config{
@@ -51,9 +47,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("put and persist", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "update_and_query_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "test-store2")
 		c := &Config{
@@ -75,9 +69,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("put partial persist and clean memory", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "update_and_query_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "test-store3")
 		c := &Config{
@@ -126,9 +118,7 @@ func TestPutAndPersist(t *testing.T) {
 	t.Run("put and persist - reopen store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "update_and_query_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "test-store4")
 		c := &Config{

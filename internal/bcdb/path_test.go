@@ -4,8 +4,6 @@ package bcdb
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,9 +11,7 @@ import (
 
 func TestPath(t *testing.T) {
 	t.Run("worldstate path", func(t *testing.T) {
-		dir, err := ioutil.TempDir("", "statedb")
-		require.NoError(t, err)
-		defer os.RemoveAll(dir)
+		dir := t.TempDir()
 
 		require.Equal(
 			t,
@@ -25,9 +21,7 @@ func TestPath(t *testing.T) {
 	})
 
 	t.Run("blockstore path", func(t *testing.T) {
-		dir, err := ioutil.TempDir("", "blockstore")
-		require.NoError(t, err)
-		defer os.RemoveAll(dir)
+		dir := t.TempDir()
 
 		require.Equal(
 			t,

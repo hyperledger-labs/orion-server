@@ -1,7 +1,6 @@
 package user
 
 import (
-	"io/ioutil"
 	"testing"
 	"time"
 
@@ -12,8 +11,7 @@ import (
 )
 
 func TestUserUpdateACL(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

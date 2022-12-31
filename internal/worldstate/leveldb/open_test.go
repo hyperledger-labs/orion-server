@@ -3,8 +3,6 @@
 package leveldb
 
 import (
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -39,9 +37,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("open a new levelDB instance", func(t *testing.T) {
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		dbRootDir := filepath.Join(testDir, "new-leveldb")
 		conf := &Config{
@@ -60,9 +56,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("open while partial leveldb instance exist with an empty dir", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		// create folders and files to mimic an existing creation but a crash before
 		// the successful completion
@@ -85,9 +79,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("open while partial leveldb instance exist with the creation flag", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		// create folders and files to mimic an existing creation but a crash before
 		// the successful completion
@@ -113,9 +105,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("reopen an empty leveldb", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		dbRootDir := filepath.Join(testDir, "reopen-empty-store")
 		conf := &Config{
@@ -141,9 +131,7 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	t.Run("reopen non-empty leveldb", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		dbRootDir := filepath.Join(testDir, "reopen-non-empty-store")
 		conf := &Config{

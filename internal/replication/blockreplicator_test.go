@@ -4,8 +4,6 @@
 package replication_test
 
 import (
-	"io/ioutil"
-	"os"
 	"sync"
 	"testing"
 	"time"
@@ -24,7 +22,6 @@ import (
 func TestBlockReplicator_StartClose_Fast(t *testing.T) {
 	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
-	defer os.RemoveAll(env.testDir)
 
 	err := env.conf.Transport.Start()
 	require.NoError(t, err)
@@ -46,7 +43,6 @@ func TestBlockReplicator_StartClose_Fast(t *testing.T) {
 func TestBlockReplicator_StartClose_Slow(t *testing.T) {
 	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
-	defer os.RemoveAll(env.testDir)
 
 	err := env.conf.Transport.Start()
 	require.NoError(t, err)
@@ -75,7 +71,6 @@ func TestBlockReplicator_StartClose_Slow(t *testing.T) {
 func TestBlockReplicator_Restart(t *testing.T) {
 	env := createNodeEnv(t, "info")
 	require.NotNil(t, env)
-	defer os.RemoveAll(env.testDir)
 
 	err := env.conf.Transport.Start()
 	require.NoError(t, err)
@@ -122,7 +117,6 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	t.Run("normal flow", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
-		defer os.RemoveAll(env.testDir)
 
 		err := env.conf.Transport.Start()
 		require.NoError(t, err)
@@ -183,7 +177,6 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	t.Run("normal flow: close before commit reply", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
-		defer os.RemoveAll(env.testDir)
 
 		err := env.conf.Transport.Start()
 		require.NoError(t, err)
@@ -219,7 +212,6 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	t.Run("normal flow: blocked submit", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
-		defer os.RemoveAll(env.testDir)
 
 		err := env.conf.Transport.Start()
 		require.NoError(t, err)
@@ -284,7 +276,6 @@ func TestBlockReplicator_Submit(t *testing.T) {
 	t.Run("restart", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
-		defer os.RemoveAll(env.testDir)
 
 		err := env.conf.Transport.Start()
 		require.NoError(t, err)
@@ -385,7 +376,6 @@ func TestBlockReplicator_ReConfig(t *testing.T) {
 	t.Run("update admins", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
-		defer os.RemoveAll(env.testDir)
 		err := env.Start()
 		require.NoError(t, err)
 
@@ -435,7 +425,6 @@ func TestBlockReplicator_ReConfig(t *testing.T) {
 	t.Run("update CAs", func(t *testing.T) {
 		env := createNodeEnv(t, "info")
 		require.NotNil(t, env)
-		defer os.RemoveAll(env.testDir)
 		err := env.Start()
 		require.NoError(t, err)
 
@@ -487,9 +476,7 @@ func TestBlockReplicator_Snapshots(t *testing.T) {
 	// - submit blocks and verify the last 4 snapshots exist.
 	t.Run("take a snapshot every two blocks", func(t *testing.T) {
 		lg := testLogger(t, "info")
-		testDir, err := ioutil.TempDir("", "replication-test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		block := &types.Block{
 			Header: &types.BlockHeader{
@@ -555,9 +542,7 @@ func TestBlockReplicator_Snapshots(t *testing.T) {
 	// Correct behavior after restart is checked by submitting more blocks and checking that they commit.
 	t.Run("restart from a snapshot", func(t *testing.T) {
 		lg := testLogger(t, "info")
-		testDir, err := ioutil.TempDir("", "replication-test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		block := &types.Block{
 			Header: &types.BlockHeader{

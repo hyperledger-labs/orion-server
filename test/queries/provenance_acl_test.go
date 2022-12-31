@@ -4,7 +4,6 @@
 package queries
 
 import (
-	"io/ioutil"
 	"testing"
 	"time"
 
@@ -18,8 +17,7 @@ import (
 // only the admin user can read historical data.
 // only the user and admin can fetch all operations performed by the user.
 func TestProvenanceACL(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

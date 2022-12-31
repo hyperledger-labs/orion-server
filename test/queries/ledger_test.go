@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"strconv"
 	"testing"
 	"time"
@@ -33,8 +32,7 @@ import (
 // GET /ledger/block/{blockNumber}?augmented=true
 // where {blockNumber} is 1 (genesis), 2-11 (data)
 func TestLedgerBlockQueries(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -205,8 +203,7 @@ func TestLedgerBlockQueries(t *testing.T) {
 // HTTP GET "/ledger/path?start={startId}&end={endId}" with invalid query params
 // where {startId} and {endId} are: out of range, reverse order
 func TestLedgerPathQueries(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -392,8 +389,7 @@ func verifyLedgerPath(lp []*types.BlockHeader) error {
 // HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" gets proof for tx with index idx inside block blockId
 // HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" with invalid query params
 func TestLedgerTxProof(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -471,8 +467,7 @@ func TestLedgerTxProof(t *testing.T) {
 // HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" gets proof for tx with index idx inside block blockId
 // HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" with invalid query params
 func TestLedgerAsyncTxProof(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -643,8 +638,7 @@ func verifyTxProof(intermediateHashes [][]byte, receipt *types.TxReceipt, tx pro
 // HTTP GET "/ledger/proof/data/{blockId}/{dbname}/{key}?deleted={true|false}" gets proof for value associated with (dbname, key) in block blockId,
 // HTTP GET "/ledger/proof/data/{blockId}/{dbname}/{key}" gets proof for value associated with (dbname, key) in block blockId
 func TestLedgerDataProof(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -757,8 +751,7 @@ func TestLedgerDataProof(t *testing.T) {
 }
 
 func TestLedgerAsyncDataProof(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -955,8 +948,7 @@ func calculateValueHash(dbName, key string, value []byte) ([]byte, error) {
 }
 
 func TestLedgerAsyncDataMPTrieDisabled(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

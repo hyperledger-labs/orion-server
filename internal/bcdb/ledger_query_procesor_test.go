@@ -6,8 +6,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/hyperledger-labs/orion-server/pkg/state"
@@ -39,8 +37,7 @@ type ledgerProcessorTestEnv struct {
 }
 
 func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
-	path, err := ioutil.TempDir("/tmp", "ledgerQueryProcessor")
-	require.NoError(t, err)
+	path := t.TempDir()
 
 	c := &logger.Config{
 		Level:         "info",
@@ -59,9 +56,6 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		},
 	)
 	if err != nil {
-		if err := os.RemoveAll(path); err != nil {
-			t.Errorf("failed to remove %s due to %v", path, err)
-		}
 		t.Fatalf("failed to create a new leveldb instance, %v", err)
 	}
 
@@ -73,9 +67,6 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(path); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", path, rmErr)
-		}
 		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
@@ -95,9 +86,6 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(path); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", path, rmErr)
-		}
 		t.Fatalf("error while creating provenancestore, %v", err)
 	}
 
@@ -113,9 +101,6 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		}
 		if err := trieStore.Close(); err != nil {
 			t.Errorf("error while closing triestore, %v", err)
-		}
-		if err := os.RemoveAll(path); err != nil {
-			t.Fatalf("failed to remove %s due to %v", path, err)
 		}
 	}
 

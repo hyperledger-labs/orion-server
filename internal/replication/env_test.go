@@ -2,9 +2,7 @@ package replication_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
-	"os"
 	"path"
 	"reflect"
 	"sync"
@@ -74,12 +72,10 @@ type nodeEnv struct {
 
 func createNodeEnv(t *testing.T, level string) *nodeEnv {
 	lg := testLogger(t, level)
-	testDir, err := ioutil.TempDir("", "replication-test")
-	require.NoError(t, err)
+	testDir := t.TempDir()
 
 	env, err := newNodeEnv(1, testDir, lg, clusterConfig1node)
 	if err != nil {
-		os.RemoveAll(testDir)
 		return nil
 	}
 	env.testDir = testDir // clean the top level
@@ -207,8 +203,7 @@ type clusterEnv struct {
 func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logLevel string, logOpts ...zap.Option) *clusterEnv {
 	lg := testLogger(t, logLevel, logOpts...)
 
-	testDir, err := ioutil.TempDir("", "replication-test")
-	require.NoError(t, err)
+	testDir := t.TempDir()
 
 	clusterConfig := &types.ClusterConfig{
 		ConsensusConfig: &types.ConsensusConfig{
@@ -249,7 +244,6 @@ func createClusterEnv(t *testing.T, nNodes int, raftConf *types.RaftConfig, logL
 	for n := uint32(1); n <= uint32(nNodes); n++ {
 		nEnv, err := newNodeEnv(n, testDir, lg, proto.Clone(clusterConfig).(*types.ClusterConfig))
 		if err != nil {
-			os.RemoveAll(testDir)
 			return nil
 		}
 
@@ -266,9 +260,6 @@ func destroyClusterEnv(t *testing.T, env *clusterEnv) {
 			assert.NoError(t, err)
 		}
 	}
-
-	err := os.RemoveAll(env.testDir)
-	assert.NoError(t, err)
 }
 
 // create a BlockReplicator environment with a genesis block

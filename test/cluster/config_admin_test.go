@@ -5,7 +5,6 @@ package cluster
 
 import (
 	"encoding/pem"
-	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
@@ -21,8 +20,7 @@ import (
 // - alice adds bob to the admins' list
 // - bob tries to add alice again to the admins' list => the tx fails because alice is already an admin
 func TestAddNewAdmins(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -129,8 +127,7 @@ func TestAddNewAdmins(t *testing.T) {
 }
 
 func TestAddNewAdminWithInvalidCertificate(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -182,8 +179,7 @@ func TestAddNewAdminWithInvalidCertificate(t *testing.T) {
 // - admin adds alice to admins list
 // - alice deletes admin from the admins' list
 func TestDeleteAdmin(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -295,8 +291,7 @@ func TestDeleteAdmin(t *testing.T) {
 // - update admin signer to new signer based on alice's private key
 // - get config envelope
 func TestChangeAdminCA(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -368,8 +363,7 @@ func TestChangeAdminCA(t *testing.T) {
 // - alice is a regular user so access to ClusterConfig is denied
 // - adding alice to admins list => alice can get ClusterConfig
 func TestGetClusterConfigAccessibility(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

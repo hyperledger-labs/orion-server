@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"net/http"
 	"net/url"
@@ -136,13 +135,7 @@ func (env *serverTestEnv) getConfigResponse(t *testing.T) *types.GetConfigRespon
 }
 
 func newServerTestEnv(t *testing.T, serverTLS bool, clientTLS bool, disableProvenance bool) *serverTestEnv {
-	tempDir, err := ioutil.TempDir("/tmp", "serverTest")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		if err := os.RemoveAll(tempDir); err != nil {
-			t.Errorf("error while removing test directory: %v", err)
-		}
-	})
+	tempDir := t.TempDir()
 
 	rootCAPemCert, caPrivKey, err := testutils.GenerateRootCA("Orion RootCA", "127.0.0.1")
 	require.NoError(t, err)

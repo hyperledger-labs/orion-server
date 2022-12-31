@@ -1,7 +1,6 @@
 package cluster
 
 import (
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"testing"
@@ -103,8 +102,7 @@ func removeServer(t *testing.T, leaderServer *setup.Server, c *setup.Cluster, re
 // - remove leader
 // - remove follower
 func TestRemoveLeaderAndFollower(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -155,8 +153,7 @@ func TestRemoveLeaderAndFollower(t *testing.T) {
 // - start 2 => 3 nodes are active => there is a majority to choose a leader
 // - start 3
 func TestRemoveNodeLossOfQuorum(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(5)
 	setupConfig := &setup.Config{
@@ -223,8 +220,7 @@ func TestRemoveNodeLossOfQuorum(t *testing.T) {
 // - try to remove node from Members only without also removing from Nodes
 // - try to remove 2 servers in one tx
 func TestInvalidRemove(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(5)
 	setupConfig := &setup.Config{

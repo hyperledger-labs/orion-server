@@ -4,8 +4,6 @@
 package setup
 
 import (
-	"io/ioutil"
-	"os"
 	"path"
 	"testing"
 
@@ -16,9 +14,7 @@ import (
 )
 
 func TestWriteLocalConfig(t *testing.T) {
-	testDir, err := ioutil.TempDir("", "integration-test-setup-")
-	require.NoError(t, err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	localConfig := &config.LocalConfiguration{
 		Server: config.ServerConf{
@@ -59,7 +55,7 @@ func TestWriteLocalConfig(t *testing.T) {
 
 	fileName := path.Join(testDir, "config.yml")
 
-	err = WriteLocalConfig(localConfig, fileName)
+	err := WriteLocalConfig(localConfig, fileName)
 	require.NoError(t, err)
 
 	v := viper.New()
@@ -73,9 +69,7 @@ func TestWriteLocalConfig(t *testing.T) {
 }
 
 func TestWriteSharedConfig(t *testing.T) {
-	testDir, err := ioutil.TempDir("", "integration-test-setup-")
-	require.NoError(t, err)
-	defer os.RemoveAll(testDir)
+	testDir := t.TempDir()
 
 	sharedConfig := &config.SharedConfiguration{
 		Nodes: []*config.NodeConf{
@@ -106,7 +100,7 @@ func TestWriteSharedConfig(t *testing.T) {
 
 	fileName := path.Join(testDir, "shared-config.yml")
 
-	err = WriteSharedConfig(sharedConfig, fileName)
+	err := WriteSharedConfig(sharedConfig, fileName)
 	require.NoError(t, err)
 
 	v := viper.New()

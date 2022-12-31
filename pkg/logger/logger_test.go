@@ -95,9 +95,7 @@ func TestLogger(t *testing.T) {
 		t.Run(tt.level, func(t *testing.T) {
 			t.Parallel()
 
-			testDir, err := ioutil.TempDir("", "logger-test")
-			require.NoError(t, err)
-			defer os.RemoveAll(testDir)
+			testDir := t.TempDir()
 
 			logFile := path.Join(testDir, tt.fileName)
 
@@ -191,9 +189,7 @@ func TestDynamicLogger(t *testing.T) {
 		t.Run(tt.level, func(t *testing.T) {
 			t.Parallel()
 
-			testDir, err := ioutil.TempDir("", "logger-test")
-			require.NoError(t, err)
-			defer os.RemoveAll(testDir)
+			testDir := t.TempDir()
 
 			logFile := path.Join(testDir, tt.fileName)
 
@@ -393,9 +389,7 @@ func TestLoggerWith(t *testing.T) {
 		t.Run(tt.level, func(t *testing.T) {
 			t.Parallel()
 
-			testDir, err := ioutil.TempDir("", "logger-test")
-			require.NoError(t, err)
-			defer os.RemoveAll(testDir)
+			testDir := t.TempDir()
 
 			logFile := path.Join(testDir, tt.fileName)
 			l, err := New(&Config{

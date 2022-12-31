@@ -5,9 +5,7 @@ package stateindex
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
 	"math"
-	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -35,8 +33,7 @@ func newIndexTestEnv(t *testing.T) *indexTestEnv {
 	logger, err := logger.New(lc)
 	require.NoError(t, err)
 
-	dir, err := ioutil.TempDir("", "index")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	dbPath := filepath.Join(dir, "leveldb")
 	db, err := leveldb.Open(
@@ -46,9 +43,6 @@ func newIndexTestEnv(t *testing.T) *indexTestEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, rmErr)
-		}
 		t.Fatalf("error while creating leveldb, %v", err)
 	}
 

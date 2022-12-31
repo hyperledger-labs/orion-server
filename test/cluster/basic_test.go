@@ -5,7 +5,6 @@ package cluster
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"sync"
@@ -47,8 +46,7 @@ func getPorts(num uint32) (node uint32, peer uint32) {
 // - expect 1 tx to be accepted, and 2 to be redirected.
 // - check that the tx accepted is committed and that the written key-value is replicated to all servers.
 func TestBasicCluster(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -113,8 +111,7 @@ func TestBasicCluster(t *testing.T) {
 // - wait for one to be the new leader.
 // - make sure the stopped server is in sync with the transaction made while it was stopped.
 func NodeRecovery(t *testing.T, victimIsLeader bool) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -213,7 +210,7 @@ func TestNodeRecoveryLeader(t *testing.T) {
 	NodeRecovery(t, true)
 }
 
-//Scenario:
+// Scenario:
 // round 1:
 // - start 3 servers in a cluster.
 // - wait for one to be the leader.
@@ -233,8 +230,7 @@ func TestNodeRecoveryLeader(t *testing.T) {
 // - find leader4.
 // - submit a tx => tx accepted.
 func StopServerNoMajorityToChooseLeader(t *testing.T, victimIsLeader bool) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -406,8 +402,7 @@ func TestStopLeaderNoMajorityToChooseLeader(t *testing.T) {
 // - shutting down and starting all servers in the cluster.
 // - make sure the servers are in sync with the txs made before they were shut down.
 func TestClusterRestart(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -486,8 +481,7 @@ func TestClusterRestart(t *testing.T) {
 // - repeat until each server was a leader at least once.
 // - make sure each node submitted a valid tx as a leader.
 func TestAllNodesGetLeadership(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{

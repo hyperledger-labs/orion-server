@@ -30,8 +30,7 @@ import (
 // - wait for one to be the new leader.
 // - make sure the stopped server is in sync with the txs made while it was stopped.
 func TestNodeRecoveryWithTLS(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -107,8 +106,7 @@ func TestNodeRecoveryWithTLS(t *testing.T) {
 // - restart the server.
 // - make sure the server is in sync with previous txs.
 func TestNodeRecoveryWithCatchupAndTLS(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -257,8 +255,7 @@ func TestNodeRecoveryWithCatchupAndTLS(t *testing.T) {
 // - create server with TLS disabled, fail to start the new server.
 // - create server with TLS enabled but a key-cert pair not from the cluster's CA, fail to start the new server.
 func TestTLSAddInvalidNodes(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -362,8 +359,7 @@ func TestTLSAddInvalidNodes(t *testing.T) {
 // - start a 3 servers cluster with TLS enabled.
 // - change server-2 config file.
 func TestTLSChangeNodeCA(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
