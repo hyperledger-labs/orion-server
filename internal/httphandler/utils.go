@@ -32,13 +32,32 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 
 	switch queryType {
 	case constants.GetData:
+		key, err := utils.GetBase64urlKey(params, "key")
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+			return nil, true
+		}
+
 		payload = &types.GetDataQuery{
 			UserId: querierUserID,
 			DbName: params["dbname"],
-			Key:    params["key"],
+			Key:    key,
 		}
+
 	case constants.GetDataRange:
 		limit, err := strconv.ParseUint(params["limit"], 10, 64)
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+			return nil, true
+		}
+
+		startKey, err := utils.GetBase64urlKey(params, "startkey")
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
+			return nil, true
+		}
+
+		endKey, err := utils.GetBase64urlKey(params, "endkey")
 		if err != nil {
 			utils.SendHTTPResponse(w, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 			return nil, true
@@ -47,8 +66,8 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		payload = &types.GetDataRangeQuery{
 			UserId:   querierUserID,
 			DbName:   params["dbname"],
-			StartKey: params["startkey"][1 : len(params["startkey"])-1],
-			EndKey:   params["endkey"][1 : len(params["endkey"])-1],
+			StartKey: startKey,
+			EndKey:   endKey,
 			Limit:    limit,
 		}
 	case constants.GetUser:
@@ -144,6 +163,12 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			TxIndex:     txIndex,
 		}
 	case constants.GetDataProof:
+		key, err := utils.GetBase64urlKey(params, "key")
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
 		blockNum, err := utils.GetBlockNum(params)
 		if err != nil {
 			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
@@ -163,7 +188,7 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			UserId:      querierUserID,
 			BlockNumber: blockNum,
 			DbName:      params["dbname"],
-			Key:         params["key"],
+			Key:         key,
 			IsDeleted:   deleted,
 		}
 	case constants.GetTxReceipt:
@@ -172,6 +197,12 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			TxId:   params["txId"],
 		}
 	case constants.GetHistoricalData:
+		key, err := utils.GetBase64urlKey(params, "key")
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
 		version, err := utils.GetVersion(params)
 		if err != nil {
 			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
@@ -191,23 +222,35 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 		payload = &types.GetHistoricalDataQuery{
 			UserId:      querierUserID,
 			DbName:      params["dbname"],
-			Key:         params["key"],
+			Key:         key,
 			Version:     version,
 			Direction:   params["direction"],
 			OnlyDeletes: isOnlyDeletesSet,
 			MostRecent:  isMostRecentSet,
 		}
 	case constants.GetDataReaders:
+		key, err := utils.GetBase64urlKey(params, "key")
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
 		payload = &types.GetDataReadersQuery{
 			UserId: querierUserID,
 			DbName: params["dbname"],
-			Key:    params["key"],
+			Key:    key,
 		}
 	case constants.GetDataWriters:
+		key, err := utils.GetBase64urlKey(params, "key")
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
 		payload = &types.GetDataWritersQuery{
 			UserId: querierUserID,
 			DbName: params["dbname"],
-			Key:    params["key"],
+			Key:    key,
 		}
 	case constants.GetDataReadBy:
 		payload = &types.GetDataReadByQuery{

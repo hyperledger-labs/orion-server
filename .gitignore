@@ -18,3 +18,9 @@ cmd/bdb/bdb
 
 #IDE artifacts
 .idea
+
+#Documentation with docusaurus
+.docusaurus
+node_modules
+yarn.lock
+

@@ -4,6 +4,7 @@
 package utils
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -125,4 +126,17 @@ func GetVersion(params map[string]string) (*types.Version, error) {
 		BlockNum: blockNum,
 		TxNum:    txNum,
 	}, nil
+}
+
+func GetBase64urlKey(params map[string]string, name string) (string, error) {
+	base64urlKey, ok := params[name]
+	if !ok {
+		return "", &types.HttpResponseErr{ErrMsg: fmt.Sprintf("Missing key: %s (in base64 URL encoding)", name)}
+	}
+	keyBytes, err := base64.RawURLEncoding.DecodeString(base64urlKey)
+	if err != nil {
+		return "", &types.HttpResponseErr{ErrMsg: fmt.Sprintf("Failed to decode base64 URL key: %s: %s", name, err.Error())}
+	}
+
+	return string(keyBytes), nil
 }

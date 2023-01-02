@@ -646,7 +646,7 @@ func TestDataTx(t *testing.T) {
 		require.Equal(t, []byte("key5constantValue"), resp.GetResponse().GetValue())
 
 		_, err = s.QueryData(t, "db1", "key5", "bob")
-		require.EqualError(t, err, "error while processing 'GET /data/db1/key5' because the user [bob] has no permission to read key [key5] from database [db1]")
+		require.EqualError(t, err, "error while processing 'GET /data/db1/a2V5NQ' because the user [bob] has no permission to read key [key5] from database [db1]")
 	})
 
 	t.Run("invalid: inadequate signature error", func(t *testing.T) {
@@ -1513,7 +1513,7 @@ func TestAsyncDataTx(t *testing.T) {
 		require.Equal(t, []byte("keyF3-constantValue"), resp.GetResponse().GetValue())
 
 		_, err = s.QueryData(t, "db1", "keyF3", "bob")
-		require.EqualError(t, err, "error while processing 'GET /data/db1/keyF3' because the user [bob] has no permission to read key [keyF3] from database [db1]")
+		require.EqualError(t, err, "error while processing 'GET /data/db1/a2V5RjM' because the user [bob] has no permission to read key [keyF3] from database [db1]")
 	})
 
 	t.Run("invalid: inadequate signature error", func(t *testing.T) {

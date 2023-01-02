@@ -151,7 +151,7 @@ func TestUserACLOnDatabase(t *testing.T) {
 				Signature: testutils.SignatureFromQuery(t, aliceSigner, query),
 			},
 		)
-		require.EqualError(t, err, "error while processing 'GET /data/db3/key1' because the user [alice] has no permission to read from database [db3]")
+		require.EqualError(t, err, "error while processing 'GET /data/db3/a2V5MQ' because the user [alice] has no permission to read from database [db3]")
 	})
 
 	t.Run("write to db3 would fail", func(t *testing.T) {

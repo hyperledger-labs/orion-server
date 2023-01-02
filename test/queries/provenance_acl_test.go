@@ -102,10 +102,10 @@ func TestProvenanceACL(t *testing.T) {
 	require.NotNil(t, historyResp)
 
 	historyResp, err = s.GetValueAt(t, "db1", "key1", "bob", statusRes.GetResponse().GetVersion())
-	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/db1/key1?blocknumber=1&transactionnumber=0' because The querier [bob] is not an admin. Only an admin can query historical data")
+	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/db1/a2V5MQ?blocknumber=1&transactionnumber=0' because The querier [bob] is not an admin. Only an admin can query historical data")
 	require.Nil(t, historyResp)
 
 	historyResp, err = s.GetPreviousValues(t, "db1", "key1", "alice", statusRes.GetResponse().GetVersion())
-	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/db1/key1?blocknumber=1&transactionnumber=0&direction=previous' because The querier [alice] is not an admin. Only an admin can query historical data")
+	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/db1/a2V5MQ?blocknumber=1&transactionnumber=0&direction=previous' because The querier [alice] is not an admin. Only an admin can query historical data")
 	require.Nil(t, historyResp)
 }

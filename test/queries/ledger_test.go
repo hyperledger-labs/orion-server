@@ -709,25 +709,25 @@ func TestLedgerDataProof(t *testing.T) {
 
 	t.Run("invalid: non-existing key", func(t *testing.T) {
 		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key8", "admin", 3, false)
-		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key8?block=3: error while processing 'GET /ledger/proof/data/bdb/key8?block=3' because no proof for block 3, db bdb, key key8, isDeleted false found")
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/a2V5OA?block=3: error while processing 'GET /ledger/proof/data/bdb/a2V5OA?block=3' because no proof for block 3, db bdb, key key8, isDeleted false found")
 		require.Nil(t, respEnv)
 	})
 
 	t.Run("invalid: block out of range", func(t *testing.T) {
 		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", 10, false)
-		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key1?block=10: error while processing 'GET /ledger/proof/data/bdb/key1?block=10' because block not found: 10")
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/a2V5MQ?block=10: error while processing 'GET /ledger/proof/data/bdb/a2V5MQ?block=10' because block not found: 10")
 		require.Nil(t, respEnv)
 	})
 
 	t.Run("invalid: isDeleted true but key still exists in the db", func(t *testing.T) {
 		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key1", "admin", rcpt2.GetHeader().GetBaseHeader().GetNumber(), true)
-		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key1?block=7&deleted=true: error while processing 'GET /ledger/proof/data/bdb/key1?block=7&deleted=true' because no proof for block 7, db bdb, key key1, isDeleted true found")
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/a2V5MQ?block=7&deleted=true: error while processing 'GET /ledger/proof/data/bdb/a2V5MQ?block=7&deleted=true' because no proof for block 7, db bdb, key key1, isDeleted true found")
 		require.Nil(t, respEnv)
 	})
 
 	t.Run("invalid: key is in the db but in a different block", func(t *testing.T) {
 		respEnv, err := s.GetDataProof(t, worldstate.DefaultDBName, "key3", "admin", 1, true)
-		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/key3?block=1&deleted=true: error while processing 'GET /ledger/proof/data/bdb/key3?block=1&deleted=true' because no proof for block 1, db bdb, key key3, isDeleted true found")
+		require.EqualError(t, err, "error while issuing /ledger/proof/data/bdb/a2V5Mw?block=1&deleted=true: error while processing 'GET /ledger/proof/data/bdb/a2V5Mw?block=1&deleted=true' because no proof for block 1, db bdb, key key3, isDeleted true found")
 		require.Nil(t, respEnv)
 	})
 

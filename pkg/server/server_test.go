@@ -600,7 +600,7 @@ func TestServerWithDataRequestAndProvenanceOff(t *testing.T) {
 			Signature: testutils.SignatureFromQuery(t, env.adminSigner, provenanceQuery),
 		},
 	)
-	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/bdb/foo' because provenance store is disabled on this server")
+	require.EqualError(t, err, "error while processing 'GET /provenance/data/history/bdb/Zm9v' because provenance store is disabled on this server")
 
 	env.serverConfig.LocalConfig.Server.Provenance.Disabled = false
 

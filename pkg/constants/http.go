@@ -4,6 +4,7 @@
 package constants
 
 import (
+	"encoding/base64"
 	"fmt"
 	"path"
 	"regexp"
@@ -37,7 +38,8 @@ const (
 	GetUser      = "/user/{userid}"
 	PostUserTx   = "/user/tx"
 
-	DataEndpoint  = "/data/"
+	DataEndpoint = "/data/"
+	// GetData Keys in URLs are expected to be encoded in base64 URL encoding without padding.
 	GetData       = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
 	GetDataRange  = "/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}"
 	PostDataTx    = "/data/tx"
@@ -63,12 +65,16 @@ const (
 	GetTxProofPrefix   = "/ledger/proof/tx"
 	GetTxProof         = "/ledger/proof/tx/{blockId:[0-9]+}"
 	GetDataProofPrefix = "/ledger/proof/data"
-	GetDataProof       = "/ledger/proof/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
-	GetTxReceipt       = "/ledger/tx/receipt/{txId}"
+	// GetDataProof Keys in URLs are expected to be encoded in base64 URL encoding without padding.
+	GetDataProof = "/ledger/proof/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
+	GetTxReceipt = "/ledger/tx/receipt/{txId}"
 
-	ProvenanceEndpoint      = "/provenance/"
-	GetHistoricalData       = "/provenance/data/history/{dbname}/{key}"
-	GetDataReaders          = "/provenance/data/readers/{dbname}/{key}"
+	ProvenanceEndpoint = "/provenance/"
+	// GetHistoricalData Keys in URLs are expected to be encoded in base64 URL encoding without padding.
+	GetHistoricalData = "/provenance/data/history/{dbname}/{key}"
+	// GetDataReaders Keys in URLs are expected to be encoded in base64 URL encoding without padding.
+	GetDataReaders = "/provenance/data/readers/{dbname}/{key}"
+	// GetDataWriters Keys in URLs are expected to be encoded in base64 URL encoding without padding.
 	GetDataWriters          = "/provenance/data/writers/{dbname}/{key}"
 	GetDataReadBy           = "/provenance/data/read/{userId}"
 	GetDataWrittenBy        = "/provenance/data/written/{userId}"
@@ -77,17 +83,20 @@ const (
 	GetMostRecentUserOrNode = "/provenance/{type:user|node}/{id}"
 )
 
-// URLForGetData returns url for GET request to retrieve
-// value of the key present in the dbName
+// URLForGetData returns url for GET request to retrieve value of the key present in the dbName.
+// Keys in URLs are expected to be encoded in base64 URL encoding without padding.
 func URLForGetData(dbName, key string) string {
-	return DataEndpoint + path.Join(dbName, key)
+	base64urlKey := base64.RawURLEncoding.EncodeToString([]byte(key))
+	return DataEndpoint + path.Join(dbName, base64urlKey)
 }
 
-// URLForGetDataRange returns url for GET request to retrieve
-// a range of values.
+// URLForGetDataRange returns url for GET request to retrieve a range of values.
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetDataRange(dbName, startKey, endKey string, limit uint64) string {
+	base64urlStartKey := base64.RawURLEncoding.EncodeToString([]byte(startKey))
+	base64urlEndKey := base64.RawURLEncoding.EncodeToString([]byte(endKey))
 	return path.Join(DataEndpoint, dbName) +
-		fmt.Sprintf("?startkey=\"%s\"&endkey=\"%s\"&limit=%d", startKey, endKey, limit)
+		fmt.Sprintf("?startkey=%s&endkey=%s&limit=%d", base64urlStartKey, base64urlEndKey, limit)
 }
 
 // URLForJSONQuery returns url for GET request to retrieve
@@ -140,70 +149,81 @@ func URLTxProof(blockNum uint64, txIdx uint64) string {
 	return LedgerEndpoint + fmt.Sprintf("proof/tx/%d?idx=%d", blockNum, txIdx)
 }
 
+// URLDataProof returns URL for GET request to retrieve a data existence proof.
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLDataProof(blockNum uint64, dbname, key string, deleted bool) string {
+	base64urlKey := base64.RawURLEncoding.EncodeToString([]byte(key))
 	if deleted {
-		return LedgerEndpoint + fmt.Sprintf("proof/data/%s/%s?block=%d&deleted=%t", dbname, key, blockNum, deleted)
+		return LedgerEndpoint + fmt.Sprintf("proof/data/%s/%s?block=%d&deleted=%t", dbname, base64urlKey, blockNum, deleted)
 	}
-	return LedgerEndpoint + fmt.Sprintf("proof/data/%s/%s?block=%d", dbname, key, blockNum)
+	return LedgerEndpoint + fmt.Sprintf("proof/data/%s/%s?block=%d", dbname, base64urlKey, blockNum)
 }
 
 func URLForNodeConfigPath(nodeID string) string {
 	return path.Join(GetNodeConfigPath, nodeID)
 }
 
-// URLForGetHistoricalData returns url for GET request to
-// retrieve all values associated with a given key on a database
+// URLForGetHistoricalData returns url for GET request to retrieve all values associated with a given key on a database.
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetHistoricalData(dbName, key string) string {
-	return ProvenanceEndpoint + path.Join("data", "history", dbName, key)
+	base64urlKey := base64.RawURLEncoding.EncodeToString([]byte(key))
+	return ProvenanceEndpoint + path.Join("data", "history", dbName, base64urlKey)
 }
 
-// URLForGetHistoricalDeletedData returns url for GET request to
-// retrieve all deleted values associated with a given key on a database
+// URLForGetHistoricalDeletedData returns url for GET request to retrieve all deleted values associated with a given
+// key on a database.
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetHistoricalDeletedData(dbName, key string) string {
-	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) + "?onlydeletes=true"
+	return URLForGetHistoricalData(dbName, key) + "?onlydeletes=true"
 }
 
-// URLForGetHistoricalDataAt returns url for GET request to
-// retrieve a value at a particular version for a given key on a database
+// URLForGetHistoricalDataAt returns url for GET request to retrieve a value at a particular version for a given key on
+// a database.
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetHistoricalDataAt(dbName, key string, version *types.Version) string {
-	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+	return URLForGetHistoricalData(dbName, key) +
 		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum)
 }
 
 // URLForGetHistoricalDataAtOrBelow returns url for GET request to
 // retrieve a most recent value at a particular version for a given key on a database
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetHistoricalDataAtOrBelow(dbName, key string, version *types.Version) string {
-	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+	return URLForGetHistoricalData(dbName, key) +
 		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum) +
 		fmt.Sprintf("&mostrecent=true")
 }
 
 // URLForGetPreviousHistoricalData returns url for GET request to
 // retrieve previous values for a given key on a database from a particular version
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetPreviousHistoricalData(dbName, key string, version *types.Version) string {
-	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+	return URLForGetHistoricalData(dbName, key) +
 		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum) +
 		"&direction=previous"
 }
 
 // URLForGetNextHistoricalData returns url for GET request to
 // retrieve next values for a given key on a database from a particular version
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetNextHistoricalData(dbName, key string, version *types.Version) string {
-	return ProvenanceEndpoint + path.Join("data", "history", dbName, key) +
+	return URLForGetHistoricalData(dbName, key) +
 		fmt.Sprintf("?blocknumber=%d&transactionnumber=%d", version.BlockNum, version.TxNum) +
 		"&direction=next"
 }
 
-// URLForGetDataReaders returns url for GET request to
-// retrive all users who have read a given key from a database
+// URLForGetDataReaders returns url for GET request to retrieve all users who have read a given key from a database.
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetDataReaders(dbName, key string) string {
-	return ProvenanceEndpoint + path.Join("data", "readers", dbName, key)
+	base64urlKey := base64.RawURLEncoding.EncodeToString([]byte(key))
+	return ProvenanceEndpoint + path.Join("data", "readers", dbName, base64urlKey)
 }
 
-// URLForGetDataWriters returns url for GET request to
-// retrive all users who have written a given key from a database
+// URLForGetDataWriters returns url for GET request to retrieve all users who have written a given key from a database.
+// Keys in URLs are encoded in base64 URL encoding without padding.
 func URLForGetDataWriters(dbName, key string) string {
-	return ProvenanceEndpoint + path.Join("data", "writers", dbName, key)
+	base64urlKey := base64.RawURLEncoding.EncodeToString([]byte(key))
+	return ProvenanceEndpoint + path.Join("data", "writers", dbName, base64urlKey)
 }
 
 // URLForGetDataReadBy returns url for GET request to

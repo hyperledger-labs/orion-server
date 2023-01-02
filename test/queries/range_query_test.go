@@ -207,8 +207,8 @@ func TestInvalidRangeQuery(t *testing.T) {
 	insertDataAlphabet(t, s)
 
 	res, err := s.QueryDataRange(t, "admin", worldstate.DefaultDBName, "key-a", "key-z", 100)
-	require.EqualError(t, err, "error while issuing /data/bdb?startkey=\"key-a\"&endkey=\"key-z\"&limit=100: "+
-		"error while processing 'GET /data/bdb?startkey=\"key-a\"&endkey=\"key-z\"&limit=100' because "+
+	require.EqualError(t, err, "error while issuing /data/bdb?startkey=a2V5LWE&endkey=a2V5LXo&limit=100: "+
+		"error while processing 'GET /data/bdb?startkey=a2V5LWE&endkey=a2V5LXo&limit=100' because "+
 		"response size limit for queries is configured as 10 bytes but a single record size itself is 14 bytes. "+
 		"Increase the query response size limit at the server")
 	require.Nil(t, res)
