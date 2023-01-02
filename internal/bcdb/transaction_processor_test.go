@@ -5,7 +5,6 @@ package bcdb
 import (
 	"bytes"
 	"crypto/x509"
-	"io/ioutil"
 	"math"
 	"os"
 	"path"
@@ -219,7 +218,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("commit a data transaction asynchronously", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -331,7 +329,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("commit a data transaction synchronously", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -438,7 +435,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("duplicate txID with the already committed transaction", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -474,7 +470,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("duplicate txID with either pending or already committed transaction", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -514,7 +509,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("unexpected transaction type", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -528,7 +522,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("bad TxId", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -560,7 +553,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("create with a join block", func(t *testing.T) {
 		cryptoDir, conf := testJoinConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		require.NotNil(t, env)
 	})
@@ -568,7 +560,6 @@ func TestTransactionProcessor(t *testing.T) {
 	t.Run("get cluster status", func(t *testing.T) {
 		cryptoDir, conf := testConfiguration(t)
 		require.NotEqual(t, "", cryptoDir)
-		defer os.RemoveAll(conf.LocalConfig.Server.Database.LedgerDirectory)
 		env := newTxProcessorTestEnv(t, cryptoDir, conf)
 		defer env.cleanup()
 
@@ -586,8 +577,7 @@ func TestTransactionProcessor(t *testing.T) {
 }
 
 func testConfiguration(t *testing.T) (string, *config.Configurations) {
-	ledgerDir, err := ioutil.TempDir("/tmp", "server")
-	require.NoError(t, err)
+	ledgerDir := t.TempDir()
 
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"testUser", "bdb-node-1", "admin"})
 
@@ -667,8 +657,7 @@ func testConfiguration(t *testing.T) (string, *config.Configurations) {
 }
 
 func testJoinConfiguration(t *testing.T) (string, *config.Configurations) {
-	ledgerDir, err := ioutil.TempDir("/tmp", "server")
-	require.NoError(t, err)
+	ledgerDir := t.TempDir()
 
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"testUser", "bdb-node-1", "bdb-node-2", "admin"})
 

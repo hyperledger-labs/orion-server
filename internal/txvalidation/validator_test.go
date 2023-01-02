@@ -4,8 +4,6 @@
 package txvalidation
 
 import (
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -37,8 +35,7 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 	logger, err := logger.New(c)
 	require.NoError(t, err)
 
-	dir, err := ioutil.TempDir("/tmp", "validator")
-	require.NoError(t, err)
+	dir := t.TempDir()
 	path := filepath.Join(dir, "leveldb")
 
 	db, err := leveldb.Open(
@@ -48,18 +45,12 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 		},
 	)
 	if err != nil {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Errorf("failed to remove directory %s, %v", dir, err)
-		}
 		t.Fatalf("failed to create leveldb with path %s", path)
 	}
 
 	cleanup := func() {
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close the db instance, %v", err)
-		}
-		if err := os.RemoveAll(dir); err != nil {
-			t.Errorf("failed to remove directory %s, %v", dir, err)
 		}
 	}
 

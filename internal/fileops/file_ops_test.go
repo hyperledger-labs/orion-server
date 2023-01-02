@@ -14,7 +14,6 @@ import (
 
 func TestIsDirEmpty(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	t.Run("non-empty directory", func(t *testing.T) {
 		isEmpty, err := IsDirEmpty(path.Join(testDir, "dir"))
@@ -39,7 +38,6 @@ func TestIsDirEmpty(t *testing.T) {
 
 func TestListSubdirs(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	t.Run("subdirs exist", func(t *testing.T) {
 		dirs, err := ListSubdirs(path.Join(testDir, "dir"))
@@ -64,7 +62,6 @@ func TestListSubdirs(t *testing.T) {
 
 func TestFileExists(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	exists, err := Exists(path.Join(testDir, "dir"))
 	require.NoError(t, err)
@@ -81,7 +78,6 @@ func TestFileExists(t *testing.T) {
 
 func TestCreateDir(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	require.DirExists(t, path.Join(testDir, "dir"))
 	require.NoError(t, CreateDir(path.Join(testDir, "dir")))
@@ -97,7 +93,6 @@ func TestCreateDir(t *testing.T) {
 
 func TestOpenFile(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	testCases := []struct {
 		description  string
@@ -142,7 +137,6 @@ func TestOpenFile(t *testing.T) {
 
 func TestCreateFile(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	tests := []struct {
 		name         string
@@ -182,7 +176,6 @@ func TestCreateFile(t *testing.T) {
 
 func TestRemove(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	var tests = []struct {
 		name        string
@@ -226,7 +219,6 @@ func TestRemove(t *testing.T) {
 
 func TestRemoveAll(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	var tests = []struct {
 		name     string
@@ -253,7 +245,6 @@ func TestRemoveAll(t *testing.T) {
 
 func TestWrite(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	setup := func() (*os.File, *os.File) {
 		contentFilePath := path.Join(testDir, "contentfile")
@@ -308,7 +299,6 @@ func TestWrite(t *testing.T) {
 
 func TestTruncate(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	setup := func() *os.File {
 		contentFilePath := path.Join(testDir, "contentfile")
@@ -364,7 +354,6 @@ func TestTruncate(t *testing.T) {
 
 func TestSyncDir(t *testing.T) {
 	testDir := prepareTestDir(t)
-	defer os.RemoveAll(testDir)
 
 	t.Run("green-path", func(t *testing.T) {
 		testPath := path.Join(testDir, "dir")
@@ -380,34 +369,17 @@ func TestSyncDir(t *testing.T) {
 }
 
 func prepareTestDir(t *testing.T) string {
-	tempDir, err := ioutil.TempDir(os.TempDir(), "UnitTest-fileops")
+	tempDir := t.TempDir()
+
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "a"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "b"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "c"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "d"), 0755))
+
+	file, err := os.OpenFile(path.Join(tempDir, "dir", "e"), os.O_CREATE, 0644)
 	require.NoError(t, err)
-
-	removeAndFailNow := func() {
-		os.RemoveAll(tempDir)
-		t.FailNow()
-	}
-
-	if err := os.Mkdir(path.Join(tempDir, "dir"), 0755); err != nil {
-		removeAndFailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "a"), 0755); err != nil {
-		removeAndFailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "b"), 0755); err != nil {
-		removeAndFailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "c"), 0755); err != nil {
-		removeAndFailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "d"), 0755); err != nil {
-		removeAndFailNow()
-	}
-	if file, err := os.OpenFile(path.Join(tempDir, "dir", "e"), os.O_CREATE, 0644); err != nil {
-		removeAndFailNow()
-	} else {
-		defer file.Close()
-	}
+	defer file.Close()
 
 	return tempDir
 }

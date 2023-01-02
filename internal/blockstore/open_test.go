@@ -5,7 +5,6 @@ package blockstore
 import (
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,9 +54,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("open a new store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "new-store")
 		c := &Config{
@@ -73,9 +70,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("open while partial store exist with an empty dir", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		// create folders and files to mimic an existing creation but a crash before
 		// the successful completion
@@ -87,7 +82,6 @@ func TestOpenStore(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)
@@ -96,9 +90,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("open while partial store exist with a creation flag", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		// create folders and files to mimic an existing creation but a crash before
 		// the successful completion
@@ -125,9 +117,7 @@ func TestOpenStore(t *testing.T) {
 	t.Run("reopen an empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "reopen-empty-store")
 		require.NoError(t, fileops.CreateDir(storeDir))
@@ -137,7 +127,6 @@ func TestOpenStore(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)
@@ -153,12 +142,9 @@ func TestOpenStore(t *testing.T) {
 	t.Run("reopen non-empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "opentest")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "reopen-non-empty-store")
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, fileops.CreateDir(storeDir))
 
 		c := &Config{
@@ -166,7 +152,6 @@ func TestOpenStore(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)

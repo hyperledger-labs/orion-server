@@ -7,8 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -59,8 +57,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	logger, err := logger.New(c)
 	require.NoError(t, err)
 
-	dir, err := ioutil.TempDir("/tmp", "validatorAndCommitter")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	dbPath := filepath.Join(dir, "leveldb")
 	db, err := leveldb.Open(
@@ -70,9 +67,6 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, err)
-		}
 		t.Fatalf("error while creating the leveldb instance, %v", err)
 	}
 
@@ -84,9 +78,6 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, err)
-		}
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
@@ -98,9 +89,6 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, err)
-		}
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
@@ -113,9 +101,6 @@ func newTestEnv(t *testing.T) *testEnv {
 	)
 
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, err)
-		}
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
@@ -208,10 +193,6 @@ func newTestEnv(t *testing.T) *testEnv {
 
 		if err := blockStore.Close(); err != nil {
 			t.Errorf("failed to close the blockstore, %v", err)
-		}
-
-		if err := os.RemoveAll(dir); err != nil {
-			t.Errorf("failed to remove directory %s, %v", dir, err)
 		}
 	}
 

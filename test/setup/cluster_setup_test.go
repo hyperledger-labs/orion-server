@@ -5,7 +5,6 @@ package setup_test
 
 import (
 	"errors"
-	"io/ioutil"
 	"testing"
 	"time"
 
@@ -16,8 +15,7 @@ import (
 )
 
 func TestClusterSetup(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 	setupConfig := &setup.Config{
 		NumberOfServers:     3,
 		TestDirAbsolutePath: dir,

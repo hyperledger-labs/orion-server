@@ -5,7 +5,6 @@ package user
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"sync"
 	"testing"
 	"time"
@@ -41,8 +40,7 @@ func getPorts(num uint32) (node uint32, peer uint32) {
 
 // Scenario:
 func TestDBManagement(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

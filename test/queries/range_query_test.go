@@ -5,9 +5,7 @@ package queries
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math"
-	"os"
 	"testing"
 	"time"
 
@@ -22,11 +20,10 @@ import (
 // - Execute queries with and without pagination triggered by user limit
 // - Execute open intervals queries
 // - Execute queries that returns empty response:
-//// - the start key is after the end key in alphabetical order
-//// - key that does not exist in the database
+// // - the start key is after the end key in alphabetical order
+// // - key that does not exist in the database
 func TestRangeQueriesWithUserLimit(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -38,7 +35,6 @@ func TestRangeQueriesWithUserLimit(t *testing.T) {
 		BasePeerPort:        pPort,
 		ServersQueryLimit:   math.MaxInt64,
 	}
-	defer os.RemoveAll(dir)
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
 	defer c.ShutdownAndCleanup()
@@ -110,11 +106,10 @@ func TestRangeQueriesWithUserLimit(t *testing.T) {
 // - Execute queries with and without pagination triggered by server limit
 // - Execute open intervals queries
 // - Execute queries that returns empty response:
-//// - the start key is after the end key in alphabetical order
-//// - key that does not exist in the database
+// // - the start key is after the end key in alphabetical order
+// // - key that does not exist in the database
 func TestRangeQueriesWithServerLimit(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -184,8 +179,7 @@ func TestRangeQueriesWithServerLimit(t *testing.T) {
 // - create cluster with QueryLimit = 10
 // - Try to execute a query that returns a response size larger than the limit
 func TestInvalidRangeQuery(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

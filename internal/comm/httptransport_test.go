@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 	"sync"
@@ -873,11 +872,7 @@ func newTestSetup(t *testing.T, numServers int) ([]*config.LocalConfiguration, *
 		nodeIDs = append(nodeIDs, fmt.Sprintf("node%d", i+1))
 	}
 	cryptoDir := testutils.GenerateTestCrypto(t, nodeIDs, true)
-	auxDir, err := ioutil.TempDir("/tmp", "UnitTestAux")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(auxDir)
-	})
+	auxDir := t.TempDir()
 
 	configs := make([]*config.LocalConfiguration, 0)
 	for i := 0; i < numServers; i++ {

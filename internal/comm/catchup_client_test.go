@@ -5,8 +5,6 @@ package comm_test
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
 	"path"
 	"strings"
 	"sync"
@@ -284,9 +282,7 @@ func TestCatchUpClient_PullBlocksLoop(t *testing.T) {
 // - Start 3rd transport with ledger at height 150,
 // - Wait until client gets them all.
 func TestCatchUpClient_PullBlocksRetry(t *testing.T) {
-	dir, err := ioutil.TempDir("", "catchup")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	var retryCount int
 	var wgRetry1 sync.WaitGroup

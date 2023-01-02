@@ -4,8 +4,6 @@
 package queries
 
 import (
-	"io/ioutil"
-	"os"
 	"sort"
 	"testing"
 	"time"
@@ -19,8 +17,7 @@ import (
 )
 
 func TestJSONQueries(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -31,7 +28,6 @@ func TestJSONQueries(t *testing.T) {
 		BaseNodePort:        nPort,
 		BasePeerPort:        pPort,
 	}
-	defer os.RemoveAll(dir)
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
 	defer c.ShutdownAndCleanup()

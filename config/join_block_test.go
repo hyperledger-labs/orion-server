@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 	"path"
 	"testing"
 
@@ -13,9 +12,7 @@ import (
 )
 
 func TestJoinBlock(t *testing.T) {
-	dir, err := ioutil.TempDir("", "test-config-join-block")
-	require.NoError(t, err)
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	t.Run("empty-join-block-path", func(t *testing.T) {
 		joinBlock, err := readJoinBlock("")

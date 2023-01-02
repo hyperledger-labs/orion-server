@@ -5,7 +5,6 @@ package queries
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
@@ -24,8 +23,7 @@ import (
 // - switching provenance off in server-0 that had it on is supported.
 // - trying to restart server-0 with provenance on fails.
 func TestProvenanceSwitchOff(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{

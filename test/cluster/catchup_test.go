@@ -4,7 +4,6 @@
 package cluster
 
 import (
-	"io/ioutil"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -35,8 +34,7 @@ func createKeys(k int) []int {
 // - restart the server.
 // - make sure the server is in sync with previous txs.
 func NodeRecoveryWithCatchup(t *testing.T, victimIsLeader bool) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -195,7 +193,7 @@ func TestLeaderRecoveryWithCatchup(t *testing.T) {
 	NodeRecoveryWithCatchup(t, true)
 }
 
-//Scenario:
+// Scenario:
 // round 1:
 // - start 3 servers in a cluster and change SnapshotIntervalSize to 4K.
 // - wait for one to be the leader.
@@ -215,8 +213,7 @@ func TestLeaderRecoveryWithCatchup(t *testing.T) {
 // - find leader4.
 // - submit a tx => tx accepted.
 func StopServerNoMajorityToChooseLeaderWithCatchup(t *testing.T, victimIsLeader bool) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{

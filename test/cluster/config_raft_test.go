@@ -4,11 +4,11 @@
 package cluster
 
 import (
-	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/hyperledger-labs/orion-server/pkg/types"
 
 	"github.com/hyperledger-labs/orion-server/test/setup"
 	"github.com/pkg/errors"
@@ -19,8 +19,7 @@ import (
 // - change the ticks, heartbeat interval, and election timeout (200ms, 4, 40)
 // - stop the leader and make sure a new leader is elected.
 func TestUpdateRaft(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{

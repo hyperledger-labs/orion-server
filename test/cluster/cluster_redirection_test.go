@@ -4,7 +4,6 @@
 package cluster
 
 import (
-	"io/ioutil"
 	"strconv"
 	"testing"
 	"time"
@@ -20,8 +19,7 @@ import (
 // - Submit txs to all nodes
 // - Tx redirection from follower to leader
 func TestRedirection(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

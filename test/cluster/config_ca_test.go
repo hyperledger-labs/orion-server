@@ -6,7 +6,6 @@ package cluster
 import (
 	"crypto/tls"
 	"encoding/pem"
-	"io/ioutil"
 	"net/http"
 	"testing"
 	"time"
@@ -21,8 +20,7 @@ import (
 // Scenario:
 // - add Root CA & Intermediate CA to CertAuthConfig
 func TestAddCA(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -180,8 +178,7 @@ func TestAddCA(t *testing.T) {
 // Scenario:
 // - adding an intermediate CA without adding the root it came from in the same tx (broken chain)
 func TestInvalidCABrokenChain(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -243,8 +240,7 @@ func TestInvalidCABrokenChain(t *testing.T) {
 // - add a root CA as an intermediate CA
 // - update to empty CA
 func TestInvalidCAs(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -339,8 +335,7 @@ func TestInvalidCAs(t *testing.T) {
 // - add Root CA & Intermediate CA to CertAuthConfig
 // - try to remove the original CA - tx fails
 func TestRemoveCA(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

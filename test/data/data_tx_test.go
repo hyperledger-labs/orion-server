@@ -6,7 +6,6 @@ package datatxtest
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"strconv"
 	"sync"
 	"testing"
@@ -43,8 +42,7 @@ func getPorts(num uint32) (node uint32, peer uint32) {
 }
 
 func TestDataTx(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -677,8 +675,7 @@ func TestDataTx(t *testing.T) {
 }
 
 func TestAsyncDataTx(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

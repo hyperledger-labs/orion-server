@@ -3,8 +3,6 @@
 package bcdb
 
 import (
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -25,8 +23,7 @@ type provenanceQueryProcessorTestEnv struct {
 }
 
 func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorTestEnv {
-	provenancePath, err := ioutil.TempDir("/tmp", "provenanceQueryProcessor")
-	require.NoError(t, err)
+	provenancePath := t.TempDir()
 
 	c := &logger.Config{
 		Level:         "info",
@@ -44,15 +41,10 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 		},
 	)
 	if err != nil {
-		if err := os.RemoveAll(provenancePath); err != nil {
-			t.Errorf("failed to remove %s due to %v", provenancePath, err)
-		}
-
 		t.Fatalf("failed to create a new provenance store, %v", err)
 	}
 
-	dbPath, err := ioutil.TempDir("/tmp", "db")
-	require.NoError(t, err)
+	dbPath := t.TempDir()
 	db, err := leveldb.Open(
 		&leveldb.Config{
 			DBRootDir: dbPath,
@@ -60,10 +52,6 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 		},
 	)
 	if err != nil {
-		if err := os.RemoveAll(dbPath); err != nil {
-			t.Errorf("failed to remove %s due to %v", dbPath, err)
-		}
-
 		t.Fatalf("failed to create a new leveldb instance, %v", err)
 	}
 
@@ -74,13 +62,6 @@ func newProvenanceQueryProcessorTestEnv(t *testing.T) *provenanceQueryProcessorT
 
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close leveldb: %v", err)
-		}
-		if err := os.RemoveAll(provenancePath); err != nil {
-			t.Fatalf("failed to remove %s due to %v", provenancePath, err)
-		}
-
-		if err := os.RemoveAll(dbPath); err != nil {
-			t.Fatalf("failed to remove %s due to %v", dbPath, err)
 		}
 	}
 

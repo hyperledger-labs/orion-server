@@ -4,16 +4,14 @@
 package leveldb
 
 import (
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -25,8 +23,7 @@ type testEnv struct {
 }
 
 func newTestEnv(t *testing.T) *testEnv {
-	dir, err := ioutil.TempDir("/tmp", "ledger")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	path := filepath.Join(dir, "leveldb")
 
@@ -45,19 +42,12 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 	l, err := Open(conf)
 	if err != nil {
-		if err := os.RemoveAll(dir); err != nil {
-			t.Errorf("failed to remove %s, %v", dir, err)
-		}
 		t.Fatalf("failed to create leveldb with path %s", path)
 	}
 
 	cleanup := func() {
 		if err := l.Close(); err != nil {
 			t.Errorf("failed to close the database instance, %v", err)
-		}
-
-		if err := os.RemoveAll(dir); err != nil {
-			t.Errorf("failed to remove %s, %v", dir, err)
 		}
 	}
 

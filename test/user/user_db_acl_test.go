@@ -4,7 +4,6 @@
 package user
 
 import (
-	"io/ioutil"
 	"sync"
 	"testing"
 	"time"
@@ -39,8 +38,7 @@ func getPorts(num uint32) (node uint32, peer uint32) {
 }
 
 func TestUserACLOnDatabase(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{
@@ -206,8 +204,7 @@ func TestUserACLOnDatabase(t *testing.T) {
 
 // Scenario:
 func TestUserCertificateUpdate(t *testing.T) {
-	dir, err := ioutil.TempDir("", "update-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(1)
 	setupConfig := &setup.Config{

@@ -6,8 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -37,8 +35,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	logger, err := logger.New(c)
 	require.NoError(t, err)
 
-	dir, err := ioutil.TempDir("/tmp", "committer")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	dbPath := filepath.Join(dir, "leveldb")
 	db, err := leveldb.Open(
@@ -48,19 +45,12 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, rmErr)
-		}
 		t.Fatalf("error while creating leveldb, %v", err)
 	}
 
 	cleanup := func() {
 		if err := db.Close(); err != nil {
 			t.Errorf("error while closing the db instance, %v", err)
-		}
-
-		if err := os.RemoveAll(dir); err != nil {
-			t.Fatalf("error while removing directory %s, %v", dir, err)
 		}
 	}
 

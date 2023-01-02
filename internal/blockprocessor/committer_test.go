@@ -5,8 +5,6 @@ package blockprocessor
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -43,8 +41,7 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	logger, err := logger.New(lc)
 	require.NoError(t, err)
 
-	dir, err := ioutil.TempDir("/tmp", "committer")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	dbPath := filepath.Join(dir, "leveldb")
 	db, err := leveldb.Open(
@@ -54,9 +51,6 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, rmErr)
-		}
 		t.Fatalf("error while creating leveldb, %v", err)
 	}
 
@@ -68,9 +62,6 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, rmErr)
-		}
 		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
@@ -91,9 +82,6 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 	)
 
 	if err != nil {
-		if rmErr := os.RemoveAll(dir); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", dir, err)
-		}
 		t.Fatalf("error while creating the block store, %v", err)
 	}
 
@@ -108,10 +96,6 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 
 		if err := blockStore.Close(); err != nil {
 			t.Errorf("error while closing blockstore, %v", err)
-		}
-
-		if err := os.RemoveAll(dir); err != nil {
-			t.Fatalf("error while removing directory %s, %v", dir, err)
 		}
 	}
 

@@ -3,7 +3,6 @@ package queryexecutor
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -35,20 +34,11 @@ func newTestEnv(t *testing.T) *testEnv {
 	)
 	require.NoError(t, err)
 
-	tempDir, err := ioutil.TempDir("/tmp", "queryexecutor")
-	require.NoError(t, err)
+	tempDir := t.TempDir()
 	db, err := leveldb.Open(
 		&leveldb.Config{
 			DBRootDir: tempDir,
 			Logger:    l,
-		},
-	)
-	t.Cleanup(
-		func() {
-			if err := os.RemoveAll(tempDir); err != nil {
-				t.Log("error during cleanup: removal of directory [" + tempDir + "] failed with error [" + err.Error() + "]")
-				t.Fail()
-			}
 		},
 	)
 	require.NoError(t, err)
@@ -59,10 +49,6 @@ func newTestEnv(t *testing.T) *testEnv {
 		cleanup: func() {
 			if err := db.Close(); err != nil {
 				t.Log("error while closing the database: [" + err.Error() + "]")
-			}
-			if err := os.RemoveAll(tempDir); err != nil {
-				t.Log("error during cleanup: removal of directory [" + tempDir + "] failed with error [" + err.Error() + "]")
-				t.Fail()
 			}
 		},
 	}

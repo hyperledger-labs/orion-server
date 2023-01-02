@@ -1,8 +1,6 @@
 package store
 
 import (
-	"io/ioutil"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -24,9 +22,7 @@ func TestOpen(t *testing.T) {
 	t.Run("open a new store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "open_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "new-store")
 		c := &Config{
@@ -42,9 +38,7 @@ func TestOpen(t *testing.T) {
 	t.Run("open while partial store exist with an empty dir", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "open_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		// create folders and files to mimic an existing creation but a crash before
 		// the successful completion
@@ -56,7 +50,6 @@ func TestOpen(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)
@@ -65,9 +58,7 @@ func TestOpen(t *testing.T) {
 	t.Run("open while partial store exist with a creation flag", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "open_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		// create folders and files to mimic an existing creation but a crash before
 		// the successful completion
@@ -82,7 +73,6 @@ func TestOpen(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)
@@ -91,9 +81,7 @@ func TestOpen(t *testing.T) {
 	t.Run("reopen an empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "open_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "reopen-empty-store")
 
@@ -102,7 +90,6 @@ func TestOpen(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)
@@ -118,12 +105,9 @@ func TestOpen(t *testing.T) {
 	t.Run("reopen non-empty store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "open_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "reopen-non-empty-store")
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, fileops.CreateDir(storeDir))
 
 		c := &Config{
@@ -131,7 +115,6 @@ func TestOpen(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		assertStore(t, storeDir, s)
@@ -149,16 +132,12 @@ func TestOpen(t *testing.T) {
 		require.Equal(t, uint64(999), lastBlock)
 	})
 
-
 	t.Run("open a disabled store", func(t *testing.T) {
 		t.Parallel()
 
-		testDir, err := ioutil.TempDir("", "open_test")
-		require.NoError(t, err)
-		defer os.RemoveAll(testDir)
+		testDir := t.TempDir()
 
 		storeDir := filepath.Join(testDir, "reopen-non-empty-store")
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, fileops.CreateDir(storeDir))
 
 		c := &Config{
@@ -167,7 +146,6 @@ func TestOpen(t *testing.T) {
 			Logger:   logger,
 		}
 		s, err := Open(c)
-		defer os.RemoveAll(storeDir)
 		require.NoError(t, err)
 
 		// close and reopen the store

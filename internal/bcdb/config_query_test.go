@@ -5,8 +5,6 @@ package bcdb
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -36,8 +34,7 @@ type configQueryTestEnv struct {
 func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
 	nodeID := "node1"
 
-	path, err := ioutil.TempDir("/tmp", "queryProcessor")
-	require.NoError(t, err)
+	path := t.TempDir()
 
 	c := &logger.Config{
 		Level:         "info",
@@ -55,10 +52,6 @@ func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
 		},
 	)
 	if err != nil {
-		if err := os.RemoveAll(path); err != nil {
-			t.Errorf("failed to remove %s due to %v", path, err)
-		}
-
 		t.Fatalf("failed to create a new leveldb instance, %v", err)
 	}
 
@@ -70,9 +63,6 @@ func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(path); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", path, rmErr)
-		}
 		t.Fatalf("error while creating blockstore, %v", err)
 	}
 
@@ -92,9 +82,6 @@ func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
 		},
 	)
 	if err != nil {
-		if rmErr := os.RemoveAll(path); rmErr != nil {
-			t.Errorf("error while removing directory %s, %v", path, rmErr)
-		}
 		t.Fatalf("error while creating provenancestore, %v", err)
 	}
 
@@ -110,9 +97,6 @@ func newConfigQueryTestEnv(t *testing.T) *configQueryTestEnv {
 		}
 		if err := trieStore.Close(); err != nil {
 			t.Errorf("error while closing triestore, %v", err)
-		}
-		if err := os.RemoveAll(path); err != nil {
-			t.Fatalf("failed to remove %s due to %v", path, err)
 		}
 	}
 

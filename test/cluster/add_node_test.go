@@ -95,8 +95,7 @@ func addServerTx(t *testing.T, c *setup.Cluster, setupConfig *setup.Config, conf
 // - add a new server (node-4)
 // - start the new server
 func TestBasicAddServer(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(4)
 	setupConfig := &setup.Config{
@@ -157,8 +156,7 @@ func TestBasicAddServer(t *testing.T) {
 // - Start a 1 node cluster
 // - add 2 new servers
 func TestAddFrom1To3(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -255,14 +253,13 @@ func TestAddFrom1To3(t *testing.T) {
 // Scenario:
 // - Start a 3 node cluster
 // - failed to submit transactions:
-// 	  1. add 2 nodes in one tx
-// 	  2. add node to Members only without also adding to Nodes
-// 	  3. add node with invalid port
-// 	  4. add node with invalid cert
-// 	  5. add node with invalid raft-id
+//  1. add 2 nodes in one tx
+//  2. add node to Members only without also adding to Nodes
+//  3. add node with invalid port
+//  4. add node with invalid cert
+//  5. add node with invalid raft-id
 func TestInvalidAdd(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
@@ -394,8 +391,7 @@ func TestInvalidAdd(t *testing.T) {
 // - restart nodes 5,6
 // - start node 7
 func TestAddAndRemove(t *testing.T) {
-	dir, err := ioutil.TempDir("", "int-test")
-	require.NoError(t, err)
+	dir := t.TempDir()
 
 	nPort, pPort := getPorts(3)
 	setupConfig := &setup.Config{
