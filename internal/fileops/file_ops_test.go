@@ -371,26 +371,15 @@ func TestSyncDir(t *testing.T) {
 func prepareTestDir(t *testing.T) string {
 	tempDir := t.TempDir()
 
-	if err := os.Mkdir(path.Join(tempDir, "dir"), 0755); err != nil {
-		t.FailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "a"), 0755); err != nil {
-		t.FailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "b"), 0755); err != nil {
-		t.FailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "c"), 0755); err != nil {
-		t.FailNow()
-	}
-	if err := os.Mkdir(path.Join(tempDir, "dir", "d"), 0755); err != nil {
-		t.FailNow()
-	}
-	if file, err := os.OpenFile(path.Join(tempDir, "dir", "e"), os.O_CREATE, 0644); err != nil {
-		t.FailNow()
-	} else {
-		defer file.Close()
-	}
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "a"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "b"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "c"), 0755))
+	require.NoError(t, os.Mkdir(path.Join(tempDir, "dir", "d"), 0755))
+
+	file, err := os.OpenFile(path.Join(tempDir, "dir", "e"), os.O_CREATE, 0644)
+	require.NoError(t, err)
+	defer file.Close()
 
 	return tempDir
 }
