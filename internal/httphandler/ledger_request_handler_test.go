@@ -271,7 +271,7 @@ func TestBlockQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewLedgerRequestHandler(db, logger)
+			handler := NewLedgerRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -495,7 +495,7 @@ func TestPathQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewLedgerRequestHandler(db, logger)
+			handler := NewLedgerRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -700,7 +700,7 @@ func TestTxProofQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewLedgerRequestHandler(db, logger)
+			handler := NewLedgerRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -1063,7 +1063,7 @@ func TestTxContentQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewLedgerRequestHandler(db, logger)
+			handler := NewLedgerRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -1362,7 +1362,7 @@ func TestDataProofQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewLedgerRequestHandler(db, logger)
+			handler := NewLedgerRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -1500,7 +1500,7 @@ func TestTxReceiptQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewLedgerRequestHandler(db, logger)
+			handler := NewLedgerRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)

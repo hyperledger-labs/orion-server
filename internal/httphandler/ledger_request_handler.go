@@ -13,6 +13,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // ledgerRequestHandler handles query associated with the
@@ -25,7 +26,7 @@ type ledgerRequestHandler struct {
 }
 
 // NewLedgerRequestHandler creates users request handler
-func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
+func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger, metricsRegistry *prometheus.Registry) http.Handler {
 	handler := &ledgerRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db, logger),

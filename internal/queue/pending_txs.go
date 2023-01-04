@@ -92,3 +92,9 @@ func (p *PendingTxs) Empty() bool {
 	defer p.lock.Unlock()
 	return len(p.txs) == 0
 }
+
+func (p *PendingTxs) Size() int {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	return len(p.txs)
+}

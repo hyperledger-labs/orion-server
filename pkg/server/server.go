@@ -18,16 +18,20 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // BCDBHTTPServer holds the database and http server objects
 type BCDBHTTPServer struct {
-	db      bcdb.DB
-	handler http.Handler
-	listen  net.Listener
-	server  *http.Server
-	conf    *config.Configurations
-	logger  *logger.SugarLogger
+	db            bcdb.DB
+	handler       http.Handler
+	listen        net.Listener
+	server        *http.Server
+	conf          *config.Configurations
+	metricsListen net.Listener
+	metricsServer *http.Server
+	logger        *logger.SugarLogger
 }
 
 // New creates a object of BCDBHTTPServer
@@ -44,18 +48,46 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		return nil, err
 	}
 
-	db, err := bcdb.NewDB(conf, lg)
+	var metricsRegistry *prometheus.Registry
+	var metricsServer *http.Server
+	var metricsListen net.Listener
+	if conf.LocalConfig.Prometheus.Enabled {
+		metricsRegistry = prometheus.NewRegistry()
+		metricsRegistry.MustRegister(
+			prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+			prometheus.NewGoCollector(),
+		)
+
+		metricsNetConf := conf.LocalConfig.Prometheus.Network
+		metricsServer = &http.Server{
+			Addr: fmt.Sprintf("%s:%d", metricsNetConf.Address, metricsNetConf.Port),
+			Handler: promhttp.InstrumentMetricHandler(
+				metricsRegistry, promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}),
+			),
+		}
+		metricsListen, err = net.Listen("tcp", metricsServer.Addr)
+		if err != nil {
+			lg.Errorf("Failed to create Promeheus tcp listener on: %s, error: %s", metricsServer.Addr, err)
+			return nil, errors.Wrapf(err, "error while creating a tcp listener on: %s", metricsServer.Addr)
+		}
+		metricsServer.TLSConfig, err = makeTlsConfig(&conf.LocalConfig.Prometheus.TLS, conf.SharedConfig)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	db, err := bcdb.NewDB(conf, lg, metricsRegistry)
 	if err != nil {
 		return nil, errors.Wrap(err, "error while creating the database object")
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(constants.UserEndpoint, httphandler.NewUsersRequestHandler(db, lg))
-	mux.Handle(constants.DataEndpoint, httphandler.NewDataRequestHandler(db, lg))
-	mux.Handle(constants.DBEndpoint, httphandler.NewDBRequestHandler(db, lg))
-	mux.Handle(constants.ConfigEndpoint, httphandler.NewConfigRequestHandler(db, lg))
-	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, lg))
-	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, lg))
+	mux.Handle(constants.UserEndpoint, httphandler.NewUsersRequestHandler(db, lg, metricsRegistry))
+	mux.Handle(constants.DataEndpoint, httphandler.NewDataRequestHandler(db, lg, metricsRegistry))
+	mux.Handle(constants.DBEndpoint, httphandler.NewDBRequestHandler(db, lg, metricsRegistry))
+	mux.Handle(constants.ConfigEndpoint, httphandler.NewConfigRequestHandler(db, lg, metricsRegistry))
+	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, lg, metricsRegistry))
+	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, lg, metricsRegistry))
 
 	netConf := conf.LocalConfig.Server.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)
@@ -70,57 +102,68 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		Handler: mux,
 	}
 
-	if conf.LocalConfig.Server.TLS.Enabled {
-		// load and check the CA certificates
-		caCerts, err := certificateauthority.LoadCAConfig(&conf.SharedConfig.CAConfig)
-		if err != nil {
-			return nil, errors.Wrapf(err, "error while loading CA certificates from local configuration Server.TLS.CaConfig: %+v", conf.LocalConfig.Server.TLS.CaConfig)
-		}
-		caColl, err := certificateauthority.NewCACertCollection(caCerts.GetRoots(), caCerts.GetIntermediates())
-		if err != nil {
-			return nil, errors.Wrap(err, "error while creating a CA certificate collection")
-		}
-		if err := caColl.VerifyCollection(); err != nil {
-			return nil, errors.Wrap(err, "error while verifying the CA certificate collection")
-		}
-
-		// get a x509.CertPool of all the CA certificates for tls.Config
-		caCertPool := caColl.GetCertPool()
-
-		// server tls.Config
-		serverKeyBytes, err := os.ReadFile(conf.LocalConfig.Server.TLS.ServerKeyPath)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to read local config Server.TLS.ServerKeyPath")
-		}
-		serverCertBytes, err := os.ReadFile(conf.LocalConfig.Server.TLS.ServerCertificatePath)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to read local config Server.TLS.ServerCertificatePath")
-		}
-		serverKeyPair, err := tls.X509KeyPair(serverCertBytes, serverKeyBytes)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to create server tls.X509KeyPair")
-		}
-
-		tlsServerConfig := &tls.Config{
-			Certificates: []tls.Certificate{serverKeyPair},
-			RootCAs:      caCertPool,
-			ClientCAs:    caCertPool,
-			MinVersion:   tls.VersionTLS12,
-		}
-		if conf.LocalConfig.Server.TLS.ClientAuthRequired {
-			tlsServerConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		}
-		server.TLSConfig = tlsServerConfig
+	server.TLSConfig, err = makeTlsConfig(&conf.LocalConfig.Server.TLS, conf.SharedConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	return &BCDBHTTPServer{
-		db:      db,
-		handler: mux,
-		listen:  netListener,
-		server:  server,
-		conf:    conf,
-		logger:  lg,
+		db:            db,
+		handler:       mux,
+		listen:        netListener,
+		server:        server,
+		conf:          conf,
+		metricsListen: metricsListen,
+		metricsServer: metricsServer,
+		logger:        lg,
 	}, nil
+}
+
+func makeTlsConfig(tlsConf *config.TLSConf, sharedConf *config.SharedConfiguration) (*tls.Config, error) {
+	if !tlsConf.Enabled {
+		return nil, nil
+	}
+	// load and check the CA certificates
+	caCerts, err := certificateauthority.LoadCAConfig(&sharedConf.CAConfig)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error while loading CA certificates from local configuration Server.TLS.CaConfig: %+v", &sharedConf.CAConfig)
+	}
+	caColl, err := certificateauthority.NewCACertCollection(caCerts.GetRoots(), caCerts.GetIntermediates())
+	if err != nil {
+		return nil, errors.Wrap(err, "error while creating a CA certificate collection")
+	}
+	if err := caColl.VerifyCollection(); err != nil {
+		return nil, errors.Wrap(err, "error while verifying the CA certificate collection")
+	}
+
+	// get a x509.CertPool of all the CA certificates for tls.Config
+	caCertPool := caColl.GetCertPool()
+
+	// server tls.Config
+	serverKeyBytes, err := os.ReadFile(tlsConf.ServerKeyPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read local config Server.TLS.ServerKeyPath")
+	}
+	serverCertBytes, err := os.ReadFile(tlsConf.ServerCertificatePath)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read local config Server.TLS.ServerCertificatePath")
+	}
+	serverKeyPair, err := tls.X509KeyPair(serverCertBytes, serverKeyBytes)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create server tls.X509KeyPair")
+	}
+
+	tlsServerConfig := &tls.Config{
+		Certificates: []tls.Certificate{serverKeyPair},
+		RootCAs:      caCertPool,
+		ClientCAs:    caCertPool,
+		MinVersion:   tls.VersionTLS12,
+	}
+	if tlsConf.ClientAuthRequired {
+		tlsServerConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+
+	return tlsServerConfig, nil
 }
 
 // Start starts the server
@@ -140,6 +183,7 @@ func (s *BCDBHTTPServer) Start() error {
 	}
 
 	go s.serveRequests(s.listen)
+	go s.servePrometheus()
 
 	return nil
 }
@@ -163,6 +207,28 @@ func (s *BCDBHTTPServer) serveRequests(l net.Listener) {
 	s.logger.Infof("Finished serving requests on: %s", s.listen.Addr().String())
 }
 
+func (s *BCDBHTTPServer) servePrometheus() {
+	if s.metricsServer == nil {
+		return
+	}
+
+	s.logger.Infof("Starting Prometheus server on: %s", s.server.Addr)
+
+	var err error
+	if s.conf.LocalConfig.Prometheus.TLS.Enabled {
+		err = s.metricsServer.ServeTLS(s.metricsListen, "", "")
+	} else {
+		err = s.metricsServer.Serve(s.metricsListen)
+	}
+
+	if err == http.ErrServerClosed {
+		s.logger.Infof("Prometheus server stopped: %s", err)
+	} else {
+		s.logger.Panicf("Prometheus server stopped unexpectedly, %v", err)
+	}
+	s.logger.Infof("Finished serving prometheus requests on: %s", s.metricsServer.Addr)
+}
+
 // Stop stops the server
 func (s *BCDBHTTPServer) Stop() error {
 	if s == nil || s.listen == nil || s.server == nil {
@@ -175,6 +241,14 @@ func (s *BCDBHTTPServer) Stop() error {
 	if err := s.server.Close(); err != nil {
 		s.logger.Errorf("Failure while closing the http server: %s", err)
 		errR = err
+	}
+
+	if s.metricsServer != nil {
+		s.logger.Infof("Stopping the Prometheus server listening on: %s\n", s.metricsServer.Addr)
+		if err := s.metricsServer.Close(); err != nil {
+			s.logger.Errorf("Failure while closing the http Prometheus server: %s", err)
+			errR = err
+		}
 	}
 
 	if err := s.db.Close(); err != nil {

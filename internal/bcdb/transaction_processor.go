@@ -5,6 +5,7 @@ package bcdb
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,11 +26,66 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
 	commitListenerName = "transactionProcessor"
 )
+
+type transactionProcessorMetrics struct {
+	enabled    bool
+	queueSize  *prometheus.GaugeVec
+	submitTime prometheus.Histogram
+}
+
+var timeBuckets = []float64{
+	math.Inf(-1), 0,
+	1e-9, 1e-8, 1e-7, 1e-6, 1e-5,
+	1e-4, 2.5e-4, 5e-4, 7.5e-4,
+	1e-3, 2.5e-3, 5e-3, 7.5e-3,
+	1e-2, 2.5e-2, 5e-2, 7.5e-2,
+	1e-1, 2.5e-1, 5e-1, 7.5e-1,
+	1, 2.5, 5, 7.5,
+	10, 25, 50, 75,
+	1e2, 1e3, 1e4, 1e5, 1e6,
+	math.Inf(1),
+}
+
+func (s *transactionProcessorMetrics) init(reg *prometheus.Registry) {
+	s.enabled = reg != nil
+	if !s.enabled {
+		return
+	}
+
+	s.queueSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "transaction_processor",
+		Name:      "queue_size",
+		Help:      "Queue size",
+	}, []string{"type"})
+	s.submitTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: "transaction_processor",
+		Name:      "submit_time",
+		Help:      "The time taken in seconds to submit a TX",
+		Buckets:   timeBuckets,
+	})
+	reg.MustRegister(
+		s.queueSize,
+		s.submitTime,
+	)
+}
+
+func (s *transactionProcessorMetrics) QueueSize(label string, size int) {
+	if s.enabled {
+		s.queueSize.WithLabelValues(label).Set(float64(size))
+	}
+}
+
+func (s *transactionProcessorMetrics) SubmitTime(startTime time.Time) {
+	if s.enabled {
+		s.submitTime.Observe(time.Since(startTime).Seconds())
+	}
+}
 
 type transactionProcessor struct {
 	nodeID               string
@@ -44,6 +100,7 @@ type transactionProcessor struct {
 	blockStore           *blockstore.Store
 	pendingTxs           *queue.PendingTxs
 	logger               *logger.SugarLogger
+	metrics              transactionProcessorMetrics
 }
 
 type txProcessorConfig struct {
@@ -52,6 +109,7 @@ type txProcessorConfig struct {
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
 	stateTrieStore  mptrie.Store
+	metricsRegistry *prometheus.Registry
 	logger          *logger.SugarLogger
 }
 
@@ -234,6 +292,8 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 
 	p.blockStore = conf.blockStore
 
+	p.metrics.init(conf.metricsRegistry)
+
 	return p, nil
 }
 
@@ -242,6 +302,8 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 // a non-zero timeout would be treated as a sync submission. When a timeout
 // occurs with the sync submission, a timeout error will be returned
 func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error) {
+	startTime := time.Now()
+
 	var txID string
 	switch tx.(type) {
 	case *types.DataTxEnvelope:
@@ -304,6 +366,8 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		}
 	}
 	t.logger.Debug("transaction is enqueued for re-ordering")
+	t.metrics.QueueSize("tx", t.txQueue.Size())
+	t.metrics.QueueSize("pending", t.pendingTxs.Size())
 
 	receipt, err := promise.Wait()
 
@@ -311,6 +375,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
+	t.metrics.SubmitTime(startTime)
 	return &types.TxReceiptResponse{
 		Receipt: receipt,
 	}, nil
