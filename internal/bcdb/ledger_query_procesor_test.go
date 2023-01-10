@@ -3,12 +3,11 @@
 package bcdb
 
 import (
-	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
-
-	"github.com/hyperledger-labs/orion-server/pkg/state"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockprocessor"
@@ -23,17 +22,24 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
+	"github.com/hyperledger-labs/orion-server/pkg/state"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 
 type ledgerProcessorTestEnv struct {
-	db      *leveldb.LevelDB
-	p       *ledgerQueryProcessor
-	cleanup func(t *testing.T)
-	blocks  []*types.BlockHeader
-	blockTx []*types.DataTxEnvelopes
+	db          *leveldb.LevelDB
+	p           *ledgerQueryProcessor
+	cleanup     func(t *testing.T)
+	blocks      []*types.BlockHeader
+	blockTx     []*types.DataTxEnvelopes
+	instCert    *x509.Certificate
+	adminCert   *x509.Certificate
+	userCert    *x509.Certificate
+	aliceCert   *x509.Certificate
+	aliceSigner crypto.Signer
 }
 
 func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
@@ -89,6 +95,13 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 		t.Fatalf("error while creating provenancestore, %v", err)
 	}
 
+	cryptoPath := testutils.GenerateTestCrypto(t, []string{"Instance", "Admin", "testUser", "alice"})
+	instCert, _ := testutils.LoadTestCrypto(t, cryptoPath, "Instance")
+	adminCert, _ := testutils.LoadTestCrypto(t, cryptoPath, "Admin")
+	userCert, _ := testutils.LoadTestCrypto(t, cryptoPath, "testUser")
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoPath, "alice")
+	_ = os.RemoveAll(cryptoPath)
+
 	cleanup := func(t *testing.T) {
 		if err := db.Close(); err != nil {
 			t.Errorf("failed to close leveldb: %v", err)
@@ -113,16 +126,18 @@ func newLedgerProcessorTestEnv(t *testing.T) *ledgerProcessorTestEnv {
 	}
 
 	return &ledgerProcessorTestEnv{
-		db:      db,
-		p:       newLedgerQueryProcessor(conf),
-		cleanup: cleanup,
+		db:          db,
+		p:           newLedgerQueryProcessor(conf),
+		cleanup:     cleanup,
+		instCert:    instCert,
+		adminCert:   adminCert,
+		userCert:    userCert,
+		aliceCert:   aliceCert,
+		aliceSigner: aliceSigner,
 	}
 }
 
 func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
-	instCert, adminCert := generateCrypto(t)
-	//	dcCert, _ := pem.Decode(cert)
-
 	configBlock := &types.Block{
 		Header: &types.BlockHeader{
 			BaseHeader: &types.BlockHeaderBase{
@@ -137,7 +152,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 		Payload: &types.Block_ConfigTxEnvelope{
 			ConfigTxEnvelope: &types.ConfigTxEnvelope{
 				Payload: &types.ConfigTx{
-					UserId:               "adminUser",
+					UserId:               "admin1",
 					TxId:                 "configTx1",
 					ReadOldConfigVersion: nil,
 					NewConfig: &types.ClusterConfig{
@@ -145,13 +160,13 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 							{
 								Id:          "node1",
 								Address:     "127.0.0.1",
-								Certificate: instCert,
+								Certificate: env.instCert.Raw,
 							},
 						},
 						Admins: []*types.Admin{
 							{
 								Id:          "admin1",
-								Certificate: adminCert,
+								Certificate: env.adminCert.Raw,
 							},
 						},
 					},
@@ -167,6 +182,19 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 	env.blocks = []*types.BlockHeader{configBlock.GetHeader()}
 	env.blockTx = []*types.DataTxEnvelopes{{}}
 
+	adminUser := &types.User{
+		Id: "admin1",
+		Privilege: &types.Privilege{
+			DbPermission: map[string]types.Privilege_Access{
+				worldstate.DefaultDBName: types.Privilege_ReadWrite,
+			},
+			Admin: true,
+		},
+		Certificate: env.adminCert.Raw,
+	}
+	adminUserBytes, err := proto.Marshal(adminUser)
+	require.NoError(t, err)
+
 	user := &types.User{
 		Id: "testUser",
 		Privilege: &types.Privilege{
@@ -174,9 +202,23 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 				worldstate.DefaultDBName: types.Privilege_ReadWrite,
 			},
 		},
+		Certificate: env.userCert.Raw,
 	}
 
-	u, err := proto.Marshal(user)
+	userBytes, err := proto.Marshal(user)
+	require.NoError(t, err)
+
+	aliceUser := &types.User{
+		Id: "alice",
+		Privilege: &types.Privilege{
+			DbPermission: map[string]types.Privilege_Access{
+				worldstate.DefaultDBName: types.Privilege_ReadWrite,
+			},
+		},
+		Certificate: env.aliceCert.Raw,
+	}
+
+	aliceBytes, err := proto.Marshal(aliceUser)
 	require.NoError(t, err)
 
 	createUser := map[string]*worldstate.DBUpdates{
@@ -184,7 +226,27 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 			Writes: []*worldstate.KVWithMetadata{
 				{
 					Key:   string(identity.UserNamespace) + "testUser",
-					Value: u,
+					Value: userBytes,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    1,
+						},
+					},
+				},
+				{
+					Key:   string(identity.UserNamespace) + "admin1",
+					Value: adminUserBytes,
+					Metadata: &types.Metadata{
+						Version: &types.Version{
+							BlockNum: 1,
+							TxNum:    2,
+						},
+					},
+				},
+				{
+					Key:   string(identity.UserNamespace) + "alice",
+					Value: aliceBytes,
 					Metadata: &types.Metadata{
 						Version: &types.Version{
 							BlockNum: 1,
@@ -208,7 +270,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 			key = append(key, fmt.Sprintf("key%d", j))
 			value = append(value, []byte(fmt.Sprintf("value_%d_%d", j, i)))
 		}
-		block := createSampleBlock(i, key, value)
+		block := createSampleBlock(env.aliceSigner, i, key, value)
 		require.NoError(t, env.p.blockStore.AddSkipListLinks(block))
 		root, err := mtree.BuildTreeForBlockTx(block)
 		require.NoError(t, err)
@@ -227,7 +289,7 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 	}
 }
 
-func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.Block {
+func createSampleBlock(aliceSigner crypto.Signer, blockNumber uint64, key []string, value [][]byte) *types.Block {
 	envelopes := make([]*types.DataTxEnvelope, 0)
 	for i := 0; i < len(key); i++ {
 		e := &types.DataTxEnvelope{
@@ -246,7 +308,17 @@ func createSampleBlock(blockNumber uint64, key []string, value [][]byte) *types.
 					},
 				},
 			},
+			Signatures: make(map[string][]byte),
 		}
+
+		e.Signatures["testUser"] = []byte("in must sign so always correct")
+		e.Signatures["testUser2"] = []byte("bad sig")
+		if aliceSigner != nil {
+			eBytes, _ := marshal.DefaultMarshaler().Marshal(e.Payload)
+			sig, _ := aliceSigner.Sign(eBytes)
+			e.Signatures["alice"] = sig
+		}
+
 		envelopes = append(envelopes, e)
 	}
 
@@ -858,20 +930,87 @@ func TestGetTxReceipt(t *testing.T) {
 	}
 }
 
-func generateCrypto(t *testing.T) ([]byte, []byte) {
-	rootCAPemCert, caPrivKey, err := testutils.GenerateRootCA("BCDB RootCA", "127.0.0.1")
-	require.NoError(t, err)
-	require.NotNil(t, rootCAPemCert)
-	require.NotNil(t, caPrivKey)
+func TestGetTx(t *testing.T) {
+	env := newLedgerProcessorTestEnv(t)
+	defer env.cleanup(t)
+	setup(t, env, 20)
 
-	keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
-	require.NoError(t, err)
-	require.NotNil(t, keyPair)
+	testCases := []struct {
+		name        string
+		blockNumber uint64
+		txIndex     uint64
+		user        string
 
-	instCertPem, _, err := testutils.IssueCertificate("BCDB Instance", "127.0.0.1", keyPair)
-	require.NoError(t, err)
+		expectedGetTxResponse *types.GetTxResponse
+		expectedErr           error
+	}{
+		{
+			name:        "Getting block 5, tx 2 - correct, user in must-sign",
+			blockNumber: 5,
+			txIndex:     2,
+			user:        "testUser",
+		},
+		{
+			name:        "Getting block 5, tx 2 - correct, user in signatures",
+			blockNumber: 5,
+			txIndex:     2,
+			user:        "alice",
+		},
+		{
+			name:        "Getting block 1, tx 0, config - correct, admin",
+			blockNumber: 1,
+			txIndex:     0,
+			user:        "admin1",
+		},
+		{
+			name:        "Getting block 1, tx 0, config - not admin",
+			blockNumber: 1,
+			txIndex:     0,
+			user:        "testUser",
+			expectedErr: &interrors.PermissionErr{ErrMsg: "user testUser has no permission to access the tx"},
+		},
+		{
+			name:        "Getting block 10 - non existing user",
+			blockNumber: 10,
+			txIndex:     0,
+			user:        "userNotExist",
+			expectedErr: &interrors.PermissionErr{ErrMsg: "user userNotExist has no permission to access the tx"},
+		},
+		{
+			name:        "Getting block 10 - another signed user - bad signature",
+			blockNumber: 10,
+			txIndex:     0,
+			user:        "testUser2",
+			expectedErr: &interrors.PermissionErr{ErrMsg: "user testUser2 has no permission to access the tx"},
+		},
+		{
+			name:        "Getting block 10 - index out of range",
+			blockNumber: 10,
+			txIndex:     3000,
+			user:        "testUser",
+			expectedErr: &interrors.BadRequestError{ErrMsg: "transaction index out of range: 3000"},
+		},
+		{
+			name:        "Getting block 200 - out of range",
+			blockNumber: 200,
+			txIndex:     0,
+			user:        "testUser",
+			expectedErr: &interrors.NotFoundErr{Message: "requested block number [200] cannot be greater than the last committed block number [19]"},
+		},
+	}
 
-	adminCertPem, _, err := testutils.IssueCertificate("BCDB Admin", "127.0.0.1", keyPair)
-	require.NoError(t, err)
-	return instCertPem, adminCertPem
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			payload, err := env.p.getTx(testCase.user, testCase.blockNumber, testCase.txIndex)
+			if testCase.expectedErr == nil {
+				require.NoError(t, err)
+				require.NotNil(t, payload)
+				//TODO
+			} else {
+				require.Error(t, err)
+				require.EqualError(t, err, testCase.expectedErr.Error())
+				require.IsType(t, testCase.expectedErr, err)
+			}
+		})
+	}
 }

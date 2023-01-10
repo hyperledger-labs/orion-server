@@ -4,6 +4,7 @@
 package bcdb
 
 import (
+	"crypto/tls"
 	"fmt"
 	"testing"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	crypto_mocks "github.com/hyperledger-labs/orion-server/pkg/crypto/mocks"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -255,7 +257,7 @@ func setupConfigQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum int) 
 			key = append(key, fmt.Sprintf("key%d", j))
 			value = append(value, []byte(fmt.Sprintf("value_%d_%d", j, i)))
 		}
-		block := createSampleBlock(i, key, value)
+		block := createSampleBlock(nil, i, key, value)
 		require.NoError(t, env.ledgerQP.blockStore.Commit(block))
 
 		env.blocks = append(env.blocks, block.GetHeader())
@@ -320,6 +322,24 @@ func setupConfigQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum int) 
 	}
 	require.NoError(t, env.db.Commit(createConfig, 1))
 	env.blocks = append(env.blocks, configBlock.GetHeader())
+}
+
+func generateCrypto(t *testing.T) ([]byte, []byte) {
+	rootCAPemCert, caPrivKey, err := testutils.GenerateRootCA("BCDB RootCA", "127.0.0.1")
+	require.NoError(t, err)
+	require.NotNil(t, rootCAPemCert)
+	require.NotNil(t, caPrivKey)
+
+	keyPair, err := tls.X509KeyPair(rootCAPemCert, caPrivKey)
+	require.NoError(t, err)
+	require.NotNil(t, keyPair)
+
+	instCertPem, _, err := testutils.IssueCertificate("BCDB Instance", "127.0.0.1", keyPair)
+	require.NoError(t, err)
+
+	adminCertPem, _, err := testutils.IssueCertificate("BCDB Admin", "127.0.0.1", keyPair)
+	require.NoError(t, err)
+	return instCertPem, adminCertPem
 }
 
 func TestGetConfigBlock(t *testing.T) {

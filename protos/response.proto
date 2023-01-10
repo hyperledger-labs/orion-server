@@ -123,7 +123,7 @@ message GetClusterStatusResponse {
   repeated string Active = 5;
 }
 
-//========= Part II Provenance API responses
+//==== Ledger API responses ===========================================================================================
 
 // GetBlock
 message GetBlockResponseEnvelope {
@@ -169,6 +169,24 @@ message GetTxProofResponse {
   repeated bytes hashes = 2;
 }
 
+// GetTx
+message GetTxResponseEnvelope {
+  GetTxResponse response = 1;
+  bytes signature = 2;
+}
+
+message GetTxResponse {
+  ResponseHeader header = 1;
+  oneof TxEnvelope {
+    DataTxEnvelope data_tx_envelope = 2;
+    ConfigTxEnvelope config_tx_envelope = 3;
+    DBAdministrationTxEnvelope db_administration_tx_envelope = 4;
+    UserAdministrationTxEnvelope user_administration_tx_envelope = 5;
+  }
+  ValidationInfo validation_info = 7;
+  Version version = 8;
+}
+
 // GetDataProof
 message GetDataProofResponseEnvelope {
   GetDataProofResponse response = 1;
@@ -183,6 +201,18 @@ message GetDataProofResponse {
 message MPTrieProofElement {
   repeated bytes hashes = 1;
 }
+
+message TxReceiptResponseEnvelope {
+  TxReceiptResponse response = 1;
+  bytes signature = 2;
+}
+
+message TxReceiptResponse {
+  ResponseHeader header = 1;
+  TxReceipt receipt = 2;
+}
+
+//=== Provenance API responses ========================================================================================
 
 // GetHistoricalData
 message GetHistoricalDataResponseEnvelope {
@@ -244,15 +274,7 @@ message GetTxIDsSubmittedByResponse {
   repeated string txIDs = 2;
 }
 
-message TxReceiptResponseEnvelope {
-  TxReceiptResponse response = 1;
-  bytes signature = 2;
-}
-
-message TxReceiptResponse {
-  ResponseHeader header = 1;
-  TxReceipt receipt = 2;
-}
+//=== Data query API responses ========================================================================================
 
 message DataQueryResponseEnvelope {
   DataQueryResponse response = 1;

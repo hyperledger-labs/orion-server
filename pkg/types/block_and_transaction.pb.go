@@ -2098,13 +2098,17 @@ func (x *ConsensusMetadata) GetRaftIndex() uint64 {
 	return 0
 }
 
+// AugmentedBlockHeader contains in addition to the block header, an array of transaction IDs (TxID). This array
+// corresponds to the validation info array in the block header and is keyed by the transaction index.
 type AugmentedBlockHeader struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
+	// The block header.
 	Header *BlockHeader `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	TxIds  []string     `protobuf:"bytes,2,rep,name=tx_ids,json=txIds,proto3" json:"tx_ids,omitempty"`
+	// An array of transaction IDs (TxID).
+	TxIds []string `protobuf:"bytes,2,rep,name=tx_ids,json=txIds,proto3" json:"tx_ids,omitempty"`
 }
 
 func (x *AugmentedBlockHeader) Reset() {
