@@ -492,6 +492,29 @@ func (_m *DB) GetReaders(userID string, dbName string, key string) (*types.GetDa
 	return r0, r1
 }
 
+// GetTx provides a mock function with given fields: userID, blockNum, txIdx
+func (_m *DB) GetTx(userID string, blockNum uint64, txIdx uint64) (*types.GetTxResponseEnvelope, error) {
+	ret := _m.Called(userID, blockNum, txIdx)
+
+	var r0 *types.GetTxResponseEnvelope
+	if rf, ok := ret.Get(0).(func(string, uint64, uint64) *types.GetTxResponseEnvelope); ok {
+		r0 = rf(userID, blockNum, txIdx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*types.GetTxResponseEnvelope)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(string, uint64, uint64) error); ok {
+		r1 = rf(userID, blockNum, txIdx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetTxIDsSubmittedByUser provides a mock function with given fields: querierUserID, targetUserID
 func (_m *DB) GetTxIDsSubmittedByUser(querierUserID string, targetUserID string) (*types.GetTxIDsSubmittedByResponseEnvelope, error) {
 	ret := _m.Called(querierUserID, targetUserID)

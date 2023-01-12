@@ -722,6 +722,369 @@ func TestTxProofQuery(t *testing.T) {
 	}
 }
 
+func TestTxContentQuery(t *testing.T) {
+	submittingUserName := "alice"
+	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})
+	aliceCert, aliceSigner := testutils.LoadTestCrypto(t, cryptoDir, "alice")
+
+	testCases := []struct {
+		name               string
+		requestFactory     func() (*http.Request, error)
+		dbMockFactory      func(response *types.GetTxResponseEnvelope) bcdb.DB
+		expectedResponse   *types.GetTxResponseEnvelope
+		expectedStatusCode int
+		expectedErr        string
+	}{
+		{
+			name: "valid get request, data tx",
+			expectedResponse: &types.GetTxResponseEnvelope{
+				Response: &types.GetTxResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					TxEnvelope: &types.GetTxResponse_DataTxEnvelope{DataTxEnvelope: &types.DataTxEnvelope{
+						Payload:    &types.DataTx{TxId: "txID-1"},
+						Signatures: map[string][]byte{"alice": []byte("alice-sig")},
+					}},
+					ValidationInfo: &types.ValidationInfo{
+						Flag: types.Flag_VALID,
+					},
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+				},
+				Signature: []byte("valid-server-sig"),
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTx", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get request, config tx",
+			expectedResponse: &types.GetTxResponseEnvelope{
+				Response: &types.GetTxResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					TxEnvelope: &types.GetTxResponse_ConfigTxEnvelope{ConfigTxEnvelope: &types.ConfigTxEnvelope{
+						Payload:   &types.ConfigTx{TxId: "txID-1"},
+						Signature: []byte("alice-sig"),
+					}},
+					ValidationInfo: &types.ValidationInfo{
+						Flag: types.Flag_VALID,
+					},
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+				},
+				Signature: []byte("valid-server-sig"),
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTx", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get request, user tx",
+			expectedResponse: &types.GetTxResponseEnvelope{
+				Response: &types.GetTxResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					TxEnvelope: &types.GetTxResponse_UserAdministrationTxEnvelope{UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
+						Payload:   &types.UserAdministrationTx{TxId: "txID-1"},
+						Signature: []byte("alice-sig"),
+					}},
+					ValidationInfo: &types.ValidationInfo{
+						Flag: types.Flag_VALID,
+					},
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+				},
+				Signature: []byte("valid-server-sig"),
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTx", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "valid get request, db tx",
+			expectedResponse: &types.GetTxResponseEnvelope{
+				Response: &types.GetTxResponse{
+					Header: &types.ResponseHeader{
+						NodeId: "testNodeID",
+					},
+					TxEnvelope: &types.GetTxResponse_DbAdministrationTxEnvelope{DbAdministrationTxEnvelope: &types.DBAdministrationTxEnvelope{
+						Payload:   &types.DBAdministrationTx{TxId: "txID-1"},
+						Signature: []byte("alice-sig"),
+					}},
+					ValidationInfo: &types.ValidationInfo{
+						Flag: types.Flag_VALID,
+					},
+					Version: &types.Version{
+						BlockNum: 2,
+						TxNum:    1,
+					},
+				},
+				Signature: []byte("valid-server-sig"),
+			},
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTx", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name:             "user doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 1), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     1,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(nil, errors.New("user does not exist"))
+				db.On("GetTx", submittingUserName, uint64(2), uint64(1)).Return(response, nil)
+				return db
+			},
+			expectedStatusCode: http.StatusUnauthorized,
+			expectedErr:        "signature verification failed",
+		},
+		{
+			name:             "no tx exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 2), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     2,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTx", submittingUserName, uint64(2), uint64(2)).Return(nil, &interrors.NotFoundErr{Message: "block not found: 2"})
+				return db
+			},
+			expectedStatusCode: http.StatusNotFound,
+			expectedErr:        "error while processing 'GET /ledger/tx/content/2?idx=2' because block not found: 2",
+		},
+		{
+			name:             "no permission",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 2), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     2,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTx", submittingUserName, uint64(2), uint64(2)).Return(nil, &interrors.PermissionErr{ErrMsg: "no permission to access tx"})
+				return db
+			},
+			expectedStatusCode: http.StatusForbidden,
+			expectedErr:        "error while processing 'GET /ledger/tx/content/2?idx=2' because no permission to access tx",
+		},
+		{
+			name:             "bad request",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, constants.URLTxContent(2, 2), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				sig := testutils.SignatureFromQuery(t, aliceSigner, &types.GetTxContentQuery{
+					UserId:      submittingUserName,
+					BlockNumber: 2,
+					TxIndex:     2,
+				})
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString(sig))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				db.On("GetCertificate", submittingUserName).Return(aliceCert, nil)
+				db.On("GetTx", submittingUserName, uint64(2), uint64(2)).Return(nil, &interrors.BadRequestError{ErrMsg: "tx index out of range"})
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "error while processing 'GET /ledger/tx/content/2?idx=2' because tx index out of range",
+		},
+		{
+			name:             "wrong url, idx param doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "tx", "content", "2"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "tx content query error - bad or missing query parameter",
+		},
+		{
+			name:             "wrong url, blockId idx params doesn't exist",
+			expectedResponse: nil,
+			requestFactory: func() (*http.Request, error) {
+				req, err := http.NewRequest(http.MethodGet, path.Join(constants.LedgerEndpoint, "tx", "content"), nil)
+				if err != nil {
+					return nil, err
+				}
+				req.Header.Set(constants.UserHeader, submittingUserName)
+				req.Header.Set(constants.SignatureHeader, base64.StdEncoding.EncodeToString([]byte{0}))
+				return req, nil
+			},
+			dbMockFactory: func(response *types.GetTxResponseEnvelope) bcdb.DB {
+				db := &mocks.DB{}
+				return db
+			},
+			expectedStatusCode: http.StatusBadRequest,
+			expectedErr:        "tx content query error - bad or missing query parameter",
+		},
+	}
+
+	logger, err := createLogger("debug")
+	require.NoError(t, err)
+	require.NotNil(t, logger)
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := tt.requestFactory()
+			require.NoError(t, err)
+			require.NotNil(t, req)
+
+			db := tt.dbMockFactory(tt.expectedResponse)
+			rr := httptest.NewRecorder()
+			handler := NewLedgerRequestHandler(db, logger)
+			handler.ServeHTTP(rr, req)
+
+			require.Equal(t, tt.expectedStatusCode, rr.Code)
+			if tt.expectedStatusCode != http.StatusOK {
+				respErr := &types.HttpResponseErr{}
+				err := json.NewDecoder(rr.Body).Decode(respErr)
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedErr, respErr.ErrMsg)
+			}
+
+			if tt.expectedResponse != nil {
+				responseBody, err := ioutil.ReadAll(rr.Body)
+				require.NoError(t, err)
+				res := &types.GetTxResponseEnvelope{}
+				require.NoError(t, protojson.Unmarshal(responseBody, res))
+				require.Equal(t, tt.expectedResponse, res)
+			}
+		})
+	}
+}
+
 func TestDataProofQuery(t *testing.T) {
 	submittingUserName := "alice"
 	cryptoDir := testutils.GenerateTestCrypto(t, []string{"alice"})

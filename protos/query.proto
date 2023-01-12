@@ -241,6 +241,17 @@ message GetTxReceiptQueryEnvelope {
   bytes signature = 2;
 }
 
+message GetTxContentQuery {
+  string user_id = 1;
+  uint64 block_number = 2;
+  uint64 tx_index = 3;
+}
+
+message GetTxContentQueryEnvelope {
+  GetTxContentQuery payload = 1;
+  bytes signature = 2;
+}
+
 message GetMostRecentUserOrNodeQuery {
     enum Type {
         USER = 0;
