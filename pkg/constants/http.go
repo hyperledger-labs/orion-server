@@ -66,8 +66,10 @@ const (
 	GetTxProof         = "/ledger/proof/tx/{blockId:[0-9]+}"
 	GetDataProofPrefix = "/ledger/proof/data"
 	// GetDataProof Keys in URLs are expected to be encoded in base64 URL encoding without padding.
-	GetDataProof = "/ledger/proof/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
-	GetTxReceipt = "/ledger/tx/receipt/{txId}"
+	GetDataProof       = "/ledger/proof/data/{dbname:" + `[0-9a-zA-Z_\-\.]+` + "}/{key}"
+	GetTxReceipt       = "/ledger/tx/receipt/{txId}"
+	GetTxContentPrefix = "/ledger/tx/content"
+	GetTxContent       = "/ledger/tx/content/{blockId:[0-9]+}"
 
 	ProvenanceEndpoint = "/provenance/"
 	// GetHistoricalData Keys in URLs are expected to be encoded in base64 URL encoding without padding.
@@ -147,6 +149,10 @@ func URLForLedgerPath(start, end uint64) string {
 
 func URLTxProof(blockNum uint64, txIdx uint64) string {
 	return LedgerEndpoint + fmt.Sprintf("proof/tx/%d?idx=%d", blockNum, txIdx)
+}
+
+func URLTxContent(blockNum uint64, txIdx uint64) string {
+	return LedgerEndpoint + fmt.Sprintf("tx/content/%d?idx=%d", blockNum, txIdx)
 }
 
 // URLDataProof returns URL for GET request to retrieve a data existence proof.

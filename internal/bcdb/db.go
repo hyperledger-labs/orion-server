@@ -113,6 +113,9 @@ type DB interface {
 	// GetTxProof returns intermediate hashes to recalculate merkle tree root from tx hash
 	GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.GetTxProofResponseEnvelope, error)
 
+	// GetTx returns the content of the TX
+	GetTx(userID string, blockNum uint64, txIdx uint64) (*types.GetTxResponseEnvelope, error)
+
 	// GetDataProof returns hashes path from value to root in merkle-patricia trie
 	GetDataProof(userID string, blockNum uint64, dbname string, key string, deleted bool) (*types.GetDataProofResponseEnvelope, error)
 
@@ -646,6 +649,24 @@ func (d *db) GetTxProof(userID string, blockNum uint64, txIdx uint64) (*types.Ge
 
 	return &types.GetTxProofResponseEnvelope{
 		Response:  proofResponse,
+		Signature: sign,
+	}, nil
+}
+
+func (d *db) GetTx(userID string, blockNum uint64, txIdx uint64) (*types.GetTxResponseEnvelope, error) {
+	txResponse, err := d.ledgerQueryProcessor.getTx(userID, blockNum, txIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	txResponse.Header = d.responseHeader()
+	sign, err := d.signature(txResponse)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.GetTxResponseEnvelope{
+		Response:  txResponse,
 		Signature: sign,
 	}, nil
 }
