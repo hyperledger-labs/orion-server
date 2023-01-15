@@ -166,11 +166,7 @@ func GenerateTestCrypto(t *testing.T, names []string, withIntermediateCA ...bool
 		withInterCA = withIntermediateCA[0]
 	}
 
-	tempDir, err := ioutil.TempDir("/tmp", "UnitTestCrypto")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
-	})
+	tempDir := t.TempDir()
 
 	rootCAPemCert, caPrivKey, err := GenerateRootCA("Orion RootCA", "127.0.0.1")
 	require.NoError(t, err)
