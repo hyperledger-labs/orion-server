@@ -50,6 +50,8 @@ func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handle
 	handler.router.HandleFunc(constants.GetDataProof, handler.dataProof).Methods(http.MethodGet).Queries("block", "{blockId:[0-9]+}")
 	// HTTP GET "/ledger/tx/receipt/{txId}" gets transaction receipt
 	handler.router.HandleFunc(constants.GetTxReceipt, handler.txReceipt).Methods(http.MethodGet)
+	// HTTP GET "/ledger/tx/content/{blockId}?idx={idx}" gets the tx envelope with index idx inside block blockId
+	handler.router.HandleFunc(constants.GetTxContent, handler.txContent).Methods(http.MethodGet).Queries("idx", "{idx:[0-9]+}")
 	// HTTP GET "/ledger/path?start={startId}&end={endId}" with invalid query params
 	handler.router.HandleFunc(constants.GetPath, handler.invalidPathQuery).Methods(http.MethodGet)
 	// HTTP GET "/ledger/proof/tx/{blockId}?idx={idx}" with invalid query params
@@ -62,6 +64,9 @@ func NewLedgerRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handle
 	handler.router.HandleFunc(constants.GetDataProofPrefix+"/{dbname}", handler.invalidDataProof).Methods(http.MethodGet)
 	// HTTP GET "/ledger/proof/data/{blockId}/{dbname}/{key}" with invalid query params
 	handler.router.HandleFunc(constants.GetDataProofPrefix+"/{dbname}/{key}", handler.invalidDataProof).Methods(http.MethodGet)
+	// HTTP GET "/ledger/tx/content/{blockId}?idx={idx}" with invalid query params
+	handler.router.HandleFunc(constants.GetTxContentPrefix, handler.invalidTxContent).Methods(http.MethodGet)
+	handler.router.HandleFunc(constants.GetTxContent, handler.invalidTxContent).Methods(http.MethodGet)
 
 	return handler
 }
@@ -276,6 +281,40 @@ func (p *ledgerRequestHandler) txReceipt(response http.ResponseWriter, request *
 	utils.SendHTTPResponse(response, http.StatusOK, data)
 }
 
+func (p *ledgerRequestHandler) txContent(response http.ResponseWriter, request *http.Request) {
+	payload, respondedErr := extractVerifiedQueryPayload(response, request, constants.GetTxContent, p.sigVerifier)
+	if respondedErr {
+		return
+	}
+	query := payload.(*types.GetTxContentQuery)
+
+	data, err := p.db.GetTx(query.GetUserId(), query.GetBlockNumber(), query.GetTxIndex())
+	if err != nil {
+		var status int
+
+		switch err.(type) {
+		case *errors.PermissionErr:
+			status = http.StatusForbidden
+		case *errors.NotFoundErr:
+			status = http.StatusNotFound
+		case *errors.BadRequestError:
+			status = http.StatusBadRequest
+		default:
+			status = http.StatusInternalServerError
+		}
+
+		utils.SendHTTPResponse(
+			response,
+			status,
+			&types.HttpResponseErr{
+				ErrMsg: "error while processing '" + request.Method + " " + request.URL.String() + "' because " + err.Error(),
+			})
+		return
+	}
+
+	utils.SendHTTPResponse(response, http.StatusOK, data)
+}
+
 func (p *ledgerRequestHandler) invalidPathQuery(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "query error - bad or missing start/end block number",
@@ -293,6 +332,13 @@ func (p *ledgerRequestHandler) invalidTxProof(response http.ResponseWriter, requ
 func (p *ledgerRequestHandler) invalidDataProof(response http.ResponseWriter, request *http.Request) {
 	err := &types.HttpResponseErr{
 		ErrMsg: "data proof query error - bad or missing query parameter",
+	}
+	utils.SendHTTPResponse(response, http.StatusBadRequest, err)
+}
+
+func (p *ledgerRequestHandler) invalidTxContent(response http.ResponseWriter, request *http.Request) {
+	err := &types.HttpResponseErr{
+		ErrMsg: "tx content query error - bad or missing query parameter",
 	}
 	utils.SendHTTPResponse(response, http.StatusBadRequest, err)
 }

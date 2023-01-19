@@ -5,14 +5,15 @@ package bcdb
 
 import (
 	"fmt"
-
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/hyperledger-labs/orion-server/internal/mtree"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
+	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
+	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/state"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
@@ -141,6 +142,118 @@ func (p *ledgerQueryProcessor) getTxProof(userId string, blockNum uint64, txIdx 
 	return &types.GetTxProofResponse{
 		Hashes: path,
 	}, nil
+}
+
+// getTx allows a user to get a TX
+func (p *ledgerQueryProcessor) getTx(userId string, blockNum uint64, txIndex uint64) (*types.GetTxResponse, error) {
+	block, err := p.blockStore.Get(blockNum)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &types.GetTxResponse{
+		Version: &types.Version{
+			BlockNum: blockNum,
+			TxNum:    txIndex,
+		},
+	}
+
+	switch block.Payload.(type) {
+	case *types.Block_DataTxEnvelopes:
+		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
+		if  int(txIndex) >= len(dataTxEnvs) {
+			return nil, &interrors.BadRequestError{ErrMsg: fmt.Sprintf("transaction index out of range: %d", txIndex)}
+		}
+		dataTxEnv := dataTxEnvs[txIndex]
+		hasAccess, err := p.hasDataTxAccess(userId, dataTxEnv)
+		if err != nil {
+			return nil, err
+		}
+		if !hasAccess {
+			return nil, &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the tx", userId)}
+		}
+		response.TxEnvelope = &types.GetTxResponse_DataTxEnvelope{
+			DataTxEnvelope: dataTxEnv,
+		}
+
+	case *types.Block_UserAdministrationTxEnvelope:
+		if err := p.checkAdminTxAccess(userId, txIndex); err != nil {
+			return nil, err
+		}
+		response.TxEnvelope = &types.GetTxResponse_UserAdministrationTxEnvelope{
+			UserAdministrationTxEnvelope: block.GetUserAdministrationTxEnvelope(),
+		}
+
+	case *types.Block_DbAdministrationTxEnvelope:
+		if err := p.checkAdminTxAccess(userId, txIndex); err != nil {
+			return nil, err
+		}
+		response.TxEnvelope = &types.GetTxResponse_DbAdministrationTxEnvelope{
+			DbAdministrationTxEnvelope: block.GetDbAdministrationTxEnvelope(),
+		}
+
+	case *types.Block_ConfigTxEnvelope:
+		if err := p.checkAdminTxAccess(userId, txIndex); err != nil {
+			return nil, err
+		}
+		response.TxEnvelope = &types.GetTxResponse_ConfigTxEnvelope{
+			ConfigTxEnvelope: block.GetConfigTxEnvelope(),
+		}
+
+	default:
+		return nil, errors.Errorf("unexpected transaction envelope in the block")
+	}
+
+	response.ValidationInfo = block.Header.ValidationInfo[txIndex]
+
+	return response, nil
+
+}
+
+// either the user is in the must-sign set, or it has signed the TX correctly
+func (p *ledgerQueryProcessor) hasDataTxAccess(userId string, env *types.DataTxEnvelope) (bool, error) {
+	dataTx := env.GetPayload()
+
+	for _, mustSignUser := range dataTx.GetMustSignUserIds() {
+		if mustSignUser == userId { // must-sign user always have valid sig, no need to check
+			return true, nil
+		}
+	}
+
+	for signedUser, sig := range env.GetSignatures() {
+		if userId != signedUser {
+			continue
+		}
+
+		dataTxBytes, err := marshal.DefaultMarshaler().Marshal(dataTx)
+		if err != nil {
+			p.logger.Errorf("Error during Marshal Tx: %s, error: %s", dataTx, err)
+			return false, errors.Wrap(err, "failed to Marshal Tx")
+		}
+		// TODO This may fail if the user changed his certificate after signing the TX - use certificate history
+		sigVerifier := cryptoservice.NewVerifier(p.identityQuerier, p.logger)
+		if err = sigVerifier.Verify(userId, sig, dataTxBytes); err == nil {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (p *ledgerQueryProcessor) checkAdminTxAccess(userId string, txIndex uint64) error {
+	if txIndex > 0 {
+		return &interrors.BadRequestError{ErrMsg: fmt.Sprintf("transaction index out of range: %d", txIndex)}
+	}
+
+	hasAccess, err := p.identityQuerier.HasAdministrationPrivilege(userId)
+	if err != nil {
+		return err
+	}
+	if !hasAccess {
+		return &interrors.PermissionErr{ErrMsg: fmt.Sprintf("user %s has no permission to access the tx", userId)}
+	}
+
+	return nil
 }
 
 func (p *ledgerQueryProcessor) getDataProof(userId string, blockNum uint64, dbname string, key string, isDeleted bool) (*types.GetDataProofResponse, error) {

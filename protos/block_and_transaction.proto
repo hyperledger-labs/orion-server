@@ -228,7 +228,11 @@ message ConsensusMetadata {
   uint64 raft_index = 2;
 }
 
+// AugmentedBlockHeader contains in addition to the block header, an array of transaction IDs (TxID). This array
+// corresponds to the validation info array in the block header and is keyed by the transaction index.
 message AugmentedBlockHeader {
+  // The block header.
   BlockHeader header = 1;
+  // An array of transaction IDs (TxID).
   repeated string tx_ids = 2;
 }

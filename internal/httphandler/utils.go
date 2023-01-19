@@ -162,6 +162,18 @@ func extractVerifiedQueryPayload(w http.ResponseWriter, r *http.Request, queryTy
 			BlockNumber: blockNum,
 			TxIndex:     txIndex,
 		}
+	case constants.GetTxContent:
+		blockNum, txIndex, err := utils.GetBlockNumAndTxIndex(params)
+		if err != nil {
+			utils.SendHTTPResponse(w, http.StatusBadRequest, err)
+			return nil, true
+		}
+
+		payload = &types.GetTxContentQuery{
+			UserId:      querierUserID,
+			BlockNumber: blockNum,
+			TxIndex:     txIndex,
+		}
 	case constants.GetDataProof:
 		key, err := utils.GetBase64urlKey(params, "key")
 		if err != nil {
