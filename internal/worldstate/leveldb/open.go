@@ -34,6 +34,7 @@ type LevelDB struct {
 	logger      *logger.SugarLogger
 	dbsList     sync.RWMutex
 	dbNameRegex *regexp.Regexp
+	cache       *cache
 }
 
 // db - a wrapper on an actual store
@@ -112,6 +113,7 @@ func openNewLevelDBInstance(c *Config) (*LevelDB, error) {
 		dbs:         make(map[string]*db),
 		logger:      c.Logger,
 		dbNameRegex: regexp.MustCompile(allowedCharsInDBName),
+		cache:       newCache(128),
 	}
 
 	for _, dbName := range preCreateDBs {
@@ -133,6 +135,7 @@ func openExistingLevelDBInstance(c *Config) (*LevelDB, error) {
 		dbs:         make(map[string]*db),
 		logger:      c.Logger,
 		dbNameRegex: regexp.MustCompile(allowedCharsInDBName),
+		cache:       newCache(128),
 	}
 
 	dbNames, err := fileops.ListSubdirs(c.DBRootDir)

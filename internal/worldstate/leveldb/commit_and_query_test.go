@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/VictoriaMetrics/fastcache"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
@@ -279,6 +280,8 @@ func TestCommitAndQuery(t *testing.T) {
 			"db2-key1": db2valAndMetadata1,
 			"db2-key2": db2valAndMetadata2,
 		}
+
+		testCacheEntriesCount(t, l.cache, 0)
 		return db1KVs, db2KVs
 	}
 
@@ -288,6 +291,8 @@ func TestCommitAndQuery(t *testing.T) {
 		defer env.cleanup()
 		l := env.l
 		setupWithNoData(l)
+
+		testCacheEntriesCount(t, l.cache, 0)
 
 		for _, db := range []string{"db1", "db2"} {
 			for _, key := range []string{"key1", "key2"} {
@@ -310,6 +315,20 @@ func TestCommitAndQuery(t *testing.T) {
 			require.NoError(t, err)
 			require.False(t, iter.Next())
 			require.NoError(t, iter.Error())
+		}
+
+		// Even when database is empty, cache is filled with reads of non-existing
+		// keys with a nil value/metadata. This does not waste the cache memory and
+		// instead, it would help the mvcc validation to avoid reads from the disk
+		testCacheEntriesCount(t, l.cache, 4)
+
+		for _, db := range []string{"db1", "db2"} {
+			for _, key := range []string{"key1", "key2"} {
+				valWithMetadata, err := l.cache.getState(db, db+"-"+key)
+				require.NoError(t, err)
+				require.Nil(t, valWithMetadata.Value)
+				require.Nil(t, valWithMetadata.Metadata)
+			}
 		}
 	})
 
@@ -344,6 +363,14 @@ func TestCommitAndQuery(t *testing.T) {
 			require.True(t, exist)
 		}
 
+		// db1-key1, db1-key2 should exist in the cache
+		testCacheEntriesCount(t, l.cache, 2)
+		for key, expectedValAndMetadata := range db1KVs {
+			valWithMetadata, err := l.cache.getState("db1", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
+		}
+
 		for key, expectedValAndMetadata := range db2KVs {
 			val, metadata, err := l.Get("db2", key)
 			require.NoError(t, err)
@@ -363,6 +390,19 @@ func TestCommitAndQuery(t *testing.T) {
 			exist, err := l.Has("db2", key)
 			require.NoError(t, err)
 			require.True(t, exist)
+		}
+
+		// db2-key1, db2-key2 should exist in the cache
+		testCacheEntriesCount(t, l.cache, 4)
+		for key, expectedValAndMetadata := range db1KVs {
+			valWithMetadata, err := l.cache.getState("db1", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
+		}
+		for key, expectedValAndMetadata := range db2KVs {
+			valWithMetadata, err := l.cache.getState("db2", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
 		}
 	})
 
@@ -490,6 +530,8 @@ func TestCommitAndQuery(t *testing.T) {
 		// greater than "db2-key3", seek would return a false
 		require.False(t, iter4.Seek([]byte("db2-key3")))
 		require.False(t, iter4.Next())
+
+		testCacheEntriesCount(t, l.cache, 0)
 	})
 
 	// Scenario-2: For both databases (db1, db2), update
@@ -503,6 +545,43 @@ func TestCommitAndQuery(t *testing.T) {
 		defer env.cleanup()
 		l := env.l
 		db1KVs, db2KVs := setupWithData(l)
+
+		for key, expectedValAndMetadata := range db1KVs {
+			val, metadata, err := l.Get("db1", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(
+				expectedValAndMetadata,
+				&types.ValueWithMetadata{Value: val, Metadata: metadata},
+			))
+		}
+
+		testCacheEntriesCount(t, l.cache, 2)
+		for key, expectedValAndMetadata := range db1KVs {
+			valWithMetadata, err := l.cache.getState("db1", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
+		}
+
+		for key, expectedValAndMetadata := range db2KVs {
+			val, metadata, err := l.Get("db2", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(
+				expectedValAndMetadata,
+				&types.ValueWithMetadata{Value: val, Metadata: metadata},
+			))
+		}
+
+		testCacheEntriesCount(t, l.cache, 4)
+		for key, expectedValAndMetadata := range db1KVs {
+			valWithMetadata, err := l.cache.getState("db1", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
+		}
+		for key, expectedValAndMetadata := range db2KVs {
+			valWithMetadata, err := l.cache.getState("db2", key)
+			require.NoError(t, err)
+			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
+		}
 
 		db1valAndMetadata1New := &types.ValueWithMetadata{
 			Value: []byte("db1-value1-new"),
@@ -522,13 +601,8 @@ func TestCommitAndQuery(t *testing.T) {
 			},
 		}
 		db2valAndMetadata1New := &types.ValueWithMetadata{
-			Value: []byte("db2-value1-new"),
-			Metadata: &types.Metadata{
-				Version: &types.Version{
-					BlockNum: 2,
-					TxNum:    2,
-				},
-			},
+			Value:    []byte("db2-value1-new"),
+			Metadata: &types.Metadata{Version: &types.Version{BlockNum: 2, TxNum: 2}},
 		}
 		dbsUpdates := map[string]*worldstate.DBUpdates{
 			"db1": {
@@ -554,6 +628,23 @@ func TestCommitAndQuery(t *testing.T) {
 		}
 
 		require.NoError(t, l.Commit(dbsUpdates, 2))
+
+		testCacheEntriesCount(t, l.cache, 2)
+		valWithMetadata, err := l.cache.getState("db1", "db1-key1")
+		require.NoError(t, err)
+		require.True(t, proto.Equal(db1valAndMetadata1New, valWithMetadata))
+
+		valWithMetadata, err = l.cache.getState("db1", "db1-key2")
+		require.NoError(t, err)
+		require.Nil(t, valWithMetadata)
+
+		valWithMetadata, err = l.cache.getState("db2", "db2-key1")
+		require.NoError(t, err)
+		require.True(t, proto.Equal(db2valAndMetadata1New, valWithMetadata))
+
+		valWithMetadata, err = l.cache.getState("db2", "db2-key2")
+		require.NoError(t, err)
+		require.Nil(t, valWithMetadata)
 
 		db1KVs["db1-key1"] = db1valAndMetadata1New
 		db1KVs["db1-key2"] = nil
@@ -587,6 +678,20 @@ func TestCommitAndQuery(t *testing.T) {
 			acl, err := l.GetACL("db2", key)
 			require.NoError(t, err)
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata().GetAccessControl(), acl))
+		}
+
+		testCacheEntriesCount(t, l.cache, 4)
+		for key, expectedValAndMetadata := range db1KVs {
+			valWithMetadata, err := l.cache.getState("db1", key)
+			require.NoError(t, err)
+			require.Equal(t, expectedValAndMetadata.GetValue(), valWithMetadata.GetValue())
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata(), valWithMetadata.GetMetadata()))
+		}
+		for key, expectedValAndMetadata := range db1KVs {
+			valWithMetadata, err := l.cache.getState("db1", key)
+			require.NoError(t, err)
+			require.Equal(t, expectedValAndMetadata.GetValue(), valWithMetadata.GetValue())
+			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata(), valWithMetadata.GetMetadata()))
 		}
 	})
 }
@@ -810,6 +915,7 @@ func TestHeight(t *testing.T) {
 			blockNumber: 10,
 			dbsUpdates: map[string]*worldstate.DBUpdates{
 				worldstate.DefaultDBName: {
+					Writes:  []*worldstate.KVWithMetadata{},
 					Deletes: []string{"key1"},
 				},
 			},
@@ -842,4 +948,10 @@ func TestHeight(t *testing.T) {
 			require.Equal(t, tt.expectedHeight+1, height)
 		})
 	}
+}
+
+func testCacheEntriesCount(t *testing.T, c *cache, expectedEntriesCount uint64) {
+	s := &fastcache.Stats{}
+	c.dataCache.UpdateStats(s)
+	require.Equal(t, expectedEntriesCount, s.EntriesCount)
 }
