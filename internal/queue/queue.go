@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 package queue
 
-import "time"
+import (
+	"time"
+)
 
 // Queue is queue data structure implemented
 // using go channels
@@ -20,6 +22,21 @@ func New(size uint32) *Queue {
 // Enqueue adds the entry to the tail of the queue
 func (q *Queue) Enqueue(entry interface{}) {
 	q.entries <- entry
+}
+
+// EnqueueWithTimeout adds the entry to the tail of the queue or fail if there is a timeout.
+// Returns true if successful or false if there is a timeout.
+func (q *Queue) EnqueueWithTimeout(entry interface{}, timeout time.Duration) bool {
+	ticker := time.NewTicker(timeout)
+	defer ticker.Stop()
+
+	select {
+	case q.entries <- entry:
+		return true
+	case <-ticker.C:
+		return false
+	}
+
 }
 
 // Dequeue removes and returns an entry from

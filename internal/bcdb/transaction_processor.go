@@ -5,7 +5,6 @@ package bcdb
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -269,7 +268,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 	// If we succeed, then future TX fill fail at this point.
 	// However, if the TX already exists in the block store, then we will fail the subsequent check.
 	// Since a TX will be removed from the pending queue only after it is inserted to the block store,
-	// Then it is guaranteed that we won't use the same txID twice.
+	// then it is guaranteed that we won't use the same txID twice.
 	// TODO: add limit on the number of pending sync tx
 	promise := queue.NewCompletionPromise(timeout)
 	if existed := t.pendingTxs.Add(txID, promise); existed {
@@ -285,14 +284,25 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
-	jsonBytes, err := json.MarshalIndent(tx, "", "\t")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal transaction: %v", err)
+	// Avoids marshaling the TX in production mode
+	if t.logger.IsDebug() {
+		if jsonBytes, err := json.MarshalIndent(tx, "", "\t"); err != nil {
+			t.logger.Debugf("failed to marshal transaction: %v", err)
+		} else {
+			t.logger.Debugf("enqueuing transaction %s\n", jsonBytes)
+		}
 	}
-	t.logger.Debugf("enqueuing transaction %s\n", string(jsonBytes))
 
-	// Enqueue will block until the queue is not full
-	t.txQueue.Enqueue(tx)
+	if timeout <= 0 {
+		// Enqueue will block until the queue is not full
+		t.txQueue.Enqueue(tx)
+	} else {
+		// EnqueueWithTimeout will block until the queue is not full or timeout occurs
+		if success := t.txQueue.EnqueueWithTimeout(tx, timeout); !success {
+			t.pendingTxs.DeleteWithNoAction(txID)
+			return nil, &internalerror.TimeoutErr{ErrMsg: "timeout has occurred while inserting the transaction to the queue"}
+		}
+	}
 	t.logger.Debug("transaction is enqueued for re-ordering")
 
 	receipt, err := promise.Wait()
