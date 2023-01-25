@@ -216,7 +216,7 @@ func TestDynamicLogger(t *testing.T) {
 			}
 			require.NoError(t, os.Truncate(logFile, 0))
 
-			require.NoError(t, l.setLogLevel(tt.newLevel))
+			require.NoError(t, l.SetLogLevel(tt.newLevel))
 			level, _ := getZapLogLevel(tt.newLevel)
 			require.True(t, l.conf.Level.Enabled(level))
 

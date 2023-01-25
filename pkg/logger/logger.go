@@ -80,8 +80,8 @@ func (l *SugarLogger) IsDebug() bool {
 	return l.conf.Level.Level() == zap.DebugLevel
 }
 
-// setLogLevel is used only for tests
-func (l *SugarLogger) setLogLevel(level string) error {
+// SetLogLevel is used only for tests
+func (l *SugarLogger) SetLogLevel(level string) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	logLevel, err := getZapLogLevel(level)
