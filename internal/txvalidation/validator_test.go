@@ -15,6 +15,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -657,7 +658,9 @@ func TestValidateDataBlock(t *testing.T) {
 
 			results, err := env.validator.ValidateBlock(tt.block)
 			require.NoError(t, err)
-			require.Equal(t, tt.expectedResults, results)
+			for i := range tt.expectedResults {
+				assert.Equal(t, tt.expectedResults[i], results[i], "index: %d", i)
+			}
 		})
 	}
 }

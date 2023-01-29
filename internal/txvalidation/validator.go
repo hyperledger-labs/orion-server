@@ -91,8 +91,26 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 			return nil, err
 		}
 
-		if err = v.dataTxValidator.parallelValidation(dataTxEnvs, usersWithValidSigPerTX, valInfoArray); err != nil {
-			return nil, errors.WithMessage(err, "error while validating data transaction")
+		var wg sync.WaitGroup
+		var parallelValidErr error
+		var parallelMvccReadErr error
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			parallelValidErr = v.dataTxValidator.parallelValidation(dataTxEnvs, usersWithValidSigPerTX, valInfoArray)
+		}()
+		go func() {
+			defer wg.Done()
+			parallelMvccReadErr = v.dataTxValidator.parallelReadMvccValidation(valInfoArray, dataTxEnvs)
+		}()
+		wg.Wait()
+
+		if parallelValidErr != nil {
+			return nil, errors.WithMessage(parallelValidErr, "error while validating data transaction")
+		}
+
+		if parallelMvccReadErr != nil {
+			return nil, errors.WithMessage(parallelMvccReadErr, "error while validating data transaction's read set")
 		}
 
 		pendingOps := newPendingOperations()
@@ -116,7 +134,7 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 
 				go func() {
 					defer wg.Done()
-					mvccValResult, mvccValError = v.dataTxValidator.mvccValidation(txOps.DbName, txOps, pendingOps)
+					mvccValResult, mvccValError = v.dataTxValidator.mvccValidationPending(txOps.DbName, txOps, pendingOps)
 				}()
 
 				wg.Wait()
