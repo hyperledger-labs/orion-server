@@ -2,8 +2,6 @@ package leveldb
 
 import (
 	"github.com/VictoriaMetrics/fastcache"
-	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
 
 var keySep = []byte{0x00}
@@ -27,19 +25,9 @@ func newCache(dataCacheSizeMBs int) *cache {
 
 // getState returns the value for a given namespace and key from
 // the cache
-func (c *cache) getState(namespace, key string) (*types.ValueWithMetadata, error) {
+func (c *cache) getState(namespace, key string) ([]byte, bool) {
 	cacheKey := constructCacheKey(namespace, key)
-
-	valBytes, exists := c.dataCache.HasGet(nil, cacheKey)
-	if !exists {
-		return nil, nil
-	}
-
-	cacheValue := &types.ValueWithMetadata{}
-	if err := proto.Unmarshal(valBytes, cacheValue); err != nil {
-		return nil, err
-	}
-	return cacheValue, nil
+	return c.dataCache.HasGet(nil, cacheKey)
 }
 
 // putState stores a given value in the cache

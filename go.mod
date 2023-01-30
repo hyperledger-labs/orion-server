@@ -19,6 +19,7 @@ require (
 	github.com/syndtr/goleveldb v1.0.1-0.20220721030215-126854af5e6d
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20210226220824-aa7126864d82 // indirect git tag v3.4.15
+	go.uber.org/multierr v1.6.0
 	go.uber.org/zap v1.18.1
 	google.golang.org/protobuf v1.26.0
 	gopkg.in/yaml.v2 v2.4.0
