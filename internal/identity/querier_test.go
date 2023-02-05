@@ -262,7 +262,7 @@ func TestQuerier(t *testing.T) {
 		setup(env.db, user)
 
 		cert, err := env.q.GetCertificate(user.Id)
-		require.Contains(t, err.Error(), "asn1: structure error: tags don't match")
+		require.Contains(t, err.Error(), "x509: malformed certificate")
 		require.Nil(t, cert)
 	})
 }

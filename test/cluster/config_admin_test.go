@@ -170,7 +170,7 @@ func TestAddNewAdminWithInvalidCertificate(t *testing.T) {
 
 	//add alice with invalid certificate
 	_, _, err = leaderServer.SetConfigTx(t, newConfig, version, c.Servers[leaderIndex].AdminSigner(), "admin")
-	require.EqualError(t, err, "failed to submit transaction, server returned: status: 400 Bad Request, message: Invalid config tx, reason: the admin [alice] has an invalid certificate: error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:9 length:110 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2")
+	require.EqualError(t, err, "failed to submit transaction, server returned: status: 400 Bad Request, message: Invalid config tx, reason: the admin [alice] has an invalid certificate: error parsing certificate: x509: malformed certificate")
 }
 
 // Scenario:

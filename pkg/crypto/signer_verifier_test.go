@@ -26,7 +26,7 @@ func TestNewVerifierAndNewSigner(t *testing.T) {
 		verifier, err = NewVerifier(rawCert)
 		require.Nil(t, verifier)
 		require.NotNil(t, err)
-		require.Contains(t, err.Error(), "asn1: structure error")
+		require.Contains(t, err.Error(), "x509: malformed certificate")
 
 	})
 

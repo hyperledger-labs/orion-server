@@ -1,5 +1,5 @@
-ARG GO_VER=1.16
-ARG ALPINE_VER=3.14
+ARG GO_VER=1.19
+ARG ALPINE_VER=3.17
 
 FROM alpine:${ALPINE_VER} as orion-base
 RUN apk add --no-cache tzdata

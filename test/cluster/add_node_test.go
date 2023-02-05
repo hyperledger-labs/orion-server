@@ -358,7 +358,7 @@ func TestInvalidAdd(t *testing.T) {
 
 	_, _, err = c.Servers[leaderIndex].SetConfigTx(t, newConfig, configEnv.GetResponse().GetMetadata().GetVersion(), c.Servers[leaderIndex].AdminSigner(), "admin")
 	require.EqualError(t, err, "failed to submit transaction, server returned: status: 400 Bad Request, message: Invalid config tx,"+
-		" reason: the node [node-5] has an invalid certificate: error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:9 length:110 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2")
+		" reason: the node [node-5] has an invalid certificate: error parsing certificate: x509: malformed certificate")
 
 	t.Logf("create node-6")
 	_, peer6, node6, err := createNewServer(c, setupConfig, 5)
