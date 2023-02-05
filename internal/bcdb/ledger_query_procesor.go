@@ -5,6 +5,7 @@ package bcdb
 
 import (
 	"fmt"
+
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	interrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
@@ -161,7 +162,7 @@ func (p *ledgerQueryProcessor) getTx(userId string, blockNum uint64, txIndex uin
 	switch block.Payload.(type) {
 	case *types.Block_DataTxEnvelopes:
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
-		if  int(txIndex) >= len(dataTxEnvs) {
+		if int(txIndex) >= len(dataTxEnvs) {
 			return nil, &interrors.BadRequestError{ErrMsg: fmt.Sprintf("transaction index out of range: %d", txIndex)}
 		}
 		dataTxEnv := dataTxEnvs[txIndex]
@@ -225,7 +226,7 @@ func (p *ledgerQueryProcessor) hasDataTxAccess(userId string, env *types.DataTxE
 			continue
 		}
 
-		dataTxBytes, err := marshal.DefaultMarshaler().Marshal(dataTx)
+		dataTxBytes, err := marshal.DefaultMarshaller.Marshal(dataTx)
 		if err != nil {
 			p.logger.Errorf("Error during Marshal Tx: %s, error: %s", dataTx, err)
 			return false, errors.Wrap(err, "failed to Marshal Tx")

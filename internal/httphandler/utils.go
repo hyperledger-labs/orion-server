@@ -347,7 +347,7 @@ func VerifyRequestSignature(
 		return &types.HttpResponseErr{ErrMsg: "payload is not a protoreflect message"}, http.StatusInternalServerError
 	}
 
-	requestBytes, err := marshal.DefaultMarshaler().Marshal(requestPayload.(proto.Message))
+	requestBytes, err := marshal.DefaultMarshaller.Marshal(requestPayload.(proto.Message))
 	if err != nil {
 		return &types.HttpResponseErr{ErrMsg: "failure during Marshal: " + err.Error()}, http.StatusInternalServerError
 	}

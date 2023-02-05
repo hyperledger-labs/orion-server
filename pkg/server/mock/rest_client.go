@@ -567,7 +567,7 @@ func (c *Client) SubmitTransaction(urlPath string, tx interface{}, serverTimeout
 		},
 	)
 
-	txBytes, err := marshal.DefaultMarshaler().Marshal(tx.(proto.Message))
+	txBytes, err := marshal.DefaultMarshaller.Marshal(tx.(proto.Message))
 	if err != nil {
 		return nil, err
 	}

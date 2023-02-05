@@ -14,8 +14,8 @@ type DefaultMarshal struct {
 	marshalOption *protojson.MarshalOptions
 }
 
-func DefaultMarshaler() *DefaultMarshal {
-	return &DefaultMarshal{
+func NewDefaultMarshaller() DefaultMarshal {
+	return DefaultMarshal{
 		marshalOption: &protojson.MarshalOptions{
 			Multiline:       false,
 			AllowPartial:    false,
@@ -26,6 +26,8 @@ func DefaultMarshaler() *DefaultMarshal {
 		},
 	}
 }
+
+var DefaultMarshaller = NewDefaultMarshaller()
 
 func (o DefaultMarshal) Marshal(m proto.Message) ([]byte, error) {
 	mBytes, err := o.marshalOption.Marshal(m)
