@@ -52,11 +52,11 @@ func (l *LevelDB) ListDBs() []string {
 // returns the last committed block number
 func (l *LevelDB) Height() (uint64, error) {
 	db, ok := l.getDB(worldstate.MetadataDBName)
-	if !ok {
+	if !ok || db == nil {
 		return 0, errors.Errorf("unable to retrieve the state database height due to missing metadataDB")
 	}
 
-	blockNumberEnc, err := db.reader().Get(lastCommittedBlockNumberKey, db.readOpts)
+	blockNumberEnc, err := db.reader.Get(lastCommittedBlockNumberKey, db.readOpts)
 	if err != nil && err != leveldb.ErrNotFound {
 		return 0, errors.Wrap(err, "error while retrieving the state database height")
 	}
@@ -73,26 +73,35 @@ func (l *LevelDB) Height() (uint64, error) {
 	return blockNumberDec, nil
 }
 
+func convertClosedErr(err error, dbName string) error {
+	if err == leveldb.ErrClosed || err == leveldb.ErrSnapshotReleased {
+		return &DBNotFoundErr{dbName: dbName}
+	}
+	return err
+}
+
 // Get returns the value of the key present in the database.
 func (l *LevelDB) Get(dbName string, key string) ([]byte, *types.Metadata, error) {
 	db, ok := l.getDB(dbName)
-	if !ok {
-		return nil, nil, &DBNotFoundErr{
-			dbName: dbName,
-		}
+	if !ok || db == nil {
+		return nil, nil, &DBNotFoundErr{dbName: dbName}
 	}
 
 	dbVal, inCache := l.cache.getState(dbName, key)
 	if !inCache {
 		var err error
-		dbVal, err = db.reader().Get([]byte(key), db.readOpts)
-		if err == leveldb.ErrNotFound {
+		dbVal, err = db.reader.Get([]byte(key), db.readOpts)
+		switch err {
+		case leveldb.ErrNotFound:
 			if err = l.cache.putState(dbName, key, nil); err != nil {
 				return nil, nil, err
 			}
 			return nil, nil, nil
-		}
-		if err != nil {
+		case leveldb.ErrClosed, leveldb.ErrSnapshotReleased:
+			return nil, nil, &DBNotFoundErr{dbName: dbName}
+		case nil:
+			// ignore
+		default: // != nil
 			return nil, nil, errors.WithMessagef(err, "failed to retrieve leveldb key [%s] from database %s", key, dbName)
 		}
 
@@ -132,10 +141,11 @@ func (l *LevelDB) GetACL(dbName, key string) (*types.AccessControl, error) {
 // Has returns true if the key exist in the database
 func (l *LevelDB) Has(dbName, key string) (bool, error) {
 	db, ok := l.getDB(dbName)
-	if !ok {
-		return false, nil
+	if !ok || db == nil {
+		return false, &DBNotFoundErr{dbName: dbName}
 	}
-	return db.reader().Has([]byte(key), db.readOpts)
+	has, err := db.reader.Has([]byte(key), db.readOpts)
+	return has, convertClosedErr(err, dbName)
 }
 
 // GetConfig returns the cluster configuration
@@ -164,10 +174,8 @@ func (l *LevelDB) GetIndexDefinition(dbName string) ([]byte, *types.Metadata, er
 // endKey (i.e., "") denotes that the caller wants till the last key in the database (lexicographic order).
 func (l *LevelDB) GetIterator(dbName string, startKey, endKey string) (worldstate.Iterator, error) {
 	db, ok := l.getDB(dbName)
-
 	if !ok || db == nil {
-		l.logger.Errorf("database %s does not exist", dbName)
-		return nil, errors.Errorf("database %s does not exist", dbName)
+		return nil, &DBNotFoundErr{dbName: dbName}
 	}
 
 	r := &util.Range{}
@@ -183,7 +191,14 @@ func (l *LevelDB) GetIterator(dbName string, startKey, endKey string) (worldstat
 		r.Limit = []byte(endKey)
 	}
 
-	return db.reader().NewIterator(r, &opt.ReadOptions{}), nil
+	it := db.reader.NewIterator(r, &opt.ReadOptions{})
+
+	// Iterator contains errors internally, but we want to fail early if there is an issue with the DB.
+	if err := convertClosedErr(it.Error(), dbName); err != nil {
+		return nil, err
+	} else {
+		return it, nil
+	}
 }
 
 // Commit commits the updates to the database
@@ -297,12 +312,17 @@ func (l *LevelDB) create(dbName string) error {
 	}
 
 	// We assume no concurrent updates to the map due to the above, so we can use a blind store.
-	l.setDB(dbName, &Db{
+	db := &Db{
 		name:      dbName,
 		file:      file,
 		readOpts:  &opt.ReadOptions{},
 		writeOpts: &opt.WriteOptions{Sync: true},
-	})
+	}
+	if err := db.updateSnapshot(); err != nil {
+		return err
+	}
+
+	l.setDB(dbName, db)
 
 	return nil
 }

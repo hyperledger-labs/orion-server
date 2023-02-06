@@ -42,6 +42,7 @@ type Db struct {
 	name      string
 	file      *leveldb.DB
 	snap      *leveldb.Snapshot
+	reader    FileOrSnap
 	readOpts  *opt.ReadOptions
 	writeOpts *opt.WriteOptions
 }
@@ -51,14 +52,6 @@ type FileOrSnap interface {
 	Has(key []byte, ro *opt.ReadOptions) (bool, error)
 }
 
-func (db *Db) reader() FileOrSnap {
-	if db.snap != nil {
-		return db.snap
-	} else {
-		return db.file
-	}
-}
-
 func (db *Db) updateSnapshot() error {
 	prev := db.snap
 	if prev != nil {
@@ -66,9 +59,11 @@ func (db *Db) updateSnapshot() error {
 	}
 
 	if snap, err := db.file.GetSnapshot(); err != nil {
-		return err
+		db.reader = db.file
+		return errors.WithMessagef(err, "failed to create a leveldb snapshot for database %s", db.name)
 	} else {
 		db.snap = snap
+		db.reader = snap
 	}
 	return nil
 }
