@@ -314,7 +314,7 @@ func createSampleBlock(aliceSigner crypto.Signer, blockNumber uint64, key []stri
 		e.Signatures["testUser"] = []byte("in must sign so always correct")
 		e.Signatures["testUser2"] = []byte("bad sig")
 		if aliceSigner != nil {
-			eBytes, _ := marshal.DefaultMarshaller.Marshal(e.Payload)
+			eBytes, _ := marshal.DefaultMarshaller().Marshal(e.Payload)
 			sig, _ := aliceSigner.Sign(eBytes)
 			e.Signatures["alice"] = sig
 		}

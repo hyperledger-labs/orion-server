@@ -302,7 +302,7 @@ func SignedDBAdministrationTxEnvelope(t *testing.T, signer crypto.Signer, tx *ty
 func VerifyPayloadSignature(t *testing.T, rawCert []byte, payload interface{}, sig []byte) {
 	ver, err := crypto.NewVerifier(rawCert)
 	require.NoError(t, err)
-	payloadBytes, err := marshal.DefaultMarshaller.Marshal(payload.(proto.Message))
+	payloadBytes, err := marshal.DefaultMarshaller().Marshal(payload.(proto.Message))
 	require.NoError(t, err)
 	err = ver.Verify(payloadBytes, sig)
 	require.NoError(t, err)

@@ -495,7 +495,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			txEnv := tt.txEnvFactory()
 			txResp := tt.txRespFactory()
-			txBytes, err := marshal.DefaultMarshaller.Marshal(txEnv)
+			txBytes, err := marshal.DefaultMarshaller().Marshal(txEnv)
 			require.NoError(t, err)
 
 			txReader := bytes.NewReader(txBytes)

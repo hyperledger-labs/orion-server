@@ -988,7 +988,7 @@ func (d *db) responseHeader() *types.ResponseHeader {
 }
 
 func (d *db) signature(response interface{}) ([]byte, error) {
-	responseBytes, err := marshal.DefaultMarshaller.Marshal(response.(proto.Message))
+	responseBytes, err := marshal.DefaultMarshaller().Marshal(response.(proto.Message))
 	if err != nil {
 		return nil, err
 	}

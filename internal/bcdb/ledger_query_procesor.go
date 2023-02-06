@@ -226,7 +226,7 @@ func (p *ledgerQueryProcessor) hasDataTxAccess(userId string, env *types.DataTxE
 			continue
 		}
 
-		dataTxBytes, err := marshal.DefaultMarshaller.Marshal(dataTx)
+		dataTxBytes, err := marshal.DefaultMarshaller().Marshal(dataTx)
 		if err != nil {
 			p.logger.Errorf("Error during Marshal Tx: %s, error: %s", dataTx, err)
 			return false, errors.Wrap(err, "failed to Marshal Tx")
