@@ -1,5 +1,6 @@
+# Allow setting different go version from the command line. E.g.,`make GO=go1.19.4 binary`
+GO      ?= go
 TIMEOUT  = 20m
-GO      = go
 DOCKER  = docker
 DOCKER_IMAGE = orionbcdb/orion-server
 DOCKERFILE = images/Dockerfile
