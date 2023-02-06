@@ -21,7 +21,7 @@ $(BIN):
 
 $(BIN)/%: | $(BIN)
 	@tmp=$$(mktemp -d); \
-		env GO11MODULE=off GOPATH=$$tmpp GOBIN=$(BIN) go get $(PACKAGE) \
+		env GO11MODULE=off GOPATH=$$tmpp GOBIN=$(BIN) $(GO) get $(PACKAGE) \
 		|| ret=$$?;
 	rm -rf $$tmp ; exit $$ret
 
@@ -51,10 +51,10 @@ goimports:
 
 .PHONY: binary
 binary:
-	go build -o $(BIN)/bdb cmd/bdb/main.go
-	go build -o $(BIN)/signer cmd/signer/signer.go
-	go build -o $(BIN)/encoder cmd/base64_encoder/encoder.go
-	go build -o $(BIN)/decoder cmd/base64_decoder/decoder.go
+	$(GO) build -o $(BIN)/bdb cmd/bdb/main.go
+	$(GO) build -o $(BIN)/signer cmd/signer/signer.go
+	$(GO) build -o $(BIN)/encoder cmd/base64_encoder/encoder.go
+	$(GO) build -o $(BIN)/decoder cmd/base64_decoder/decoder.go
 
 .PHONY: test
 test-script: 
@@ -81,13 +81,13 @@ test-verbose: ARGS=-v
 test-race:    ARGS=-race
 $(TEST_TARGETS): test
 check test tests:
-	go build -o $(BIN)/bdb cmd/bdb/main.go
-	go test -timeout $(TIMEOUT) $(ARGS) $(TESTPKGS)
+	$(GO) build -o $(BIN)/bdb cmd/bdb/main.go
+	$(GO) test -timeout $(TIMEOUT) $(ARGS) $(TESTPKGS)
 
 test-coverage-tools: | $(GOCOVMERGE) $(GOCOV) $(GOCOVXML) 
 test-coverage: COVERAGE_DIR := $(CURDIR)/test/coverage.$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 test-coverage: test-coverage-tools
-	go build -o $(BIN)/bdb cmd/bdb/main.go
+	$(GO) build -o $(BIN)/bdb cmd/bdb/main.go
 	mkdir -p $(COVERAGE_DIR)/coverage
 	$(GO) test \
 		-coverpkg=$$($(GO) list -f '{{ join .Deps "\n" }}' $(TESTPKGS) | \

@@ -411,7 +411,7 @@ func TestValidateEntryFieldsInWrites(t *testing.T) {
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the user [user1] in the write list has an invalid certificate: Error = error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+				ReasonIfInvalid: "the user [user1] in the write list has an invalid certificate: Error = error parsing certificate: x509: malformed certificate",
 			},
 		},
 		{

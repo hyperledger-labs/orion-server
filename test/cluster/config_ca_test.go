@@ -277,7 +277,7 @@ func TestInvalidCAs(t *testing.T) {
 	caConf.Intermediates = append(caConf.Intermediates, []byte("bad-certificate"))
 
 	_, _, err = leaderServer.SetConfigTx(t, newConfig, configEnv.GetResponse().GetMetadata().GetVersion(), c.Servers[leaderIndex].AdminSigner(), "admin")
-	require.EqualError(t, err, "failed to submit transaction, server returned: status: 400 Bad Request, message: Invalid config tx, reason: CA certificate collection cannot be created: asn1: structure error: tags don't match (16 vs {class:1 tag:2 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2")
+	require.EqualError(t, err, "failed to submit transaction, server returned: status: 400 Bad Request, message: Invalid config tx, reason: CA certificate collection cannot be created: x509: malformed certificate")
 
 	// add an Intermediate CA as a root CA
 	certRootCA, rootCAPrivKey, err := testutils.GenerateRootCA("Orion RootCA", "127.0.0.1")

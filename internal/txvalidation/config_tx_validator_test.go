@@ -683,7 +683,7 @@ func TestValidateCAConfig(t *testing.T) {
 			caConfig: &types.CAConfig{Roots: [][]byte{[]byte("bad-certificate")}},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "CA certificate collection cannot be created: asn1: structure error: tags don't match (16 vs {class:1 tag:2 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+				ReasonIfInvalid: "CA certificate collection cannot be created: x509: malformed certificate",
 			},
 		},
 		{
@@ -848,7 +848,7 @@ func TestValidateNodeConfig(t *testing.T) {
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the node [node1] has an invalid certificate: error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+				ReasonIfInvalid: "the node [node1] has an invalid certificate: error parsing certificate: x509: malformed certificate",
 			},
 		},
 		{
@@ -992,7 +992,7 @@ func TestValidateAdminConfig(t *testing.T) {
 			},
 			expectedResult: &types.ValidationInfo{
 				Flag:            types.Flag_INVALID_INCORRECT_ENTRIES,
-				ReasonIfInvalid: "the admin [admin2] has an invalid certificate: error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:18 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2",
+				ReasonIfInvalid: "the admin [admin2] has an invalid certificate: error parsing certificate: x509: malformed certificate",
 			},
 		},
 		{
@@ -1041,7 +1041,7 @@ func TestValidateAdminConfig(t *testing.T) {
 	}
 }
 
-//TODO
+// TODO
 func TestValidateConsensusConfig(t *testing.T) {
 	t.Parallel()
 
@@ -1490,7 +1490,7 @@ func TestValidateConsensusConfig(t *testing.T) {
 	}
 }
 
-//TODO
+// TODO
 func TestValidateMembersNodesMatch(t *testing.T) {
 	t.Parallel()
 

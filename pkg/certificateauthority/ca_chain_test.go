@@ -43,7 +43,7 @@ func TestNewCACertCollection(t *testing.T) {
 
 	t.Run("invalid certificate", func(t *testing.T) {
 		caCertCollection, err := NewCACertCollection([][]byte{[]byte("invalid certificate")}, nil)
-		require.EqualError(t, err, "asn1: structure error: tags don't match (16 vs {class:1 tag:9 length:110 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2")
+		require.EqualError(t, err, "x509: malformed certificate")
 		require.Nil(t, caCertCollection)
 	})
 
@@ -80,7 +80,7 @@ func TestCACertCollection_VerifyLeafCert(t *testing.T) {
 
 	t.Run("bad leaf certificate", func(t *testing.T) {
 		err := caCertCollection.VerifyLeafCert([]byte("bad-certificate"))
-		require.EqualError(t, err, "error parsing certificate: asn1: structure error: tags don't match (16 vs {class:1 tag:2 length:97 isCompound:true}) {optional:false explicit:false application:false private:false defaultValue:<nil> tag:<nil> stringType:0 timeType:0 set:false omitEmpty:false} certificate @2")
+		require.EqualError(t, err, "error parsing certificate: x509: malformed certificate")
 	})
 
 	t.Run("untrusted leaf certificate", func(t *testing.T) {
