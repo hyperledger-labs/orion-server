@@ -497,14 +497,19 @@ func (v *dataTxValidator) parallelReadMvccValidation(
 ) error {
 	reads := make(map[string]map[string]*readCache)
 	errorChan := make(chan error)
+	defer close(errorChan)
 
-	// Submit a "get-version" Go routine for each key in the envelope.
+	// Submit a "get-version" Go routine for each read key in the envelope.
 	// We avoid reading the same key twice.
 	for txNum, txEnv := range dataTxEnvs {
 		if valInfoArray[txNum].Flag != types.Flag_VALID {
 			continue
 		}
 		for _, txOps := range txEnv.Payload.DbOperations {
+			if len(txOps.DataReads) == 0 {
+				continue
+			}
+
 			dbName := txOps.DbName
 			dbReads, ok := reads[dbName]
 			if !ok {
@@ -513,25 +518,23 @@ func (v *dataTxValidator) parallelReadMvccValidation(
 			}
 
 			for _, r := range txOps.DataReads {
-				key := r.Key
-				if _, ok := dbReads[key]; ok {
+				if _, ok := dbReads[r.Key]; ok {
 					continue
 				}
 
 				c := &readCache{
 					dbName: dbName,
-					key:    key,
+					key:    r.Key,
 				}
 				c.wg.Add(1)
-				dbReads[key] = c
+				dbReads[r.Key] = c
 				go func(txNum int, c *readCache) {
 					defer c.wg.Done()
 					c.ver, c.err = v.db.GetVersion(c.dbName, c.key)
 					if c.err != nil {
 						v.logger.Errorf("error validating signatures in tx number %d, error: %s", txNum, c.err)
 						defer func() {
-							// Ignore panic when errorChan is closed
-							recover()
+							recover() // Ignore panic when errorChan is closed
 						}()
 						errorChan <- c.err
 					}
@@ -543,45 +546,56 @@ func (v *dataTxValidator) parallelReadMvccValidation(
 	// Submit a "validation" Go routine for read operation in the envelope.
 	wg := sync.WaitGroup{}
 	for txNum, txEnv := range dataTxEnvs {
+		if valInfoArray[txNum].Flag != types.Flag_VALID {
+			continue
+		}
 		for _, txOps := range txEnv.Payload.DbOperations {
+			if len(txOps.DataReads) == 0 {
+				continue
+			}
+			dbReads, ok := reads[txOps.DbName]
+			if !ok {
+				panic("all read DBs should be in the map")
+			}
 			for _, r := range txOps.DataReads {
-				if valInfoArray[txNum].Flag != types.Flag_VALID {
-					continue
+				keyRead, ok := dbReads[r.Key]
+				if !ok {
+					panic("all read keys should be in the map")
 				}
 
 				wg.Add(1)
 				go func(txNum int, c *readCache, expectedVer *types.Version) {
 					defer wg.Done()
-					if c == nil {
-						panic("all reads keys should be in the map")
+					// Stop early in case another validation routine already invalidated this TX.
+					if valInfoArray[txNum].Flag != types.Flag_VALID {
+						return
 					}
 
 					c.wg.Wait()
-					if valInfoArray[txNum].Flag != types.Flag_VALID || c.err != nil {
-						return
+
+					// We check the flag again after waiting for the read version.
+					// The version comparison is last to avoid redundant comparison (short circuit evaluation).
+					if c.err == nil && valInfoArray[txNum].Flag == types.Flag_VALID && !proto.Equal(expectedVer, c.ver) {
+						valInfoArray[txNum] = &types.ValidationInfo{
+							Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
+							ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the key [" + c.key + "] in database [" + c.dbName + "] changed",
+						}
 					}
-					if proto.Equal(expectedVer, c.ver) {
-						return
-					}
-					valInfoArray[txNum] = &types.ValidationInfo{
-						Flag:            types.Flag_INVALID_MVCC_CONFLICT_WITH_COMMITTED_STATE,
-						ReasonIfInvalid: "mvcc conflict has occurred as the committed state for the key [" + c.key + "] in database [" + c.dbName + "] changed",
-					}
-				}(txNum, reads[txOps.DbName][r.Key], r.Version)
+				}(txNum, keyRead, r.Version)
 			}
 		}
 	}
 
-	// Wait for all the validation routines to end.
+	// Wait in the background for all the validation routines to end, then inject nil to make sure we have data
+	// to read from the channel if no error occurred.
 	go func() {
 		wg.Wait()
-		// Inject nil to make sure we have data to read from the channel if no error occurred.
 		errorChan <- nil
 	}()
 
+	// Wait for all the validation routines to end or for the first error.
 	select {
 	case err := <-errorChan:
-		close(errorChan)
 		return err
 	}
 }
