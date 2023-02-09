@@ -11,32 +11,43 @@ import (
 )
 
 type PendingTxs struct {
-	txs    sync.Map
+	txs    map[string]*CompletionPromise
+	lock   sync.Mutex // We use a simple mutex because we only access the pending TXs to add or delete TXs
 	logger *logger.SugarLogger
 }
 
 func NewPendingTxs(logger *logger.SugarLogger) *PendingTxs {
 	return &PendingTxs{
+		txs:    make(map[string]*CompletionPromise),
 		logger: logger,
 	}
 }
 
 // Add returns true if the txId was already taken
 func (p *PendingTxs) Add(txID string, promise *CompletionPromise) bool {
-	_, loaded := p.txs.LoadOrStore(txID, promise)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	_, loaded := p.txs[txID]
+	if !loaded {
+		p.txs[txID] = promise
+	}
 	return loaded
 }
 
 func (p *PendingTxs) DeleteWithNoAction(txID string) {
-	p.txs.Delete(txID)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	delete(p.txs, txID)
 }
 
 func (p *PendingTxs) loadAndDelete(txID string) (*CompletionPromise, bool) {
-	promise, loaded := p.txs.LoadAndDelete(txID)
-	if !loaded {
-		return nil, loaded
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	promise, loaded := p.txs[txID]
+	if loaded {
+		delete(p.txs, txID)
 	}
-	return promise.(*CompletionPromise), true
+	return promise, loaded
 }
 
 // DoneWithReceipt is called after the commit of a block.
@@ -73,16 +84,17 @@ func (p *PendingTxs) ReleaseWithError(txIDs []string, err error) {
 	}
 }
 
+// Has is used only for testing.
 func (p *PendingTxs) Has(txID string) bool {
-	_, ok := p.txs.Load(txID)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	_, ok := p.txs[txID]
 	return ok
 }
 
+// Empty is used only for testing.
 func (p *PendingTxs) Empty() bool {
-	empty := true
-	p.txs.Range(func(key, value interface{}) bool {
-		empty = false
-		return false
-	})
-	return empty
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	return len(p.txs) == 0
 }

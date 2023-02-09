@@ -350,6 +350,7 @@ func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) err
 }
 
 func (t *transactionProcessor) Close() error {
+	// It is safe to use without locks because all the following calls are protected internally.
 	t.txReorderer.Stop()
 	t.blockCreator.Stop()
 	_ = t.blockReplicator.Close()
@@ -360,12 +361,14 @@ func (t *transactionProcessor) Close() error {
 }
 
 func (t *transactionProcessor) IsLeader() *internalerror.NotLeaderError {
+	// It is safe to use without locks because the following call is protected internally.
 	return t.blockReplicator.IsLeader()
 }
 
 // ClusterStatus returns the leader NodeID, and the active nodes NodeIDs.
 // Note: leader is always in active.
 func (t *transactionProcessor) ClusterStatus() (leader string, active []string) {
+	// It is safe to use without locks because the following call is protected internally.
 	leaderID, activePeers := t.blockReplicator.GetClusterStatus()
 	for _, peer := range activePeers {
 		active = append(active, peer.NodeId)
