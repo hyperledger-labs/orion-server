@@ -4,14 +4,15 @@
 package queue_test
 
 import (
-	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"sync"
 	"testing"
 	"time"
 
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
+
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -20,10 +21,10 @@ func TestPendingTxs_Async(t *testing.T) {
 
 	var p *queue.CompletionPromise
 	require.True(t, pendingTxs.Empty())
-	pendingTxs.Add("tx1", p)
+	require.False(t, pendingTxs.Add("tx1", p))
 	require.True(t, pendingTxs.Has("tx1"))
 	require.False(t, pendingTxs.Has("tx2"))
-	pendingTxs.Add("tx2", p)
+	require.False(t, pendingTxs.Add("tx2", p))
 	require.True(t, pendingTxs.Has("tx2"))
 	pendingTxs.DoneWithReceipt([]string{"tx1", "tx2"}, nil)
 	require.True(t, pendingTxs.Empty())
@@ -45,7 +46,7 @@ func TestPendingTxs_Sync(t *testing.T) {
 
 	t.Run("Wait before Done", func(t *testing.T) {
 		p := queue.NewCompletionPromise(time.Hour)
-		pendingTxs.Add("tx3", p)
+		require.False(t, pendingTxs.Add("tx3", p))
 
 		go func() {
 			time.Sleep(10 * time.Millisecond)
@@ -59,7 +60,7 @@ func TestPendingTxs_Sync(t *testing.T) {
 
 	t.Run("Done before Wait", func(t *testing.T) {
 		p := queue.NewCompletionPromise(time.Hour)
-		pendingTxs.Add("tx3", p)
+		require.False(t, pendingTxs.Add("tx3", p))
 		pendingTxs.DoneWithReceipt([]string{"tx3"}, blockHeader)
 		actualReceipt, err := p.Wait()
 		require.NoError(t, err)
@@ -68,7 +69,7 @@ func TestPendingTxs_Sync(t *testing.T) {
 
 	t.Run("Wait before Release with Error", func(t *testing.T) {
 		p := queue.NewCompletionPromise(time.Hour)
-		pendingTxs.Add("tx3", p)
+		require.False(t, pendingTxs.Add("tx3", p))
 
 		go func() {
 			time.Sleep(10 * time.Millisecond)
@@ -82,7 +83,7 @@ func TestPendingTxs_Sync(t *testing.T) {
 
 	t.Run("Release with Error before Wait", func(t *testing.T) {
 		p := queue.NewCompletionPromise(time.Hour)
-		pendingTxs.Add("tx3", p)
+		require.False(t, pendingTxs.Add("tx3", p))
 		pendingTxs.ReleaseWithError([]string{"tx3"}, &ierrors.NotLeaderError{LeaderID: 1, LeaderHostPort: "10.10.10.10:666"})
 		actualReceipt, err := p.Wait()
 		require.EqualError(t, err, "not a leader, leader is RaftID: 1, with HostPort: 10.10.10.10:666")
@@ -94,7 +95,7 @@ func TestPendingTxs_Timeout(t *testing.T) {
 	pendingTxs := queue.NewPendingTxs(testLogger(t, "debug"))
 
 	p := queue.NewCompletionPromise(1 * time.Millisecond)
-	pendingTxs.Add("tx3", p)
+	require.False(t, pendingTxs.Add("tx3", p))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
