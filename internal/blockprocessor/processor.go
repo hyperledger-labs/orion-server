@@ -4,8 +4,9 @@
 package blockprocessor
 
 import (
-	"github.com/hyperledger-labs/orion-server/config"
 	"sync"
+
+	"github.com/hyperledger-labs/orion-server/config"
 
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
@@ -133,9 +134,11 @@ func (b *BlockProcessor) Start() {
 				continue
 			}
 
-			if err = b.listeners.invoke(block); err != nil {
-				panic(err)
-			}
+			go func(curBlock *types.Block) {
+				if err = b.listeners.invoke(curBlock); err != nil {
+					panic(err)
+				}
+			}(block)
 		}
 	}
 }
