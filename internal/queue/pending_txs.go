@@ -4,34 +4,48 @@
 package queue
 
 import (
+	"sync"
+
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	cmap "github.com/orcaman/concurrent-map/v2"
 )
 
 type PendingTxs struct {
-	txs    cmap.ConcurrentMap[string, *CompletionPromise]
+	txs    map[string]*CompletionPromise
+	lock   sync.Mutex // We use a simple mutex because we only access the pending TXs to add or delete TXs
 	logger *logger.SugarLogger
 }
 
 func NewPendingTxs(logger *logger.SugarLogger) *PendingTxs {
 	return &PendingTxs{
-		txs:    cmap.New[*CompletionPromise](),
+		txs:    make(map[string]*CompletionPromise),
 		logger: logger,
 	}
 }
 
 // Add returns true if the txId was already taken
 func (p *PendingTxs) Add(txID string, promise *CompletionPromise) bool {
-	return !p.txs.SetIfAbsent(txID, promise)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	_, loaded := p.txs[txID]
+	if !loaded {
+		p.txs[txID] = promise
+	}
+	return loaded
 }
 
 func (p *PendingTxs) DeleteWithNoAction(txID string) {
-	p.txs.Remove(txID)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	delete(p.txs, txID)
 }
 
 func (p *PendingTxs) loadAndDelete(txID string) (*CompletionPromise, bool) {
-	return p.txs.Pop(txID)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	promise, loaded := p.txs[txID]
+	delete(p.txs, txID)
+	return promise, loaded
 }
 
 // DoneWithReceipt is called after the commit of a block.
@@ -66,10 +80,15 @@ func (p *PendingTxs) ReleaseWithError(txIDs []string, err error) {
 
 // Has is used only for testing.
 func (p *PendingTxs) Has(txID string) bool {
-	return p.txs.Has(txID)
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	_, ok := p.txs[txID]
+	return ok
 }
 
 // Empty is used only for testing.
 func (p *PendingTxs) Empty() bool {
-	return p.txs.IsEmpty()
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	return len(p.txs) == 0
 }
