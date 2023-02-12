@@ -44,9 +44,7 @@ func (p *PendingTxs) loadAndDelete(txID string) (*CompletionPromise, bool) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 	promise, loaded := p.txs[txID]
-	if loaded {
-		delete(p.txs, txID)
-	}
+	delete(p.txs, txID)
 	return promise, loaded
 }
 
