@@ -14,17 +14,19 @@ type DefaultMarshal struct {
 	marshalOption *protojson.MarshalOptions
 }
 
-func DefaultMarshaler() *DefaultMarshal {
-	return &DefaultMarshal{
-		marshalOption: &protojson.MarshalOptions{
-			Multiline:       false,
-			AllowPartial:    false,
-			UseProtoNames:   true,
-			UseEnumNumbers:  false,
-			EmitUnpopulated: false,
-			Resolver:        nil,
-		},
-	}
+var defaultMarshallerInstance = &DefaultMarshal{
+	marshalOption: &protojson.MarshalOptions{
+		Multiline:       false,
+		AllowPartial:    false,
+		UseProtoNames:   true,
+		UseEnumNumbers:  false,
+		EmitUnpopulated: false,
+		Resolver:        nil,
+	},
+}
+
+func DefaultMarshaller() *DefaultMarshal {
+	return defaultMarshallerInstance
 }
 
 func (o DefaultMarshal) Marshal(m proto.Message) ([]byte, error) {

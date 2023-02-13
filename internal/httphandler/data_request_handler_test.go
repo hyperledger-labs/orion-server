@@ -52,7 +52,6 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 		Key:    "key1",
 	})
 
-
 	testCases := []struct {
 		name               string
 		requestFactory     func() (*http.Request, error)
@@ -1337,7 +1336,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			txEnv := tt.txEnvFactory()
 			txResp := tt.txRespFactory()
-			txBytes, err := marshal.DefaultMarshaler().Marshal(txEnv)
+			txBytes, err := marshal.DefaultMarshaller().Marshal(txEnv)
 			require.NoError(t, err)
 			require.NotNil(t, txBytes)
 

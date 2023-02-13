@@ -23,7 +23,7 @@ const MultiPartFormData = "multipart/form-data"
 func SendHTTPResponse(w http.ResponseWriter, code int, payload interface{}) {
 	var response []byte
 	if p, ok := payload.(proto.Message); ok {
-		response, _ = marshal.DefaultMarshaler().Marshal(p)
+		response, _ = marshal.DefaultMarshaller().Marshal(p)
 	} else {
 		response, _ = json.Marshal(payload)
 	}

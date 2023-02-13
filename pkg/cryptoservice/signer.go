@@ -60,7 +60,7 @@ func SignTx(txSigner crypto.Signer, tx interface{}) ([]byte, error) {
 }
 
 func SignPayload(signer crypto.Signer, payload interface{}) ([]byte, error) {
-	payloadBytes, err := marshal.DefaultMarshaler().Marshal(payload.(proto.Message))
+	payloadBytes, err := marshal.DefaultMarshaller().Marshal(payload.(proto.Message))
 	if err != nil {
 		return nil, err
 	}

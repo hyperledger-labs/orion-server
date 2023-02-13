@@ -678,7 +678,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
 			txEnv := tt.txEnvFactory()
-			txBytes, err := marshal.DefaultMarshaler().Marshal(txEnv)
+			txBytes, err := marshal.DefaultMarshaller().Marshal(txEnv)
 			require.NoError(t, err)
 			require.NotNil(t, txBytes)
 
