@@ -344,7 +344,7 @@ func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) err
 		return errors.Errorf("unexpected transaction envelope in the block")
 	}
 
-	t.pendingTxs.DoneWithReceipt(txIDs, block.Header)
+	go t.pendingTxs.DoneWithReceipt(txIDs, block.Header)
 
 	return nil
 }

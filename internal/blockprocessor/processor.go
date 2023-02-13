@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/hyperledger-labs/orion-server/config"
-
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/hyperledger-labs/orion-server/internal/mtree"
@@ -134,11 +133,9 @@ func (b *BlockProcessor) Start() {
 				continue
 			}
 
-			go func(curBlock *types.Block) {
-				if err = b.listeners.invoke(curBlock); err != nil {
-					panic(err)
-				}
-			}(block)
+			if err = b.listeners.invoke(block); err != nil {
+				panic(err)
+			}
 		}
 	}
 }

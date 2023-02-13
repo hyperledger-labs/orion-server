@@ -8,9 +8,8 @@ import (
 	"testing"
 	"time"
 
-	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
-
 	"github.com/golang/protobuf/proto"
+	ierrors "github.com/hyperledger-labs/orion-server/internal/errors"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
