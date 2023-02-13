@@ -1,21 +1,21 @@
 ARG GO_VER=1.19
-ARG ALPINE_VER=3.17
+ARG UBUNTU_VER=20.04
 
-FROM alpine:${ALPINE_VER} as orion-base
-RUN apk add --no-cache tzdata
+FROM ubuntu:${UBUNTU_VER} as orion-base
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /val/lib/apt/lists/*
 RUN echo 'hosts: files dns' > /etc/nsswitch.conf
 RUN mkdir -p /etc/orion-server/config
 RUN mkdir -p /etc/orion-server/crypto
 RUN mkdir -p /var/orion-server/ledger
 
-FROM golang:${GO_VER}-alpine${ALPINE_VER} as golang
-RUN apk add --no-cache \
-    bash \
-    binutils-gold \
-    gcc \
-    git \
-    make \
-    musl-dev
+FROM golang:${GO_VER} as golang
+RUN apt-get update && apt-get install -y --no-install-recommends  \
+     bash \
+     binutils-gold \
+     gcc \
+     git \
+     make \
+     musl-dev && rm -rf /val/lib/apt/lists/*
 ADD . $GOPATH/src/github.com/hyperledger-labs/orion-server
 WORKDIR $GOPATH/src/github.com/hyperledger-labs/orion-server
 
