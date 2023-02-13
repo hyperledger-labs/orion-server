@@ -332,7 +332,7 @@ func TestBlockCreator_ReleaseAsync(t *testing.T) {
 	})
 
 	for i := 1; i < 6; i++ {
-		testEnv.pendingTxs.Add(fmt.Sprintf("txid:%d", i), nil)
+		require.False(t, testEnv.pendingTxs.Add(fmt.Sprintf("txid:%d", i), nil))
 	}
 
 	for _, txBatch := range txBatches {
@@ -358,7 +358,7 @@ func TestBlockCreator_ReleaseSync(t *testing.T) {
 	wg.Add(5)
 	for i := 1; i < 6; i++ {
 		promise := queue.NewCompletionPromise(5 * time.Second)
-		testEnv.pendingTxs.Add(fmt.Sprintf("txid:%d", i), promise)
+		require.False(t, testEnv.pendingTxs.Add(fmt.Sprintf("txid:%d", i), promise))
 		go func() {
 			receipt, err := promise.Wait()
 			require.Nil(t, receipt)

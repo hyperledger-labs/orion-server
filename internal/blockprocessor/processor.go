@@ -4,9 +4,9 @@
 package blockprocessor
 
 import (
-	"github.com/hyperledger-labs/orion-server/config"
 	"sync"
 
+	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/hyperledger-labs/orion-server/internal/mtree"

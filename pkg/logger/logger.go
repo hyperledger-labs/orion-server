@@ -3,8 +3,6 @@
 package logger
 
 import (
-	"sync"
-
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -12,8 +10,7 @@ import (
 
 type SugarLogger struct {
 	*zap.SugaredLogger
-	conf  zap.Config
-	mutex sync.RWMutex
+	conf zap.Config
 }
 
 type Config struct {
@@ -76,14 +73,19 @@ func (l *SugarLogger) With(args ...interface{}) *SugarLogger {
 	}
 }
 
+func (l *SugarLogger) IsDebug() bool {
+	// Level is atomic so no need for locks
+	return l.conf.Level.Enabled(zap.DebugLevel)
+}
+
+// SetLogLevel is used only for tests
 func (l *SugarLogger) SetLogLevel(level string) error {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
 	logLevel, err := getZapLogLevel(level)
 	if err != nil {
 		return err
 	}
 
+	// Level is atomic so no need for locks
 	l.conf.Level.SetLevel(logLevel)
 
 	return nil

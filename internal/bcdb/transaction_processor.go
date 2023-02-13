@@ -1,11 +1,10 @@
 // Copyright IBM Corp. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
+
 package bcdb
 
 import (
 	"encoding/json"
-	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,7 +44,6 @@ type transactionProcessor struct {
 	blockStore           *blockstore.Store
 	pendingTxs           *queue.PendingTxs
 	logger               *logger.SugarLogger
-	sync.Mutex
 }
 
 type txProcessorConfig struct {
@@ -266,36 +264,46 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
-	t.Lock()
-	duplicate, err := t.isTxIDDuplicate(txID)
-	if err != nil {
-		t.Unlock()
-		return nil, err
-	}
-	if duplicate {
-		t.Unlock()
+	// We attempt to insert the txID atomically.
+	// If we succeed, then future TX fill fail at this point.
+	// However, if the TX already exists in the block store, then we will fail the subsequent check.
+	// Since a TX will be removed from the pending queue only after it is inserted to the block store,
+	// then it is guaranteed that we won't use the same txID twice.
+	// TODO: add limit on the number of pending sync tx
+	promise := queue.NewCompletionPromise(timeout)
+	if existed := t.pendingTxs.Add(txID, promise); existed {
 		return nil, &internalerror.DuplicateTxIDError{TxID: txID}
 	}
 
-	if t.txQueue.IsFull() {
-		t.Unlock()
-		return nil, fmt.Errorf("transaction queue is full. It means the server load is high. Try after sometime")
+	duplicate, err := t.blockStore.DoesTxIDExist(txID)
+	if err != nil || duplicate {
+		t.pendingTxs.DeleteWithNoAction(txID)
+		if err == nil {
+			err = &internalerror.DuplicateTxIDError{TxID: txID}
+		}
+		return nil, err
 	}
 
-	jsonBytes, err := json.MarshalIndent(tx, "", "\t")
-	if err != nil {
-		t.Unlock()
-		return nil, fmt.Errorf("failed to marshal transaction: %v", err)
+	// Avoids marshaling the TX in production mode
+	if t.logger.IsDebug() {
+		if jsonBytes, err := json.MarshalIndent(tx, "", "\t"); err != nil {
+			t.logger.Debugf("failed to marshal transaction: %v", err)
+		} else {
+			t.logger.Debugf("enqueuing transaction %s\n", jsonBytes)
+		}
 	}
-	t.logger.Debugf("enqueuing transaction %s\n", string(jsonBytes))
 
-	t.txQueue.Enqueue(tx)
+	if timeout <= 0 {
+		// Enqueue will block until the queue is not full
+		t.txQueue.Enqueue(tx)
+	} else {
+		// EnqueueWithTimeout will block until the queue is not full or timeout occurs
+		if success := t.txQueue.EnqueueWithTimeout(tx, timeout); !success {
+			t.pendingTxs.DeleteWithNoAction(txID)
+			return nil, &internalerror.TimeoutErr{ErrMsg: "timeout has occurred while inserting the transaction to the queue"}
+		}
+	}
 	t.logger.Debug("transaction is enqueued for re-ordering")
-
-	promise := queue.NewCompletionPromise(timeout)
-	// TODO: add limit on the number of pending sync tx
-	t.pendingTxs.Add(txID, promise)
-	t.Unlock()
 
 	receipt, err := promise.Wait()
 
@@ -336,30 +344,16 @@ func (t *transactionProcessor) PostBlockCommitProcessing(block *types.Block) err
 		return errors.Errorf("unexpected transaction envelope in the block")
 	}
 
-	t.pendingTxs.DoneWithReceipt(txIDs, block.Header)
+	go t.pendingTxs.DoneWithReceipt(txIDs, block.Header)
 
 	return nil
 }
 
-func (t *transactionProcessor) isTxIDDuplicate(txID string) (bool, error) {
-	if t.pendingTxs.Has(txID) {
-		return true, nil
-	}
-
-	isTxIDAlreadyCommitted, err := t.blockStore.DoesTxIDExist(txID)
-	if err != nil {
-		return false, err
-	}
-	return isTxIDAlreadyCommitted, nil
-}
-
 func (t *transactionProcessor) Close() error {
-	t.Lock()
-	defer t.Unlock()
-
+	// It is safe to use without locks because all the following calls are protected internally.
 	t.txReorderer.Stop()
 	t.blockCreator.Stop()
-	t.blockReplicator.Close()
+	_ = t.blockReplicator.Close()
 	t.peerTransport.Close()
 	t.blockProcessor.Stop()
 
@@ -367,18 +361,14 @@ func (t *transactionProcessor) Close() error {
 }
 
 func (t *transactionProcessor) IsLeader() *internalerror.NotLeaderError {
-	t.Lock()
-	defer t.Unlock()
-
+	// It is safe to use without locks because the following call is protected internally.
 	return t.blockReplicator.IsLeader()
 }
 
 // ClusterStatus returns the leader NodeID, and the active nodes NodeIDs.
 // Note: leader is always in active.
 func (t *transactionProcessor) ClusterStatus() (leader string, active []string) {
-	t.Lock()
-	defer t.Unlock()
-
+	// It is safe to use without locks because the following call is protected internally.
 	leaderID, activePeers := t.blockReplicator.GetClusterStatus()
 	for _, peer := range activePeers {
 		active = append(active, peer.NodeId)
