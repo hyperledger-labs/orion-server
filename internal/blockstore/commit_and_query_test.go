@@ -92,33 +92,10 @@ func TestCommitAndQuery(t *testing.T) {
 		var prevBlockBaseHash, prevBlockHash []byte
 		blockHashes := [][]byte{nil}
 
-		for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
-			b := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
-
-			require.NoError(t, env.s.AddSkipListLinks(b))
-			require.NoError(t, env.s.Commit(b))
-
-			height, err := env.s.Height()
-			require.NoError(t, err)
-			require.Equal(t, blockNumber, height)
-
-			blockHeaderBaseBytes, err := proto.Marshal(b.GetHeader().GetBaseHeader())
-			require.NoError(t, err)
-			prevBlockBaseHash, err = crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
-			require.NoError(t, err)
-
-			blockHeaderBytes, err := proto.Marshal(b.GetHeader())
-			require.NoError(t, err)
-			prevBlockHash, err = crypto.ComputeSHA256Hash(blockHeaderBytes)
-			require.NoError(t, err)
-
-			blockHashes = append(blockHashes, prevBlockHash)
-		}
-
-		assertBlocks := func() {
+		assertBlocks := func(startBlockNum, endBlockNum uint64) {
 			var prevBlockBaseHash, prevBlockHash []byte
 
-			for blockNumber := uint64(1); blockNumber < totalBlocks; blockNumber++ {
+			for blockNumber := startBlockNum; blockNumber <= endBlockNum; blockNumber++ {
 				expectedBlock := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
 				expectedBlock.Header.SkipchainHashes = calculateBlockHashes(t, blockHashes, blockNumber)
 
@@ -161,11 +138,34 @@ func TestCommitAndQuery(t *testing.T) {
 			}
 		}
 
-		assertBlocks()
+		for blockNumber := uint64(1); blockNumber <= totalBlocks; blockNumber++ {
+			b := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
+
+			require.NoError(t, env.s.AddSkipListLinks(b))
+			require.NoError(t, env.s.Commit(b))
+
+			height, err := env.s.Height()
+			require.NoError(t, err)
+			require.Equal(t, blockNumber, height)
+
+			blockHeaderBaseBytes, err := proto.Marshal(b.GetHeader().GetBaseHeader())
+			require.NoError(t, err)
+			prevBlockBaseHash, err = crypto.ComputeSHA256Hash(blockHeaderBaseBytes)
+			require.NoError(t, err)
+
+			blockHeaderBytes, err := proto.Marshal(b.GetHeader())
+			require.NoError(t, err)
+			prevBlockHash, err = crypto.ComputeSHA256Hash(blockHeaderBytes)
+			require.NoError(t, err)
+
+			blockHashes = append(blockHashes, prevBlockHash)
+		}
+
+		assertBlocks(1, 1000)
 
 		// close and reopen store
 		env.closeAndReOpenStore(t)
-		assertBlocks()
+		assertBlocks(1, 1000)
 		env.s.Close()
 	})
 
