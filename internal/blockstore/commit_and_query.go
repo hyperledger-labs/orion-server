@@ -65,6 +65,8 @@ func (s *Store) Commit(block *types.Block) error {
 		return err
 	}
 
+	fileops.SyncDir(s.fileChunksDirPath)
+
 	return s.storeMetadataInDB(block, blockLocation)
 }
 
@@ -338,6 +340,9 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 		offSet := s.currentOffset
 		defer func() {
 			s.currentOffset = offSet
+			if _, err = f.Seek(offSet, 0); err != nil {
+				s.logger.Panic(err)
+			}
 		}()
 	default:
 		f, err = openFileChunk(s.fileChunksDirPath, location.FileChunkNum)
