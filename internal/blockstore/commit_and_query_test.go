@@ -52,6 +52,10 @@ func newTestEnv(t *testing.T) *testEnv {
 					t.Errorf("error while closing the store %s, %v", storeDir, err)
 				}
 			}
+
+			if err := os.RemoveAll(storeDir); err != nil {
+				t.Fatalf("error while removing directory %s, %v", storeDir, err)
+			}
 		},
 	}
 }
@@ -74,10 +78,6 @@ func (e *testEnv) closeAndReOpenStore(t *testing.T) {
 				t.Fatalf("error while closing the store %s, %v", e.storeDir, err)
 			}
 		}
-
-		if err := os.RemoveAll(e.storeDir); err != nil {
-			t.Fatalf("error while removing directory %s, %v", e.storeDir, err)
-		}
 	}
 }
 
@@ -94,6 +94,16 @@ func TestCommitAndQuery(t *testing.T) {
 
 		assertBlocks := func(startBlockNum, endBlockNum uint64) {
 			var prevBlockBaseHash, prevBlockHash []byte
+
+			if startBlockNum > 1 {
+				var err error
+
+				prevBlockBaseHash, err = env.s.GetBaseHeaderHash(startBlockNum - 1)
+				require.NoError(t, err)
+
+				prevBlockHash, err = env.s.GetHash(startBlockNum - 1)
+				require.NoError(t, err)
+			}
 
 			for blockNumber := startBlockNum; blockNumber <= endBlockNum; blockNumber++ {
 				expectedBlock := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
@@ -159,6 +169,14 @@ func TestCommitAndQuery(t *testing.T) {
 			require.NoError(t, err)
 
 			blockHashes = append(blockHashes, prevBlockHash)
+
+			if blockNumber%10 == 0 {
+				assertBlocks(blockNumber, blockNumber)
+				assertBlocks(blockNumber-1, blockNumber-1)
+				assertBlocks(blockNumber-2, blockNumber-2)
+				assertBlocks(blockNumber-3, blockNumber-3)
+				assertBlocks(blockNumber-4, blockNumber-4)
+			}
 		}
 
 		assertBlocks(1, 1000)
@@ -486,11 +504,11 @@ func createSampleUserTxBlock(blockNumber uint64, prevBlockBaseHash []byte, prevB
 		Payload: &types.Block_UserAdministrationTxEnvelope{
 			UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 				Payload: &types.UserAdministrationTx{
-					UserId: "user1",
+					UserId: fmt.Sprintf("userid-%d", blockNumber),
 					TxId:   fmt.Sprintf("txid-%d", blockNumber),
 					UserDeletes: []*types.UserDelete{
 						{
-							UserId: "user1",
+							UserId: fmt.Sprintf("userid-%d", blockNumber),
 						},
 					},
 				},
