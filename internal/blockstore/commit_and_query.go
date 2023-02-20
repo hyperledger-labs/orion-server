@@ -65,8 +65,6 @@ func (s *Store) Commit(block *types.Block) error {
 		return err
 	}
 
-	fileops.SyncDir(s.fileChunksDirPath)
-
 	return s.storeMetadataInDB(block, blockLocation)
 }
 
@@ -93,6 +91,8 @@ func (s *Store) moveToNextFileChunk() error {
 func (s *Store) appendBlock(number uint64, content []byte) (*BlockLocation, error) {
 	offsetBeforeWrite := s.currentOffset
 
+	z, _ := s.currentFileChunk.Stat()
+	fmt.Printf("current chunk [%d], current offset [%d], file size [%d]\n", s.currentChunkNum, s.currentOffset, z.Size())
 	n, err := s.currentFileChunk.Write(content)
 	if err == nil {
 		s.currentOffset += int64(len(content))
@@ -102,6 +102,14 @@ func (s *Store) appendBlock(number uint64, content []byte) (*BlockLocation, erro
 			Offset:       offsetBeforeWrite,
 			Length:       int64(len(content)),
 		}, nil
+	}
+
+	if err = s.currentFileChunk.Sync(); err != nil {
+		return nil, errors.Wrapf(
+			err,
+			"error while synching currentChunkNum [%d] to the disk",
+			s.currentChunkNum,
+		)
 	}
 
 	if n > 0 {
@@ -336,15 +344,17 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 
 	switch {
 	case s.currentChunkNum == location.FileChunkNum:
+		fmt.Printf("current chunk num [%d], last written till offset [%d] read chunk num [%d], read offset [%d]\n", s.currentChunkNum, s.currentOffset, location.FileChunkNum, location.Offset)
 		f = s.currentFileChunk
-		offSet := s.currentOffset
-		defer func() {
-			s.currentOffset = offSet
-			if _, err = f.Seek(offSet, 0); err != nil {
-				s.logger.Panic(err)
-			}
-		}()
+		// offSet := s.currentOffset
+		// defer func() {
+		// 	s.currentOffset = offSet
+		// if _, err = f.Seek(offSet, 0); err != nil {
+		// 	s.logger.Panic(err)
+		// }
+		// }()
 	default:
+		fmt.Printf("current chunk num [%d], last written till offset [%d] read chunk num [%d], read offset [%d]\n", s.currentChunkNum, s.currentOffset, location.FileChunkNum, location.Offset)
 		f, err = openFileChunk(s.fileChunksDirPath, location.FileChunkNum)
 		if err != nil {
 			return nil, err
@@ -533,6 +543,7 @@ func (s *Store) getLocation(blockNumber uint64) (*BlockLocation, error) {
 }
 
 func readBlockFromFile(f *os.File, offset int64) (*types.Block, error) {
+	fmt.Println("seeking to offset ", offset)
 	if _, err := f.Seek(offset, 0); err != nil {
 		return nil, errors.Wrap(err, "error while seeking")
 	}
