@@ -68,7 +68,7 @@ type Store struct {
 	txValidationInfoDB    *leveldb.DB
 	reusableBuffer        []byte
 	logger                *logger.SugarLogger
-	mu                    sync.RWMutex
+	mu                    sync.Mutex
 }
 
 // Config holds the configuration of a block store

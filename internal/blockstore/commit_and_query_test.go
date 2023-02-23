@@ -82,6 +82,7 @@ func (e *testEnv) closeAndReOpenStore(t *testing.T) {
 }
 
 func TestCommitAndQuery(t *testing.T) {
+	chunkSizeLimit = 64 * 1024 * 1024
 	t.Run("commit blocks and query", func(t *testing.T) {
 		t.Parallel()
 
@@ -170,12 +171,14 @@ func TestCommitAndQuery(t *testing.T) {
 
 			blockHashes = append(blockHashes, prevBlockHash)
 
-			if blockNumber%10 == 0 {
-				assertBlocks(blockNumber, blockNumber)
-				assertBlocks(blockNumber-1, blockNumber-1)
-				assertBlocks(blockNumber-2, blockNumber-2)
-				assertBlocks(blockNumber-3, blockNumber-3)
-				assertBlocks(blockNumber-4, blockNumber-4)
+			if blockNumber%600 == 0 {
+				// Note: it is necessary to read at least 4096 bytes in backward.
+				// Otherwise, even without setting offset to the old position
+				// after the read, the content is appended in the old offset
+				// rather than writting to the offset where the read end.
+				for j := blockNumber; j > blockNumber-100; j-- {
+					assertBlocks(j, j)
+				}
 			}
 		}
 
@@ -267,8 +270,7 @@ func TestCommitAndQuery(t *testing.T) {
 }
 
 func TestTxValidationInfo(t *testing.T) {
-	t.Parallel()
-
+	chunkSizeLimit = 4096
 	t.Run("txID exist", func(t *testing.T) {
 		t.Parallel()
 
@@ -438,7 +440,7 @@ func TestTxValidationInfo(t *testing.T) {
 }
 
 func TestGetAugmentedHeader(t *testing.T) {
-
+	chunkSizeLimit = 4096
 	t.Run("data tx blocks", func(t *testing.T) {
 		t.Parallel()
 
