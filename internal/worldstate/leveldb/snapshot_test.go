@@ -187,6 +187,5 @@ func deleteForSnapshotTest(t *testing.T, l *LevelDB) {
 	wdb, ok := l.getDB(worldstate.DatabasesDBName)
 	require.True(t, ok)
 	require.NoError(t, wdb.file.Delete([]byte("db1"), &opt.WriteOptions{Sync: true}))
-	require.NoError(t, wdb.updateSnapshot())
 	l.cache.delState(worldstate.DatabasesDBName, "db1")
 }

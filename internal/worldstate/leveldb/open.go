@@ -41,31 +41,8 @@ type LevelDB struct {
 type Db struct {
 	name      string
 	file      *leveldb.DB
-	snap      *leveldb.Snapshot
-	reader    FileOrSnap
 	readOpts  *opt.ReadOptions
 	writeOpts *opt.WriteOptions
-}
-
-type FileOrSnap interface {
-	leveldb.Reader
-	Has(key []byte, ro *opt.ReadOptions) (bool, error)
-}
-
-func (db *Db) updateSnapshot() error {
-	prev := db.snap
-	if prev != nil {
-		defer prev.Release()
-	}
-
-	if snap, err := db.file.GetSnapshot(); err != nil {
-		db.reader = db.file
-		return errors.WithMessagef(err, "failed to create a leveldb snapshot for database %s", db.name)
-	} else {
-		db.snap = snap
-		db.reader = snap
-	}
-	return nil
 }
 
 var (
@@ -173,9 +150,6 @@ func (l *LevelDB) Close() error {
 	var aggErr []error
 	l.dbs.Range(func(name, value interface{}) bool {
 		db := value.(*Db)
-		if db.snap != nil {
-			db.snap.Release()
-		}
 		if err := db.file.Close(); err != nil {
 			aggErr = append(aggErr, errors.Wrapf(err, "error while closing database %s", name))
 		}
