@@ -371,6 +371,32 @@ func (s *Server) QueryTxReceipt(t *testing.T, txID, user string) (*types.TxRecei
 	return response, err
 }
 
+func (s *Server) QueryTxContent(t *testing.T, blockNum, txNum uint64, user string) (*types.GetTxResponseEnvelope, error) {
+	client, err := s.NewRESTClient(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	userSigner, err := s.Signer(user)
+	require.NoError(t, err)
+
+	query := &types.GetTxContentQuery{
+		UserId:      user,
+		BlockNumber: blockNum,
+		TxIndex:     txNum,
+	}
+
+	response, err := client.GetTxContent(
+		constants.URLTxContent(blockNum, txNum),
+		&types.GetTxContentQueryEnvelope{
+			Payload:   query,
+			Signature: testutils.SignatureFromQuery(t, userSigner, query),
+		},
+	)
+
+	return response, err
+}
+
 func (s *Server) QueryAugmentedBlockHeader(t *testing.T, number uint64, user string) (*types.GetAugmentedBlockHeaderResponseEnvelope, error) {
 	client, err := s.NewRESTClient(nil)
 	if err != nil {

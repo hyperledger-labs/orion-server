@@ -462,6 +462,23 @@ func (c *Client) GetTxIDsSubmitedBy(urlPath string, e *types.GetTxIDsSubmittedBy
 	return res, err
 }
 
+func (c *Client) GetTxContent(urlPath string, e *types.GetTxContentQueryEnvelope) (*types.GetTxResponseEnvelope, error) {
+	resp, err := c.handleGetRequest(
+		urlPath,
+		e.Payload.UserId,
+		e.Signature,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	res := &types.GetTxResponseEnvelope{}
+	err = unMarshalResponse(resp, res)
+	return res, err
+}
+
 func (c *Client) ExecuteJSONQuery(urlPath string, e *types.DataJSONQuery, signature []byte) (*types.DataQueryResponseEnvelope, error) {
 	marshaledJSONQuery, err := json.Marshal(e.Query)
 	if err != nil {
