@@ -13,6 +13,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"testing"
@@ -41,8 +42,7 @@ func IssueCertificate(subjectCN string, host string, rootCAKeyPair tls.Certifica
 	}
 	pubKey := privKey.Public()
 
-	ip := net.ParseIP(host)
-	template, err := CertTemplate(subjectCN, []net.IP{ip})
+	template, err := CertTemplate(subjectCN, host)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -70,8 +70,7 @@ func GenerateRootCA(subjectCN string, host string) ([]byte, []byte, error) {
 	}
 	pubKey := privKey.Public()
 
-	ip := net.ParseIP(host)
-	template, err := CertTemplate(subjectCN, []net.IP{ip})
+	template, err := CertTemplate(subjectCN, host)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -106,8 +105,7 @@ func GenerateIntermediateCA(subjectCN string, host string, rootCAKeyPair tls.Cer
 	}
 	pubKey := privKey.Public()
 
-	ip := net.ParseIP(host)
-	template, err := CertTemplate(subjectCN, []net.IP{ip})
+	template, err := CertTemplate(subjectCN, host)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -130,11 +128,19 @@ func GenerateIntermediateCA(subjectCN string, host string, rootCAKeyPair tls.Cer
 	return certPem, caPvtPemByte, nil
 }
 
-func CertTemplate(subjectCN string, ips []net.IP) (*x509.Certificate, error) {
+func CertTemplate(subjectCN string, host string) (*x509.Certificate, error) {
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	SN, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
 		return nil, err
+	}
+
+	var uris []*url.URL
+	var ips []net.IP
+	if ip := net.ParseIP(host); ip != nil {
+		ips = append(ips, ip)
+	} else {
+		uris = append(uris, &url.URL{Host: host})
 	}
 
 	return &x509.Certificate{
@@ -146,6 +152,7 @@ func CertTemplate(subjectCN string, ips []net.IP) (*x509.Certificate, error) {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           ips,
+		URIs:                  uris,
 	}, nil
 }
 
