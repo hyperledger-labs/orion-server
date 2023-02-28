@@ -52,6 +52,10 @@ func newTestEnv(t *testing.T) *testEnv {
 					t.Errorf("error while closing the store %s, %v", storeDir, err)
 				}
 			}
+
+			if err := os.RemoveAll(storeDir); err != nil {
+				t.Fatalf("error while removing directory %s, %v", storeDir, err)
+			}
 		},
 	}
 }
@@ -74,14 +78,11 @@ func (e *testEnv) closeAndReOpenStore(t *testing.T) {
 				t.Fatalf("error while closing the store %s, %v", e.storeDir, err)
 			}
 		}
-
-		if err := os.RemoveAll(e.storeDir); err != nil {
-			t.Fatalf("error while removing directory %s, %v", e.storeDir, err)
-		}
 	}
 }
 
 func TestCommitAndQuery(t *testing.T) {
+	chunkSizeLimit = 64 * 1024 * 1024
 	t.Run("commit blocks and query", func(t *testing.T) {
 		t.Parallel()
 
@@ -94,6 +95,16 @@ func TestCommitAndQuery(t *testing.T) {
 
 		assertBlocks := func(startBlockNum, endBlockNum uint64) {
 			var prevBlockBaseHash, prevBlockHash []byte
+
+			if startBlockNum > 1 {
+				var err error
+
+				prevBlockBaseHash, err = env.s.GetBaseHeaderHash(startBlockNum - 1)
+				require.NoError(t, err)
+
+				prevBlockHash, err = env.s.GetHash(startBlockNum - 1)
+				require.NoError(t, err)
+			}
 
 			for blockNumber := startBlockNum; blockNumber <= endBlockNum; blockNumber++ {
 				expectedBlock := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
@@ -159,6 +170,16 @@ func TestCommitAndQuery(t *testing.T) {
 			require.NoError(t, err)
 
 			blockHashes = append(blockHashes, prevBlockHash)
+
+			if blockNumber%600 == 0 {
+				// Note: it is necessary to read at least 4096 bytes in backward.
+				// Otherwise, even without setting offset to the old position
+				// after the read, the content is appended in the old offset
+				// rather than writting to the offset where the read end.
+				for j := blockNumber; j > blockNumber-100; j-- {
+					assertBlocks(j, j)
+				}
+			}
 		}
 
 		assertBlocks(1, 1000)
@@ -249,8 +270,7 @@ func TestCommitAndQuery(t *testing.T) {
 }
 
 func TestTxValidationInfo(t *testing.T) {
-	t.Parallel()
-
+	chunkSizeLimit = 4096
 	t.Run("txID exist", func(t *testing.T) {
 		t.Parallel()
 
@@ -420,7 +440,7 @@ func TestTxValidationInfo(t *testing.T) {
 }
 
 func TestGetAugmentedHeader(t *testing.T) {
-
+	chunkSizeLimit = 4096
 	t.Run("data tx blocks", func(t *testing.T) {
 		t.Parallel()
 
@@ -486,11 +506,11 @@ func createSampleUserTxBlock(blockNumber uint64, prevBlockBaseHash []byte, prevB
 		Payload: &types.Block_UserAdministrationTxEnvelope{
 			UserAdministrationTxEnvelope: &types.UserAdministrationTxEnvelope{
 				Payload: &types.UserAdministrationTx{
-					UserId: "user1",
+					UserId: fmt.Sprintf("userid-%d", blockNumber),
 					TxId:   fmt.Sprintf("txid-%d", blockNumber),
 					UserDeletes: []*types.UserDelete{
 						{
-							UserId: "user1",
+							UserId: fmt.Sprintf("userid-%d", blockNumber),
 						},
 					},
 				},

@@ -65,8 +65,6 @@ func (s *Store) Commit(block *types.Block) error {
 		return err
 	}
 
-	fileops.SyncDir(s.fileChunksDirPath)
-
 	return s.storeMetadataInDB(block, blockLocation)
 }
 
@@ -102,6 +100,14 @@ func (s *Store) appendBlock(number uint64, content []byte) (*BlockLocation, erro
 			Offset:       offsetBeforeWrite,
 			Length:       int64(len(content)),
 		}, nil
+	}
+
+	if err = s.currentFileChunk.Sync(); err != nil {
+		return nil, errors.Wrapf(
+			err,
+			"error while synching currentChunkNum [%d] to the disk",
+			s.currentChunkNum,
+		)
 	}
 
 	if n > 0 {
@@ -304,16 +310,16 @@ func (s *Store) storeBlockHeaders(block *types.Block) error {
 
 // Height returns the height of the block store, i.e., the last committed block number
 func (s *Store) Height() (uint64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	return s.lastCommittedBlockNum, nil
 }
 
 // Get returns the requested block
 func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if blockNumber > s.lastCommittedBlockNum {
 		switch {
@@ -337,10 +343,8 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 	switch {
 	case s.currentChunkNum == location.FileChunkNum:
 		f = s.currentFileChunk
-		offSet := s.currentOffset
 		defer func() {
-			s.currentOffset = offSet
-			if _, err = f.Seek(offSet, 0); err != nil {
+			if _, err = f.Seek(s.currentOffset, 0); err != nil {
 				s.logger.Panic(err)
 			}
 		}()
@@ -362,8 +366,8 @@ func (s *Store) Get(blockNumber uint64) (*types.Block, error) {
 // GetHeader returns block header by block number, operation should be faster that regular Get,
 // because it requires only one db access, without file reads
 func (s *Store) GetHeader(blockNumber uint64) (*types.BlockHeader, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	val, err := s.blockHeaderDB.Get(constructHeaderBytesKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block not found: %d", blockNumber)}
@@ -383,8 +387,8 @@ func (s *Store) GetHeader(blockNumber uint64) (*types.BlockHeader, error) {
 
 // GetAugmentedHeader returns block header with slice of block tx ids
 func (s *Store) GetAugmentedHeader(blockNumber uint64) (*types.AugmentedBlockHeader, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	val, err := s.blockHeaderDB.Get(constructHeaderBytesKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block not found: %d", blockNumber)}
@@ -417,8 +421,8 @@ func (s *Store) GetAugmentedHeader(blockNumber uint64) (*types.AugmentedBlockHea
 
 // GetHash returns block hash by block number
 func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	val, err := s.blockHeaderDB.Get(constructHeaderHashKey(blockNumber), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block hash not found: %d", blockNumber)}
@@ -432,8 +436,8 @@ func (s *Store) GetHash(blockNumber uint64) ([]byte, error) {
 
 // GetBaseHeaderHash returns block header base hash by block number
 func (s *Store) GetBaseHeaderHash(blockNumber uint64) ([]byte, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if blockNumber == 0 {
 		return nil, nil
 	}
@@ -450,8 +454,8 @@ func (s *Store) GetBaseHeaderHash(blockNumber uint64) ([]byte, error) {
 
 // GetHeaderByHash returns block header by block hash, used for travel in Merkle list or Merkle skip list
 func (s *Store) GetHeaderByHash(blockHash []byte) (*types.BlockHeader, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	blockNumBytes, err := s.blockHeaderDB.Get(constructHeaderHashIndexKey(blockHash), nil)
 	if err == leveldb.ErrNotFound {
 		return nil, &interrors.NotFoundErr{Message: fmt.Sprintf("block number by hash not found: %x", blockHash)}
@@ -497,8 +501,8 @@ func (s *Store) GetValidationInfo(txID string) (*types.ValidationInfo, error) {
 
 // GetTxInfo returns the TxInfo associated with a given txID
 func (s *Store) GetTxInfo(txID string) (*TxInfo, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	valInfoSerialized, err := s.txValidationInfoDB.Get([]byte(txID), &opt.ReadOptions{})
 

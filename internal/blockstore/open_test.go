@@ -21,12 +21,11 @@ import (
 )
 
 func TestMain(t *testing.M) {
-	chunkSizeLimit = 4096
 	os.Exit(t.Run())
 }
 
 func TestOpenStore(t *testing.T) {
-	t.Parallel()
+	chunkSizeLimit = 4096
 
 	assertStore := func(t *testing.T, storeDir string, s *Store) {
 		require.Equal(t, filepath.Join(storeDir, "filechunks"), s.fileChunksDirPath)
@@ -204,6 +203,7 @@ func TestOpenStore(t *testing.T) {
 }
 
 func TestRecovery(t *testing.T) {
+	chunkSizeLimit = 4096
 	// scenario 1:
 	//  - append block 1 to the file and store only the index for block 1
 	//  - ensure that block and metadata DBs are synched after reopening the stores
