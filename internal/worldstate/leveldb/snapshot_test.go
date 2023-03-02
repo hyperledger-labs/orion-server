@@ -49,7 +49,7 @@ func TestSnapshots(t *testing.T) {
 
 	// remove all kv pairs from the real db. As a result,
 	// the real db should not return any kv pairs while
-	// the snapshot s1 shoudl return the deleted kv pairs
+	// the snapshot s1 should return the deleted kv pairs
 	deleteForSnapshotTest(t, env.l)
 
 	verifyEmptiness(t, env.l)
@@ -184,8 +184,8 @@ func deleteForSnapshotTest(t *testing.T, l *LevelDB) {
 	}
 	require.NoError(t, l.Commit(u, 2))
 
-	l.dbsList.RLock()
-	l.dbs[worldstate.DatabasesDBName].file.Delete([]byte("db1"), &opt.WriteOptions{Sync: true})
+	wdb, ok := l.getDB(worldstate.DatabasesDBName)
+	require.True(t, ok)
+	require.NoError(t, wdb.file.Delete([]byte("db1"), &opt.WriteOptions{Sync: true}))
 	l.cache.delState(worldstate.DatabasesDBName, "db1")
-	l.dbsList.RUnlock()
 }

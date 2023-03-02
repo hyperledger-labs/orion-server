@@ -17,10 +17,12 @@ func TestOpenLevelDBInstance(t *testing.T) {
 	assertDBInstance := func(dbRootDir string, l *LevelDB) {
 		require.NoFileExists(t, filepath.Join(dbRootDir, "undercreation"))
 		require.Equal(t, dbRootDir, l.dbRootDir)
-		require.Len(t, l.dbs, len(preCreateDBs))
+		require.Equal(t, l.size(), len(preCreateDBs))
 
 		for _, dbName := range preCreateDBs {
-			require.NotNil(t, l.dbs[dbName])
+			db, ok := l.getDB(dbName)
+			require.True(t, ok)
+			require.NotNil(t, db)
 		}
 
 		require.False(t, l.ValidDBName("db1/name"))
@@ -146,7 +148,8 @@ func TestOpenLevelDBInstance(t *testing.T) {
 
 		assertDBInstance(dbRootDir, l)
 
-		db := l.dbs[worldstate.DefaultDBName]
+		db, ok := l.getDB(worldstate.DefaultDBName)
+		require.True(t, ok)
 		err = db.file.Put([]byte("key1"), []byte("value1"), &opt.WriteOptions{Sync: true})
 		require.NoError(t, err)
 
@@ -160,7 +163,8 @@ func TestOpenLevelDBInstance(t *testing.T) {
 
 		assertDBInstance(dbRootDir, l)
 
-		db = l.dbs[worldstate.DefaultDBName]
+		db, ok = l.getDB(worldstate.DefaultDBName)
+		require.True(t, ok)
 		actualValue, err := db.file.Get([]byte("key1"), nil)
 		require.NoError(t, err)
 		require.Equal(t, []byte("value1"), actualValue)

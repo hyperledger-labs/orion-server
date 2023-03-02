@@ -13,6 +13,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"go.uber.org/multierr"
 )
 
 var (
@@ -30,18 +31,16 @@ var (
 // LevelDB holds information about all created database
 type LevelDB struct {
 	dbRootDir   string
-	dbs         map[string]*db
+	dbs         sync.Map
 	logger      *logger.SugarLogger
-	dbsList     sync.RWMutex
 	dbNameRegex *regexp.Regexp
 	cache       *cache
 }
 
-// db - a wrapper on an actual store
-type db struct {
+// Db - a wrapper on an actual store
+type Db struct {
 	name      string
 	file      *leveldb.DB
-	mu        sync.RWMutex
 	readOpts  *opt.ReadOptions
 	writeOpts *opt.WriteOptions
 }
@@ -108,18 +107,9 @@ func openNewLevelDBInstance(c *Config) (*LevelDB, error) {
 		return nil, err
 	}
 
-	l := &LevelDB{
-		dbRootDir:   c.DBRootDir,
-		dbs:         make(map[string]*db),
-		logger:      c.Logger,
-		dbNameRegex: regexp.MustCompile(allowedCharsInDBName),
-		cache:       newCache(128),
-	}
-
-	for _, dbName := range preCreateDBs {
-		if err := l.create(dbName); err != nil {
-			return nil, err
-		}
+	l, err := openLevelDBInstance(c, preCreateDBs)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := fileops.Remove(underCreationFlagPath); err != nil {
@@ -130,33 +120,25 @@ func openNewLevelDBInstance(c *Config) (*LevelDB, error) {
 }
 
 func openExistingLevelDBInstance(c *Config) (*LevelDB, error) {
-	l := &LevelDB{
-		dbRootDir:   c.DBRootDir,
-		dbs:         make(map[string]*db),
-		logger:      c.Logger,
-		dbNameRegex: regexp.MustCompile(allowedCharsInDBName),
-		cache:       newCache(128),
-	}
-
 	dbNames, err := fileops.ListSubdirs(c.DBRootDir)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "failed to retrieve existing level dbs from %s", c.DBRootDir)
 	}
 
-	for _, dbName := range dbNames {
-		file, err := leveldb.OpenFile(
-			filepath.Join(l.dbRootDir, dbName),
-			&opt.Options{ErrorIfMissing: false},
-		)
-		if err != nil {
-			return nil, errors.WithMessagef(err, "failed to open leveldb file for database %s", dbName)
-		}
+	return openLevelDBInstance(c, dbNames)
+}
 
-		l.dbs[dbName] = &db{
-			name:      dbName,
-			file:      file,
-			readOpts:  &opt.ReadOptions{},
-			writeOpts: &opt.WriteOptions{Sync: true},
+func openLevelDBInstance(c *Config, dbNames []string) (*LevelDB, error) {
+	l := &LevelDB{
+		dbRootDir:   c.DBRootDir,
+		logger:      c.Logger,
+		dbNameRegex: regexp.MustCompile(allowedCharsInDBName),
+		cache:       newCache(128),
+	}
+
+	for _, dbName := range dbNames {
+		if err := l.create(dbName); err != nil {
+			return nil, err
 		}
 	}
 
@@ -165,24 +147,53 @@ func openExistingLevelDBInstance(c *Config) (*LevelDB, error) {
 
 // Close closes the database instance by closing all leveldb databases
 func (l *LevelDB) Close() error {
-	l.dbsList.Lock()
-	defer l.dbsList.Unlock()
-
-	for name, db := range l.dbs {
-		db.mu.Lock()
-		defer db.mu.Unlock()
-
+	var aggErr []error
+	l.dbs.Range(func(name, value interface{}) bool {
+		db := value.(*Db)
 		if err := db.file.Close(); err != nil {
-			return errors.Errorf("error while closing database %s, %v", name, err)
+			aggErr = append(aggErr, errors.Wrapf(err, "error while closing database %s", name))
 		}
+		return true
+	})
+	l.dbs = sync.Map{}
 
-		delete(l.dbs, db.name)
+	if len(aggErr) > 0 {
+		return multierr.Combine(aggErr...)
 	}
-
 	return nil
 }
 
 // ValidDBName returns true if the given dbName is valid
 func (l *LevelDB) ValidDBName(dbName string) bool {
 	return l.dbNameRegex.MatchString(dbName)
+}
+
+func (l *LevelDB) getDB(name string) (*Db, bool) {
+	value, ok := l.dbs.Load(name)
+	if !ok {
+		return nil, ok
+	}
+	return value.(*Db), ok
+}
+
+func (l *LevelDB) getAndDelDB(name string) (*Db, bool) {
+	value, loaded := l.dbs.LoadAndDelete(name)
+	if !loaded {
+		return nil, loaded
+	}
+	return value.(*Db), loaded
+}
+
+func (l *LevelDB) setDB(name string, value *Db) {
+	l.dbs.Store(name, value)
+}
+
+// size is a costly operation. It is used only for testing.
+func (l *LevelDB) size() int {
+	sz := 0
+	l.dbs.Range(func(key, value interface{}) bool {
+		sz += 1
+		return true
+	})
+	return sz
 }

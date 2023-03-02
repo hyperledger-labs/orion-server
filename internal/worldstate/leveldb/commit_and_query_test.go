@@ -53,10 +53,12 @@ func newTestEnv(t *testing.T) *testEnv {
 	}
 
 	require.Equal(t, path, l.dbRootDir)
-	require.Len(t, l.dbs, len(preCreateDBs))
+	require.Equal(t, l.size(), len(preCreateDBs))
 
 	for _, dbName := range preCreateDBs {
-		require.NotNil(t, l.dbs[dbName])
+		db, ok := l.getDB(dbName)
+		require.True(t, ok)
+		require.NotNil(t, db)
 	}
 
 	return &testEnv{
@@ -94,7 +96,8 @@ func TestCreateDB(t *testing.T) {
 		require.NoError(t, l.create(dbName))
 		verifyDBExistance(t, l, dbName, true)
 
-		db := l.dbs[dbName]
+		db, ok := l.getDB(dbName)
+		require.True(t, ok)
 		err := db.file.Put([]byte("key1"), []byte("value1"), &opt.WriteOptions{Sync: true})
 		require.NoError(t, err)
 
@@ -324,8 +327,9 @@ func TestCommitAndQuery(t *testing.T) {
 
 		for _, db := range []string{"db1", "db2"} {
 			for _, key := range []string{"key1", "key2"} {
-				valWithMetadata, err := l.cache.getState(db, db+"-"+key)
-				require.NoError(t, err)
+				valWithMetadata, inCache := unmarshaler(t)(l.cache.getState(db, db+"-"+key))
+				require.True(t, inCache)
+				require.NotNil(t, valWithMetadata)
 				require.Nil(t, valWithMetadata.Value)
 				require.Nil(t, valWithMetadata.Metadata)
 			}
@@ -366,8 +370,8 @@ func TestCommitAndQuery(t *testing.T) {
 		// db1-key1, db1-key2 should exist in the cache
 		testCacheEntriesCount(t, l.cache, 2)
 		for key, expectedValAndMetadata := range db1KVs {
-			valWithMetadata, err := l.cache.getState("db1", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db1", key))
+			require.True(t, inCache)
 			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
 		}
 
@@ -395,13 +399,13 @@ func TestCommitAndQuery(t *testing.T) {
 		// db2-key1, db2-key2 should exist in the cache
 		testCacheEntriesCount(t, l.cache, 4)
 		for key, expectedValAndMetadata := range db1KVs {
-			valWithMetadata, err := l.cache.getState("db1", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db1", key))
+			require.True(t, inCache)
 			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
 		}
 		for key, expectedValAndMetadata := range db2KVs {
-			valWithMetadata, err := l.cache.getState("db2", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db2", key))
+			require.True(t, inCache)
 			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
 		}
 	})
@@ -557,8 +561,8 @@ func TestCommitAndQuery(t *testing.T) {
 
 		testCacheEntriesCount(t, l.cache, 2)
 		for key, expectedValAndMetadata := range db1KVs {
-			valWithMetadata, err := l.cache.getState("db1", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db1", key))
+			require.True(t, inCache)
 			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
 		}
 
@@ -573,13 +577,13 @@ func TestCommitAndQuery(t *testing.T) {
 
 		testCacheEntriesCount(t, l.cache, 4)
 		for key, expectedValAndMetadata := range db1KVs {
-			valWithMetadata, err := l.cache.getState("db1", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db1", key))
+			require.True(t, inCache)
 			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
 		}
 		for key, expectedValAndMetadata := range db2KVs {
-			valWithMetadata, err := l.cache.getState("db2", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db2", key))
+			require.True(t, inCache)
 			require.True(t, proto.Equal(expectedValAndMetadata, valWithMetadata))
 		}
 
@@ -630,20 +634,20 @@ func TestCommitAndQuery(t *testing.T) {
 		require.NoError(t, l.Commit(dbsUpdates, 2))
 
 		testCacheEntriesCount(t, l.cache, 2)
-		valWithMetadata, err := l.cache.getState("db1", "db1-key1")
-		require.NoError(t, err)
+		valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db1", "db1-key1"))
+		require.True(t, inCache)
 		require.True(t, proto.Equal(db1valAndMetadata1New, valWithMetadata))
 
-		valWithMetadata, err = l.cache.getState("db1", "db1-key2")
-		require.NoError(t, err)
+		valWithMetadata, inCache = unmarshaler(t)(l.cache.getState("db1", "db1-key2"))
+		require.False(t, inCache)
 		require.Nil(t, valWithMetadata)
 
-		valWithMetadata, err = l.cache.getState("db2", "db2-key1")
-		require.NoError(t, err)
+		valWithMetadata, inCache = unmarshaler(t)(l.cache.getState("db2", "db2-key1"))
+		require.True(t, inCache)
 		require.True(t, proto.Equal(db2valAndMetadata1New, valWithMetadata))
 
-		valWithMetadata, err = l.cache.getState("db2", "db2-key2")
-		require.NoError(t, err)
+		valWithMetadata, inCache = unmarshaler(t)(l.cache.getState("db2", "db2-key2"))
+		require.False(t, inCache)
 		require.Nil(t, valWithMetadata)
 
 		db1KVs["db1-key1"] = db1valAndMetadata1New
@@ -682,14 +686,14 @@ func TestCommitAndQuery(t *testing.T) {
 
 		testCacheEntriesCount(t, l.cache, 4)
 		for key, expectedValAndMetadata := range db1KVs {
-			valWithMetadata, err := l.cache.getState("db1", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db1", key))
+			require.True(t, inCache)
 			require.Equal(t, expectedValAndMetadata.GetValue(), valWithMetadata.GetValue())
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata(), valWithMetadata.GetMetadata()))
 		}
 		for key, expectedValAndMetadata := range db1KVs {
-			valWithMetadata, err := l.cache.getState("db1", key)
-			require.NoError(t, err)
+			valWithMetadata, inCache := unmarshaler(t)(l.cache.getState("db1", key))
+			require.True(t, inCache)
 			require.Equal(t, expectedValAndMetadata.GetValue(), valWithMetadata.GetValue())
 			require.True(t, proto.Equal(expectedValAndMetadata.GetMetadata(), valWithMetadata.GetMetadata()))
 		}
