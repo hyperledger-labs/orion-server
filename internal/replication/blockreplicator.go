@@ -98,7 +98,8 @@ type BlockReplicator struct {
 	lastSnapBlockNum uint64
 	confState        raftpb.ConfState // Etcdraft requires ConfState to be persisted within snapshot
 
-	lg *logger.SugarLogger
+	lg      *logger.SugarLogger
+	metrics *utils.TxProcessingMetrics
 }
 
 // Config holds the configuration information required to initialize the block replicator.
@@ -112,6 +113,7 @@ type Config struct {
 	PendingTxs           PendingTxsReleaser
 	ConfigValidator      ConfigTxValidator
 	Logger               *logger.SugarLogger
+	Metrics              *utils.TxProcessingMetrics
 }
 
 // NewBlockReplicator creates a new BlockReplicator.
@@ -164,6 +166,7 @@ func NewBlockReplicator(conf *Config) (*BlockReplicator, error) {
 		lastSnapBlockNum:     snapBlkNum,
 		confState:            confState,
 		lg:                   lg,
+		metrics:              conf.Metrics,
 	}
 	br.condTooManyInFlightBlocks = sync.NewCond(&br.mutex)
 
@@ -1183,6 +1186,7 @@ func (br *BlockReplicator) commitBlock(block *types.Block, updateConfig bool) er
 		blockNumber, block.GetConsensusMetadata())
 
 	// we can only get a valid config transaction
+	br.metrics.QueueSize("one_block", br.oneQueueBarrier.Size())
 	reConfig, err := br.oneQueueBarrier.EnqueueWait(block)
 	if err != nil {
 		return err

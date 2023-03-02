@@ -16,6 +16,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	mptrieStore "github.com/hyperledger-labs/orion-server/internal/mptrie/store"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
@@ -202,7 +203,7 @@ type db struct {
 }
 
 // NewDB creates a new database bcdb which handles both the queries and transactions.
-func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) {
+func NewDB(conf *config.Configurations, logger *logger.SugarLogger, metrics *utils.TxProcessingMetrics) (DB, error) {
 	localConf := conf.LocalConfig
 	if localConf.Server.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
@@ -296,6 +297,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 			blockStore:      blockStore,
 			provenanceStore: provenanceStore,
 			stateTrieStore:  stateTrieStore,
+			metrics:         metrics,
 			logger:          logger,
 		},
 	)

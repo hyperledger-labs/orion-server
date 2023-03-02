@@ -267,7 +267,7 @@ func TestDataRequestHandler_DataQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewDataRequestHandler(db, logger)
+			handler := NewDataRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -653,7 +653,7 @@ func TestDataRequestHandler_DataRangeQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewDataRequestHandler(db, logger)
+			handler := NewDataRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -923,7 +923,7 @@ func TestDataRequestHandler_DataJSONQuery(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewDataRequestHandler(db, logger)
+			handler := NewDataRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -1368,7 +1368,7 @@ func TestDataRequestHandler_DataTransaction(t *testing.T) {
 			}
 
 			db := tt.createMockAndInstrument(t, txEnv, txResp, timeout)
-			handler := NewDataRequestHandler(db, logger)
+			handler := NewDataRequestHandler(db, logger, nil)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)
@@ -1496,7 +1496,7 @@ func TestDataRequestHandler_DataJSONQueryWithContext(t *testing.T) {
 
 			db := tt.dbMockFactory(tt.expectedResponse)
 			rr := httptest.NewRecorder()
-			handler := NewDataRequestHandler(db, logger)
+			handler := NewDataRequestHandler(db, logger, nil)
 
 			var deadline time.Time
 			if tt.useCancelledContext {

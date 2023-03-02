@@ -36,6 +36,11 @@ func NewOneQueueBarrier(logger *logger.SugarLogger) *OneQueueBarrier {
 	return qb
 }
 
+// Size returns the size of the queue
+func (qb *OneQueueBarrier) Size() int {
+	return len(qb.entryCh)
+}
+
 // EnqueueWait submits an entry for consumption and ways for a reply, indicating processing had finished.
 // An error is returned if the OneQueueBarrier was closed.
 func (qb *OneQueueBarrier) EnqueueWait(entry interface{}) (interface{}, error) {

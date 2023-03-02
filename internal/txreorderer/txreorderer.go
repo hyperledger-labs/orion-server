@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 )
@@ -23,6 +24,7 @@ type TxReorderer struct {
 	stopped            chan struct{}
 	pendingDataTxs     *types.DataTxEnvelopes
 	logger             *logger.SugarLogger
+	metrics            *utils.TxProcessingMetrics
 	// TODO:
 	// tx merkle tree
 	// dependency graph
@@ -37,6 +39,7 @@ type Config struct {
 	MaxTxCountPerBatch uint32
 	BatchTimeout       time.Duration
 	Logger             *logger.SugarLogger
+	Metrics            *utils.TxProcessingMetrics
 }
 
 // New creates a transaction reorderer
@@ -50,6 +53,7 @@ func New(conf *Config) *TxReorderer {
 		stop:               make(chan struct{}),
 		stopped:            make(chan struct{}),
 		logger:             conf.Logger,
+		metrics:            conf.Metrics,
 	}
 }
 
@@ -149,6 +153,7 @@ func (r *TxReorderer) enqueueAndResetPendingDataTxBatch() {
 			DataTxEnvelopes: r.pendingDataTxs,
 		},
 	)
+	r.metrics.QueueSize("batch", r.txBatchQueue.Size())
 
 	r.pendingDataTxs = &types.DataTxEnvelopes{}
 }

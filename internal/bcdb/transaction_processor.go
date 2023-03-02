@@ -20,6 +20,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/txreorderer"
 	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -44,6 +45,7 @@ type transactionProcessor struct {
 	blockStore           *blockstore.Store
 	pendingTxs           *queue.PendingTxs
 	logger               *logger.SugarLogger
+	metrics              *utils.TxProcessingMetrics
 }
 
 type txProcessorConfig struct {
@@ -52,6 +54,7 @@ type txProcessorConfig struct {
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
 	stateTrieStore  mptrie.Store
+	metrics         *utils.TxProcessingMetrics
 	logger          *logger.SugarLogger
 }
 
@@ -74,6 +77,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			MaxTxCountPerBatch: localConfig.BlockCreation.MaxTransactionCountPerBlock,
 			BatchTimeout:       localConfig.BlockCreation.BlockTimeout,
 			Logger:             conf.logger,
+			Metrics:            conf.metrics,
 		},
 	)
 
@@ -97,6 +101,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			DB:                   conf.db,
 			TxValidator:          txValidator,
 			Logger:               conf.logger,
+			Metrics:              conf.metrics,
 		},
 	)
 
@@ -197,6 +202,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		PendingTxs:           p.pendingTxs,
 		ConfigValidator:      txValidator.ConfigValidator(),
 		Logger:               conf.logger,
+		Metrics:              conf.metrics,
 	}
 	if joinStart {
 		repConfig.JoinBlock = conf.config.JoinBlock
@@ -242,6 +248,8 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 // a non-zero timeout would be treated as a sync submission. When a timeout
 // occurs with the sync submission, a timeout error will be returned
 func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error) {
+	submitStart := time.Now()
+
 	var txID string
 	switch tx.(type) {
 	case *types.DataTxEnvelope:
@@ -293,6 +301,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		}
 	}
 
+	enqueueStart := time.Now()
 	if timeout <= 0 {
 		// Enqueue will block until the queue is not full
 		t.txQueue.Enqueue(tx)
@@ -303,7 +312,10 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 			return nil, &internalerror.TimeoutErr{ErrMsg: "timeout has occurred while inserting the transaction to the queue"}
 		}
 	}
+	t.metrics.Latency("tx-enqueue", enqueueStart)
 	t.logger.Debug("transaction is enqueued for re-ordering")
+	t.metrics.QueueSize("tx", t.txQueue.Size())
+	t.metrics.QueueSize("pending", t.pendingTxs.Size())
 
 	receipt, err := promise.Wait()
 
@@ -311,6 +323,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
+	t.metrics.Latency("tx-submit", submitStart)
 	return &types.TxReceiptResponse{
 		Receipt: receipt,
 	}, nil
