@@ -163,10 +163,14 @@ type BootstrapConf struct {
 	File string
 }
 
+// PrometheusConf specifies the metrics collection for monitoring and performance analysis.
 type PrometheusConf struct {
+	// Enabled specifies if metrics will be collected
 	Enabled bool
+	// Network defines the listen address and port used for the Prometheus server.
 	Network NetworkConf
-	TLS     TLSConf
+	// TLS defines TLS settings for the Prometheus server.
+	TLS TLSConf
 }
 
 // Read reads configurations from the config file and returns the config
