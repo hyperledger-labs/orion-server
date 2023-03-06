@@ -195,7 +195,7 @@ func TestConfigRequestHandler_GetConfig(t *testing.T) {
 			db := tt.dbMockFactory(tt.expectedResponse)
 
 			rr := httptest.NewRecorder()
-			handler := NewConfigRequestHandler(db, logger, nil)
+			handler := NewConfigRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -526,7 +526,7 @@ func TestConfigRequestHandler_SubmitConfig(t *testing.T) {
 				}
 			}
 
-			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, txEnv, txResp, timeout), logger, nil)
+			handler := NewConfigRequestHandler(tt.createMockAndInstrument(t, txEnv, txResp, timeout), logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)
@@ -702,7 +702,7 @@ func TestConfigRequestHandler_GetNodesConfig(t *testing.T) {
 			db := tt.dbMockFactory(tt.expectedResponse)
 
 			rr := httptest.NewRecorder()
-			handler := NewConfigRequestHandler(db, logger, nil)
+			handler := NewConfigRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -878,7 +878,7 @@ func TestConfigRequestHandler_GetLastConfigBlock(t *testing.T) {
 			db := tt.dbMockFactory(tt.expectedResponse)
 
 			rr := httptest.NewRecorder()
-			handler := NewConfigRequestHandler(db, logger, nil)
+			handler := NewConfigRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)
@@ -1207,7 +1207,7 @@ func TestConfigRequestHandler_GetClusterStatus(t *testing.T) {
 			db := tt.dbMockFactory(tt.expectedResponse)
 
 			rr := httptest.NewRecorder()
-			handler := NewConfigRequestHandler(db, logger, nil)
+			handler := NewConfigRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedStatusCode, rr.Code)

@@ -5,7 +5,6 @@ package bcdb
 
 import (
 	"encoding/json"
-	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +20,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/txreorderer"
 	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -32,60 +32,6 @@ import (
 const (
 	commitListenerName = "transactionProcessor"
 )
-
-type transactionProcessorMetrics struct {
-	enabled    bool
-	queueSize  *prometheus.GaugeVec
-	submitTime prometheus.Histogram
-}
-
-var timeBuckets = []float64{
-	math.Inf(-1), 0,
-	1e-9, 1e-8, 1e-7, 1e-6, 1e-5,
-	1e-4, 2.5e-4, 5e-4, 7.5e-4,
-	1e-3, 2.5e-3, 5e-3, 7.5e-3,
-	1e-2, 2.5e-2, 5e-2, 7.5e-2,
-	1e-1, 2.5e-1, 5e-1, 7.5e-1,
-	1, 2.5, 5, 7.5,
-	10, 25, 50, 75,
-	1e2, 1e3, 1e4, 1e5, 1e6,
-	math.Inf(1),
-}
-
-func (s *transactionProcessorMetrics) init(reg *prometheus.Registry) {
-	s.enabled = reg != nil
-	if !s.enabled {
-		return
-	}
-
-	s.queueSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: "transaction_processor",
-		Name:      "queue_size",
-		Help:      "Queue size",
-	}, []string{"type"})
-	s.submitTime = prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace: "transaction_processor",
-		Name:      "submit_time",
-		Help:      "The time taken in seconds to submit a TX",
-		Buckets:   timeBuckets,
-	})
-	reg.MustRegister(
-		s.queueSize,
-		s.submitTime,
-	)
-}
-
-func (s *transactionProcessorMetrics) QueueSize(label string, size int) {
-	if s.enabled {
-		s.queueSize.WithLabelValues(label).Set(float64(size))
-	}
-}
-
-func (s *transactionProcessorMetrics) SubmitTime(startTime time.Time) {
-	if s.enabled {
-		s.submitTime.Observe(time.Since(startTime).Seconds())
-	}
-}
 
 type transactionProcessor struct {
 	nodeID               string
@@ -100,7 +46,7 @@ type transactionProcessor struct {
 	blockStore           *blockstore.Store
 	pendingTxs           *queue.PendingTxs
 	logger               *logger.SugarLogger
-	metrics              transactionProcessorMetrics
+	metrics              *utils.TxProcessingMetrics
 }
 
 type txProcessorConfig struct {
@@ -124,6 +70,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	p.txBatchQueue = queue.New(localConfig.Server.QueueLength.ReorderedTransactionBatch)
 	p.blockOneQueueBarrier = queue.NewOneQueueBarrier(conf.logger)
 	p.pendingTxs = queue.NewPendingTxs(conf.logger)
+	p.metrics = utils.NewTxProcessingMetrics(conf.metricsRegistry)
 
 	p.txReorderer = txreorderer.New(
 		&txreorderer.Config{
@@ -132,6 +79,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			MaxTxCountPerBatch: localConfig.BlockCreation.MaxTransactionCountPerBlock,
 			BatchTimeout:       localConfig.BlockCreation.BlockTimeout,
 			Logger:             conf.logger,
+			Metrics:            p.metrics,
 		},
 	)
 
@@ -155,6 +103,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			DB:                   conf.db,
 			TxValidator:          txValidator,
 			Logger:               conf.logger,
+			Metrics:              p.metrics,
 		},
 	)
 
@@ -255,6 +204,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		PendingTxs:           p.pendingTxs,
 		ConfigValidator:      txValidator.ConfigValidator(),
 		Logger:               conf.logger,
+		Metrics:              p.metrics,
 	}
 	if joinStart {
 		repConfig.JoinBlock = conf.config.JoinBlock
@@ -292,8 +242,6 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 
 	p.blockStore = conf.blockStore
 
-	p.metrics.init(conf.metricsRegistry)
-
 	return p, nil
 }
 
@@ -302,7 +250,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 // a non-zero timeout would be treated as a sync submission. When a timeout
 // occurs with the sync submission, a timeout error will be returned
 func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error) {
-	startTime := time.Now()
+	submitStart := time.Now()
 
 	var txID string
 	switch tx.(type) {
@@ -355,6 +303,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		}
 	}
 
+	enqueueStart := time.Now()
 	if timeout <= 0 {
 		// Enqueue will block until the queue is not full
 		t.txQueue.Enqueue(tx)
@@ -365,6 +314,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 			return nil, &internalerror.TimeoutErr{ErrMsg: "timeout has occurred while inserting the transaction to the queue"}
 		}
 	}
+	t.metrics.Latency("tx-enqueue", enqueueStart)
 	t.logger.Debug("transaction is enqueued for re-ordering")
 	t.metrics.QueueSize("tx", t.txQueue.Size())
 	t.metrics.QueueSize("pending", t.pendingTxs.Size())
@@ -375,7 +325,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
-	t.metrics.SubmitTime(startTime)
+	t.metrics.Latency("tx-submit", submitStart)
 	return &types.TxReceiptResponse{
 		Receipt: receipt,
 	}, nil

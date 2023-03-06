@@ -88,6 +88,10 @@ func (s *Store) moveToNextFileChunk() error {
 	return nil
 }
 
+func (s *Store) GetCurrentOffset() int64 {
+	return s.currentOffset
+}
+
 func (s *Store) appendBlock(number uint64, content []byte) (*BlockLocation, error) {
 	offsetBeforeWrite := s.currentOffset
 

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
@@ -31,6 +32,7 @@ type dataRequestHandler struct {
 	router      *mux.Router
 	txHandler   *txHandler
 	logger      *logger.SugarLogger
+	metrics     *utils.DataRequestHandlingMetrics
 }
 
 // NewDataRequestHandler returns handler capable to serve incoming data requests
@@ -42,7 +44,8 @@ func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger, metricsRegist
 		txHandler: &txHandler{
 			db: db,
 		},
-		logger: logger,
+		logger:  logger,
+		metrics: utils.NewDataRequestHandlingMetrics(metricsRegistry),
 	}
 
 	rangeKeys := []string{
@@ -138,6 +141,8 @@ func (d *dataRequestHandler) dataRangeQuery(response http.ResponseWriter, reques
 }
 
 func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, request *http.Request) {
+	defer d.metrics.Latency("data_tx_handling", time.Now())
+
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
@@ -158,6 +163,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
+	d.metrics.TxSize(len(requestBody))
 
 	if txEnv.Payload == nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest,

@@ -1022,7 +1022,7 @@ func assertTestCase(t *testing.T, tt testCase, responseType interface{}) {
 
 	db := tt.dbMockFactory(tt.expectedResponse)
 	rr := httptest.NewRecorder()
-	handler := NewProvenanceRequestHandler(db, logger, nil)
+	handler := NewProvenanceRequestHandler(db, logger)
 	handler.ServeHTTP(rr, tt.request)
 
 	require.Equal(t, tt.expectedStatusCode, rr.Code)

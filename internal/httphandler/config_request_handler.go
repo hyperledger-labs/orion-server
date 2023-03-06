@@ -15,7 +15,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -30,7 +29,7 @@ type configRequestHandler struct {
 }
 
 // NewConfigRequestHandler return config query and transactions request handler
-func NewConfigRequestHandler(db bcdb.DB, logger *logger.SugarLogger, metricsRegistry *prometheus.Registry) http.Handler {
+func NewConfigRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &configRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db, logger),

@@ -196,7 +196,7 @@ func TestUsersRequestHandler_GetUser(t *testing.T) {
 			require.NotNil(t, req)
 
 			db := tt.dbMockFactory(tt.expectedResponse)
-			handler := NewUsersRequestHandler(db, logger, nil)
+			handler := NewUsersRequestHandler(db, logger)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
@@ -527,7 +527,7 @@ func TestUsersRequestHandler_SubmitUserTx(t *testing.T) {
 			}
 
 			db := tt.createMockAndInstrument(t, txEnv, txResp, timeout)
-			handler := NewUsersRequestHandler(db, logger, nil)
+			handler := NewUsersRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)

@@ -5,6 +5,7 @@ package blockprocessor
 
 import (
 	"sync"
+	"time"
 
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
@@ -13,6 +14,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
@@ -31,6 +33,7 @@ type BlockProcessor struct {
 	stop                 chan struct{}
 	stopped              chan struct{}
 	logger               *logger.SugarLogger
+	metrics              *utils.TxProcessingMetrics
 }
 
 // Config holds the configuration information needed to bootstrap the
@@ -43,6 +46,7 @@ type Config struct {
 	StateTrieStore       mptrie.Store
 	TxValidator          *txvalidation.Validator
 	Logger               *logger.SugarLogger
+	Metrics              *utils.TxProcessingMetrics
 }
 
 // New creates a ValidatorAndCommitter
@@ -57,6 +61,7 @@ func New(conf *Config) *BlockProcessor {
 		stop:                 make(chan struct{}),
 		stopped:              make(chan struct{}),
 		logger:               conf.Logger,
+		metrics:              conf.Metrics,
 	}
 }
 
@@ -141,7 +146,10 @@ func (b *BlockProcessor) Start() {
 }
 
 func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
+	blockProcessingStart := time.Now()
 	b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
+
+	start := time.Now()
 	validationInfo, err := b.validator.ValidateBlock(block)
 	if err != nil {
 		if block.GetHeader().GetBaseHeader().GetNumber() > 1 {
@@ -149,24 +157,33 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 		}
 		return err
 	}
+	b.metrics.Latency("validation", start)
 
+	b.metrics.TxPerBlock(len(validationInfo))
 	block.Header.ValidationInfo = validationInfo
 
+	start = time.Now()
 	if err = b.blockStore.AddSkipListLinks(block); err != nil {
 		panic(err)
 	}
+	b.metrics.Latency("skip_list_construction", start)
 
+	start = time.Now()
 	root, err := mtree.BuildTreeForBlockTx(block)
 	if err != nil {
 		panic(err)
 	}
 	block.Header.TxMerkleTreeRootHash = root.Hash()
+	b.metrics.Latency("merkel_tree_build", start)
 
+	start = time.Now()
 	if err = b.committer.commitBlock(block); err != nil {
 		panic(err)
 	}
+	b.metrics.Latency("block_commit", start)
 
 	b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
+	b.metrics.Latency("block_processing", blockProcessingStart)
 	return err
 }
 

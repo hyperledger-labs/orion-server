@@ -5,6 +5,7 @@ package blockprocessor
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
@@ -12,6 +13,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/mptrie"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/state"
@@ -32,6 +34,7 @@ type committer struct {
 	stateTrieStore  mptrie.Store
 	stateTrie       *mptrie.MPTrie // may be nil when MPTrie disabled
 	logger          *logger.SugarLogger
+	metrics         *utils.TxProcessingMetrics
 }
 
 func newCommitter(conf *Config) *committer {
@@ -41,16 +44,20 @@ func newCommitter(conf *Config) *committer {
 		provenanceStore: conf.ProvenanceStore,
 		stateTrieStore:  conf.StateTrieStore,
 		logger:          conf.Logger,
+		metrics:         conf.Metrics,
 	}
 }
 
 func (c *committer) commitBlock(block *types.Block) error {
 	// Calculate expected changes to world state db and provenance db
+	start := time.Now()
 	dbsUpdates, provenanceData, err := c.constructDBAndProvenanceEntries(block)
 	if err != nil {
 		return errors.WithMessagef(err, "error while constructing database and provenance entries for block %d", block.GetHeader().GetBaseHeader().GetNumber())
 	}
+	c.metrics.Latency("commit_entries_construction", start)
 
+	start = time.Now()
 	// Update state trie with expected world state db changes
 	if !c.stateTrieStore.IsDisabled() { // may be nil when MPTrie disabled
 		if err := c.applyBlockOnStateTrie(dbsUpdates); err != nil {
@@ -64,7 +71,10 @@ func (c *committer) commitBlock(block *types.Block) error {
 	}
 	// Update block with state trie root
 	block.Header.StateMerkleTreeRootHash = stateTrieRootHash
+	c.metrics.Latency("state_trie_update", start)
 
+	start = time.Now()
+	offsetBeforeWrite := c.blockStore.GetCurrentOffset()
 	// Commit block to block store
 	if err := c.commitToBlockStore(block); err != nil {
 		return errors.WithMessagef(
@@ -73,6 +83,8 @@ func (c *committer) commitBlock(block *types.Block) error {
 			block.GetHeader().GetBaseHeader().GetNumber(),
 		)
 	}
+	c.metrics.Latency("block_store_commit", start)
+	c.metrics.BlockSize(c.blockStore.GetCurrentOffset() - offsetBeforeWrite)
 
 	// Commit block to world state db and provenance db
 	if err = c.commitToDBs(dbsUpdates, provenanceData, block); err != nil {
@@ -81,9 +93,11 @@ func (c *committer) commitBlock(block *types.Block) error {
 
 	// Commit state trie changes to trie store
 	if !c.stateTrieStore.IsDisabled() {
+		start = time.Now()
 		if err = c.commitTrie(block.GetHeader().GetBaseHeader().GetNumber()); err != nil {
 			return err
 		}
+		c.metrics.Latency("state_trie_commit", start)
 	}
 
 	return nil
@@ -100,11 +114,19 @@ func (c *committer) commitToBlockStore(block *types.Block) error {
 func (c *committer) commitToDBs(dbsUpdates map[string]*worldstate.DBUpdates, provenanceData []*provenance.TxDataForProvenance, block *types.Block) error {
 	blockNum := block.GetHeader().GetBaseHeader().GetNumber()
 
+	start := time.Now()
 	if err := c.commitToProvenanceStore(blockNum, provenanceData); err != nil {
 		return errors.WithMessagef(err, "error while committing block %d to the block store", blockNum)
 	}
+	c.metrics.Latency("provenance_store_commit", start)
 
-	return c.commitToStateDB(blockNum, dbsUpdates)
+	start = time.Now()
+	if err := c.commitToStateDB(blockNum, dbsUpdates); err != nil {
+		return err
+	}
+	c.metrics.Latency("world_state_commit", start)
+
+	return nil
 }
 
 func (c *committer) commitToProvenanceStore(blockNum uint64, provenanceData []*provenance.TxDataForProvenance) error {
@@ -148,6 +170,7 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 		txsEnvelopes := block.GetDataTxEnvelopes().Envelopes
 
 		for txNum, txValidationInfo := range blockValidationInfo {
+			c.metrics.IncrementTxCount(txValidationInfo.Flag, "data_tx")
 			if txValidationInfo.Flag != types.Flag_VALID {
 				if c.provenanceStore != nil {
 					provenanceData = append(
@@ -183,7 +206,9 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 			block.GetHeader().GetBaseHeader().GetNumber())
 
 	case *types.Block_UserAdministrationTxEnvelope:
-		if blockValidationInfo[userAdminTxIndex].Flag != types.Flag_VALID {
+		flag := blockValidationInfo[userAdminTxIndex].Flag
+		c.metrics.IncrementTxCount(flag, "user_tx")
+		if flag != types.Flag_VALID {
 			var pData []*provenance.TxDataForProvenance
 			if c.provenanceStore != nil {
 				pData = []*provenance.TxDataForProvenance{
@@ -221,7 +246,9 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 			block.GetHeader().GetBaseHeader().GetNumber())
 
 	case *types.Block_DbAdministrationTxEnvelope:
-		if blockValidationInfo[dbAdminTxIndex].Flag != types.Flag_VALID {
+		flag := blockValidationInfo[dbAdminTxIndex].Flag
+		c.metrics.IncrementTxCount(flag, "db_tx")
+		if flag != types.Flag_VALID {
 			return nil, nil, nil
 		}
 
@@ -240,7 +267,9 @@ func (c *committer) constructDBAndProvenanceEntries(block *types.Block) (map[str
 			block.GetHeader().GetBaseHeader().GetNumber())
 
 	case *types.Block_ConfigTxEnvelope:
-		if blockValidationInfo[configTxIndex].Flag != types.Flag_VALID {
+		flag := blockValidationInfo[configTxIndex].Flag
+		c.metrics.IncrementTxCount(flag, "config_tx")
+		if flag != types.Flag_VALID {
 			return nil, []*provenance.TxDataForProvenance{
 				{
 					IsValid: false,

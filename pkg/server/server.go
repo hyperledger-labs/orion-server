@@ -19,6 +19,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -48,14 +49,15 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 		return nil, err
 	}
 
+	// If metricsRegistry is not initialized (nil), then no metrics will be collected
 	var metricsRegistry *prometheus.Registry
 	var metricsServer *http.Server
 	var metricsListen net.Listener
 	if conf.LocalConfig.Prometheus.Enabled {
 		metricsRegistry = prometheus.NewRegistry()
 		metricsRegistry.MustRegister(
-			prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
-			prometheus.NewGoCollector(),
+			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+			collectors.NewGoCollector(),
 		)
 
 		metricsNetConf := conf.LocalConfig.Prometheus.Network
@@ -82,12 +84,12 @@ func New(conf *config.Configurations) (*BCDBHTTPServer, error) {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle(constants.UserEndpoint, httphandler.NewUsersRequestHandler(db, lg, metricsRegistry))
+	mux.Handle(constants.UserEndpoint, httphandler.NewUsersRequestHandler(db, lg))
 	mux.Handle(constants.DataEndpoint, httphandler.NewDataRequestHandler(db, lg, metricsRegistry))
-	mux.Handle(constants.DBEndpoint, httphandler.NewDBRequestHandler(db, lg, metricsRegistry))
-	mux.Handle(constants.ConfigEndpoint, httphandler.NewConfigRequestHandler(db, lg, metricsRegistry))
-	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, lg, metricsRegistry))
-	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, lg, metricsRegistry))
+	mux.Handle(constants.DBEndpoint, httphandler.NewDBRequestHandler(db, lg))
+	mux.Handle(constants.ConfigEndpoint, httphandler.NewConfigRequestHandler(db, lg))
+	mux.Handle(constants.LedgerEndpoint, httphandler.NewLedgerRequestHandler(db, lg))
+	mux.Handle(constants.ProvenanceEndpoint, httphandler.NewProvenanceRequestHandler(db, lg))
 
 	netConf := conf.LocalConfig.Server.Network
 	addr := fmt.Sprintf("%s:%d", netConf.Address, netConf.Port)

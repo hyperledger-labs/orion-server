@@ -191,7 +191,7 @@ func TestDBRequestHandler_DBStatus(t *testing.T) {
 			require.NotNil(t, req)
 
 			db := tt.dbMockFactory(tt.expectedResponse)
-			handler := NewDBRequestHandler(db, logger, nil)
+			handler := NewDBRequestHandler(db, logger)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
@@ -397,7 +397,7 @@ func TestDBRequestHandler_DBIndex(t *testing.T) {
 			require.NotNil(t, req)
 
 			db := tt.dbMockFactory(tt.expectedResponse)
-			handler := NewDBRequestHandler(db, logger, nil)
+			handler := NewDBRequestHandler(db, logger)
 			rr := httptest.NewRecorder()
 
 			handler.ServeHTTP(rr, req)
@@ -712,7 +712,7 @@ func TestDBRequestHandler_DBTransaction(t *testing.T) {
 			}
 
 			db := tt.createMockAndInstrument(t, txEnv, txResp, timeout)
-			handler := NewDBRequestHandler(db, logger, nil)
+			handler := NewDBRequestHandler(db, logger)
 			handler.ServeHTTP(rr, req)
 
 			require.Equal(t, tt.expectedCode, rr.Code)

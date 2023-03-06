@@ -14,7 +14,6 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // provenanceRequestHandler handles query and transaction associated
@@ -28,7 +27,7 @@ type provenanceRequestHandler struct {
 }
 
 // NewProvenanceRequestHandler return config query and transactions request handler
-func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger, metricsRegistry *prometheus.Registry) http.Handler {
+func NewProvenanceRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
 	handler := &provenanceRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db, logger),
