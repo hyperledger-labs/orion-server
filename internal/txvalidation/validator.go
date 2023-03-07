@@ -5,8 +5,10 @@ package txvalidation
 
 import (
 	"sync"
+	"time"
 
 	"github.com/hyperledger-labs/orion-server/internal/identity"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -24,11 +26,13 @@ type Validator struct {
 	dataTxValidator      *dataTxValidator
 	signValidator        *txSigValidator
 	logger               *logger.SugarLogger
+	metrics              *utils.TxProcessingMetrics
 }
 
 type Config struct {
-	DB     worldstate.DB
-	Logger *logger.SugarLogger
+	DB      worldstate.DB
+	Logger  *logger.SugarLogger
+	Metrics *utils.TxProcessingMetrics
 }
 
 // NewValidator creates a new Validator
@@ -70,7 +74,8 @@ func NewValidator(conf *Config) *Validator {
 
 		signValidator: txSigValidator,
 
-		logger: conf.Logger,
+		logger:  conf.Logger,
+		metrics: conf.Metrics,
 	}
 }
 
@@ -86,7 +91,9 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	switch block.Payload.(type) {
 	case *types.Block_DataTxEnvelopes:
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
+		start := time.Now()
 		valInfoArray, usersWithValidSigPerTX, err := v.parallelSigValidation(dataTxEnvs)
+		v.metrics.Latency("sig_validation", start)
 		if err != nil {
 			return nil, err
 		}
