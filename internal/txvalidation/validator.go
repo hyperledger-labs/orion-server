@@ -93,7 +93,7 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
 		start := time.Now()
 		valInfoArray, usersWithValidSigPerTX, err := v.parallelSigValidation(dataTxEnvs)
-		v.metrics.Latency("sig_validation", start)
+		v.metrics.Latency("sig-validation", start)
 		if err != nil {
 			return nil, err
 		}

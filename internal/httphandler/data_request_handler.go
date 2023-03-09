@@ -141,7 +141,7 @@ func (d *dataRequestHandler) dataRangeQuery(response http.ResponseWriter, reques
 }
 
 func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, request *http.Request) {
-	defer d.metrics.Latency("data_tx_handling", time.Now())
+	defer d.metrics.Latency("data-tx-handling", time.Now())
 
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {

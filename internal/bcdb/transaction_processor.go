@@ -89,8 +89,9 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	// it (or one of its sub-components), e.g. the config-validator is used by the block-replicator.
 	txValidator := txvalidation.NewValidator(
 		&txvalidation.Config{
-			DB:     conf.db,
-			Logger: conf.logger,
+			DB:      conf.db,
+			Logger:  conf.logger,
+			Metrics: p.metrics,
 		},
 	)
 

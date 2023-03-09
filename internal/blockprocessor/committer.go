@@ -55,7 +55,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 	if err != nil {
 		return errors.WithMessagef(err, "error while constructing database and provenance entries for block %d", block.GetHeader().GetBaseHeader().GetNumber())
 	}
-	c.metrics.Latency("commit_entries_construction", start)
+	c.metrics.Latency("commit-entries-construction", start)
 
 	start = time.Now()
 	// Update state trie with expected world state db changes
@@ -71,7 +71,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 	}
 	// Update block with state trie root
 	block.Header.StateMerkleTreeRootHash = stateTrieRootHash
-	c.metrics.Latency("state_trie_update", start)
+	c.metrics.Latency("state-trie-update", start)
 
 	start = time.Now()
 	offsetBeforeWrite := c.blockStore.GetCurrentOffset()
@@ -83,7 +83,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 			block.GetHeader().GetBaseHeader().GetNumber(),
 		)
 	}
-	c.metrics.Latency("block_store_commit", start)
+	c.metrics.Latency("block-store-commit", start)
 	c.metrics.BlockSize(c.blockStore.GetCurrentOffset() - offsetBeforeWrite)
 
 	// Commit block to world state db and provenance db
@@ -97,7 +97,7 @@ func (c *committer) commitBlock(block *types.Block) error {
 		if err = c.commitTrie(block.GetHeader().GetBaseHeader().GetNumber()); err != nil {
 			return err
 		}
-		c.metrics.Latency("state_trie_commit", start)
+		c.metrics.Latency("state-trie-commit", start)
 	}
 
 	return nil
@@ -118,13 +118,13 @@ func (c *committer) commitToDBs(dbsUpdates map[string]*worldstate.DBUpdates, pro
 	if err := c.commitToProvenanceStore(blockNum, provenanceData); err != nil {
 		return errors.WithMessagef(err, "error while committing block %d to the block store", blockNum)
 	}
-	c.metrics.Latency("provenance_store_commit", start)
+	c.metrics.Latency("provenance-store-commit", start)
 
 	start = time.Now()
 	if err := c.commitToStateDB(blockNum, dbsUpdates); err != nil {
 		return err
 	}
-	c.metrics.Latency("world_state_commit", start)
+	c.metrics.Latency("world-state-commit", start)
 
 	return nil
 }

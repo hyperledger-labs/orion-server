@@ -166,7 +166,7 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 	if err = b.blockStore.AddSkipListLinks(block); err != nil {
 		panic(err)
 	}
-	b.metrics.Latency("skip_list_construction", start)
+	b.metrics.Latency("skip-list-construction", start)
 
 	start = time.Now()
 	root, err := mtree.BuildTreeForBlockTx(block)
@@ -174,16 +174,16 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 		panic(err)
 	}
 	block.Header.TxMerkleTreeRootHash = root.Hash()
-	b.metrics.Latency("merkel_tree_build", start)
+	b.metrics.Latency("merkel-tree-build", start)
 
 	start = time.Now()
 	if err = b.committer.commitBlock(block); err != nil {
 		panic(err)
 	}
-	b.metrics.Latency("block_commit", start)
+	b.metrics.Latency("block-commit", start)
 
 	b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
-	b.metrics.Latency("block_processing", blockProcessingStart)
+	b.metrics.Latency("block-processing", blockProcessingStart)
 	return err
 }
 
