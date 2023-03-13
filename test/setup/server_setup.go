@@ -44,6 +44,7 @@ type Server struct {
 	address              string // For testing, the node-host and peer-host address are the same.
 	nodePort             uint32
 	peerPort             uint32
+	prometheusPort       uint32
 	configDir            string
 	configFilePath       string
 	bootstrapFilePath    string
@@ -79,6 +80,7 @@ func NewServer(id uint64, clusterBaseDir string, baseNodePort, basePeerPort uint
 		address:             "127.0.0.1",
 		nodePort:            baseNodePort + uint32(id),
 		peerPort:            basePeerPort + uint32(id),
+		prometheusPort:      basePeerPort + uint32(id) + 2_000,
 		adminID:             "admin",
 		configDir:           filepath.Join(clusterBaseDir, "node-"+sNumber),
 		configFilePath:      filepath.Join(clusterBaseDir, "node-"+sNumber, "config.yml"),
@@ -1396,6 +1398,24 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 			Method: s.method,
 			File:   s.bootstrapFilePath,
 		},
+		Prometheus: config.PrometheusConf{
+			Enabled: conf.Prometheus.Enabled,
+			Network: config.NetworkConf{
+				Address: s.address,
+				Port:    s.prometheusPort,
+			},
+			TLS: config.TLSConf{
+				Enabled:               conf.Replication.TLS.Enabled,
+				ClientAuthRequired:    false,
+				ServerCertificatePath: s.serverCertPath,
+				ServerKeyPath:         s.serverKeyPath,
+				ClientCertificatePath: s.serverCertPath,
+				ClientKeyPath:         s.serverKeyPath,
+				CaConfig: config.CAConfiguration{
+					RootCACertsPath: []string{s.serverRootCACertPath},
+				},
+			},
+		},
 	}
 
 	emptyBlockCreationConf := config.BlockCreationConf{}
@@ -1500,6 +1520,13 @@ func (s *Server) URL() string {
 	defer s.mu.RUnlock()
 
 	return "http://" + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10)
+}
+
+func (s *Server) PrometheusURL() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	return "http://" + s.address + ":" + strconv.FormatInt(int64(s.prometheusPort), 10)
 }
 
 func (s *Server) ID() string {

@@ -6,6 +6,8 @@ package datatxtest
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"sync"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/server/testutils"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/hyperledger-labs/orion-server/test/setup"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,6 +55,7 @@ func TestDataTx(t *testing.T) {
 		CmdTimeout:          10 * time.Second,
 		BaseNodePort:        nPort,
 		BasePeerPort:        pPort,
+		PrometheusEnabled:   true,
 	}
 	c, err := setup.NewCluster(setupConfig)
 	require.NoError(t, err)
@@ -671,6 +675,17 @@ func TestDataTx(t *testing.T) {
 			Signatures: map[string][]byte{"alice": testutils.SignatureFromTx(t, aliceSigner, dataTx)},
 		})
 		require.EqualError(t, err, "TxValidation: Flag: INVALID_NO_PERMISSION, Reason: not all required users in [alice,bob] have signed the transaction to write/delete key [key4] present in the database [db2]")
+	})
+
+	t.Run("metrics", func(t *testing.T) {
+		client := http.Client{}
+		resp, err := client.Get(s.PrometheusURL())
+		require.NoError(t, err)
+		assert.Equal(t, 200, resp.StatusCode)
+
+		responseBytes, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.Contains(t, string(responseBytes), "tx_processing")
 	})
 }
 

@@ -51,6 +51,7 @@ type Config struct {
 	ServersQueryLimit        uint64
 	DisableProvenanceServers []int
 	DisableStateMPTrie       bool
+	PrometheusEnabled        bool
 }
 
 // NewCluster creates a new cluster environment for the blockchain database
@@ -114,6 +115,9 @@ func NewCluster(conf *Config) (*Cluster, error) {
 			TLS: config.TLSConf{
 				Enabled: conf.ClusterTLSEnabled,
 			},
+		},
+		Prometheus: config.PrometheusConf{
+			Enabled: conf.PrometheusEnabled,
 		},
 	}
 	if conf.BlockCreationOverride != nil {
