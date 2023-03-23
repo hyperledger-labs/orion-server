@@ -1035,3 +1035,84 @@ func TestLedgerAsyncDataMPTrieDisabled(t *testing.T) {
 		}
 	})
 }
+
+// Scenario:
+// HTTP GET "/ledger/tx/content/{blockId}?idx={idx}" gets the tx envelope with index idx inside block blockId
+// HTTP GET "/ledger/tx/content/{blockId}?idx={idx}" with invalid query params
+func TestLedgerTxContent(t *testing.T) {
+	dir := t.TempDir()
+
+	nPort, pPort := getPorts(1)
+	setupConfig := &setup.Config{
+		NumberOfServers:     1,
+		TestDirAbsolutePath: dir,
+		BDBBinaryPath:       "../../bin/bdb",
+		CmdTimeout:          10 * time.Second,
+		BaseNodePort:        nPort,
+		BasePeerPort:        pPort,
+	}
+	c, err := setup.NewCluster(setupConfig)
+	require.NoError(t, err)
+	defer c.ShutdownAndCleanup()
+
+	require.NoError(t, c.Start())
+	leaderIndex := -1
+	require.Eventually(t, func() bool {
+		leaderIndex = c.AgreedLeader(t, 0)
+		return leaderIndex >= 0
+	}, 30*time.Second, 100*time.Millisecond)
+
+	s := c.Servers[leaderIndex]
+
+	// add 2000 data blocks, one tx per block
+	for i := 1; i <= 2000; i++ {
+		_, rcpt, _, err := s.WriteDataTx(t, worldstate.DefaultDBName, fmt.Sprintf("key-%d", 1), []byte{uint8(1), uint8(1)})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), rcpt.GetTxIndex())
+	}
+
+	// get data blocks from block number 2000 to 1500 in a reverse order and save for future comparison
+	var txContents []*types.GetTxResponseEnvelope
+	for n := 2001; n >= 1501; n-- {
+		txContent, err := s.QueryTxContent(t, uint64(n), 0, "admin")
+		txContents = append(txContents, txContent)
+		require.NoError(t, err)
+		require.NotNil(t, txContent)
+		rsp := txContent.GetResponse()
+		require.NotNil(t, rsp)
+		require.Equal(t, uint64(n), rsp.GetVersion().GetBlockNum())
+		require.Equal(t, uint64(0), txContent.GetResponse().GetVersion().GetTxNum())
+	}
+
+	// perform data transactions to add 500 more blocks and
+	for i := 2001; i <= 2500; i++ {
+		_, rcpt, _, err := s.WriteDataTx(t, worldstate.DefaultDBName, fmt.Sprintf("key-%d", i), []byte{uint8(i), uint8(i)})
+		require.NoError(t, err)
+		require.Equal(t, uint64(0), rcpt.GetTxIndex())
+	}
+
+	// get data blocks from block number 2000 to 1500 again and compare txs
+	for n := 2001; n >= 1501; n-- {
+		txContent, err := s.QueryTxContent(t, uint64(n), 0, "admin")
+		require.NoError(t, err)
+		require.NotNil(t, txContent)
+		require.True(t, proto.Equal(txContent.GetResponse(), txContents[2001-n].GetResponse()))
+	}
+
+	// invalid cases
+	t.Run("invalid: index out of range", func(t *testing.T) {
+		respEnv, err := s.QueryTxContent(t, 2, 1, "admin")
+		require.EqualError(t, err, "error while processing 'GET /ledger/tx/content/2?idx=1' because transaction index out of range: 1")
+		require.Nil(t, respEnv)
+	})
+
+	t.Run("invalid: block out of range", func(t *testing.T) {
+		respEnv, err := s.QueryTxContent(t, 3000, 0, "admin")
+		require.EqualError(t, err, "error while processing 'GET /ledger/tx/content/3000?idx=0' because requested block number [3000] cannot be greater than the last committed block number [2501]")
+		require.Nil(t, respEnv)
+
+		respEnv, err = s.QueryTxContent(t, 0, 0, "admin")
+		require.EqualError(t, err, "error while processing 'GET /ledger/tx/content/0?idx=0' because block not found: 0")
+		require.Nil(t, respEnv)
+	})
+}
