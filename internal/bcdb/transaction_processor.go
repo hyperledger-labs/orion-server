@@ -251,7 +251,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 // a non-zero timeout would be treated as a sync submission. When a timeout
 // occurs with the sync submission, a timeout error will be returned
 func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error) {
-	submitStart := time.Now()
+	submitTimer := t.metrics.NewLatencyTimer("tx-submit")
 
 	var txID string
 	switch tx.(type) {
@@ -304,7 +304,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		}
 	}
 
-	enqueueStart := time.Now()
+	enqueueTimer := t.metrics.NewLatencyTimer("tx-enqueue")
 	if timeout <= 0 {
 		// Enqueue will block until the queue is not full
 		t.txQueue.Enqueue(tx)
@@ -315,7 +315,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 			return nil, &internalerror.TimeoutErr{ErrMsg: "timeout has occurred while inserting the transaction to the queue"}
 		}
 	}
-	t.metrics.Latency("tx-enqueue", enqueueStart)
+	enqueueTimer.Observe()
 	t.logger.Debug("transaction is enqueued for re-ordering")
 	t.metrics.QueueSize("tx", t.txQueue.Size())
 	t.metrics.QueueSize("pending", t.pendingTxs.Size())
@@ -326,7 +326,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
-	t.metrics.Latency("tx-submit", submitStart)
+	submitTimer.Observe()
 	return &types.TxReceiptResponse{
 		Receipt: receipt,
 	}, nil

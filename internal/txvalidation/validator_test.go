@@ -9,6 +9,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/identity"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
@@ -59,8 +60,9 @@ func newValidatorTestEnv(t *testing.T) *validatorTestEnv {
 		path: path,
 		validator: NewValidator(
 			&Config{
-				DB:     db,
-				Logger: logger,
+				DB:      db,
+				Logger:  logger,
+				Metrics: utils.NewTxProcessingMetrics(nil),
 			},
 		),
 		cleanup: cleanup,

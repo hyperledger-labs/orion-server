@@ -6,11 +6,10 @@ package httphandler
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/hyperledger-labs/orion-server/internal/bcdb"
@@ -141,7 +140,7 @@ func (d *dataRequestHandler) dataRangeQuery(response http.ResponseWriter, reques
 }
 
 func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, request *http.Request) {
-	defer d.metrics.Latency("data-tx-handling", time.Now())
+	defer d.metrics.NewLatencyTimer("data-tx-handling").Observe()
 
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
@@ -152,7 +151,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	// requestData := json.NewDecoder(request.Body)
 	// requestData.DisallowUnknownFields()
 
-	requestBody, err := ioutil.ReadAll(request.Body)
+	requestBody, err := io.ReadAll(request.Body)
 	if err != nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: err.Error()})

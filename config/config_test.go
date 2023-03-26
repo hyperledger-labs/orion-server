@@ -88,8 +88,6 @@ var expectedLocalConfig = &LocalConfiguration{
 			ClientAuthRequired:    false,
 			ServerCertificatePath: "./testdata/cluster/server.cert",
 			ServerKeyPath:         "./testdata/cluster/server.key",
-			ClientCertificatePath: "./testdata/cluster/client.cert",
-			ClientKeyPath:         "./testdata/cluster/client.key",
 			CaConfig: CAConfiguration{
 				RootCACertsPath:         []string{"./testdata/cluster/rootca.cert"},
 				IntermediateCACertsPath: []string{"./testdata/cluster/midca.cert"},

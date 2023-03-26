@@ -27,10 +27,10 @@ const (
 	nonDataTxIndex = 0
 )
 
-// Commit commits the block to the block store
-func (s *Store) Commit(block *types.Block) error {
+// Commit commits the block to the block store and returns the size of the encoded block in bytes
+func (s *Store) Commit(block *types.Block) (int, error) {
 	if block == nil {
-		return errors.New("block cannot be nil")
+		return 0, errors.New("block cannot be nil")
 	}
 
 	s.mu.Lock()
@@ -38,7 +38,7 @@ func (s *Store) Commit(block *types.Block) error {
 
 	blockNumber := block.GetHeader().GetBaseHeader().GetNumber()
 	if blockNumber != s.lastCommittedBlockNum+1 {
-		return errors.Errorf(
+		return 0, errors.Errorf(
 			"expected block number [%d] but received [%d]",
 			s.lastCommittedBlockNum+1,
 			blockNumber,
@@ -47,7 +47,7 @@ func (s *Store) Commit(block *types.Block) error {
 
 	b, err := proto.Marshal(block)
 	if err != nil {
-		return errors.Wrapf(err, "error while marshaling block, %v", block)
+		return 0, errors.Wrapf(err, "error while marshaling block, %v", block)
 	}
 
 	encodedBlock := snappy.Encode(nil, b)
@@ -56,16 +56,16 @@ func (s *Store) Commit(block *types.Block) error {
 
 	if !s.canCurrentFileChunkHold(len(content)) {
 		if err := s.moveToNextFileChunk(); err != nil {
-			return err
+			return 0, err
 		}
 	}
 
 	blockLocation, err := s.appendBlock(blockNumber, content)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return s.storeMetadataInDB(block, blockLocation)
+	return len(content), s.storeMetadataInDB(block, blockLocation)
 }
 
 func (s *Store) canCurrentFileChunkHold(toBeAddedBytesLength int) bool {
@@ -86,10 +86,6 @@ func (s *Store) moveToNextFileChunk() error {
 	s.currentOffset = 0
 
 	return nil
-}
-
-func (s *Store) GetCurrentOffset() int64 {
-	return s.currentOffset
 }
 
 func (s *Store) appendBlock(number uint64, content []byte) (*BlockLocation, error) {

@@ -153,7 +153,8 @@ func TestCommitAndQuery(t *testing.T) {
 			b := createSampleUserTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash)
 
 			require.NoError(t, env.s.AddSkipListLinks(b))
-			require.NoError(t, env.s.Commit(b))
+			_, err := env.s.Commit(b)
+			require.NoError(t, err)
 
 			height, err := env.s.Height()
 			require.NoError(t, err)
@@ -196,7 +197,8 @@ func TestCommitAndQuery(t *testing.T) {
 		env := newTestEnv(t)
 		defer env.cleanup(true)
 
-		require.EqualError(t, env.s.Commit(nil), "block cannot be nil")
+		_, err := env.s.Commit(nil)
+		require.EqualError(t, err, "block cannot be nil")
 
 		b := &types.Block{
 			Header: &types.BlockHeader{
@@ -205,7 +207,8 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		require.EqualError(t, env.s.Commit(b), "expected block number [1] but received [10]")
+		_, err = env.s.Commit(b)
+		require.EqualError(t, err, "expected block number [1] but received [10]")
 	})
 
 	t.Run("requested block is out of range", func(t *testing.T) {
@@ -245,7 +248,8 @@ func TestCommitAndQuery(t *testing.T) {
 				},
 			},
 		}
-		require.NoError(t, env.s.Commit(b))
+		_, err = env.s.Commit(b)
+		require.NoError(t, err)
 
 		block, err = env.s.Get(10)
 		require.EqualError(t, err, "requested block number [10] cannot be greater than the last committed block number [1]")
@@ -401,7 +405,8 @@ func TestTxValidationInfo(t *testing.T) {
 				env := newTestEnv(t)
 				defer env.cleanup(true)
 
-				require.NoError(t, env.s.Commit(tt.block))
+				_, err := env.s.Commit(tt.block)
+				require.NoError(t, err)
 
 				for index, txID := range tt.txIDs {
 					exist, err := env.s.DoesTxIDExist(txID)
@@ -452,7 +457,8 @@ func TestGetAugmentedHeader(t *testing.T) {
 
 		for blockNumber := uint64(1); blockNumber < 10; blockNumber++ {
 			b := createSampleDataTxBlock(blockNumber, prevBlockBaseHash, prevBlockHash, 10)
-			require.NoError(t, env.s.Commit(b))
+			_, err := env.s.Commit(b)
+			require.NoError(t, err)
 
 			height, err := env.s.Height()
 			require.NoError(t, err)

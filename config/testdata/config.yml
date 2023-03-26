@@ -163,10 +163,6 @@ prometheus:
     serverCertificatePath: ./testdata/cluster/server.cert
     # Private key for TLS server
     serverKeyPath: ./testdata/cluster/server.key
-    # X.509 certificate used for creating TLS client connections.
-    clientCertificatePath: ./testdata/cluster/client.cert
-    # Private key used for creating TLS client connections.
-    clientKeyPath: ./testdata/cluster/client.key
     # cluster.tls.caConfig defines the paths to the x509 certificates
     # of the root and intermediate certificate authorities that issued
     # all the certificates used for intra-cluster communication.

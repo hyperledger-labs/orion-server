@@ -5,7 +5,6 @@ package txvalidation
 
 import (
 	"sync"
-	"time"
 
 	"github.com/hyperledger-labs/orion-server/internal/identity"
 	"github.com/hyperledger-labs/orion-server/internal/utils"
@@ -91,9 +90,9 @@ func (v *Validator) ValidateBlock(block *types.Block) ([]*types.ValidationInfo, 
 	switch block.Payload.(type) {
 	case *types.Block_DataTxEnvelopes:
 		dataTxEnvs := block.GetDataTxEnvelopes().Envelopes
-		start := time.Now()
+		timer := v.metrics.NewLatencyTimer("sig-validation")
 		valInfoArray, usersWithValidSigPerTX, err := v.parallelSigValidation(dataTxEnvs)
-		v.metrics.Latency("sig-validation", start)
+		timer.Observe()
 		if err != nil {
 			return nil, err
 		}

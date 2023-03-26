@@ -14,6 +14,7 @@ import (
 	mptrieStore "github.com/hyperledger-labs/orion-server/internal/mptrie/store"
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/stateindex"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -105,6 +106,7 @@ func newCommitterTestEnv(t *testing.T) *committerTestEnv {
 		ProvenanceStore: provenanceStore,
 		StateTrieStore:  mptrieStore,
 		Logger:          logger,
+		Metrics:         utils.NewTxProcessingMetrics(nil),
 	}
 	env := &committerTestEnv{
 		db:              db,
@@ -299,7 +301,8 @@ func TestBlockStoreCommitter(t *testing.T) {
 
 		for blockNumber := uint64(1); blockNumber <= 100; blockNumber++ {
 			block := getSampleBlock(blockNumber)
-			require.NoError(t, env.committer.commitToBlockStore(block))
+			_, err := env.committer.commitToBlockStore(block)
+			require.NoError(t, err)
 			expectedBlocks = append(expectedBlocks, block)
 		}
 
@@ -321,7 +324,7 @@ func TestBlockStoreCommitter(t *testing.T) {
 		defer env.cleanup()
 
 		block := getSampleBlock(10)
-		err := env.committer.commitToBlockStore(block)
+		_, err := env.committer.commitToBlockStore(block)
 		require.EqualError(t, err, "failed to commit block 10 to block store: expected block number [1] but received [10]")
 	})
 }

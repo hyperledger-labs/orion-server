@@ -185,7 +185,8 @@ func TestOpenStore(t *testing.T) {
 				},
 			}
 
-			require.NoError(t, s.Commit(b))
+			_, err = s.Commit(b)
+			require.NoError(t, err)
 		}
 
 		fileChunkNum := s.currentChunkNum
@@ -276,7 +277,7 @@ func TestRecovery(t *testing.T) {
 
 		block1 := createSampleUserTxBlock(1, nil, nil)
 		require.NoError(t, env.s.AddSkipListLinks(block1))
-		err := env.s.Commit(block1)
+		_, err := env.s.Commit(block1)
 		require.NoError(t, err)
 
 		block1BaseHeaderHash, err := env.s.GetBaseHeaderHash(1)
@@ -315,7 +316,7 @@ func TestRecovery(t *testing.T) {
 
 		block1 := createSampleUserTxBlock(1, nil, nil)
 		require.NoError(t, env.s.AddSkipListLinks(block1))
-		err := env.s.Commit(block1)
+		_, err := env.s.Commit(block1)
 		require.NoError(t, err)
 		block1Offset := env.s.currentOffset
 
@@ -367,7 +368,8 @@ func TestRecovery(t *testing.T) {
 				b := createSampleUserTxBlock(blockNumber, preBlockBaseHash, preBlockHash)
 
 				require.NoError(t, s.AddSkipListLinks(b))
-				require.NoError(t, s.Commit(b))
+				_, err := s.Commit(b)
+				require.NoError(t, err)
 
 				height, err := s.Height()
 				require.NoError(t, err)
@@ -538,7 +540,8 @@ func TestRecovery(t *testing.T) {
 
 				block := createSampleUserTxBlock(1, nil, nil)
 				require.NoError(t, env.s.AddSkipListLinks(block))
-				require.NoError(t, env.s.Commit(block))
+				_, err := env.s.Commit(block)
+				require.NoError(t, err)
 
 				require.NoError(t, env.s.moveToNextFileChunk())
 				if !tt.empty {

@@ -5,7 +5,6 @@ package blockprocessor
 
 import (
 	"sync"
-	"time"
 
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
@@ -146,10 +145,10 @@ func (b *BlockProcessor) Start() {
 }
 
 func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
-	blockProcessingStart := time.Now()
+	blockProcessingTimer := b.metrics.NewLatencyTimer("block-processing")
 	b.logger.Debugf("validating and committing block %d", block.GetHeader().GetBaseHeader().GetNumber())
 
-	start := time.Now()
+	timer := b.metrics.NewLatencyTimer("validation")
 	validationInfo, err := b.validator.ValidateBlock(block)
 	if err != nil {
 		if block.GetHeader().GetBaseHeader().GetNumber() > 1 {
@@ -157,33 +156,33 @@ func (b *BlockProcessor) validateAndCommit(block *types.Block) error {
 		}
 		return err
 	}
-	b.metrics.Latency("validation", start)
+	timer.Observe()
 
 	b.metrics.TxPerBlock(len(validationInfo))
 	block.Header.ValidationInfo = validationInfo
 
-	start = time.Now()
+	timer = b.metrics.NewLatencyTimer("skip-list-construction")
 	if err = b.blockStore.AddSkipListLinks(block); err != nil {
 		panic(err)
 	}
-	b.metrics.Latency("skip-list-construction", start)
+	timer.Observe()
 
-	start = time.Now()
+	timer = b.metrics.NewLatencyTimer("merkel-tree-build")
 	root, err := mtree.BuildTreeForBlockTx(block)
 	if err != nil {
 		panic(err)
 	}
 	block.Header.TxMerkleTreeRootHash = root.Hash()
-	b.metrics.Latency("merkel-tree-build", start)
+	timer.Observe()
 
-	start = time.Now()
+	timer = b.metrics.NewLatencyTimer("block-commit")
 	if err = b.committer.commitBlock(block); err != nil {
 		panic(err)
 	}
-	b.metrics.Latency("block-commit", start)
+	timer.Observe()
 
 	b.logger.Debugf("validated and committed block %d\n", block.GetHeader().GetBaseHeader().GetNumber())
-	b.metrics.Latency("block-processing", blockProcessingStart)
+	blockProcessingTimer.Observe()
 	return err
 }
 

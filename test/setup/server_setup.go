@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hyperledger-labs/orion-server/config"
 	"github.com/hyperledger-labs/orion-server/internal/fileops"
+	"github.com/hyperledger-labs/orion-server/pkg/certificateauthority"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
@@ -65,6 +66,7 @@ type Server struct {
 	clientCheckRedirect  func(req *http.Request, via []*http.Request) error
 	logger               *logger.SugarLogger
 	mu                   sync.RWMutex
+	LocalConfig          *config.LocalConfiguration
 }
 
 // NewServer creates a new blockchain database server
@@ -1341,7 +1343,7 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	localCofig := &config.LocalConfiguration{
+	s.LocalConfig = &config.LocalConfiguration{
 		Server: config.ServerConf{
 			Identity: config.IdentityConf{
 				ID:              s.serverID,
@@ -1409,8 +1411,6 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 				ClientAuthRequired:    false,
 				ServerCertificatePath: s.serverCertPath,
 				ServerKeyPath:         s.serverKeyPath,
-				ClientCertificatePath: s.serverCertPath,
-				ClientKeyPath:         s.serverKeyPath,
 				CaConfig: config.CAConfiguration{
 					RootCACertsPath: []string{s.serverRootCACertPath},
 				},
@@ -1420,16 +1420,16 @@ func (s *Server) CreateConfigFile(conf *config.LocalConfiguration) error {
 
 	emptyBlockCreationConf := config.BlockCreationConf{}
 	if conf.BlockCreation != emptyBlockCreationConf {
-		localCofig.BlockCreation = conf.BlockCreation
+		s.LocalConfig.BlockCreation = conf.BlockCreation
 	}
 	if conf.Replication.TLS.ServerCertificatePath != "" && conf.Replication.TLS.ServerKeyPath != "" {
-		localCofig.Replication.TLS.ServerKeyPath = conf.Replication.TLS.ServerKeyPath
-		localCofig.Replication.TLS.ServerCertificatePath = conf.Replication.TLS.ServerCertificatePath
-		localCofig.Replication.TLS.ClientKeyPath = conf.Replication.TLS.ServerKeyPath
-		localCofig.Replication.TLS.ClientCertificatePath = conf.Replication.TLS.ServerCertificatePath
-		localCofig.Replication.TLS.CaConfig = conf.Replication.TLS.CaConfig
+		s.LocalConfig.Replication.TLS.ServerKeyPath = conf.Replication.TLS.ServerKeyPath
+		s.LocalConfig.Replication.TLS.ServerCertificatePath = conf.Replication.TLS.ServerCertificatePath
+		s.LocalConfig.Replication.TLS.ClientKeyPath = conf.Replication.TLS.ServerKeyPath
+		s.LocalConfig.Replication.TLS.ClientCertificatePath = conf.Replication.TLS.ServerCertificatePath
+		s.LocalConfig.Replication.TLS.CaConfig = conf.Replication.TLS.CaConfig
 	}
-	if err := WriteLocalConfig(localCofig, s.configFilePath); err != nil {
+	if err := WriteLocalConfig(s.LocalConfig, s.configFilePath); err != nil {
 		return err
 	}
 
@@ -1522,11 +1522,15 @@ func (s *Server) URL() string {
 	return "http://" + s.address + ":" + strconv.FormatInt(int64(s.nodePort), 10)
 }
 
-func (s *Server) PrometheusURL() string {
+func (s *Server) PrometheusURL(tls bool) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	return "http://" + s.address + ":" + strconv.FormatInt(int64(s.prometheusPort), 10)
+	protocol := "http://"
+	if tls {
+		protocol = "https://"
+	}
+	return protocol + s.address + ":" + strconv.FormatInt(int64(s.prometheusPort), 10)
 }
 
 func (s *Server) ID() string {
@@ -1543,6 +1547,24 @@ func (s *Server) NewRESTClient(checkRedirect func(req *http.Request, via []*http
 	defer s.mu.RUnlock()
 
 	return mock.NewRESTClient(s.URL(), checkRedirect, nil)
+}
+
+func (s *Server) NewTLSConfig(t *testing.T) *tls.Config {
+	if !s.LocalConfig.Replication.TLS.Enabled {
+		return nil
+	}
+
+	caCerts, err := certificateauthority.LoadCAConfig(&s.LocalConfig.Replication.TLS.CaConfig)
+	require.NoError(t, err)
+	caColl, err := certificateauthority.NewCACertCollection(caCerts.GetRoots(), caCerts.GetIntermediates())
+	require.NoError(t, err)
+	require.NoError(t, caColl.VerifyCollection())
+
+	return &tls.Config{
+		RootCAs:    caColl.GetCertPool(),
+		ClientCAs:  caColl.GetCertPool(),
+		MinVersion: tls.VersionTLS12,
+	}
 }
 
 // testFailure is in lieu of *testing.T for gomega's types.GomegaTestingT

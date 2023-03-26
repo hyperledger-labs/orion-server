@@ -5,7 +5,6 @@ package blockprocessor
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger-labs/orion-server/internal/blockstore"
@@ -50,14 +49,14 @@ func newCommitter(conf *Config) *committer {
 
 func (c *committer) commitBlock(block *types.Block) error {
 	// Calculate expected changes to world state db and provenance db
-	start := time.Now()
+	timer := c.metrics.NewLatencyTimer("commit-entries-construction")
 	dbsUpdates, provenanceData, err := c.constructDBAndProvenanceEntries(block)
 	if err != nil {
 		return errors.WithMessagef(err, "error while constructing database and provenance entries for block %d", block.GetHeader().GetBaseHeader().GetNumber())
 	}
-	c.metrics.Latency("commit-entries-construction", start)
+	timer.Observe()
 
-	start = time.Now()
+	timer = c.metrics.NewLatencyTimer("state-trie-update")
 	// Update state trie with expected world state db changes
 	if !c.stateTrieStore.IsDisabled() { // may be nil when MPTrie disabled
 		if err := c.applyBlockOnStateTrie(dbsUpdates); err != nil {
@@ -71,20 +70,20 @@ func (c *committer) commitBlock(block *types.Block) error {
 	}
 	// Update block with state trie root
 	block.Header.StateMerkleTreeRootHash = stateTrieRootHash
-	c.metrics.Latency("state-trie-update", start)
+	timer.Observe()
 
-	start = time.Now()
-	offsetBeforeWrite := c.blockStore.GetCurrentOffset()
+	timer = c.metrics.NewLatencyTimer("block-store-commit")
 	// Commit block to block store
-	if err := c.commitToBlockStore(block); err != nil {
+	n, err := c.commitToBlockStore(block)
+	if err != nil {
 		return errors.WithMessagef(
 			err,
 			"error while committing block %d to the block store",
 			block.GetHeader().GetBaseHeader().GetNumber(),
 		)
 	}
-	c.metrics.Latency("block-store-commit", start)
-	c.metrics.BlockSize(c.blockStore.GetCurrentOffset() - offsetBeforeWrite)
+	timer.Observe()
+	c.metrics.BlockSize(int64(n))
 
 	// Commit block to world state db and provenance db
 	if err = c.commitToDBs(dbsUpdates, provenanceData, block); err != nil {
@@ -93,38 +92,39 @@ func (c *committer) commitBlock(block *types.Block) error {
 
 	// Commit state trie changes to trie store
 	if !c.stateTrieStore.IsDisabled() {
-		start = time.Now()
+		timer = c.metrics.NewLatencyTimer("state-trie-commit")
 		if err = c.commitTrie(block.GetHeader().GetBaseHeader().GetNumber()); err != nil {
 			return err
 		}
-		c.metrics.Latency("state-trie-commit", start)
+		timer.Observe()
 	}
 
 	return nil
 }
 
-func (c *committer) commitToBlockStore(block *types.Block) error {
-	if err := c.blockStore.Commit(block); err != nil {
-		return errors.WithMessagef(err, "failed to commit block %d to block store", block.Header.BaseHeader.Number)
+func (c *committer) commitToBlockStore(block *types.Block) (int, error) {
+	n, err := c.blockStore.Commit(block)
+	if err != nil {
+		return n, errors.WithMessagef(err, "failed to commit block %d to block store", block.Header.BaseHeader.Number)
 	}
 
-	return nil
+	return n, nil
 }
 
 func (c *committer) commitToDBs(dbsUpdates map[string]*worldstate.DBUpdates, provenanceData []*provenance.TxDataForProvenance, block *types.Block) error {
 	blockNum := block.GetHeader().GetBaseHeader().GetNumber()
 
-	start := time.Now()
+	timer := c.metrics.NewLatencyTimer("provenance-store-commit")
 	if err := c.commitToProvenanceStore(blockNum, provenanceData); err != nil {
 		return errors.WithMessagef(err, "error while committing block %d to the block store", blockNum)
 	}
-	c.metrics.Latency("provenance-store-commit", start)
+	timer.Observe()
 
-	start = time.Now()
+	timer = c.metrics.NewLatencyTimer("world-state-commit")
 	if err := c.commitToStateDB(blockNum, dbsUpdates); err != nil {
 		return err
 	}
-	c.metrics.Latency("world-state-commit", start)
+	timer.Observe()
 
 	return nil
 }

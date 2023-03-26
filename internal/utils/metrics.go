@@ -36,27 +36,44 @@ var SizeBase2Buckets = []float64{
 }
 
 type commonMetrics struct {
+	enabled bool
 	latency *prometheus.HistogramVec
 }
 
 func newCommonMetrics(namespace string, reg *prometheus.Registry) *commonMetrics {
-	if reg == nil {
-		// If the registry is nil, then metrics collection is disabled
-		return nil
+	// If the registry is nil, then metrics collection is disabled
+	s := &commonMetrics{enabled: reg != nil}
+	if !s.enabled {
+		return s
 	}
-	s := &commonMetrics{
-		latency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Name:      "latency_seconds",
-			Buckets:   TimeBuckets,
-		}, []string{"process"}),
-	}
+	s.latency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Name:      "latency_seconds",
+		Buckets:   TimeBuckets,
+	}, []string{"process"})
 	reg.MustRegister(s.latency)
 	return s
 }
 
+type Timer prometheus.Timer
+
+func (s *commonMetrics) NewLatencyTimer(label string) *Timer {
+	if s.enabled {
+		return (*Timer)(prometheus.NewTimer(s.latency.WithLabelValues(label)))
+	} else {
+		return nil
+	}
+}
+
+func (t *Timer) Observe() {
+	if t == nil {
+		return
+	}
+	(*prometheus.Timer)(t).ObserveDuration()
+}
+
 func (s *commonMetrics) Latency(label string, startTime time.Time) {
-	if s != nil {
+	if s.enabled {
 		s.latency.WithLabelValues(label).Observe(time.Since(startTime).Seconds())
 	}
 }
@@ -70,34 +87,33 @@ type TxProcessingMetrics struct {
 }
 
 func NewTxProcessingMetrics(reg *prometheus.Registry) *TxProcessingMetrics {
-	if reg == nil {
-		// If the registry is nil, then metrics collection is disabled
-		return nil
-	}
 	const namespace = "tx_processing"
-	s := &TxProcessingMetrics{
-		commonMetrics: *newCommonMetrics(namespace, reg),
-		queueSize: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Namespace: namespace,
-			Name:      "queue_size_txs",
-		}, []string{"queue_type"}),
-		txCount: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: namespace,
-			Name:      "tx_count",
-		}, []string{"validation_code", "transaction_type"}),
-		txPerBlock: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Name:      "tx_per_block",
-			Help:      "The number of transactions per block",
-			Buckets:   SizeBase10Buckets,
-		}),
-		blockSizeBytes: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Name:      "block_size_bytes",
-			Help:      "Total block size in bytes",
-			Buckets:   SizeBase2Buckets,
-		}),
+	s := &TxProcessingMetrics{commonMetrics: *newCommonMetrics(namespace, reg)}
+	if !s.enabled {
+		return s
 	}
+
+	s.queueSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "queue_size_txs",
+	}, []string{"queue_type"})
+	s.txCount = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "tx_count",
+	}, []string{"validation_code", "transaction_type"})
+	s.txPerBlock = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Name:      "tx_per_block",
+		Help:      "The number of transactions per block",
+		Buckets:   SizeBase10Buckets,
+	})
+	s.blockSizeBytes = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Name:      "block_size_bytes",
+		Help:      "Total block size in bytes",
+		Buckets:   SizeBase2Buckets,
+	})
+
 	reg.MustRegister(
 		s.queueSize,
 		s.txCount,
@@ -107,33 +123,26 @@ func NewTxProcessingMetrics(reg *prometheus.Registry) *TxProcessingMetrics {
 	return s
 }
 
-func (s *TxProcessingMetrics) Latency(label string, startTime time.Time) {
-	// We redefine this method to prevent segmentation fault
-	if s != nil {
-		s.commonMetrics.Latency(label, startTime)
-	}
-}
-
 func (s *TxProcessingMetrics) QueueSize(label string, size int) {
-	if s != nil {
+	if s.enabled {
 		s.queueSize.WithLabelValues(label).Set(float64(size))
 	}
 }
 
 func (s *TxProcessingMetrics) IncrementTxCount(flag types.Flag, txType string) {
-	if s != nil {
+	if s.enabled {
 		s.txCount.WithLabelValues(flag.String(), txType).Inc()
 	}
 }
 
 func (s *TxProcessingMetrics) TxPerBlock(size int) {
-	if s != nil {
+	if s.enabled {
 		s.txPerBlock.Observe(float64(size))
 	}
 }
 
 func (s *TxProcessingMetrics) BlockSize(size int64) {
-	if s != nil {
+	if s.enabled {
 		s.blockSizeBytes.Observe(float64(size))
 	}
 }
@@ -144,33 +153,24 @@ type DataRequestHandlingMetrics struct {
 }
 
 func NewDataRequestHandlingMetrics(reg *prometheus.Registry) *DataRequestHandlingMetrics {
-	if reg == nil {
-		// If the registry is nil, then metrics collection is disabled
-		return nil
-	}
 	const namespace = "data_handling"
-	s := &DataRequestHandlingMetrics{
-		commonMetrics: *newCommonMetrics(namespace, reg),
-		txSize: prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: namespace,
-			Name:      "tx_size_bytes",
-			Help:      "Total TX size in bytes",
-			Buckets:   SizeBase2Buckets,
-		}),
+	s := &DataRequestHandlingMetrics{commonMetrics: *newCommonMetrics(namespace, reg)}
+	if !s.enabled {
+		return s
 	}
+
+	s.txSize = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Name:      "tx_size_bytes",
+		Help:      "Total TX size in bytes",
+		Buckets:   SizeBase2Buckets,
+	})
 	reg.MustRegister(s.txSize)
 	return s
 }
 
-func (s *DataRequestHandlingMetrics) Latency(label string, startTime time.Time) {
-	// We redefine this method to prevent segmentation fault
-	if s != nil {
-		s.commonMetrics.Latency(label, startTime)
-	}
-}
-
 func (s *DataRequestHandlingMetrics) TxSize(size int) {
-	if s != nil {
+	if s.enabled {
 		s.txSize.Observe(float64(size))
 	}
 }

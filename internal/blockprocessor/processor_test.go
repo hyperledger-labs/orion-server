@@ -21,6 +21,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/provenance"
 	"github.com/hyperledger-labs/orion-server/internal/queue"
 	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate/leveldb"
 	"github.com/hyperledger-labs/orion-server/pkg/crypto"
@@ -106,8 +107,9 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	txValidator := txvalidation.NewValidator(
 		&txvalidation.Config{
-			DB:     db,
-			Logger: logger,
+			DB:      db,
+			Logger:  logger,
+			Metrics: utils.NewTxProcessingMetrics(nil),
 		},
 	)
 
@@ -125,6 +127,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		DB:                   db,
 		TxValidator:          txValidator,
 		Logger:               logger,
+		Metrics:              utils.NewTxProcessingMetrics(nil),
 	})
 
 	genesisConfig := &types.ClusterConfig{
@@ -476,7 +479,8 @@ func TestFailureAndRecovery(t *testing.T) {
 				Flag: types.Flag_VALID,
 			},
 		}
-		require.NoError(t, env.blockProcessor.committer.blockStore.Commit(block2))
+		_, err := env.blockProcessor.committer.blockStore.Commit(block2)
+		require.NoError(t, err)
 
 		blockStoreHeight, err := env.blockStore.Height()
 		require.NoError(t, err)
@@ -559,7 +563,9 @@ func TestFailureAndRecovery(t *testing.T) {
 				Flag: types.Flag_VALID,
 			},
 		}
-		require.NoError(t, env.blockProcessor.committer.commitToBlockStore(block2))
+
+		_, err := env.blockProcessor.committer.commitToBlockStore(block2)
+		require.NoError(t, err)
 
 		block3 := createSampleBlock(3, tx[1:])
 		block3.Header.ValidationInfo = []*types.ValidationInfo{
@@ -567,7 +573,8 @@ func TestFailureAndRecovery(t *testing.T) {
 				Flag: types.Flag_VALID,
 			},
 		}
-		require.NoError(t, env.blockProcessor.committer.commitToBlockStore(block3))
+		_, err = env.blockProcessor.committer.commitToBlockStore(block3)
+		require.NoError(t, err)
 
 		blockStoreHeight, err := env.blockStore.Height()
 		require.NoError(t, err)

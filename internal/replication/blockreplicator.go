@@ -1186,7 +1186,6 @@ func (br *BlockReplicator) commitBlock(block *types.Block, updateConfig bool) er
 		blockNumber, block.GetConsensusMetadata())
 
 	// we can only get a valid config transaction
-	br.metrics.QueueSize("one_block", br.oneQueueBarrier.Size())
 	reConfig, err := br.oneQueueBarrier.EnqueueWait(block)
 	if err != nil {
 		return err

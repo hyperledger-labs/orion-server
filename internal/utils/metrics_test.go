@@ -4,7 +4,6 @@ package utils
 
 import (
 	"testing"
-	"time"
 
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/prometheus/client_golang/prometheus"
@@ -22,8 +21,8 @@ func requireGather(t *testing.T, reg *prometheus.Registry, expectedLen int) {
 }
 
 func observeAllTxProcessingMetrics(m *TxProcessingMetrics) {
-	m.Latency("test1", time.Now())
-	m.Latency("test2", time.Now())
+	m.NewLatencyTimer("test1").Observe()
+	m.NewLatencyTimer("test2").Observe()
 	m.TxPerBlock(100)
 	m.QueueSize("test1", 100)
 	m.QueueSize("test2", 100)
@@ -48,8 +47,8 @@ func TestTxProcessingMetrics(t *testing.T) {
 }
 
 func observeAllDataRequestHandlingMetrics(m *DataRequestHandlingMetrics) {
-	m.Latency("test1", time.Now())
-	m.Latency("test2", time.Now())
+	m.NewLatencyTimer("test1").Observe()
+	m.NewLatencyTimer("test2").Observe()
 	m.TxSize(100)
 }
 
