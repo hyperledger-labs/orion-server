@@ -24,6 +24,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/marshal"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -202,7 +203,7 @@ type db struct {
 }
 
 // NewDB creates a new database bcdb which handles both the queries and transactions.
-func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) {
+func NewDB(conf *config.Configurations, logger *logger.SugarLogger, metricsRegistry *prometheus.Registry) (DB, error) {
 	localConf := conf.LocalConfig
 	if localConf.Server.Database.Name != "leveldb" {
 		return nil, errors.New("only leveldb is supported as the state database")
@@ -296,6 +297,7 @@ func NewDB(conf *config.Configurations, logger *logger.SugarLogger) (DB, error) 
 			blockStore:      blockStore,
 			provenanceStore: provenanceStore,
 			stateTrieStore:  stateTrieStore,
+			metricsRegistry: metricsRegistry,
 			logger:          logger,
 		},
 	)

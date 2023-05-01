@@ -223,13 +223,14 @@ func (c *catchUpClient) GetHeight(ctx context.Context, targetID uint64) (uint64,
 
 func newHTTPClient(tlsConfig *tls.Config) *http.Client {
 	//TODO expose some transport parameters
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
 	httpClient := &http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           dialer.DialContext,
 			TLSClientConfig:       tlsConfig,
 			TLSHandshakeTimeout:   10 * time.Second,
 			MaxIdleConns:          100,

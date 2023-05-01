@@ -77,6 +77,23 @@ var expectedLocalConfig = &LocalConfiguration{
 		Method: "genesis",
 		File:   "./testdata/3node-shared-config-bootstrap.yml",
 	},
+	Prometheus: PrometheusConf{
+		Enabled: true,
+		Network: NetworkConf{
+			Address: "127.0.0.1",
+			Port:    8050,
+		},
+		TLS: TLSConf{
+			Enabled:               false,
+			ClientAuthRequired:    false,
+			ServerCertificatePath: "./testdata/cluster/server.cert",
+			ServerKeyPath:         "./testdata/cluster/server.key",
+			CaConfig: CAConfiguration{
+				RootCACertsPath:         []string{"./testdata/cluster/rootca.cert"},
+				IntermediateCACertsPath: []string{"./testdata/cluster/midca.cert"},
+			},
+		},
+	},
 }
 
 func TestConfig(t *testing.T) {

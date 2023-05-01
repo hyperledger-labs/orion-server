@@ -190,7 +190,8 @@ func setupConfigQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum int) 
 			},
 		},
 	}
-	require.NoError(t, env.ledgerQP.blockStore.Commit(genesisBlock))
+	_, err := env.ledgerQP.blockStore.Commit(genesisBlock)
+	require.NoError(t, err)
 
 	configSerialized, err := proto.Marshal(genesisConfig)
 	require.NoError(t, err)
@@ -258,7 +259,8 @@ func setupConfigQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum int) 
 			value = append(value, []byte(fmt.Sprintf("value_%d_%d", j, i)))
 		}
 		block := createSampleBlock(nil, i, key, value)
-		require.NoError(t, env.ledgerQP.blockStore.Commit(block))
+		_, err = env.ledgerQP.blockStore.Commit(block)
+		require.NoError(t, err)
 
 		env.blocks = append(env.blocks, block.GetHeader())
 	}
@@ -300,7 +302,8 @@ func setupConfigQueryTest(t *testing.T, env *configQueryTestEnv, blocksNum int) 
 			},
 		},
 	}
-	require.NoError(t, env.ledgerQP.blockStore.Commit(configBlock))
+	_, err = env.ledgerQP.blockStore.Commit(configBlock)
+	require.NoError(t, err)
 
 	configSerialized, err = proto.Marshal(newConfig)
 	require.NoError(t, err)

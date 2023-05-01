@@ -31,6 +31,7 @@ type LocalConfiguration struct {
 	BlockCreation BlockCreationConf
 	Replication   ReplicationConf
 	Bootstrap     BootstrapConf
+	Prometheus    PrometheusConf
 }
 
 // ReplicationConf provides local configuration parameters for replication and server to server communication.
@@ -77,7 +78,7 @@ type ServerConf struct {
 	// The database configuration of the local node.
 	Database DatabaseConf
 	// The provenance store configuration of the local node.
-	Provenance    ProvenanceConf
+	Provenance ProvenanceConf
 	// The lengths of various queues that buffer between internal components.
 	QueueLength QueueLengthConf
 	// QueryProcessing holds limits associated with query responses
@@ -160,6 +161,16 @@ type BootstrapConf struct {
 	// File contains the path to initial configuration that will be used to bootstrap the node,
 	// as specified by the`Method`.
 	File string
+}
+
+// PrometheusConf specifies the metrics collection for monitoring and performance analysis.
+type PrometheusConf struct {
+	// Enabled specifies if metrics will be collected
+	Enabled bool
+	// Network defines the listen address and port used for the Prometheus server.
+	Network NetworkConf
+	// TLS defines TLS settings for the Prometheus server.
+	TLS TLSConf
 }
 
 // Read reads configurations from the config file and returns the config

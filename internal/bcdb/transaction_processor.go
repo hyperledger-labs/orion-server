@@ -20,11 +20,13 @@ import (
 	"github.com/hyperledger-labs/orion-server/internal/replication"
 	"github.com/hyperledger-labs/orion-server/internal/txreorderer"
 	"github.com/hyperledger-labs/orion-server/internal/txvalidation"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/internal/worldstate"
 	"github.com/hyperledger-labs/orion-server/pkg/constants"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -44,6 +46,7 @@ type transactionProcessor struct {
 	blockStore           *blockstore.Store
 	pendingTxs           *queue.PendingTxs
 	logger               *logger.SugarLogger
+	metrics              *utils.TxProcessingMetrics
 }
 
 type txProcessorConfig struct {
@@ -52,6 +55,7 @@ type txProcessorConfig struct {
 	blockStore      *blockstore.Store
 	provenanceStore *provenance.Store
 	stateTrieStore  mptrie.Store
+	metricsRegistry *prometheus.Registry
 	logger          *logger.SugarLogger
 }
 
@@ -66,6 +70,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	p.txBatchQueue = queue.New(localConfig.Server.QueueLength.ReorderedTransactionBatch)
 	p.blockOneQueueBarrier = queue.NewOneQueueBarrier(conf.logger)
 	p.pendingTxs = queue.NewPendingTxs(conf.logger)
+	p.metrics = utils.NewTxProcessingMetrics(conf.metricsRegistry)
 
 	p.txReorderer = txreorderer.New(
 		&txreorderer.Config{
@@ -74,6 +79,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			MaxTxCountPerBatch: localConfig.BlockCreation.MaxTransactionCountPerBlock,
 			BatchTimeout:       localConfig.BlockCreation.BlockTimeout,
 			Logger:             conf.logger,
+			Metrics:            p.metrics,
 		},
 	)
 
@@ -83,8 +89,9 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 	// it (or one of its sub-components), e.g. the config-validator is used by the block-replicator.
 	txValidator := txvalidation.NewValidator(
 		&txvalidation.Config{
-			DB:     conf.db,
-			Logger: conf.logger,
+			DB:      conf.db,
+			Logger:  conf.logger,
+			Metrics: p.metrics,
 		},
 	)
 
@@ -97,6 +104,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 			DB:                   conf.db,
 			TxValidator:          txValidator,
 			Logger:               conf.logger,
+			Metrics:              p.metrics,
 		},
 	)
 
@@ -197,6 +205,7 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 		PendingTxs:           p.pendingTxs,
 		ConfigValidator:      txValidator.ConfigValidator(),
 		Logger:               conf.logger,
+		Metrics:              p.metrics,
 	}
 	if joinStart {
 		repConfig.JoinBlock = conf.config.JoinBlock
@@ -242,6 +251,8 @@ func newTransactionProcessor(conf *txProcessorConfig) (*transactionProcessor, er
 // a non-zero timeout would be treated as a sync submission. When a timeout
 // occurs with the sync submission, a timeout error will be returned
 func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Duration) (*types.TxReceiptResponse, error) {
+	submitTimer := t.metrics.NewLatencyTimer("tx-submit")
+
 	var txID string
 	switch tx.(type) {
 	case *types.DataTxEnvelope:
@@ -293,6 +304,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		}
 	}
 
+	enqueueTimer := t.metrics.NewLatencyTimer("tx-enqueue")
 	if timeout <= 0 {
 		// Enqueue will block until the queue is not full
 		t.txQueue.Enqueue(tx)
@@ -303,7 +315,10 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 			return nil, &internalerror.TimeoutErr{ErrMsg: "timeout has occurred while inserting the transaction to the queue"}
 		}
 	}
+	enqueueTimer.Observe()
 	t.logger.Debug("transaction is enqueued for re-ordering")
+	t.metrics.QueueSize("tx", t.txQueue.Size())
+	t.metrics.QueueSize("pending", t.pendingTxs.Size())
 
 	receipt, err := promise.Wait()
 
@@ -311,6 +326,7 @@ func (t *transactionProcessor) SubmitTransaction(tx interface{}, timeout time.Du
 		return nil, err
 	}
 
+	submitTimer.Observe()
 	return &types.TxReceiptResponse{
 		Receipt: receipt,
 	}, nil

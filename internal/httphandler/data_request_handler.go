@@ -6,7 +6,7 @@ package httphandler
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -19,6 +19,7 @@ import (
 	"github.com/hyperledger-labs/orion-server/pkg/cryptoservice"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
+	"github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -30,10 +31,11 @@ type dataRequestHandler struct {
 	router      *mux.Router
 	txHandler   *txHandler
 	logger      *logger.SugarLogger
+	metrics     *utils.DataRequestHandlingMetrics
 }
 
 // NewDataRequestHandler returns handler capable to serve incoming data requests
-func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler {
+func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger, metricsRegistry *prometheus.Registry) http.Handler {
 	handler := &dataRequestHandler{
 		db:          db,
 		sigVerifier: cryptoservice.NewVerifier(db, logger),
@@ -41,7 +43,8 @@ func NewDataRequestHandler(db bcdb.DB, logger *logger.SugarLogger) http.Handler 
 		txHandler: &txHandler{
 			db: db,
 		},
-		logger: logger,
+		logger:  logger,
+		metrics: utils.NewDataRequestHandlingMetrics(metricsRegistry),
 	}
 
 	rangeKeys := []string{
@@ -137,6 +140,8 @@ func (d *dataRequestHandler) dataRangeQuery(response http.ResponseWriter, reques
 }
 
 func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, request *http.Request) {
+	defer d.metrics.NewLatencyTimer("data-tx-handling").Observe()
+
 	timeout, err := validateAndParseTxPostHeader(&request.Header)
 	if err != nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
@@ -146,7 +151,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 	// requestData := json.NewDecoder(request.Body)
 	// requestData.DisallowUnknownFields()
 
-	requestBody, err := ioutil.ReadAll(request.Body)
+	requestBody, err := io.ReadAll(request.Body)
 	if err != nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest,
 			&types.HttpResponseErr{ErrMsg: err.Error()})
@@ -157,6 +162,7 @@ func (d *dataRequestHandler) dataTransaction(response http.ResponseWriter, reque
 		utils.SendHTTPResponse(response, http.StatusBadRequest, &types.HttpResponseErr{ErrMsg: err.Error()})
 		return
 	}
+	d.metrics.TxSize(len(requestBody))
 
 	if txEnv.Payload == nil {
 		utils.SendHTTPResponse(response, http.StatusBadRequest,

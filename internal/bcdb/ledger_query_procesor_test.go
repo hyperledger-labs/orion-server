@@ -178,7 +178,8 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 	root, err := mtree.BuildTreeForBlockTx(configBlock)
 	require.NoError(t, err)
 	configBlock.Header.TxMerkleTreeRootHash = root.Hash()
-	require.NoError(t, env.p.blockStore.Commit(configBlock))
+	_, err = env.p.blockStore.Commit(configBlock)
+	require.NoError(t, err)
 	env.blocks = []*types.BlockHeader{configBlock.GetHeader()}
 	env.blockTx = []*types.DataTxEnvelopes{{}}
 
@@ -279,7 +280,8 @@ func setup(t *testing.T, env *ledgerProcessorTestEnv, blocksNum int) {
 		blockprocessor.ApplyBlockOnStateTrie(trie, dataUpdates)
 		block.Header.StateMerkleTreeRootHash, err = trie.Hash()
 		require.NoError(t, err)
-		require.NoError(t, env.p.blockStore.Commit(block))
+		_, err = env.p.blockStore.Commit(block)
+		require.NoError(t, err)
 
 		err = trie.Commit(block.GetHeader().GetBaseHeader().GetNumber())
 		require.NoError(t, err)

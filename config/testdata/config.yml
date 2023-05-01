@@ -142,3 +142,35 @@ bootstrap:
   method: genesis
   # file contains the initial configuration that will be used to bootstrap the node, as specified by the method, above.
   file: ./testdata/3node-shared-config-bootstrap.yml
+
+# prometheus specifies the metrics collection for monitoring and performance analysis.
+prometheus:
+  # enabled specifies if metrics will be collected
+  enabled: true
+  # network defines the listen address and port used for the Prometheus server.
+  network:
+    # The listen address
+    address: 127.0.0.1
+    # The listen port
+    port: 8050
+  # tls defines TLS settings for the Prometheus server.
+  tls:
+    # Require server-side TLS.
+    enabled: false
+    # Require client certificates / mutual TLS for inbound connections.
+    clientAuthRequired: false
+    # X.509 certificate used for TLS server
+    serverCertificatePath: ./testdata/cluster/server.cert
+    # Private key for TLS server
+    serverKeyPath: ./testdata/cluster/server.key
+    # cluster.tls.caConfig defines the paths to the x509 certificates
+    # of the root and intermediate certificate authorities that issued
+    # all the certificates used for intra-cluster communication.
+    caConfig:
+      # The paths to root certificates. At least one is required. for example:
+      #   rootCACertsPath: ./testdata/rootcaA.cert, ./testdata/rootcaB.cert
+      rootCACertsPath: ./testdata/cluster/rootca.cert
+
+      # The paths to intermediate certificates. Optional. For example:
+      #   intermediateCACertsPath: ./testdata/cluster/midcaA.cert, ./testdata/cluster/midcaB.cert
+      intermediateCACertsPath: ./testdata/cluster/midca.cert

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hyperledger-labs/orion-server/internal/queue"
+	"github.com/hyperledger-labs/orion-server/internal/utils"
 	"github.com/hyperledger-labs/orion-server/pkg/logger"
 	"github.com/hyperledger-labs/orion-server/pkg/types"
 	"github.com/stretchr/testify/require"
@@ -28,6 +29,7 @@ func newTxReordererForTest(t *testing.T, maxTxCountPerBatch uint32, blockTimeout
 		MaxTxCountPerBatch: maxTxCountPerBatch,
 		BatchTimeout:       blockTimeout,
 		Logger:             logger,
+		Metrics:            utils.NewTxProcessingMetrics(nil),
 	})
 	go r.Start()
 	r.WaitTillStart()
