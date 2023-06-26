@@ -17,5 +17,7 @@ Orion **DOES NOT** have the following two blockchain properties:
 ## Documentation 
 Please visit our [online documentation](http://labs.hyperledger.org/orion-server/) for information on [getting started](http://labs.hyperledger.org/orion-server/docs/introduction/).
 
+In addition, the [Go SDK repository](https://github.com/hyperledger-labs/orion-sdk-go) contains examples and tutorials.
+
 ## How to Contribute
 We will be happy to receive help! In order to become an Orion contributor, please contact the project [maintainers](MAINTAINERS.md).
