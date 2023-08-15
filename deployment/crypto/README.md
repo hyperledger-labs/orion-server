@@ -1,4 +1,4 @@
-It holds the scripts to perform various build, and install.
+This folder contains the crypto materials, including root CA private key, self-signed root CA certificate, and private keys and certificates per user.
 
 ### creating private keys and certificates and using them in configuration
 Run from `orion-server` root folder:
