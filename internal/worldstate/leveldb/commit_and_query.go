@@ -56,7 +56,7 @@ func (l *LevelDB) Height() (uint64, error) {
 		return 0, errors.Errorf("unable to retrieve the state database height due to missing metadataDB")
 	}
 
-	blockNumberEnc, err := db.file.Get(lastCommittedBlockNumberKey, db.readOpts)
+	blockNumberEnc, err := db.reader.Get(lastCommittedBlockNumberKey, db.readOpts)
 	if err != nil && err != leveldb.ErrNotFound {
 		return 0, errors.Wrap(err, "error while retrieving the state database height")
 	}
@@ -90,7 +90,7 @@ func (l *LevelDB) Get(dbName string, key string) ([]byte, *types.Metadata, error
 	dbVal, inCache := l.cache.getState(dbName, key)
 	if !inCache {
 		var err error
-		dbVal, err = db.file.Get([]byte(key), db.readOpts)
+		dbVal, err = db.reader.Get([]byte(key), db.readOpts)
 		switch err {
 		case leveldb.ErrNotFound:
 			if err = l.cache.putState(dbName, key, nil); err != nil {
@@ -144,7 +144,7 @@ func (l *LevelDB) Has(dbName, key string) (bool, error) {
 	if !ok || db == nil {
 		return false, &DBNotFoundErr{dbName: dbName}
 	}
-	has, err := db.file.Has([]byte(key), db.readOpts)
+	has, err := db.reader.Has([]byte(key), db.readOpts)
 	return has, convertClosedErr(err, dbName)
 }
 
@@ -191,7 +191,7 @@ func (l *LevelDB) GetIterator(dbName string, startKey, endKey string) (worldstat
 		r.Limit = []byte(endKey)
 	}
 
-	it := db.file.NewIterator(r, &opt.ReadOptions{})
+	it := db.reader.NewIterator(r, &opt.ReadOptions{})
 
 	// Iterator contains errors internally, but we want to fail early if there is an issue with the DB.
 	if err := convertClosedErr(it.Error(), dbName); err != nil {
@@ -214,6 +214,9 @@ func (l *LevelDB) Commit(dbsUpdates map[string]*worldstate.DBUpdates, blockNumbe
 		if err := l.commitToDB(db, updates); err != nil {
 			return err
 		}
+		if err := db.updateSnapshot(); err != nil {
+			return err
+		}
 		l.logger.Debugf("changes committed to the database %s, took %d ms, available dbs are [%s]", dbName, time.Since(start).Milliseconds(), "")
 	}
 
@@ -227,6 +230,9 @@ func (l *LevelDB) Commit(dbsUpdates map[string]*worldstate.DBUpdates, blockNumbe
 	binary.PutUvarint(b, blockNumber)
 	if err := db.file.Put(lastCommittedBlockNumberKey, b, db.writeOpts); err != nil {
 		return errors.Wrapf(err, "error while storing the last committed block number [%d] to the metadataDB", blockNumber)
+	}
+	if err := db.updateSnapshot(); err != nil {
+		return err
 	}
 
 	return nil
@@ -312,6 +318,9 @@ func (l *LevelDB) create(dbName string) error {
 		readOpts:  &opt.ReadOptions{},
 		writeOpts: &opt.WriteOptions{Sync: true},
 	}
+	if err := db.updateSnapshot(); err != nil {
+		return err
+	}
 
 	l.setDB(dbName, db)
 
@@ -327,6 +336,9 @@ func (l *LevelDB) delete(dbName string) error {
 		return nil
 	}
 
+	if db.snap != nil {
+		db.snap.Release()
+	}
 	if err := db.file.Close(); err != nil {
 		return errors.Wrapf(err, "error while closing the database [%s] before delete", dbName)
 	}
