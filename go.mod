@@ -6,7 +6,7 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.12.0
 	github.com/cayleygraph/cayley v0.7.7
 	github.com/cayleygraph/quad v1.1.0
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.3
 	github.com/golang/snappy v0.0.4
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.7.4
@@ -22,7 +22,7 @@ require (
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20210226220824-aa7126864d82 // indirect git tag v3.4.15
 	go.uber.org/multierr v1.6.0
 	go.uber.org/zap v1.18.1
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -70,6 +70,6 @@ require (
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	golang.org/x/tools v0.6.0 // indirect
-	google.golang.org/grpc v1.53.0 // indirect
+	google.golang.org/grpc v1.56.3 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
