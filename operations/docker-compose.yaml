@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  orion-server:
+    image: orionbcdb/orion-server
+    container_name: orion-server
+    ports:
+      - "6001:6001"
+      - "7050:7050"
+    volumes:
+      - ../deployment/crypto:/etc/orion-server/crypto
+      - ../ledger:/etc/orion-server/ledger
+      - ../deployment/config-docker:/etc/orion-server/config
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
