@@ -16,11 +16,7 @@ export const initConnection = async (): Promise<ClientRecordShape> => {
 
   const clientRecord: ClientRecordShape = new ClientRecord({
     logger: logger,
-    orionUrls: {
-      'orion-server1': 'http://127.0.0.1:6001',
-      'orion-server2': 'http://127.0.0.1:6002',
-      'orion-server3': 'http://127.0.0.1:6003'
-    }
+    orionUrls: JSON.parse(process.env.ORION_URLS || '[]')
   });
 
   return clientRecord;

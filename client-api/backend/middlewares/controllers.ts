@@ -24,56 +24,40 @@ export const commitTx: RequestHandler = async (req: Request, res: Response) => {
     req.clientRecord.logger.info('Commit transaction endpoint called');
 
     const { payload, signature } = req.body;
+    const orionUrls = req.clientRecord.orionUrls;
     let response;
+    for (const [index, url] of orionUrls.entries()) {
+      console.log(`Attempt ${index + 1} of ${orionUrls.length}: ${url}`)
 
-    try {
-      response = await customFetch(
-        `${req.clientRecord.orionUrls['orion-server1']}/db/tx`,
-        'POST',
-        {
-          body: { payload, signature },
-          headers: {
-            'Content-Type': 'application/json',
-            'TxTimeout': '20s'
-          }
-        }
-      ); 
-    }
-    catch (error: any) {
-      if (error.cause?.code === 'ENOTFOUND') {
-        const hostname = error.cause?.hostname;
-
-        if (hostname && req.clientRecord.orionUrls[hostname]) {
-          req.clientRecord.logger.info(`Redirect failed for ${hostname}, retrying with mapped URL`);
-
-          // Retry with mapped URL
-          response = await customFetch(
-            `${req.clientRecord.orionUrls[hostname]}/db/tx`,
-            'POST',
-            {
-              body: { payload, signature },
-              headers: {
-                'Content-Type': 'application/json',
-                'TxTimeout': '20s'
-              }
+      try {
+        response = await customFetch(
+          `${url}/db/tx`,
+          'POST',
+          {
+            body: { payload, signature },
+            headers: {
+              'Content-Type': 'application/json',
+              'TxTimeout': '20s'
             }
-          );
-        } else {
-          console.log('first')
-          throw error;  // Re-throw if hostname not in map
+          }
+        );
+
+        break;
+      }
+      catch (error: any) {
+        if (index === orionUrls.length - 1) {
+          throw error;
         }
-      } else {
-        console.log('second')
-        throw error;  // Re-throw if not a DNS error
+        continue;
       }
     }
 
     createResponse(res, 'Transaction committed successfully', response);
   }
   catch (error: any) {
-    console.log('third')
     const message = error instanceof Error ? error.message : 'An unknown error occurred';
     req.clientRecord.logger.error(`${error}`);
+
     createErrorResponse(res, 500, message);
   }
 
@@ -86,48 +70,31 @@ export const queryTx: RequestHandler = async (req: Request, res: Response) => {
     const { dbName } = req.params;
     const userId = req.headers['userid'] as string;
     const signature = req.headers['signature'] as string;
-
+    const orionUrls = req.clientRecord.orionUrls;
     let response;
-    try {
-      response = await customFetch(
-        `http://127.0.0.1:6001/db/${dbName}`,
-        'GET',
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'UserID': userId,
-            'Signature': signature
-          }
-        }
-      );
-    }
-    catch (error: any) {
-      if (error.cause?.code === 'ENOTFOUND') {
-        const hostname = error.cause?.hostname;
 
-        if (hostname && req.clientRecord.orionUrls[hostname]) {
-          req.clientRecord.logger.info(`Redirect failed for ${hostname}, retrying with mapped URL`);
+    for (const [index, url] of orionUrls.entries()) {
+      console.log(`Attempt ${index + 1} of ${orionUrls.length}: ${url}`)
 
-          // Extract path from original URL
-          const newUrl = `${req.clientRecord.orionUrls[hostname]}/db/${dbName}`;
-
-          // Retry with mapped URL
-          response = await customFetch(
-            newUrl,
-            'GET',
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                'UserID': userId,
-                'Signature': signature
-              }
+      try {
+        response = await customFetch(
+          `${url}/db/${dbName}`,
+          'GET',
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'UserID': userId,
+              'Signature': signature
             }
-          );
-        } else {
-          throw error;  // Re-throw if hostname not in map
+          }
+        );
+        break;
+      }
+      catch (error: any) {
+        if (index === orionUrls.length - 1) {
+          throw error;
         }
-      } else {
-        throw error;  // Re-throw if not a DNS error
+        continue;
       }
     }
 
@@ -136,6 +103,7 @@ export const queryTx: RequestHandler = async (req: Request, res: Response) => {
   catch (error: any) {
     const message = error instanceof Error ? error.message : 'An unknown error occurred';
     req.clientRecord.logger.error(`${error}`);
+
     createErrorResponse(res, 500, message);
   }
 }
