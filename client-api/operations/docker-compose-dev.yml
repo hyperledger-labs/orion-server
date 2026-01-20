@@ -5,7 +5,7 @@ version: '3.8'
 
 services:
   client-api:
-    image: node:22.17.1
+    image: node:22-alpine3.23
     container_name: orion-client-api
     hostname: client-api
     working_dir: /app

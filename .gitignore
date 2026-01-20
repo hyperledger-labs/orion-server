@@ -22,6 +22,5 @@ cmd/bdb/bdb
 #Documentation with docusaurus
 .docusaurus
 node_modules
-yarn.lock
 ledger
 
