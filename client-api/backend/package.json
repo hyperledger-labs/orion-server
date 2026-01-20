@@ -9,7 +9,6 @@
     "start": "node dist/bin/index.ts"
   },
   "dependencies": {
-    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "http-status-codes": "^2.3.0",
@@ -18,7 +17,6 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/http-status-codes": "^1.2.0",
     "@types/log4js": "^2.3.5",

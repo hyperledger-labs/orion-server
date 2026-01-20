@@ -153,7 +153,6 @@ const data = await fetch('...');
 
 ### Production:
 - `express` - Web server
-- `cors` - CORS middleware
 - `pg` - PostgreSQL client
 - `pgvector` - Vector extension
 - `dotenv` - Environment variables
