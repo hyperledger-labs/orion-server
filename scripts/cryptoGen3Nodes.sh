@@ -58,13 +58,11 @@ docker run -it --rm -v $BASE_DIR/crypto:/export nginx openssl req -new -x509 -no
 echo "✅ Created CA"
 echo ""
 
-# Create admin user
-create_pki "admin"
-
-# Create 3 server nodes
-create_pki "server1"
-create_pki "server2"
-create_pki "server3"
+# Create 3 server nodes, admin,bob,alice users
+for f in "server1" "server2" "server3" "admin" "bob" "alice"
+do
+  create_pki "$f"
+done
 
 echo "✅ All crypto materials generated successfully!"
 echo ""
@@ -74,5 +72,7 @@ echo "  - admin (Cluster Administrator)"
 echo "  - server1 (Orion Node 1)"
 echo "  - server2 (Orion Node 2)"
 echo "  - server3 (Orion Node 3)"
+echo "  - bob (User)"
+echo "  - alice (User)"
 echo ""
 echo "📂 Location: $BASE_DIR/crypto/"
