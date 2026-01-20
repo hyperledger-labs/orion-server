@@ -1,0 +1,38 @@
+# Local configuration for orion-server1
+server:
+  identity:
+    id: orion-server1
+    certificatePath: /etc/orion-server/crypto/server1/server1.pem
+    keyPath: /etc/orion-server/crypto/server1/server1.key
+  network:
+    address: 0.0.0.0
+    port: 6001
+  database:
+    name: leveldb
+    ledgerdirectory: /var/orion-server/ledger
+  queueLength:
+    transaction: 1000
+    reorderedTransactionBatch: 100
+    block: 100
+  logLevel: info
+  tls:
+    enabled: false
+
+blockCreation:
+  maxBlockSize: 2
+  maxTransactionCountPerBlock: 1
+  blockTimeout: 50ms
+
+replication:
+  walDir: "/var/orion-server/ledger/etcdraft/wal"
+  snapDir: "/var/orion-server/ledger/etcdraft/snapshot"
+  auxDir: "/var/orion-server/ledger/auxiliary"
+  network:
+    address: 0.0.0.0
+    port: 7050
+  tls:
+    enabled: false
+
+bootstrap:
+  method: genesis
+  file: /etc/orion-server/config/3node-shared-config-bootstrap.yml
