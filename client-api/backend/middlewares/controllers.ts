@@ -3,6 +3,21 @@ import customFetch from '../helpers/api.js';
 import { createResponse, createErrorResponse } from '../helpers/responses.js';
 import type { RequestHandler } from '../types/index.js';
 
+const handleNetworkError = (error: any, index: number, orionUrls: string[]) => {
+  if (error.cause?.code) {
+    // Network error - try next server
+    console.log(`Network error (${error.cause.code}), trying next...`);
+    
+    if (index === orionUrls.length - 1) {
+      throw new Error('All Orion nodes are unreachable');
+    }
+  } else {
+    // HTTP error from server - throw immediately
+    throw error;
+  }
+};
+
+
 export const health: RequestHandler = async (req: Request, res: Response) => {
   try {
     // Access clientRecord directly from request - fully type-safe!
@@ -45,10 +60,17 @@ export const commitTx: RequestHandler = async (req: Request, res: Response) => {
         break;
       }
       catch (error: any) {
-        if (index === orionUrls.length - 1) {
+        if (error.cause?.code) {
+          // Network error - try next server
+          console.log(`Network error (${error.cause.code}), trying next...`);
+          
+          if (index === orionUrls.length - 1) {
+            throw new Error('All Orion nodes are unreachable');
+          }
+        } else {
+          // HTTP error from server - throw immediately
           throw error;
         }
-        continue;
       }
     }
 
@@ -91,10 +113,17 @@ export const queryTx: RequestHandler = async (req: Request, res: Response) => {
         break;
       }
       catch (error: any) {
-        if (index === orionUrls.length - 1) {
+        if (error.cause?.code) {
+          // Network error - try next server
+          console.log(`Network error (${error.cause.code}), trying next...`);
+          
+          if (index === orionUrls.length - 1) {
+            throw new Error('All Orion nodes are unreachable');
+          }
+        } else {
+          // HTTP error from server - throw immediately
           throw error;
         }
-        continue;
       }
     }
 
