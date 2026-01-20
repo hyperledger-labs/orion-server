@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    // Target and Module (ESM)
+    "target": "ES2022",
+    "module": "ES2022",
+    "lib": ["ES2022"],
+    
+    // File Layout
+    "rootDir": ".",
+    "outDir": "./dist",
+
+    // Module Resolution (ESM + Node.js)
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    
+    // Type Checking
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    
+    // Output Options
+    "sourceMap": true,
+    "declaration": true,
+    
+    // Node.js specific
+    "types": ["node"]
+  },
+  "include": ["bin/**/*", "core/**/*", "helpers/**/*", "middlewares/**/*", "types/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
