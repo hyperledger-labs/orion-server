@@ -60,17 +60,7 @@ export const commitTx: RequestHandler = async (req: Request, res: Response) => {
         break;
       }
       catch (error: any) {
-        if (error.cause?.code) {
-          // Network error - try next server
-          console.log(`Network error (${error.cause.code}), trying next...`);
-          
-          if (index === orionUrls.length - 1) {
-            throw new Error('All Orion nodes are unreachable');
-          }
-        } else {
-          // HTTP error from server - throw immediately
-          throw error;
-        }
+        handleNetworkError(error, index, orionUrls);
       }
     }
 
@@ -113,17 +103,7 @@ export const queryTx: RequestHandler = async (req: Request, res: Response) => {
         break;
       }
       catch (error: any) {
-        if (error.cause?.code) {
-          // Network error - try next server
-          console.log(`Network error (${error.cause.code}), trying next...`);
-          
-          if (index === orionUrls.length - 1) {
-            throw new Error('All Orion nodes are unreachable');
-          }
-        } else {
-          // HTTP error from server - throw immediately
-          throw error;
-        }
+        handleNetworkError(error, index, orionUrls);
       }
     }
 
