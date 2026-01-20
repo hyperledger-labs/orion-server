@@ -1,0 +1,32 @@
+version: '3.8'
+
+# Client API development environment
+# Mounts the backend directory for live development
+
+services:
+  client-api:
+    image: node:22.17.1
+    container_name: orion-client-api
+    hostname: client-api
+    working_dir: /app
+    ports:
+      - "4001:4001"  # Client API port
+    volumes:
+      # Mount the backend directory for development
+      - ../backend:/app
+    # environment:
+    #   - NODE_ENV=development
+    #   - PORT=4001
+    #   - CLIENT_NAME=orion-client
+    command: sh -c "corepack enable && yarn install && yarn dev"
+    networks:
+      - orion-network
+    restart: unless-stopped
+
+networks:
+  orion-network:
+    driver: bridge
+
+volumes:
+  # Named volume for node_modules to avoid performance issues with bind mounts
+  client-api-node-modules:
