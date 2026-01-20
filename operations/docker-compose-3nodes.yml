@@ -17,16 +17,9 @@ services:
       - ../deployment/config-docker:/etc/orion-server/config:ro
     environment:
       - BCDB_CONFIG_PATH=/etc/orion-server/config/config-server1.yml
-    command: ["start", "--configpath", "/etc/orion-server/config/config-server1.yml"]
+    command: ["bdb", "start", "--configpath", "/etc/orion-server/config/config-server1.yml"]
     networks:
       - orion-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6001/config/cluster"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   orion-server2:
     image: orionbcdb/orion-server
@@ -41,19 +34,9 @@ services:
       - ../deployment/config-docker:/etc/orion-server/config:ro
     environment:
       - BCDB_CONFIG_PATH=/etc/orion-server/config/config-server2.yml
-    command: ["start", "--configpath", "/etc/orion-server/config/config-server2.yml"]
+    command: ["bdb", "start", "--configpath", "/etc/orion-server/config/config-server2.yml"]
     networks:
       - orion-network
-    restart: unless-stopped
-    depends_on:
-      orion-server1:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6001/config/cluster"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   orion-server3:
     image: orionbcdb/orion-server
@@ -68,19 +51,9 @@ services:
       - ../deployment/config-docker:/etc/orion-server/config:ro
     environment:
       - BCDB_CONFIG_PATH=/etc/orion-server/config/config-server3.yml
-    command: ["start", "--configpath", "/etc/orion-server/config/config-server3.yml"]
+    command: ["bdb", "start", "--configpath", "/etc/orion-server/config/config-server3.yml"]
     networks:
       - orion-network
-    restart: unless-stopped
-    depends_on:
-      orion-server1:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6001/config/cluster"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
 networks:
   orion-network:

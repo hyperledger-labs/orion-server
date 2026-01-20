@@ -48,9 +48,9 @@ This creates:
 Each node needs its own ledger directory:
 
 ```bash
-mkdir -p deployment/ledger/node1
-mkdir -p deployment/ledger/node2
-mkdir -p deployment/ledger/node3
+mkdir -p ledger/node1
+mkdir -p ledger/node2
+mkdir -p ledger/node3
 ```
 
 ## Step 3: Start the Cluster 🚀
@@ -264,8 +264,8 @@ docker network inspect operations_orion-network
 1. Stop all nodes
 2. Clear ledger directories:
    ```bash
-   rm -rf deployment/ledger/node*
-   mkdir -p deployment/ledger/node{1,2,3}
+   rm -rf ledger/node*
+   mkdir -p ledger/node{1,2,3}
    ```
 3. Restart cluster
 
