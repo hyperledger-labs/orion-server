@@ -23,4 +23,5 @@ cmd/bdb/bdb
 .docusaurus
 node_modules
 yarn.lock
+ledger
 
